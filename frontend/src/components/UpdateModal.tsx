@@ -9,16 +9,18 @@ export interface ProgressUpdate {
 }
 
 interface Props {
-  systems: System[];
-  onSave: (u: ProgressUpdate) => void;
+  systems: System[]; // only the projects this user may update
+  initialId?: string;
+  onSave: (u: ProgressUpdate) => Promise<void>;
   onClose: () => void;
 }
 
-export default function UpdateModal({ systems, onSave, onClose }: Props) {
-  const [id, setId] = useState(systems[0]?.id ?? "");
+export default function UpdateModal({ systems, initialId, onSave, onClose }: Props) {
+  const [id, setId] = useState(initialId ?? systems[0]?.id ?? "");
   const current = systems.find((s) => s.id === id);
   const [progress, setProgress] = useState(current?.progress ?? 0);
   const [status, setStatus] = useState<Status>(current?.status ?? "WIP");
+  const [error, setError] = useState("");
 
   // Picking a different project starts from that project's current values.
   const pick = (next: string) => {
@@ -43,9 +45,13 @@ export default function UpdateModal({ systems, onSave, onClose }: Props) {
         role="dialog"
         aria-label="Post progress update"
         onClick={(e) => e.stopPropagation()}
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          onSave({ id, progress, status });
+          try {
+            await onSave({ id, progress, status });
+          } catch (err) {
+            setError(err instanceof Error ? err.message : "Couldn't save the update");
+          }
         }}
       >
         <button type="button" className="close-btn" onClick={onClose} aria-label="Close">
@@ -82,6 +88,7 @@ export default function UpdateModal({ systems, onSave, onClose }: Props) {
           </select>
         </label>
 
+        {error && <p className="form-error">{error}</p>}
         <div className="modal-actions">
           <button type="button" className="btn btn-ghost" onClick={onClose}>
             Cancel

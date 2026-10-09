@@ -1,11 +1,14 @@
-import { ChevronRight, Clock, Mail } from "lucide-react";
+import { BellRing, ChevronRight, Clock, Mail } from "lucide-react";
 import { SCHEDULE_META, STATUS_META, daysUntil, getSchedule, initials, type System } from "../data/systems";
 import { formatShort, plural, timeAgo } from "../time";
-import { personById } from "../data/people";
+import type { User } from "../data/roles";
 
 interface Props {
   system: System;
   now: number;
+  lead?: User;
+  requests: number; // open update requests for this system
+  mine: boolean; // the signed-in developer's assigned project
   onSelect: (s: System) => void;
 }
 
@@ -66,14 +69,23 @@ export function updatedText(s: System, now: number): string {
   return !s.updatedAt && new Date(at).getTime() > now ? "No updates yet" : `Updated ${timeAgo(at, now)}`;
 }
 
-export default function SystemCard({ system, now, onSelect }: Props) {
-  const lead = personById(system.lead);
+export default function SystemCard({ system, now, lead, requests, mine, onSelect }: Props) {
   return (
-    <article className="card">
+    <article className={`card ${mine ? "mine" : ""}`}>
       <header className="card-head">
         <h3>{system.name}</h3>
         <StatusPill status={system.status} />
       </header>
+      {(mine || requests > 0) && (
+        <div className="card-flags">
+          {mine && <span className="flag flag-mine">Your project</span>}
+          {requests > 0 && (
+            <span className="flag flag-request">
+              <BellRing size={13} /> Update requested
+            </span>
+          )}
+        </div>
+      )}
 
       <ProgressBar value={system.progress} />
 

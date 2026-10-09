@@ -1,24 +1,18 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import { STATUS_META, initials, type Health, type Status, type System } from "../data/systems";
-import { PEOPLE } from "../data/people";
+import { STATUS_META, type Health, type Status, type System } from "../data/systems";
+import type { User } from "../data/roles";
 
 interface Props {
-  existingIds: string[];
-  onSave: (s: System) => void;
+  users: User[];
+  error?: string;
+  onSave: (s: Partial<System>) => void;
   onClose: () => void;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-function slug(name: string, taken: string[]): string {
-  const base = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "system";
-  let id = base;
-  for (let n = 2; taken.includes(id); n++) id = `${base}-${n}`;
-  return id;
-}
-
-export default function AddSystemModal({ existingIds, onSave, onClose }: Props) {
+export default function AddSystemModal({ users, error, onSave, onClose }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [url, setUrl] = useState("");
@@ -54,19 +48,14 @@ export default function AddSystemModal({ existingIds, onSave, onClose }: Props) 
         onSubmit={(e) => {
           e.preventDefault();
           onSave({
-            id: slug(name, existingIds),
             name: name.trim(),
-            short: initials(name),
             description: description.trim(),
             url: url.trim(),
-            owner: "Systems Team",
             ...(lead ? { lead } : {}),
             status,
             progress,
-            engagement: 0,
             startedAt,
             ...(delivered ? { finishedAt, health } : dueAt ? { dueAt: `${dueAt}T17:00:00` } : {}),
-            updatedAt: new Date().toISOString(),
           });
         }}
       >
@@ -100,9 +89,10 @@ export default function AddSystemModal({ existingIds, onSave, onClose }: Props) 
             <span>Project lead</span>
             <select value={lead} onChange={(e) => setLead(e.target.value)}>
               <option value="">Not assigned yet</option>
-              {PEOPLE.map((p) => (
+              {users.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.name} · {p.title}
+                  {p.name}
+                  {p.title ? ` · ${p.title}` : ""}
                 </option>
               ))}
             </select>
@@ -150,6 +140,7 @@ export default function AddSystemModal({ existingIds, onSave, onClose }: Props) 
           )}
         </div>
 
+        {error && <p className="form-error">{error}</p>}
         <div className="modal-actions">
           <button type="button" className="btn btn-ghost" onClick={onClose}>
             Cancel

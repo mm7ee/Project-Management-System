@@ -1,6 +1,7 @@
 import { Mail, MessageCircle, MessagesSquare, Phone } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { contactLinks, type ContactKind, type Person } from "../data/people";
+import { contactLinks, type ContactKind } from "../data/people";
+import type { User } from "../data/roles";
 
 const ICONS: Record<ContactKind, LucideIcon> = {
   email: Mail,
@@ -10,7 +11,7 @@ const ICONS: Record<ContactKind, LucideIcon> = {
 };
 
 /** Row of contact buttons for a lead: Email / Teams, plus WhatsApp / Call once they have a phone number. */
-export default function LeadContact({ person, about }: { person: Person; about: string }) {
+export default function LeadContact({ person, about }: { person: User; about: string }) {
   const links = contactLinks(person, about);
   if (!links.length) return <p className="lead-none">No contact details yet.</p>;
   return (
