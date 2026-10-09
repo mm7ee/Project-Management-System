@@ -87,7 +87,7 @@ export default function App() {
           <button className="menu-btn" onClick={() => setMenuOpen(true)} aria-label="Open menu">
             <Menu size={20} />
           </button>
-          <h1>Projects Department Tracker</h1>
+          <h1>Projects Tracker</h1>
           <label className="search">
             <Search size={18} />
             <input
