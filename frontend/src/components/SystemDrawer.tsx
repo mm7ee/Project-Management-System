@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { ArrowUpRight, Trash2, X } from "lucide-react";
 import { HEALTH_META, initials, type System } from "../data/systems";
 import { formatDate } from "../time";
+import { PEOPLE, personById } from "../data/people";
+import LeadContact from "./LeadContact";
 import { DateLine, ProgressBar, ScheduleChip, StatusPill, updatedText } from "./SystemCard";
 
 interface Props {
@@ -9,9 +11,10 @@ interface Props {
   now: number;
   onClose: () => void;
   onDelete: (id: string) => void;
+  onChangeLead: (id: string, lead: string) => void;
 }
 
-export default function SystemDrawer({ system, now, onClose, onDelete }: Props) {
+export default function SystemDrawer({ system, now, onClose, onDelete, onChangeLead }: Props) {
   const [confirming, setConfirming] = useState(false);
 
   // Opening a different system never starts in the "are you sure?" state.
@@ -25,6 +28,7 @@ export default function SystemDrawer({ system, now, onClose, onDelete }: Props) 
 
   if (!system) return null;
   const canOpen = system.status === "LIVE" || system.status === "COMPLETED";
+  const lead = personById(system.lead);
 
   return (
     <div className="backdrop drawer-backdrop" onClick={onClose}>
@@ -48,8 +52,31 @@ export default function SystemDrawer({ system, now, onClose, onDelete }: Props) 
           </div>
         </section>
 
+        <section className="lead-card">
+          <div className="lead-head">
+            <span className="avatar lg">{lead ? initials(lead.name) : "?"}</span>
+            <div className="lead-who">
+              <span className="lead-label">Project lead</span>
+              <b>{lead ? lead.name : "Not assigned"}</b>
+              {lead && <span className="lead-title">{lead.title}</span>}
+            </div>
+          </div>
+          {lead && <LeadContact person={lead} about={system.name} />}
+          <label className="lead-change">
+            <span>{lead ? "Change lead" : "Assign a lead"}</span>
+            <select value={system.lead ?? ""} onChange={(e) => onChangeLead(system.id, e.target.value)}>
+              {!lead && <option value="">Choose…</option>}
+              {PEOPLE.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} · {p.title}
+                </option>
+              ))}
+            </select>
+          </label>
+        </section>
+
         <dl className="facts">
-          <dt>Owner</dt>
+          <dt>Team</dt>
           <dd>{system.owner}</dd>
           <dt>Started</dt>
           <dd>{formatDate(system.startedAt)}</dd>

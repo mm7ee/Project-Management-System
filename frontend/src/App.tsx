@@ -131,6 +131,7 @@ export default function App() {
         system={selected}
         now={now}
         onClose={() => setSelectedId(null)}
+        onChangeLead={(id, lead) => update(id, { lead })}
         onDelete={(id) => {
           remove(id);
           setSelectedId(null);

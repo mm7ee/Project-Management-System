@@ -1,6 +1,7 @@
-import { ChevronRight, Clock } from "lucide-react";
+import { ChevronRight, Clock, Mail } from "lucide-react";
 import { SCHEDULE_META, STATUS_META, daysUntil, getSchedule, initials, type System } from "../data/systems";
 import { formatShort, plural, timeAgo } from "../time";
+import { personById } from "../data/people";
 
 interface Props {
   system: System;
@@ -66,6 +67,7 @@ export function updatedText(s: System, now: number): string {
 }
 
 export default function SystemCard({ system, now, onSelect }: Props) {
+  const lead = personById(system.lead);
   return (
     <article className="card">
       <header className="card-head">
@@ -82,12 +84,29 @@ export default function SystemCard({ system, now, onSelect }: Props) {
 
       <footer className="card-foot">
         <span className="updated">
-          <span className="avatar">{system.updatedBy ?? initials(system.owner)}</span>
-          {updatedText(system, now)}
+          <span className="avatar" title={lead ? `Project lead: ${lead.name}` : undefined}>
+            {lead ? initials(lead.name) : system.updatedBy ?? initials(system.owner)}
+          </span>
+          <span className="updated-text">
+            {lead && <b className="lead-name">{lead.name}</b>}
+            <span>{updatedText(system, now)}</span>
+          </span>
         </span>
-        <button className="view-link" onClick={() => onSelect(system)}>
-          View <ChevronRight size={15} />
-        </button>
+        <span className="foot-actions">
+          {lead?.email && (
+            <a
+              className="icon-link"
+              href={`mailto:${lead.email}?subject=${encodeURIComponent(`OmniTrack: ${system.name}`)}`}
+              title={`Email ${lead.name}`}
+              aria-label={`Email ${lead.name}`}
+            >
+              <Mail size={16} />
+            </a>
+          )}
+          <button className="view-link" onClick={() => onSelect(system)}>
+            View <ChevronRight size={15} />
+          </button>
+        </span>
       </footer>
     </article>
   );

@@ -13,7 +13,8 @@ export interface System {
   url: string;
   status: Status;
   health?: Health; // only meaningful for LIVE / COMPLETED systems
-  owner: string;
+  owner: string; // owning team
+  lead?: string; // project lead: a Person id from people.ts
   engagement: number; // visits in the last 30 days
   progress: number; // 0–100
   startedAt: string; // ISO date
@@ -84,6 +85,7 @@ export const SYSTEMS: System[] = [
     status: "LIVE",
     health: "Maintenance",
     owner: "Systems Team",
+    lead: "donald",
     engagement: 785,
     progress: 100,
     startedAt: "2026-06-02",
@@ -98,6 +100,7 @@ export const SYSTEMS: System[] = [
     status: "LIVE",
     health: "Stable",
     owner: "Systems Team",
+    lead: "anesu",
     engagement: 1240,
     progress: 100,
     startedAt: "2026-01-12",
@@ -111,6 +114,7 @@ export const SYSTEMS: System[] = [
     url: `${HOST}:8097`,
     status: "WIP",
     owner: "Systems Team",
+    lead: "kundai",
     engagement: 320,
     progress: 65,
     startedAt: "2026-08-04",
@@ -125,6 +129,7 @@ export const SYSTEMS: System[] = [
     status: "COMPLETED",
     health: "Stable",
     owner: "Systems Team",
+    lead: "tino",
     engagement: 410,
     progress: 100,
     startedAt: "2026-03-09",
@@ -138,6 +143,7 @@ export const SYSTEMS: System[] = [
     url: `${HOST}:8095`,
     status: "WIP",
     owner: "Systems Team",
+    lead: "paul",
     engagement: 190,
     progress: 40,
     startedAt: "2026-09-01",
@@ -152,6 +158,7 @@ export const SYSTEMS: System[] = [
     status: "COMPLETED",
     health: "Stable",
     owner: "Systems Team",
+    lead: "mutsa",
     engagement: 210,
     progress: 100,
     startedAt: "2026-04-14",
@@ -166,6 +173,7 @@ export const SYSTEMS: System[] = [
     status: "LIVE",
     health: "Maintenance",
     owner: "Systems Team",
+    lead: "mcdonald",
     engagement: 880,
     progress: 100,
     startedAt: "2026-02-16",
@@ -179,6 +187,7 @@ export const SYSTEMS: System[] = [
     url: `${HOST}:8092`,
     status: "UPCOMING",
     owner: "Systems Team",
+    lead: "ruva",
     engagement: 0,
     progress: 5,
     startedAt: "2026-10-01",
@@ -192,6 +201,7 @@ export const SYSTEMS: System[] = [
     url: `${HOST}:8091`,
     status: "WIP",
     owner: "Systems Team",
+    lead: "donald",
     engagement: 150,
     progress: 10,
     startedAt: "2026-09-22",
@@ -206,6 +216,7 @@ export const SYSTEMS: System[] = [
     status: "LIVE",
     health: "Stable",
     owner: "Systems Team",
+    lead: "anesu",
     engagement: 560,
     progress: 100,
     startedAt: "2026-05-04",
@@ -219,6 +230,7 @@ export const SYSTEMS: System[] = [
     url: `${HOST}:8089`,
     status: "UPCOMING",
     owner: "Systems Team",
+    lead: "kundai",
     engagement: 0,
     progress: 0,
     startedAt: "2026-10-20",
@@ -232,6 +244,7 @@ export const SYSTEMS: System[] = [
     url: `${HOST}:8088`,
     status: "IDEA",
     owner: "Unassigned",
+    lead: "tino",
     engagement: 0,
     progress: 0,
     startedAt: "2026-10-05",

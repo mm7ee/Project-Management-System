@@ -80,7 +80,7 @@ export default function Sidebar({ filter, counts, open, onFilter, onClose, onAdd
             </>
           ) : (
             <>
-              <span className="profile-avatar empty">
+              <span className="profile-avatar is-empty">
                 <UserRound size={16} />
               </span>
               <span className="profile-text">

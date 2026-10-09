@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { STATUS_META, initials, type Health, type Status, type System } from "../data/systems";
+import { PEOPLE } from "../data/people";
 
 interface Props {
   existingIds: string[];
@@ -21,7 +22,7 @@ export default function AddSystemModal({ existingIds, onSave, onClose }: Props) 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [url, setUrl] = useState("");
-  const [owner, setOwner] = useState("Systems Team");
+  const [lead, setLead] = useState("");
   const [status, setStatus] = useState<Status>("WIP");
   const [progress, setProgress] = useState(0);
   const [startedAt, setStartedAt] = useState(today());
@@ -58,7 +59,8 @@ export default function AddSystemModal({ existingIds, onSave, onClose }: Props) 
             short: initials(name),
             description: description.trim(),
             url: url.trim(),
-            owner: owner.trim() || "Unassigned",
+            owner: "Systems Team",
+            ...(lead ? { lead } : {}),
             status,
             progress,
             engagement: 0,
@@ -95,8 +97,15 @@ export default function AddSystemModal({ existingIds, onSave, onClose }: Props) 
             </select>
           </label>
           <label className="field">
-            <span>Owner</span>
-            <input value={owner} onChange={(e) => setOwner(e.target.value)} />
+            <span>Project lead</span>
+            <select value={lead} onChange={(e) => setLead(e.target.value)}>
+              <option value="">Not assigned yet</option>
+              {PEOPLE.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} · {p.title}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
 
