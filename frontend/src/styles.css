@@ -61,6 +61,24 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .add-btn:hover { background: rgba(27, 169, 225, 0.1); border-color: var(--cyan); }
 
+.profile {
+  display: flex; align-items: center; gap: 10px; width: 100%; margin-top: auto;
+  padding: 12px 10px; border: 0; border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0; background: none; color: #fff; text-align: left; cursor: pointer;
+}
+.profile:hover { background: rgba(255, 255, 255, 0.06); }
+.profile-avatar {
+  flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--cyan); color: #fff; font-size: 13px; font-weight: 700;
+}
+.profile-avatar.empty { background: rgba(255, 255, 255, 0.12); color: #d6dfec; }
+.profile-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.profile-name { font-size: 14.5px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.profile-title { font-size: 12.5px; color: #9fb0c8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.profile-edit { flex: none; color: #9fb0c8; opacity: 0; transition: opacity .15s; }
+.profile:hover .profile-edit, .profile:focus-visible .profile-edit { opacity: 1; }
+.modal-note { font-size: 14px; color: var(--muted); margin-top: -6px; }
+
 .sidebar-close, .menu-btn { display: none; }
 .sidebar-scrim { display: none; }
 

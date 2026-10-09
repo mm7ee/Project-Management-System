@@ -1,20 +1,23 @@
 import { useMemo, useState } from "react";
 import { Menu, Plus, Search } from "lucide-react";
-import { getSchedule, type System } from "./data/systems";
+import { getSchedule, initials, type System } from "./data/systems";
 import { useSystems } from "./data/store";
+import { useProfile } from "./data/profile";
 import { useNow } from "./time";
 import Sidebar, { type Filter } from "./components/Sidebar";
 import SystemCard from "./components/SystemCard";
 import SystemDrawer from "./components/SystemDrawer";
 import UpdateModal, { type ProgressUpdate } from "./components/UpdateModal";
 import AddSystemModal from "./components/AddSystemModal";
-
-// Initials shown on updates posted from this browser, until there is a login.
-const CURRENT_USER = "MM";
+import ProfileModal from "./components/ProfileModal";
 
 export default function App() {
   const now = useNow();
   const { systems, add, update, remove } = useSystems();
+  const { profile, save: saveProfile } = useProfile();
+  const [editingProfile, setEditingProfile] = useState(false);
+  // Initials stamped on updates posted from this browser.
+  const currentUser = profile ? initials(profile.name) : "?";
   const [filter, setFilter] = useState<Filter>("ALL");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -56,14 +59,14 @@ export default function App() {
       progress,
       status,
       updatedAt: stamp,
-      updatedBy: CURRENT_USER,
+      updatedBy: currentUser,
       finishedAt: progress === 100 && (status === "LIVE" || status === "COMPLETED") ? s?.finishedAt ?? stamp : s?.finishedAt,
     });
     setPosting(false);
   };
 
   const addSystem = (s: System) => {
-    add({ ...s, updatedBy: CURRENT_USER });
+    add({ ...s, updatedBy: currentUser });
     setAdding(false);
     setFilter("ALL");
     setQuery("");
@@ -80,6 +83,8 @@ export default function App() {
         onFilter={setFilter}
         onClose={() => setMenuOpen(false)}
         onAdd={() => setAdding(true)}
+        profile={profile}
+        onEditProfile={() => setEditingProfile(true)}
       />
 
       <main className="main">
@@ -131,6 +136,16 @@ export default function App() {
           setSelectedId(null);
         }}
       />
+      {editingProfile && (
+        <ProfileModal
+          profile={profile}
+          onSave={(p) => {
+            saveProfile(p);
+            setEditingProfile(false);
+          }}
+          onClose={() => setEditingProfile(false)}
+        />
+      )}
       {adding && (
         <AddSystemModal existingIds={systems.map((s) => s.id)} onSave={addSystem} onClose={() => setAdding(false)} />
       )}

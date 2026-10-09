@@ -1,5 +1,6 @@
-import { Plus, X } from "lucide-react";
-import { STATUS_META, type Status } from "../data/systems";
+import { Pencil, Plus, UserRound, X } from "lucide-react";
+import { STATUS_META, initials, type Status } from "../data/systems";
+import type { Profile } from "../data/profile";
 
 export type Filter = "ALL" | Status | "OVERDUE";
 
@@ -22,9 +23,11 @@ interface Props {
   onFilter: (f: Filter) => void;
   onClose: () => void;
   onAdd: () => void;
+  profile: Profile | null;
+  onEditProfile: () => void;
 }
 
-export default function Sidebar({ filter, counts, open, onFilter, onClose, onAdd }: Props) {
+export default function Sidebar({ filter, counts, open, onFilter, onClose, onAdd, profile, onEditProfile }: Props) {
   return (
     <>
       <div className={`sidebar-scrim ${open ? "show" : ""}`} onClick={onClose} />
@@ -63,6 +66,29 @@ export default function Sidebar({ filter, counts, open, onFilter, onClose, onAdd
           }}
         >
           <Plus size={17} strokeWidth={2.75} /> Add system
+        </button>
+
+        <button className="profile" onClick={onEditProfile} aria-label="Edit your profile">
+          {profile ? (
+            <>
+              <span className="profile-avatar">{initials(profile.name)}</span>
+              <span className="profile-text">
+                <span className="profile-name">{profile.name}</span>
+                {profile.title && <span className="profile-title">{profile.title}</span>}
+              </span>
+              <Pencil size={14} className="profile-edit" />
+            </>
+          ) : (
+            <>
+              <span className="profile-avatar empty">
+                <UserRound size={16} />
+              </span>
+              <span className="profile-text">
+                <span className="profile-name">Set your name</span>
+                <span className="profile-title">Name and title</span>
+              </span>
+            </>
+          )}
         </button>
       </aside>
     </>
