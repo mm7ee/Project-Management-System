@@ -14,7 +14,7 @@ const CURRENT_USER = "MM";
 
 export default function App() {
   const now = useNow();
-  const { systems, add, update } = useSystems();
+  const { systems, add, update, remove } = useSystems();
   const [filter, setFilter] = useState<Filter>("ALL");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -122,7 +122,15 @@ export default function App() {
         )}
       </main>
 
-      <SystemDrawer system={selected} now={now} onClose={() => setSelectedId(null)} />
+      <SystemDrawer
+        system={selected}
+        now={now}
+        onClose={() => setSelectedId(null)}
+        onDelete={(id) => {
+          remove(id);
+          setSelectedId(null);
+        }}
+      />
       {adding && (
         <AddSystemModal existingIds={systems.map((s) => s.id)} onSave={addSystem} onClose={() => setAdding(false)} />
       )}

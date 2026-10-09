@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { ArrowUpRight, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowUpRight, Trash2, X } from "lucide-react";
 import { HEALTH_META, initials, type System } from "../data/systems";
 import { formatDate } from "../time";
 import { DateLine, ProgressBar, ScheduleChip, StatusPill, updatedText } from "./SystemCard";
@@ -8,9 +8,15 @@ interface Props {
   system: System | null;
   now: number;
   onClose: () => void;
+  onDelete: (id: string) => void;
 }
 
-export default function SystemDrawer({ system, now, onClose }: Props) {
+export default function SystemDrawer({ system, now, onClose, onDelete }: Props) {
+  const [confirming, setConfirming] = useState(false);
+
+  // Opening a different system never starts in the "are you sure?" state.
+  useEffect(() => setConfirming(false), [system?.id]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -79,6 +85,26 @@ export default function SystemDrawer({ system, now, onClose }: Props) {
         >
           {canOpen ? "Open system" : "Not live yet"} {canOpen && <ArrowUpRight size={16} />}
         </a>
+
+        {confirming ? (
+          <div className="confirm" role="alertdialog" aria-label="Confirm delete">
+            <p>
+              Delete <b>{system.name}</b>? It will be removed from the tracker along with its progress updates.
+            </p>
+            <div className="confirm-actions">
+              <button className="btn btn-ghost" onClick={() => setConfirming(false)}>
+                Cancel
+              </button>
+              <button className="btn btn-danger" onClick={() => onDelete(system.id)}>
+                <Trash2 size={16} /> Delete
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button className="delete-link" onClick={() => setConfirming(true)}>
+            <Trash2 size={15} /> Delete system
+          </button>
+        )}
       </aside>
     </div>
   );
