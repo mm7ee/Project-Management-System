@@ -48,7 +48,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
 
   const counts = useMemo(() => {
     const c: Record<Filter, number> = {
-      ALL: systems.length, LIVE: 0, COMPLETED: 0, WIP: 0, TO_DEPLOY: 0, UPCOMING: 0, IDEA: 0, OVERDUE: 0, REQUESTED: 0,
+      ALL: systems.length, LIVE: 0, COMPLETED: 0, WIP: 0, TESTING: 0, TO_DEPLOY: 0, UPCOMING: 0, IDEA: 0, OVERDUE: 0, REQUESTED: 0,
     };
     systems.forEach((s) => {
       c[s.status]++;

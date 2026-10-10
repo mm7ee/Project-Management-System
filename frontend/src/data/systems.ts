@@ -1,7 +1,7 @@
 // The System shape and the status/schedule rules, shared by the UI and the Worker.
 // The systems themselves live in the D1 database (seeded by migrations/0002_seed.sql).
 
-export type Status = "LIVE" | "COMPLETED" | "WIP" | "TO_DEPLOY" | "UPCOMING" | "IDEA";
+export type Status = "LIVE" | "COMPLETED" | "WIP" | "TESTING" | "TO_DEPLOY" | "UPCOMING" | "IDEA";
 export type Health = "Stable" | "Maintenance";
 export type Schedule = "ON_TRACK" | "AT_RISK" | "OVERDUE" | "DONE" | "UNSCHEDULED";
 
@@ -28,6 +28,7 @@ export const STATUS_META: Record<Status, { label: string; tone: string }> = {
   LIVE: { label: "Live", tone: "green" },
   COMPLETED: { label: "Completed", tone: "navy" },
   WIP: { label: "In progress", tone: "cyan" },
+  TESTING: { label: "Testing", tone: "violet" },
   TO_DEPLOY: { label: "To deploy", tone: "amber" },
   UPCOMING: { label: "Upcoming", tone: "slate" },
   IDEA: { label: "Idea", tone: "light" },

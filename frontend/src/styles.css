@@ -9,6 +9,7 @@
   --amber: #f2a900;
   --red: #d9534f;
   --slate: #5b6b82;
+  --violet: #7356d6;
 
   --canvas: #f6f9fd;
   --card: #ffffff;
@@ -136,6 +137,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .fill-cyan { background: var(--cyan); color: #fff; }
 .fill-amber { background: var(--amber); color: var(--navy-900); }
 .fill-slate { background: var(--slate); color: #fff; }
+.fill-violet { background: var(--violet); color: #fff; }
 .fill-light { background: var(--track); color: var(--navy); }
 
 .progress-row { display: flex; align-items: center; gap: 16px; }

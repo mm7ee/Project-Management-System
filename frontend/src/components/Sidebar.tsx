@@ -11,6 +11,7 @@ const NAV: { key: Filter; label: string; optional?: boolean }[] = [
   { key: "ALL", label: "All projects" },
   { key: "LIVE", label: STATUS_META.LIVE.label },
   { key: "WIP", label: STATUS_META.WIP.label },
+  { key: "TESTING", label: STATUS_META.TESTING.label, optional: true },
   { key: "TO_DEPLOY", label: STATUS_META.TO_DEPLOY.label, optional: true },
   { key: "UPCOMING", label: STATUS_META.UPCOMING.label },
   { key: "COMPLETED", label: STATUS_META.COMPLETED.label },
