@@ -162,6 +162,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   padding: 3px 14px 3px 10px; border: 2px solid; border-radius: 99px; font-size: 13px; font-weight: 600;
 }
 .chip i { width: 10px; height: 10px; border-radius: 50%; background: currentColor; }
+.chip { white-space: nowrap; }
 .line-green { border-color: var(--green); color: var(--green); }
 .line-navy { border-color: var(--navy); color: var(--navy); }
 .line-red { border-color: var(--red); color: var(--red); }
@@ -336,13 +337,83 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .report-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .report-flag { margin-bottom: 12px; padding: 10px 14px; border-radius: 10px; background: #fcf2f2; color: var(--red); font-weight: 600; font-size: 14px; }
 
+/* ---------- Graphical reports ---------- */
+.viz-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
+.seg { display: inline-flex; padding: 3px; border-radius: 99px; background: var(--card); border: 1px solid var(--border); }
+.seg button { border: 0; background: none; padding: 6px 14px; border-radius: 99px; font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.seg button.on { background: var(--navy); color: #fff; }
+.viz-filters select { padding: 7px 12px; border: 1px solid var(--border); border-radius: 99px; background: var(--card); font-size: 13.5px; }
+.viz-count { font-size: 13px; color: var(--faint); }
+.viz-card { margin-bottom: 14px; padding: 18px 20px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+.viz-card h3 { font-size: 16px; font-weight: 800; color: var(--navy); }
+.viz-sub { margin: 2px 0 12px; font-size: 13px; color: var(--muted); }
+.viz-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.viz-pair .viz-card { margin-bottom: 14px; }
+.viz-svg { display: block; overflow: visible; }
+.viz-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0 0 10px; padding: 0; list-style: none; font-size: 12.5px; color: var(--muted); }
+.viz-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.viz-key { display: inline-block; flex: none; }
+.viz-key.rect { width: 12px; height: 10px; border-radius: 2px; }
+.viz-key.tick { width: 2px; height: 14px; }
+.viz-key.line { width: 14px; height: 2px; }
+.viz-axis { font-size: 11.5px; fill: var(--faint); font-variant-numeric: tabular-nums; }
+.viz-grid { stroke: #edf2f8; stroke-width: 1; }
+.viz-row-label { font-size: 13px; font-weight: 600; fill: var(--text); }
+.viz-end-label { font-size: 12px; font-weight: 600; fill: var(--muted); font-variant-numeric: tabular-nums; }
+.viz-in-label { font-size: 13px; font-weight: 800; }
+.viz-today { stroke: var(--navy); stroke-width: 1.5; }
+.viz-today-label { font-size: 11.5px; font-weight: 800; fill: var(--navy); }
+.viz-due { stroke: #15263b; stroke-width: 2; }
+.viz-expected { stroke: #15263b; stroke-width: 2; }
+.viz-verdict { font-size: 12.5px; font-weight: 700; fill: var(--muted); }
+.viz-verdict.behind { fill: #b5382f; }
+.viz-verdict.ahead { fill: #0b6e55; }
+.viz-hit { cursor: default; outline: none; }
+.viz-hit:hover rect:not([fill="transparent"]), .viz-hit:hover path, .viz-hit:focus-visible rect:not([fill="transparent"]), .viz-hit:focus-visible path { filter: brightness(1.08); }
+.viz-hit:focus-visible > rect[fill="transparent"] { fill: rgba(27, 169, 225, 0.08); }
+.viz-hit:hover > rect[fill="transparent"] { fill: rgba(5, 59, 122, 0.035); }
+.viz-empty { padding: 18px 0; font-size: 14px; color: var(--faint); }
+.viz-tip {
+  position: fixed; z-index: 60; min-width: 170px; max-width: 250px; padding: 10px 12px; pointer-events: none;
+  background: #0b1e42; color: #fff; border-radius: 10px; box-shadow: 0 12px 30px rgba(7, 26, 61, 0.3); font-size: 12.5px;
+}
+.viz-tip-title { margin-bottom: 6px; font-weight: 700; color: #cfe0f2; }
+.viz-tip-row { display: flex; align-items: center; gap: 7px; line-height: 1.6; }
+.viz-tip-row i { width: 12px; height: 3px; border-radius: 2px; flex: none; }
+.viz-tip-row b { font-size: 13.5px; }
+.viz-tip-row span { color: #9fb3cc; }
+.table-wrap.flat { box-shadow: none; }
+
+.brief { display: grid; grid-template-columns: minmax(180px, 240px) minmax(0, 1fr); gap: 24px; align-items: start; }
+.brief-hero { display: flex; flex-direction: column; padding-right: 20px; border-right: 1px solid var(--border); }
+.brief-figure { font-size: 56px; font-weight: 800; line-height: 1; color: var(--navy); letter-spacing: -0.02em; }
+.brief-figure small { font-size: 24px; color: var(--faint); font-weight: 700; }
+.brief-caption { margin-top: 6px; font-size: 14px; font-weight: 600; color: var(--muted); }
+.brief-mini { display: flex; flex-direction: column; gap: 4px; margin-top: 14px; font-size: 13.5px; color: var(--muted); }
+.brief-mini b { color: var(--text); }
+.brief-lines { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.brief-lines li { display: flex; gap: 10px; align-items: flex-start; font-size: 14.5px; line-height: 1.45; color: var(--text); }
+.brief-lines svg { flex: none; margin-top: 1px; }
+.brief-lines .tone-good svg { color: var(--green); }
+.brief-lines .tone-warn svg { color: #c98a00; }
+.brief-lines .tone-bad svg { color: var(--red); }
+.brief-lines .tone-info svg { color: var(--cyan); }
+
+@media (max-width: 1100px) { .viz-pair { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 700px) {
+  .brief { grid-template-columns: minmax(0, 1fr); }
+  .brief-hero { padding: 0 0 14px; border-right: 0; border-bottom: 1px solid var(--border); }
+}
+
 @media print {
   .sidebar, .sidebar-scrim, .no-print, .backdrop { display: none !important; }
   .shell { display: block; height: auto; }
   .main { overflow: visible; padding: 0; }
   body { background: #fff; }
   .table-wrap, .stat { box-shadow: none; }
-  .pill, .chip, .stat-value { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .pill, .chip, .stat-value, .viz-svg, .viz-key { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .viz-card, .brief { break-inside: avoid; box-shadow: none; }
+  .viz-pair { grid-template-columns: minmax(0, 1fr); }
 }
 
 @keyframes fade { from { opacity: 0; } }

@@ -12,7 +12,7 @@ import AddSystemModal from "./components/AddSystemModal";
 import AccountModal from "./components/AccountModal";
 import Login from "./components/Login";
 import UsersPage from "./components/UsersPage";
-import ReportsPage from "./components/ReportsPage";
+import ReportsPage from "./components/reports/ReportsPage";
 
 export default function App() {
   const { data, loading, reload } = useAppData();
