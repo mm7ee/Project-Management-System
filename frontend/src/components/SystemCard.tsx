@@ -2,6 +2,7 @@ import { BellRing, ChevronRight, Clock, Mail } from "lucide-react";
 import { SCHEDULE_META, STATUS_META, daysUntil, getSchedule, initials, type System } from "../data/systems";
 import { formatShort, plural, timeAgo } from "../time";
 import type { User } from "../data/roles";
+import CountUp from "./CountUp";
 
 interface Props {
   system: System;
@@ -9,12 +10,18 @@ interface Props {
   lead?: User;
   requests: number; // open update requests for this system
   mine: boolean; // the signed-in developer's assigned project
+  index?: number; // position in the grid, for the staggered entrance
   onSelect: (s: System) => void;
 }
 
 export function StatusPill({ status }: { status: System["status"] }) {
   const meta = STATUS_META[status];
-  return <span className={`pill fill-${meta.tone}`}>{meta.label}</span>;
+  return (
+    <span className={`pill fill-${meta.tone}`}>
+      {status === "LIVE" && <i className="pill-dot" aria-hidden="true" />}
+      {meta.label}
+    </span>
+  );
 }
 
 export function ScheduleChip({ system, now }: { system: System; now: number }) {
@@ -54,9 +61,11 @@ export function ProgressBar({ value }: { value: number }) {
   return (
     <div className="progress-row">
       <div className="progress">
-        <div className={`progress-fill ${value >= 100 ? "done" : ""}`} style={{ width: `${value}%` }} />
+        <div className={`progress-fill ${value >= 100 ? "done" : value > 0 ? "active" : ""}`} style={{ width: `${value}%` }} />
       </div>
-      <span className="progress-pct">{value}%</span>
+      <span className="progress-pct">
+        <CountUp value={value} />%
+      </span>
     </div>
   );
 }
@@ -69,9 +78,18 @@ export function updatedText(s: System, now: number): string {
   return !s.updatedAt && new Date(at).getTime() > now ? "No updates yet" : `Updated ${timeAgo(at, now)}`;
 }
 
-export default function SystemCard({ system, now, lead, requests, mine, onSelect }: Props) {
+export default function SystemCard({ system, now, lead, requests, mine, index = 0, onSelect }: Props) {
   return (
-    <article className={`card ${mine ? "mine" : ""}`}>
+    <article
+      className={`card ${mine ? "mine" : ""}`}
+      style={{ ["--i" as string]: Math.min(index, 12) }}
+      // Spotlight that follows the pointer (drawn by .card::before).
+      onPointerMove={(e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        e.currentTarget.style.setProperty("--mx", `${e.clientX - r.left}px`);
+        e.currentTarget.style.setProperty("--my", `${e.clientY - r.top}px`);
+      }}
+    >
       <header className="card-head">
         <h3>{system.name}</h3>
         <StatusPill status={system.status} />

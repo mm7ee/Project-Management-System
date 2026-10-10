@@ -14,6 +14,7 @@ import Login from "./components/Login";
 import UsersPage from "./components/UsersPage";
 import ReportsPage from "./components/reports/ReportsPage";
 import UpdateBanner from "./components/UpdateBanner";
+import CountUp from "./components/CountUp";
 
 export default function App() {
   const { data, loading, reload } = useAppData();
@@ -157,15 +158,18 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             <section className="stats five">
               {stats.map(({ value, label, tone }) => (
                 <div className="stat" key={label}>
-                  <span className={`stat-value text-${tone}`}>{value}</span>
+                  <span className={`stat-value text-${tone}`}>
+                    <CountUp value={value} />
+                  </span>
                   <span className="stat-label">{label}</span>
                 </div>
               ))}
             </section>
 
             {visible.length ? (
-              <div className="grid">
-                {visible.map((s) => (
+              // Keyed on the filter so switching sections replays the entrance.
+              <div className="grid" key={filter}>
+                {visible.map((s, i) => (
                   <SystemCard
                     key={s.id}
                     system={s}
@@ -173,6 +177,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
                     lead={users.find((u) => u.id === s.lead)}
                     requests={requestsFor(s.id).length}
                     mine={s.id === me.projectId}
+                    index={i}
                     onSelect={(x) => setSelectedId(x.id)}
                   />
                 ))}
