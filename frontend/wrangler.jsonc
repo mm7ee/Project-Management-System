@@ -1,5 +1,6 @@
 // Cloudflare deployment: one Worker serves the Vite build (assets) and the /api backend,
-// backed by the D1 database. Deploy with `npm run deploy` (builds, migrates, deploys).
+// backed by the D1 database. Deploy with `npm run deploy`; apply schema changes with
+// `npm run db:migrate` (remote D1) before deploying code that depends on them.
 {
   "name": "omni-tracker",
   "main": "worker/index.ts",
