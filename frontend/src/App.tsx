@@ -13,12 +13,16 @@ import AccountModal from "./components/AccountModal";
 import Login from "./components/Login";
 import UsersPage from "./components/UsersPage";
 import ReportsPage from "./components/reports/ReportsPage";
+import UpdateBanner from "./components/UpdateBanner";
 
 export default function App() {
   const { data, loading, reload } = useAppData();
-  if (loading) return <div className="splash">Loading…</div>;
-  if (!data) return <Login onSignedIn={reload} />;
-  return <Dashboard data={data} reload={reload} />;
+  return (
+    <>
+      {loading ? <div className="splash">Loading…</div> : data ? <Dashboard data={data} reload={reload} /> : <Login onSignedIn={reload} />}
+      <UpdateBanner />
+    </>
+  );
 }
 
 function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void> }) {
