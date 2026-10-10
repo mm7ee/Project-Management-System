@@ -30,7 +30,6 @@ export default function AccountModal({ me, permissions, projectName, onSignOut, 
         </button>
         <h2>{me.name}</h2>
         <p className="modal-note">
-          {me.title ? `${me.title} · ` : ""}
           {ROLE_LABEL[me.role]} · signed in as <b>{me.username}</b>
           {projectName && (
             <>

@@ -70,10 +70,7 @@ export default function UsersPage({ me, users, systems, roleMatrix, onChanged }:
                     <span className="avatar">{initials(u.name)}</span>
                     <span>
                       <b>{u.name}</b>
-                      <small>
-                        {u.username}
-                        {u.title ? ` · ${u.title}` : ""}
-                      </small>
+                      <small>{u.username}</small>
                     </span>
                   </span>
                 </td>
