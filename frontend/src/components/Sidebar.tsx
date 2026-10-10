@@ -101,7 +101,6 @@ export default function Sidebar(p: Props) {
           <span className="profile-avatar">{initials(p.me.name)}</span>
           <span className="profile-text">
             <span className="profile-name">{p.me.name}</span>
-            <span className="profile-title">{p.me.title || ROLE_LABEL[p.me.role]}</span>
             <span className="role-tag">{ROLE_LABEL[p.me.role]}</span>
           </span>
         </button>
