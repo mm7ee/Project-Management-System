@@ -118,6 +118,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .stat-value { min-width: 58px; font-size: 26px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
 .stat-label { font-size: 16px; color: var(--muted); }
+.stats.five { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.stats.five .stat { gap: 14px; padding: 16px; }
+.stats.five .stat-value { min-width: 0; }
 
 /* ---------- Project cards ---------- */
 .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 15px; }
@@ -205,6 +208,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .text-navy { color: var(--navy); }
 .text-green { color: var(--green); }
 .text-cyan { color: var(--cyan); }
+.text-violet { color: var(--violet); }
 .text-red { color: var(--red); }
 
 .empty { padding: 60px 20px; text-align: center; color: var(--faint); font-size: 15px; }
@@ -349,6 +353,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 @media (max-width: 1180px) {
   .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats.five { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .stats.five .stat { grid-column: span 2; }
+  .stats.five .stat:nth-child(n + 4) { grid-column: span 3; }
   .post-btn { margin-left: 0; }
 }
 @media (max-width: 860px) {
@@ -377,7 +384,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 @media (max-width: 600px) {
   .grid { grid-template-columns: minmax(0, 1fr); }
   .stats { gap: 10px; }
-  .stat { flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px; }
+  .stat, .stats.five .stat { flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px; }
+  .stats.five { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stats.five .stat, .stats.five .stat:nth-child(n + 4) { grid-column: span 1; }
+  .stats.five .stat:last-child { grid-column: span 2; }
   .stat-label { font-size: 14px; }
   .field-row { grid-template-columns: minmax(0, 1fr); }
 }

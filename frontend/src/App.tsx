@@ -80,6 +80,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   const stats = [
     { value: systems.length, label: "Projects tracked", tone: "navy" },
     { value: counts.LIVE, label: "Live", tone: "green" },
+    { value: counts.TESTING, label: "Testing", tone: "violet" },
     { value: `${avgProgress}%`, label: "Average progress", tone: "cyan" },
     { value: atRisk, label: "At risk / overdue", tone: "red" },
   ];
@@ -149,7 +150,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             {me.role === "developer" && !myProject && (
               <p className="notice">You haven't been assigned a project yet. Ask an administrator to assign you one.</p>
             )}
-            <section className="stats">
+            <section className="stats five">
               {stats.map(({ value, label, tone }) => (
                 <div className="stat" key={label}>
                   <span className={`stat-value text-${tone}`}>{value}</span>
