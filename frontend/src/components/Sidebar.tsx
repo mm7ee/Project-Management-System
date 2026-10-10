@@ -1,14 +1,15 @@
-import { BellRing, FileBarChart, Plus, Users, Wrench, X } from "lucide-react";
+import { BellRing, FileBarChart, FolderGit2, Plus, Settings, Users, Wrench, X } from "lucide-react";
 import { STATUS_META, initials, type Status } from "../data/systems";
 import { ROLE_LABEL, type User } from "../data/roles";
 import { COMPANY_URL } from "../brand";
 
-export type Filter = "ALL" | Status | "OVERDUE" | "REQUESTED" | "MAINTENANCE";
-export type View = "projects" | "reports" | "users";
+export type Filter = "ALL" | Status | "OVERDUE" | "REQUESTED" | "MAINTENANCE" | "MINE";
+export type View = "projects" | "reports" | "users" | "settings";
 
 // Order follows the mock-up. Optional items only appear when something is in them.
 const NAV: { key: Filter; label: string; optional?: boolean }[] = [
   { key: "ALL", label: "All projects" },
+  { key: "MINE", label: "My project", optional: true },
   { key: "LIVE", label: STATUS_META.LIVE.label },
   { key: "WIP", label: STATUS_META.WIP.label },
   { key: "TESTING", label: STATUS_META.TESTING.label, optional: true },
@@ -69,6 +70,7 @@ export default function Sidebar(p: Props) {
               <span>
                 {key === "REQUESTED" && <BellRing size={15} className="nav-icon" />}
                 {key === "MAINTENANCE" && <Wrench size={15} className="nav-icon" />}
+                {key === "MINE" && <FolderGit2 size={15} className="nav-icon" />}
                 {label}
               </span>
               <span
@@ -81,7 +83,7 @@ export default function Sidebar(p: Props) {
             </button>
           ))}
 
-          {(p.canReports || p.canUsers) && <div className="nav-divider" />}
+          <div className="nav-divider" />
           {p.canReports && (
             <button className={`nav-item ${p.view === "reports" ? "active" : ""}`} onClick={go(() => p.onView("reports"))}>
               <span>
@@ -96,6 +98,11 @@ export default function Sidebar(p: Props) {
               </span>
             </button>
           )}
+          <button className={`nav-item ${p.view === "settings" ? "active" : ""}`} onClick={go(() => p.onView("settings"))}>
+            <span>
+              <Settings size={16} className="nav-icon" /> Settings
+            </span>
+          </button>
         </nav>
 
         {p.canAdd && (
@@ -104,7 +111,7 @@ export default function Sidebar(p: Props) {
           </button>
         )}
 
-        <button className="profile" onClick={p.onAccount} aria-label="Your account">
+        <button className={`profile ${p.view === "settings" ? "on" : ""}`} onClick={go(p.onAccount)} aria-label="Your settings">
           <span className="profile-avatar">{initials(p.me.name)}</span>
           <span className="profile-text">
             <span className="profile-name">{p.me.name}</span>

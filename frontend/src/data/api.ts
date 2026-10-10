@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { System } from "./systems";
-import type { Permission, RolePermissions, UpdateRequest, User } from "./roles";
+import type { Permission, Prefs, RolePermissions, UpdateRequest, User } from "./roles";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -22,6 +22,7 @@ export async function api<T = unknown>(path: string, method = "GET", data?: unkn
 
 export interface AppData {
   me: User;
+  prefs: Prefs;
   permissions: Permission[];
   roleMatrix: RolePermissions;
   systems: System[];

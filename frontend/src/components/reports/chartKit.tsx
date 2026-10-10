@@ -1,17 +1,19 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Status } from "../../data/systems";
 
-// Chart colours. Validated with the dataviz palette checker (light surface #fff):
-// the five active statuses pass lightness, chroma, CVD and normal-vision checks; cyan
-// and amber sit under 3:1 contrast, so every chart carries visible labels + a table.
-// "Not started" (idea + upcoming) is deliberately the de-emphasis grey, not a hue.
+// Chart colours are CSS variables (--st-*, defined per theme in styles.css) so marks
+// re-colour with the theme. Each mode's set was validated with the dataviz checker
+// against its own surface: light #fff and dark #121d31 both pass lightness, chroma, CVD
+// and normal-vision checks; a few steps sit under 3:1 contrast, so every chart carries
+// visible labels + a table. "Not started" is deliberately the de-emphasis grey.
+// Apply to SVG marks with style={{ fill }} (the fill attribute can't read variables).
 export const STAGE_COLOR = {
-  NOT_STARTED: "#b7c3d3",
-  WIP: "#1ba9e1",
-  TESTING: "#7356d6",
-  TO_DEPLOY: "#d18e00",
-  LIVE: "#0e8a6b",
-  COMPLETED: "#24589f",
+  NOT_STARTED: "var(--st-not)",
+  WIP: "var(--st-wip)",
+  TESTING: "var(--st-testing)",
+  TO_DEPLOY: "var(--st-deploy)",
+  LIVE: "var(--st-live)",
+  COMPLETED: "var(--st-done)",
 } as const;
 export type Stage = keyof typeof STAGE_COLOR;
 
@@ -27,7 +29,7 @@ export const STAGES: { key: Stage; label: string }[] = [
 export const stageOf = (s: Status): Stage => (s === "IDEA" || s === "UPCOMING" ? "NOT_STARTED" : s);
 
 // Reserved status colours for schedule health (never reused for series).
-export const HEALTH_COLOR = { ON_TRACK: "#0e8a6b", AT_RISK: "#d18e00", OVERDUE: "#d9534f", DONE: "#24589f" };
+export const HEALTH_COLOR = { ON_TRACK: "var(--st-live)", AT_RISK: "var(--st-deploy)", OVERDUE: "var(--st-overdue)", DONE: "var(--st-done)" };
 
 /** Tracks an element's content width so SVGs render at true pixel size (crisp text). */
 export function useWidth<T extends HTMLElement>() {

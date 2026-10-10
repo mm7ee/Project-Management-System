@@ -2,14 +2,15 @@ import { useMemo, useState } from "react";
 import { Menu, Plus, Search } from "lucide-react";
 import { getSchedule, type System } from "./data/systems";
 import { api, useAppData, type AppData } from "./data/api";
-import type { Permission } from "./data/roles";
+import type { Permission, Prefs } from "./data/roles";
+import { useApplyPrefs } from "./prefs";
 import { useNow } from "./time";
 import Sidebar, { type Filter, type View } from "./components/Sidebar";
 import SystemCard from "./components/SystemCard";
 import SystemDrawer from "./components/SystemDrawer";
 import UpdateModal, { type ProgressUpdate } from "./components/UpdateModal";
 import AddSystemModal from "./components/AddSystemModal";
-import AccountModal from "./components/AccountModal";
+import SettingsPage from "./components/SettingsPage";
 import Login from "./components/Login";
 import UsersPage from "./components/UsersPage";
 import ReportsPage from "./components/reports/ReportsPage";
@@ -31,14 +32,29 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   const { me, systems, users, requests } = data;
   const can = (p: Permission) => data.permissions.includes(p);
 
+  // Preferences apply instantly and save in the background.
+  const [prefs, setPrefs] = useState<Prefs>(data.prefs);
+  useApplyPrefs(prefs);
+  const savePrefs = async (p: Prefs) => {
+    const before = prefs;
+    setPrefs(p);
+    try {
+      setPrefs(await api<Prefs>("/me/prefs", "PUT", p));
+    } catch (e) {
+      setPrefs(before);
+      throw e;
+    }
+  };
+
   const [view, setView] = useState<View>("projects");
-  const [filter, setFilter] = useState<Filter>("ALL");
+  const [filter, setFilter] = useState<Filter>(() =>
+    data.prefs.start === "MINE" && !me.projectId ? "ALL" : (data.prefs.start as Filter),
+  );
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [posting, setPosting] = useState<{ initialId?: string } | null>(null);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState("");
-  const [account, setAccount] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
   // The projects this user may post progress for.
@@ -53,13 +69,14 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
 
   const counts = useMemo(() => {
     const c: Record<Filter, number> = {
-      ALL: systems.length, LIVE: 0, COMPLETED: 0, WIP: 0, TESTING: 0, TO_DEPLOY: 0, UPCOMING: 0, IDEA: 0, OVERDUE: 0, REQUESTED: 0, MAINTENANCE: 0,
+      ALL: systems.length, LIVE: 0, COMPLETED: 0, WIP: 0, TESTING: 0, TO_DEPLOY: 0, UPCOMING: 0, IDEA: 0, OVERDUE: 0, REQUESTED: 0, MAINTENANCE: 0, MINE: 0,
     };
     systems.forEach((s) => {
       c[s.status]++;
       if (getSchedule(s, now) === "OVERDUE") c.OVERDUE++;
       if (requests.some((r) => r.systemId === s.id)) c.REQUESTED++;
       if (s.health === "Maintenance") c.MAINTENANCE++;
+      if (s.id === me.projectId) c.MINE++;
     });
     return c;
   }, [systems, requests, now]);
@@ -70,7 +87,9 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
       .filter((s) =>
         filter === "ALL"
           ? true
-          : filter === "OVERDUE"
+          : filter === "MINE"
+            ? s.id === me.projectId
+            : filter === "OVERDUE"
             ? getSchedule(s, now) === "OVERDUE"
             : filter === "REQUESTED"
               ? requests.some((r) => r.systemId === s.id)
@@ -120,7 +139,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           setAddError("");
           setAdding(true);
         }}
-        onAccount={() => setAccount(true)}
+        onAccount={() => setView("settings")}
       />
 
       <main className="main">
@@ -149,7 +168,17 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           )}
         </header>
 
-        {view === "users" && can("manage_users") ? (
+        {view === "settings" ? (
+          <SettingsPage
+            me={me}
+            prefs={prefs}
+            permissions={data.permissions}
+            project={myProject}
+            onPrefs={savePrefs}
+            onProfileSaved={reload}
+            onSignedOut={reload}
+          />
+        ) : view === "users" && can("manage_users") ? (
           <UsersPage me={me} users={users} systems={systems} roleMatrix={data.roleMatrix} onChanged={reload} />
         ) : view === "reports" && can("reports") ? (
           <ReportsPage systems={systems} users={users} requests={requests} now={now} />
@@ -221,18 +250,6 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           await reload();
         }}
       />
-      {account && (
-        <AccountModal
-          me={me}
-          permissions={data.permissions}
-          projectName={myProject?.name}
-          onClose={() => setAccount(false)}
-          onSignOut={() => {
-            setAccount(false);
-            reload();
-          }}
-        />
-      )}
       {adding && (
         <AddSystemModal
           users={users}

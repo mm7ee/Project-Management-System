@@ -47,7 +47,7 @@ export function PipelineBar({ systems }: { systems: System[] }) {
                 )}
                 className="viz-hit"
               >
-                <path d={roundedRect(x0, 8, w, 32, first ? 4 : 0, last ? 4 : 0)} fill={STAGE_COLOR[seg.key]} />
+                <path d={roundedRect(x0, 8, w, 32, first ? 4 : 0, last ? 4 : 0)} style={{ fill: STAGE_COLOR[seg.key] }} />
                 {fits && (
                   <text x={x0 + w / 2} y={29} textAnchor="middle" className="viz-in-label" fill={seg.key === "NOT_STARTED" ? "#15263b" : "#fff"}>
                     {label}
@@ -107,7 +107,7 @@ export function Roadmap({ systems, now }: { systems: System[]; now: number }) {
         items={[
           ...STAGES.map((s) => ({ label: s.label, color: STAGE_COLOR[s.key] })),
           { label: "Past due date", color: HEALTH_COLOR.OVERDUE },
-          { label: "Due date", color: "#15263b", shape: "tick" as const },
+          { label: "Due date", color: "var(--text)", shape: "tick" as const },
         ]}
       />
       {width > 0 && rows.length > 0 && (
@@ -176,20 +176,20 @@ export function Roadmap({ systems, now }: { systems: System[]; now: number }) {
                     width={plannedEnd - (notStarted ? start : solidEnd)}
                     height={14}
                     rx={4}
-                    fill={color}
+                    style={{ fill: color }}
                     opacity={notStarted ? 0.45 : 0.22}
                   />
                 )}
                 {!notStarted && (
-                  <rect x={start} y={y + 10} width={Math.max(4, solidEnd - start)} height={14} rx={4} fill={color} />
+                  <rect x={start} y={y + 10} width={Math.max(4, solidEnd - start)} height={14} rx={4} style={{ fill: color }} />
                 )}
                 {overrunEnd !== null && plannedEnd !== null && (
-                  <rect x={plannedEnd + 2} y={y + 10} width={Math.max(4, overrunEnd - plannedEnd - 2)} height={14} rx={4} fill={HEALTH_COLOR.OVERDUE} />
+                  <rect x={plannedEnd + 2} y={y + 10} width={Math.max(4, overrunEnd - plannedEnd - 2)} height={14} rx={4} style={{ fill: HEALTH_COLOR.OVERDUE }} />
                 )}
                 {plannedEnd !== null && !delivered && (
                   <line x1={plannedEnd} x2={plannedEnd} y1={y + 6} y2={y + 28} className="viz-due" />
                 )}
-                {!s.dueAt && !delivered && <circle cx={start} cy={y + 17} r={5} fill={color} stroke="#fff" strokeWidth={2} />}
+                {!s.dueAt && !delivered && <circle cx={start} cy={y + 17} r={5} style={{ fill: color, stroke: "var(--card)" }} strokeWidth={2} />}
                 <text x={Math.min(labelX, width - 4)} y={y + ROW / 2 + 4} className="viz-end-label" textAnchor={labelX > width - 60 ? "end" : "start"}>
                   {rightLabel}
                 </text>
@@ -240,7 +240,7 @@ export function PaceChart({ paces, now }: { paces: Pace[]; now: number }) {
       <Legend
         items={[
           { label: "Progress", color: STAGE_COLOR.WIP },
-          { label: "Where it should be by today", color: "#15263b", shape: "tick" },
+          { label: "Where it should be by today", color: "var(--text)", shape: "tick" },
         ]}
       />
       {width > 0 &&
@@ -282,9 +282,9 @@ export function PaceChart({ paces, now }: { paces: Pace[]; now: number }) {
                   <text x={0} y={y + 24} className="viz-row-label">
                     {truncate(p.system.name, Math.floor(LABEL / 7.6))}
                   </text>
-                  <rect x={LABEL} y={y + 12} width={trackW} height={16} rx={4} fill="#e6eef8" />
+                  <rect x={LABEL} y={y + 12} width={trackW} height={16} rx={4} style={{ fill: "var(--track)" }} />
                   {p.system.progress > 0 && (
-                    <rect x={LABEL} y={y + 12} width={Math.max(4, X(p.system.progress) - LABEL)} height={16} rx={4} fill={color} />
+                    <rect x={LABEL} y={y + 12} width={Math.max(4, X(p.system.progress) - LABEL)} height={16} rx={4} style={{ fill: color }} />
                   )}
                   <line x1={X(p.expected)} x2={X(p.expected)} y1={y + 6} y2={y + 34} className="viz-expected" />
                   <text x={LABEL + trackW + 12} y={y + 24} className={`viz-verdict ${behind ? "behind" : ahead ? "ahead" : ""}`}>
@@ -334,7 +334,7 @@ export function EngagementBars({ systems }: { systems: System[] }) {
                   <text x={0} y={y + 19} className="viz-row-label">
                     {truncate(s.name, Math.floor(LABEL / 7.6))}
                   </text>
-                  <path d={endRounded(LABEL, y + 7, Math.max(4, w), 16)} fill={STAGE_COLOR.COMPLETED} />
+                  <path d={endRounded(LABEL, y + 7, Math.max(4, w), 16)} style={{ fill: STAGE_COLOR.COMPLETED }} />
                   <text x={LABEL + w + 8} y={y + 19} className="viz-end-label">
                     {s.engagement.toLocaleString()}
                   </text>

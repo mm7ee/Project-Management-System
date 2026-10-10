@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-
-const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+import { reduceMotion } from "../prefs";
 
 /**
  * Animates a number up to `value` (ease-out), then follows later changes from wherever it

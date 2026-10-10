@@ -6,6 +6,8 @@ import { STATUS_META, initials, type Status, type System } from "../src/data/sys
 import {
   DEFAULT_ROLE_PERMISSIONS,
   ROLES,
+  START_KEYS,
+  cleanPrefs,
   permissionsFor,
   type Permission,
   type Role,
@@ -36,6 +38,7 @@ interface UserRow {
   role: Role;
   project_id: string | null;
   password_hash: string;
+  prefs: string;
 }
 
 const toUser = (r: UserRow): User => ({
@@ -184,6 +187,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     ]);
     return json({
       me: toUser(me),
+      prefs: cleanPrefs(JSON.parse(me.prefs || "{}"), START_KEYS),
       permissions: perms,
       roleMatrix: matrix,
       systems: systems.results.map((r) => JSON.parse(r.data)),
@@ -205,6 +209,28 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     if (!(await verifyPassword(String(current ?? ""), me.password_hash))) throw new HttpError(400, "Current password is wrong");
     await db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").bind(await hashPassword(checkPassword(next)), me.id).run();
     return json({ ok: true });
+  }
+
+  if (path === "/api/me/prefs" && method === "PUT") {
+    const prefs = cleanPrefs(await body<unknown>(req), START_KEYS);
+    await db.prepare("UPDATE users SET prefs = ? WHERE id = ?").bind(JSON.stringify(prefs), me.id).run();
+    return json(prefs);
+  }
+
+  // Everyone may keep their own contact details current (they feed the lead contact buttons).
+  if (path === "/api/me" && method === "PATCH") {
+    const b = await body<{ email?: string; phone?: string }>(req);
+    const email = b.email !== undefined ? text(b.email, "Email") ?? null : me.email;
+    const phone = b.phone !== undefined ? text(b.phone, "Phone") ?? null : me.phone;
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, "That email address doesn't look right");
+    if (phone && !/^\+?[\d\s()-]{7,20}$/.test(phone)) throw new HttpError(400, "Phone: digits, spaces and an optional leading +");
+    await db.prepare("UPDATE users SET email = ?, phone = ? WHERE id = ?").bind(email, phone, me.id).run();
+    return json({ ok: true });
+  }
+
+  if (path === "/api/logout-all" && method === "POST") {
+    await db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(me.id).run();
+    return json({ ok: true }, 200, { "set-cookie": sessionCookie("", req, 0) });
   }
 
   // ----- systems -----
