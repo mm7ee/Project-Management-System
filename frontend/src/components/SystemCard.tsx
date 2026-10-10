@@ -1,4 +1,4 @@
-import { BellRing, ChevronRight, Clock, Mail } from "lucide-react";
+import { BellRing, ChevronRight, Clock, Mail, Wrench } from "lucide-react";
 import { SCHEDULE_META, STATUS_META, daysUntil, getSchedule, initials, type System } from "../data/systems";
 import { formatShort, plural, timeAgo } from "../time";
 import type { User } from "../data/roles";
@@ -79,9 +79,10 @@ export function updatedText(s: System, now: number): string {
 }
 
 export default function SystemCard({ system, now, lead, requests, mine, index = 0, onSelect }: Props) {
+  const maintenance = system.health === "Maintenance";
   return (
     <article
-      className={`card ${mine ? "mine" : ""}`}
+      className={`card ${mine ? "mine" : ""} ${maintenance ? "maint" : ""}`}
       style={{ ["--i" as string]: Math.min(index, 12) }}
       // Spotlight that follows the pointer (drawn by .card::before).
       onPointerMove={(e) => {
@@ -94,8 +95,13 @@ export default function SystemCard({ system, now, lead, requests, mine, index = 
         <h3>{system.name}</h3>
         <StatusPill status={system.status} />
       </header>
-      {(mine || requests > 0) && (
+      {(mine || requests > 0 || maintenance) && (
         <div className="card-flags">
+          {maintenance && (
+            <span className="flag flag-maint" title={system.maintenanceNote || "Updates in progress"}>
+              <Wrench size={13} /> Under maintenance
+            </span>
+          )}
           {mine && <span className="flag flag-mine">Your project</span>}
           {requests > 0 && (
             <span className="flag flag-request">

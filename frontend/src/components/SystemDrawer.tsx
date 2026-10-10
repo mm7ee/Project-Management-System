@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowUpRight, BellRing, Pencil, Trash2, X } from "lucide-react";
+import { ArrowUpRight, BellRing, Pencil, Trash2, Wrench, X } from "lucide-react";
 import { HEALTH_META, initials, type System } from "../data/systems";
 import type { UpdateRequest, User } from "../data/roles";
 import { formatDate, timeAgo } from "../time";
@@ -68,9 +68,21 @@ export default function SystemDrawer(p: Props) {
         <h2>{system.name}</h2>
         <div className="drawer-pills">
           <StatusPill status={system.status} />
-          {system.health && <span className="pill fill-light">{system.health}</span>}
+          {system.health === "Stable" && <span className="pill fill-light">Stable</span>}
         </div>
         <p className="drawer-desc">{system.description}</p>
+        {system.health === "Maintenance" && (
+          <section className="maint-panel">
+            <Wrench size={18} />
+            <div>
+              <b>
+                Under maintenance
+                {system.maintenanceSince ? ` since ${formatDate(system.maintenanceSince)}` : ""}
+              </b>
+              <p>{system.maintenanceNote || "Updates or improvements are in progress. The system may be briefly unavailable."}</p>
+            </div>
+          </section>
+        )}
         {error && <p className="form-error">{error}</p>}
 
         <section className="panel">

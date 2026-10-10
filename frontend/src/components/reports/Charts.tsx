@@ -401,6 +401,13 @@ export function buildBrief(systems: System[], users: User[], openRequests: numbe
   } else if (paces.length) {
     lines.push({ tone: "good", text: "Every project in flight is keeping pace with its timeline." });
   }
+  const maint = systems.filter((s) => s.health === "Maintenance");
+  if (maint.length) {
+    lines.push({
+      tone: "info",
+      text: `Under maintenance: ${maint.map((s) => (s.maintenanceNote ? `${s.name} (${s.maintenanceNote})` : s.name)).join(", ")}.`,
+    });
+  }
   if (quiet.length) {
     lines.push({ tone: "warn", text: `No update in over 2 weeks: ${quiet.map((s) => s.name).join(", ")}.` });
   }

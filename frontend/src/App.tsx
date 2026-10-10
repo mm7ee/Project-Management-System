@@ -53,12 +53,13 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
 
   const counts = useMemo(() => {
     const c: Record<Filter, number> = {
-      ALL: systems.length, LIVE: 0, COMPLETED: 0, WIP: 0, TESTING: 0, TO_DEPLOY: 0, UPCOMING: 0, IDEA: 0, OVERDUE: 0, REQUESTED: 0,
+      ALL: systems.length, LIVE: 0, COMPLETED: 0, WIP: 0, TESTING: 0, TO_DEPLOY: 0, UPCOMING: 0, IDEA: 0, OVERDUE: 0, REQUESTED: 0, MAINTENANCE: 0,
     };
     systems.forEach((s) => {
       c[s.status]++;
       if (getSchedule(s, now) === "OVERDUE") c.OVERDUE++;
       if (requests.some((r) => r.systemId === s.id)) c.REQUESTED++;
+      if (s.health === "Maintenance") c.MAINTENANCE++;
     });
     return c;
   }, [systems, requests, now]);
@@ -73,7 +74,9 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             ? getSchedule(s, now) === "OVERDUE"
             : filter === "REQUESTED"
               ? requests.some((r) => r.systemId === s.id)
-              : s.status === filter,
+              : filter === "MAINTENANCE"
+                ? s.health === "Maintenance"
+                : s.status === filter,
       )
       .filter((s) => !q || s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q))
       // A developer's own project comes first.
@@ -90,8 +93,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
     { value: atRisk, label: "At risk / overdue", tone: "red" },
   ];
 
-  const saveUpdate = async ({ id, progress, status }: ProgressUpdate) => {
-    await api(`/systems/${id}`, "PATCH", { progress, status });
+  const saveUpdate = async ({ id, ...update }: ProgressUpdate) => {
+    await api(`/systems/${id}`, "PATCH", update);
     await reload();
     setPosting(null);
   };

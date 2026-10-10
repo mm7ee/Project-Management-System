@@ -13,6 +13,8 @@ export interface System {
   url: string;
   status: Status;
   health?: Health; // only meaningful for LIVE / COMPLETED systems
+  maintenanceNote?: string; // what is being updated, while health is "Maintenance"
+  maintenanceSince?: string; // ISO time it went into maintenance
   owner: string; // owning team
   lead?: string; // project lead: a Person id from people.ts
   engagement: number; // visits in the last 30 days

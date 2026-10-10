@@ -1,9 +1,9 @@
-import { BellRing, FileBarChart, Plus, Users, X } from "lucide-react";
+import { BellRing, FileBarChart, Plus, Users, Wrench, X } from "lucide-react";
 import { STATUS_META, initials, type Status } from "../data/systems";
 import { ROLE_LABEL, type User } from "../data/roles";
 import { COMPANY_URL } from "../brand";
 
-export type Filter = "ALL" | Status | "OVERDUE" | "REQUESTED";
+export type Filter = "ALL" | Status | "OVERDUE" | "REQUESTED" | "MAINTENANCE";
 export type View = "projects" | "reports" | "users";
 
 // Order follows the mock-up. Optional items only appear when something is in them.
@@ -16,6 +16,7 @@ const NAV: { key: Filter; label: string; optional?: boolean }[] = [
   { key: "UPCOMING", label: STATUS_META.UPCOMING.label },
   { key: "COMPLETED", label: STATUS_META.COMPLETED.label },
   { key: "IDEA", label: "Ideas", optional: true },
+  { key: "MAINTENANCE", label: "Maintenance" },
   { key: "OVERDUE", label: "Overdue" },
   { key: "REQUESTED", label: "Update requests", optional: true },
 ];
@@ -67,9 +68,14 @@ export default function Sidebar(p: Props) {
             >
               <span>
                 {key === "REQUESTED" && <BellRing size={15} className="nav-icon" />}
+                {key === "MAINTENANCE" && <Wrench size={15} className="nav-icon" />}
                 {label}
               </span>
-              <span className={`nav-count ${(key === "OVERDUE" || key === "REQUESTED") && p.counts[key] > 0 ? "alert" : ""}`}>
+              <span
+                className={`nav-count ${(key === "OVERDUE" || key === "REQUESTED") && p.counts[key] > 0 ? "alert" : ""} ${
+                  key === "MAINTENANCE" && p.counts[key] > 0 ? "maint" : ""
+                }`}
+              >
                 {p.counts[key]}
               </span>
             </button>

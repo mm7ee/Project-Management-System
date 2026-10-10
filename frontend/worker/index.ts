@@ -245,12 +245,24 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     const b = await body<Partial<System>>(req);
     const next: System = { ...current };
 
-    const touchesProgress = b.progress !== undefined || b.status !== undefined;
+    // Progress, status and maintenance are "progress updates": the assigned developer may post them.
+    const touchesProgress =
+      b.progress !== undefined || b.status !== undefined || b.health !== undefined || b.maintenanceNote !== undefined;
     if (touchesProgress) {
       const allowed = can("edit_any") || can("manage_systems") || (can("edit_assigned") && me.project_id === id);
       if (!allowed) throw new HttpError(403, "You can only update the project you're assigned to");
       if (b.progress !== undefined) next.progress = checkProgress(b.progress);
       if (b.status !== undefined) next.status = checkStatus(b.status);
+      if (b.health !== undefined) {
+        const health = b.health === "Maintenance" ? "Maintenance" : "Stable";
+        if (health === "Maintenance" && current.health !== "Maintenance") next.maintenanceSince = now;
+        next.health = health;
+      }
+      if (b.maintenanceNote !== undefined) next.maintenanceNote = text(b.maintenanceNote, "Maintenance note");
+      if (next.health !== "Maintenance") {
+        delete next.maintenanceNote;
+        delete next.maintenanceSince;
+      }
       if (next.progress === 100 && (next.status === "LIVE" || next.status === "COMPLETED") && !next.finishedAt) {
         next.finishedAt = now;
       }
@@ -258,7 +270,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       next.updatedBy = initials(me.name);
     }
 
-    const detailFields = ["name", "description", "url", "lead", "dueAt", "startedAt", "health"] as const;
+    const detailFields = ["name", "description", "url", "lead", "dueAt", "startedAt"] as const;
     if (detailFields.some((f) => b[f] !== undefined)) {
       need("manage_systems");
       if (b.name !== undefined) next.name = text(b.name, "Name", true)!;
@@ -266,7 +278,6 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       if (b.url !== undefined) next.url = text(b.url, "URL") ?? "";
       if (b.startedAt !== undefined) next.startedAt = text(b.startedAt, "Start date", true)!;
       if (b.dueAt !== undefined) next.dueAt = text(b.dueAt, "Due date");
-      if (b.health !== undefined) next.health = b.health === "Maintenance" ? "Maintenance" : "Stable";
       if (b.lead !== undefined) {
         const lead = text(b.lead, "Lead");
         if (lead && !(await db.prepare("SELECT 1 FROM users WHERE id = ?").bind(lead).first())) throw new HttpError(400, "Unknown lead");

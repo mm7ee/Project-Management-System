@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
-import { STATUS_META, type Status, type System } from "../data/systems";
+import { CheckCircle2, Wrench, X } from "lucide-react";
+import { STATUS_META, type Health, type Status, type System } from "../data/systems";
 
 export interface ProgressUpdate {
   id: string;
   progress: number;
   status: Status;
+  health?: Health; // sent for live / completed systems only
+  maintenanceNote?: string;
 }
 
 interface Props {
@@ -20,7 +22,11 @@ export default function UpdateModal({ systems, initialId, onSave, onClose }: Pro
   const current = systems.find((s) => s.id === id);
   const [progress, setProgress] = useState(current?.progress ?? 0);
   const [status, setStatus] = useState<Status>(current?.status ?? "WIP");
+  const [health, setHealth] = useState<Health>(current?.health ?? "Stable");
+  const [note, setNote] = useState(current?.maintenanceNote ?? "");
   const [error, setError] = useState("");
+  // Maintenance only applies once a system is in use.
+  const delivered = status === "LIVE" || status === "COMPLETED";
 
   // Picking a different project starts from that project's current values.
   const pick = (next: string) => {
@@ -29,6 +35,8 @@ export default function UpdateModal({ systems, initialId, onSave, onClose }: Pro
     if (s) {
       setProgress(s.progress);
       setStatus(s.status);
+      setHealth(s.health ?? "Stable");
+      setNote(s.maintenanceNote ?? "");
     }
   };
 
@@ -48,7 +56,12 @@ export default function UpdateModal({ systems, initialId, onSave, onClose }: Pro
         onSubmit={async (e) => {
           e.preventDefault();
           try {
-            await onSave({ id, progress, status });
+            await onSave({
+              id,
+              progress,
+              status,
+              ...(delivered ? { health, maintenanceNote: health === "Maintenance" ? note.trim() : "" } : {}),
+            });
           } catch (err) {
             setError(err instanceof Error ? err.message : "Couldn't save the update");
           }
@@ -87,6 +100,43 @@ export default function UpdateModal({ systems, initialId, onSave, onClose }: Pro
             ))}
           </select>
         </label>
+
+        {delivered && (
+          <div className="field">
+            <span>System health</span>
+            <div className="health-toggle" role="radiogroup" aria-label="System health">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={health === "Stable"}
+                className={health === "Stable" ? "on stable" : ""}
+                onClick={() => setHealth("Stable")}
+              >
+                <CheckCircle2 size={16} /> Stable
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={health === "Maintenance"}
+                className={health === "Maintenance" ? "on maint" : ""}
+                onClick={() => setHealth("Maintenance")}
+              >
+                <Wrench size={16} /> Under maintenance
+              </button>
+            </div>
+          </div>
+        )}
+        {delivered && health === "Maintenance" && (
+          <label className="field">
+            <span>What's being updated? (optional)</span>
+            <textarea
+              rows={2}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="e.g. Upgrading to v2.3 — reports may be slow until Friday"
+            />
+          </label>
+        )}
 
         {error && <p className="form-error">{error}</p>}
         <div className="modal-actions">
