@@ -1,6 +1,6 @@
-import { BellRing, FileBarChart, FolderGit2, Plus, Settings, Users, Wrench, X } from "lucide-react";
+import { BellRing, FileBarChart, FolderGit2, MonitorSmartphone, Moon, Orbit, Plus, Settings, Sun, Users, Wrench, X } from "lucide-react";
 import { STATUS_META, initials, type Status } from "../data/systems";
-import { ROLE_LABEL, type User } from "../data/roles";
+import { ROLE_LABEL, type Prefs, type User } from "../data/roles";
 import { COMPANY_URL } from "../brand";
 
 export type Filter = "ALL" | Status | "OVERDUE" | "REQUESTED" | "MAINTENANCE" | "MINE";
@@ -36,7 +36,16 @@ interface Props {
   onClose: () => void;
   onAdd: () => void;
   onAccount: () => void;
+  theme: Prefs["theme"];
+  onTheme: (t: Prefs["theme"]) => void;
 }
+
+const THEMES: { value: Prefs["theme"]; label: string; icon: typeof Sun }[] = [
+  { value: "light", label: "Light", icon: Sun },
+  { value: "dark", label: "Dark", icon: Moon },
+  { value: "futuristic", label: "Futuristic", icon: Orbit },
+  { value: "system", label: "Match device", icon: MonitorSmartphone },
+];
 
 export default function Sidebar(p: Props) {
   const go = (fn: () => void) => () => {
@@ -110,6 +119,22 @@ export default function Sidebar(p: Props) {
             <Plus size={17} strokeWidth={2.75} /> Add system
           </button>
         )}
+
+        <div className="theme-switch" role="radiogroup" aria-label="Theme">
+          {THEMES.map(({ value, label, icon: Icon }) => (
+            <button
+              key={value}
+              role="radio"
+              aria-checked={p.theme === value}
+              aria-label={label}
+              title={label}
+              className={p.theme === value ? "on" : ""}
+              onClick={() => p.onTheme(value)}
+            >
+              <Icon size={16} />
+            </button>
+          ))}
+        </div>
 
         <button className={`profile ${p.view === "settings" ? "on" : ""}`} onClick={go(p.onAccount)} aria-label="Your settings">
           <span className="profile-avatar">{initials(p.me.name)}</span>

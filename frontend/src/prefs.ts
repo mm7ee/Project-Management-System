@@ -7,7 +7,9 @@ const THEME_CACHE = "omnitrack:theme";
 const root = () => document.documentElement;
 const darkQuery = () => window.matchMedia("(prefers-color-scheme: dark)");
 
-function resolveTheme(theme: Prefs["theme"]): "light" | "dark" {
+type Resolved = "light" | "dark" | "futuristic";
+
+function resolveTheme(theme: Prefs["theme"]): Resolved {
   return theme === "system" ? (darkQuery().matches ? "dark" : "light") : theme;
 }
 
@@ -15,7 +17,7 @@ function resolveTheme(theme: Prefs["theme"]): "light" | "dark" {
 export function applyCachedTheme() {
   try {
     const t = localStorage.getItem(THEME_CACHE);
-    if (t === "dark" || t === "light") root().dataset.theme = t;
+    if (t === "dark" || t === "light" || t === "futuristic") root().dataset.theme = t;
   } catch {
     // Storage unavailable: start in light.
   }

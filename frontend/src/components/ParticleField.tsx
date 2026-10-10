@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { reduceMotion } from "../prefs";
 
 /**
  * Drifting network of points joined by faint lines (the "omnichannel" backdrop on the
@@ -11,7 +12,7 @@ export default function ParticleField({ className }: { className?: string }) {
   useEffect(() => {
     const canvas = ref.current!;
     const ctx = canvas.getContext("2d")!;
-    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const still = reduceMotion();
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     let w = 0;
     let h = 0;

@@ -37,7 +37,8 @@
 }
 
 /* Dark theme: same roles, values stepped for a dark surface. Set by Settings → Appearance. */
-:root[data-theme="dark"] {
+:root[data-theme="dark"],
+:root[data-theme="futuristic"] {
   color-scheme: dark;
   --navy: #24589f;
   --canvas: #0b1424;
@@ -409,6 +410,63 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .set-note { font-size: 13px; color: var(--faint); }
 .profile.on { background: rgba(255, 255, 255, 0.06); }
 @media (max-width: 1000px) { .set-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- Sidebar theme switch ---------- */
+.theme-switch { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: auto; padding: 4px; border-radius: 12px; background: rgba(255, 255, 255, 0.06); }
+.theme-switch button {
+  display: grid; place-items: center; height: 32px; border: 0; border-radius: 9px; background: none;
+  color: #9fb3cc; cursor: pointer; transition: background .15s, color .15s;
+}
+.theme-switch button:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.theme-switch button.on { background: var(--cyan); color: #fff; box-shadow: 0 0 14px rgba(27, 169, 225, 0.45); }
+.theme-switch + .profile { margin-top: 10px; }
+
+/* ---------- Futuristic theme: the landing page, applied to the app ---------- */
+.fx-backdrop { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; isolation: isolate; }
+.fx-backdrop .lp-particles { pointer-events: none; }
+:root[data-theme="futuristic"] {
+  --canvas: #040c22;
+  --card: rgba(10, 28, 62, 0.58);
+  --border: rgba(140, 200, 240, 0.16);
+  --track: rgba(143, 220, 251, 0.12);
+  --text: #e8f1fb;
+  --muted: #aac0da;
+  --faint: #7f98b8;
+  --heading: #8fdcfb;
+  --input-bg: rgba(255, 255, 255, 0.05);
+  --input-line: rgba(143, 200, 240, 0.26);
+  --grid: rgba(143, 200, 240, 0.08);
+  --shadow: 0 12px 34px rgba(0, 0, 0, 0.35);
+}
+:root[data-theme="futuristic"] body { background: radial-gradient(120% 90% at 70% 10%, #0b2a5c 0%, #071a3d 38%, #040c22 100%) fixed; }
+:root[data-theme="futuristic"] .sidebar {
+  background: rgba(3, 10, 28, 0.72); border-right: 1px solid rgba(143, 220, 251, 0.12);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+}
+:root[data-theme="futuristic"] :is(.card, .stat, .viz-card, .set-card, .table-wrap, .search, .seg, .viz-filters select) {
+  backdrop-filter: blur(14px) saturate(140%); -webkit-backdrop-filter: blur(14px) saturate(140%);
+}
+:root[data-theme="futuristic"] .card:hover {
+  border-color: rgba(27, 169, 225, 0.6);
+  box-shadow: 0 0 0 1px rgba(27, 169, 225, 0.35), 0 0 34px rgba(27, 169, 225, 0.22);
+  background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 50%), rgba(27, 169, 225, 0.14), transparent 45%), var(--card);
+}
+:root[data-theme="futuristic"] :is(.topbar h1, .page-head h2, .brief-figure) {
+  font-family: "Space Grotesk", "Inter", sans-serif; letter-spacing: -0.02em;
+  background: linear-gradient(90deg, #e8f1fb 0%, #8fdcfb 55%, #f2a900 120%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+:root[data-theme="futuristic"] .card-head h3, :root[data-theme="futuristic"] .viz-card h3, :root[data-theme="futuristic"] .set-head h3 { font-family: "Space Grotesk", "Inter", sans-serif; }
+:root[data-theme="futuristic"] .stat-value { text-shadow: 0 0 18px currentColor; }
+:root[data-theme="futuristic"] .progress-fill { background: linear-gradient(90deg, #1ba9e1, #7ee0ff); box-shadow: 0 0 12px rgba(27, 169, 225, 0.6); }
+:root[data-theme="futuristic"] .progress-fill.done { background: linear-gradient(90deg, #0e8a6b, #2ee6a6); box-shadow: 0 0 12px rgba(46, 230, 166, 0.45); }
+:root[data-theme="futuristic"] .nav-item.active { background: rgba(27, 169, 225, 0.16); box-shadow: 0 0 18px rgba(27, 169, 225, 0.25); }
+:root[data-theme="futuristic"] .btn-amber { background: linear-gradient(135deg, #ffc233, #f2a900); box-shadow: 0 8px 24px rgba(242, 169, 0, 0.3); }
+:root[data-theme="futuristic"] :is(.drawer, .modal) { background: #0a1a3a; border-left: 1px solid rgba(143, 220, 251, 0.18); }
+:root[data-theme="futuristic"] .modal { border: 1px solid rgba(143, 220, 251, 0.2); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 40px rgba(27, 169, 225, 0.12); }
+:root[data-theme="futuristic"] .card.mine { border-color: #1ba9e1; }
+@media (prefers-reduced-motion: reduce) { .fx-backdrop * { animation: none !important; } }
+:root[data-motion="reduced"] .fx-backdrop * { animation: none !important; }
 
 /* ---------- Density: compact ---------- */
 :root[data-density="compact"] .grid { gap: 10px; }

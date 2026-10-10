@@ -58,7 +58,7 @@ export interface User {
 
 /** Personal display preferences, saved to the account so they follow the user. */
 export interface Prefs {
-  theme: "light" | "dark" | "system";
+  theme: "light" | "dark" | "futuristic" | "system";
   motion: "full" | "reduced";
   density: "comfortable" | "compact";
   start: string; // sidebar section to open on sign-in (a Filter key, or "MINE")
@@ -67,7 +67,7 @@ export interface Prefs {
 export const DEFAULT_PREFS: Prefs = { theme: "light", motion: "full", density: "comfortable", start: "ALL" };
 
 const PREF_CHOICES: { [K in keyof Prefs]: readonly string[] | null } = {
-  theme: ["light", "dark", "system"],
+  theme: ["light", "dark", "futuristic", "system"],
   motion: ["full", "reduced"],
   density: ["comfortable", "compact"],
   start: null, // checked against the known sections by the caller

@@ -11,6 +11,7 @@ import SystemDrawer from "./components/SystemDrawer";
 import UpdateModal, { type ProgressUpdate } from "./components/UpdateModal";
 import AddSystemModal from "./components/AddSystemModal";
 import SettingsPage from "./components/SettingsPage";
+import FuturisticBackdrop from "./components/FuturisticBackdrop";
 import Login from "./components/Login";
 import UsersPage from "./components/UsersPage";
 import ReportsPage from "./components/reports/ReportsPage";
@@ -123,6 +124,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
 
   return (
     <div className="shell">
+      {prefs.theme === "futuristic" && <FuturisticBackdrop />}
       <Sidebar
         me={me}
         filter={filter}
@@ -140,6 +142,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           setAdding(true);
         }}
         onAccount={() => setView("settings")}
+        theme={prefs.theme}
+        onTheme={(theme) => savePrefs({ ...prefs, theme }).catch(() => undefined)}
       />
 
       <main className="main">
