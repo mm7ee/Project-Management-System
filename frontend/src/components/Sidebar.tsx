@@ -1,6 +1,7 @@
 import { BellRing, FileBarChart, Plus, Users, X } from "lucide-react";
 import { STATUS_META, initials, type Status } from "../data/systems";
 import { ROLE_LABEL, type User } from "../data/roles";
+import { COMPANY_URL } from "../brand";
 
 export type Filter = "ALL" | Status | "OVERDUE" | "REQUESTED";
 export type View = "projects" | "reports" | "users";
@@ -47,7 +48,9 @@ export default function Sidebar(p: Props) {
           <X size={18} />
         </button>
         <div className="brand">
-          <img src="/omni-logo-white.png" alt="Omni Contact" />
+          <a href={COMPANY_URL} target="_blank" rel="noopener noreferrer" className="logo-link" title="Omni Contact website">
+            <img src="/omni-logo-white.png" alt="Omni Contact" />
+          </a>
           <span>OmniTrack</span>
         </div>
 

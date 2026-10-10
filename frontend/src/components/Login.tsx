@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { LogIn } from "lucide-react";
 import { api } from "../data/api";
+import { COMPANY_URL } from "../brand";
 
 export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
   const [username, setUsername] = useState("");
@@ -26,7 +27,9 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
         }}
       >
         <div className="login-brand">
-          <img src="/omni-logo-white.png" alt="Omni Contact" />
+          <a href={COMPANY_URL} target="_blank" rel="noopener noreferrer" className="logo-link" title="Omni Contact website">
+            <img src="/omni-logo-white.png" alt="Omni Contact" />
+          </a>
           <span>OmniTrack</span>
         </div>
         <div className="login-body">
