@@ -1,8 +1,8 @@
 import type { User } from "./roles";
 
-// How to reach a user. Emails are placeholders (example.com) until the admin fills in real
-// ones; adding a phone number (international format, e.g. "+263 77 123 4567") switches on
-// the WhatsApp and Call buttons.
+// How to reach a user. Work emails follow name.surname@omnicontact.biz; until real surnames are
+// known the starting accounts use the placeholder "surname". Adding a phone number
+// (international format, e.g. "+263 77 123 4567") switches on the WhatsApp and Call buttons.
 
 export type ContactKind = "email" | "teams" | "whatsapp" | "call";
 

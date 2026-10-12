@@ -281,7 +281,7 @@ function UserModal({
         <div className="field-row">
           <label className="field">
             <span>Email</span>
-            <input type="email" value={f.email ?? ""} onChange={set("email")} />
+            <input type="email" value={f.email ?? ""} onChange={set("email")} placeholder="name.surname@omnicontact.biz" />
           </label>
           <label className="field">
             <span>Phone</span>

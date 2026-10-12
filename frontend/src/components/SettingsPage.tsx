@@ -160,7 +160,7 @@ export default function SettingsPage({ me, prefs, permissions, project, onPrefs,
             <div className="field-row">
               <label className="field">
                 <span>Work email</span>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@omnicontact.biz" />
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name.surname@omnicontact.biz" />
               </label>
               <label className="field">
                 <span>Phone (adds WhatsApp + Call)</span>
