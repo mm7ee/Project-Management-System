@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, Copy, KeyRound, Pencil, Plus, Trash2, X } from "lucide-react";
 import { api } from "../data/api";
 import { initials, type System } from "../data/systems";
 import {
@@ -23,6 +23,8 @@ interface Props {
 export default function UsersPage({ me, users, systems, roleMatrix, onChanged }: Props) {
   const [editing, setEditing] = useState<User | "new" | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [resetting, setResetting] = useState<string | null>(null);
+  const [issued, setIssued] = useState<{ name: string; password: string } | null>(null);
   const [error, setError] = useState("");
   const systemName = (id?: string) => systems.find((s) => s.id === id)?.name;
 
@@ -76,12 +78,31 @@ export default function UsersPage({ me, users, systems, roleMatrix, onChanged }:
                 </td>
                 <td>
                   <span className={`role-chip role-${u.role}`}>{ROLE_LABEL[u.role]}</span>
+                  {u.mustChangePassword && <span className="flag flag-request pw-pending">Must set a new password</span>}
                 </td>
                 <td>{u.role === "developer" ? systemName(u.projectId) ?? <i className="muted">Not assigned</i> : "—"}</td>
                 <td className="muted">{u.email ?? "—"}</td>
                 <td>
                   <div className="row-actions">
-                    {deleting === u.id ? (
+                    {resetting === u.id ? (
+                      <>
+                        <span className="confirm-inline">Reset {u.name}'s password?</span>
+                        <button className="btn btn-ghost sm" onClick={() => setResetting(null)}>
+                          Cancel
+                        </button>
+                        <button
+                          className="btn btn-navy sm"
+                          onClick={() =>
+                            run(async () => {
+                              const { password } = await api<{ password: string }>(`/users/${u.id}/reset-password`, "POST");
+                              setIssued({ name: u.name, password });
+                            }).then(() => setResetting(null))
+                          }
+                        >
+                          Reset
+                        </button>
+                      </>
+                    ) : deleting === u.id ? (
                       <>
                         <span className="confirm-inline">Delete {u.name}?</span>
                         <button className="btn btn-ghost sm" onClick={() => setDeleting(null)}>
@@ -100,7 +121,25 @@ export default function UsersPage({ me, users, systems, roleMatrix, onChanged }:
                           <Pencil size={15} />
                         </button>
                         {u.id !== me.id && (
-                          <button className="icon-link danger" onClick={() => setDeleting(u.id)} aria-label={`Delete ${u.name}`} title="Delete">
+                          <button
+                            className="icon-link"
+                            onClick={() => {
+                              setDeleting(null);
+                              setResetting(u.id);
+                            }}
+                            aria-label={`Reset ${u.name}'s password`}
+                            title="Reset password"
+                          >
+                            <KeyRound size={15} />
+                          </button>
+                        )}
+                        {u.id !== me.id && (
+                          <button
+                            className="icon-link danger"
+                            onClick={() => {
+                              setResetting(null);
+                              setDeleting(u.id);
+                            }} aria-label={`Delete ${u.name}`} title="Delete">
                             <Trash2 size={15} />
                           </button>
                         )}
@@ -115,6 +154,8 @@ export default function UsersPage({ me, users, systems, roleMatrix, onChanged }:
       </div>
 
       <RoleMatrix matrix={roleMatrix} onSave={(m) => run(() => api("/roles", "PUT", m))} />
+
+      {issued && <TempPasswordDialog {...issued} onClose={() => setIssued(null)} />}
 
       {editing && (
         <UserModal
@@ -187,6 +228,47 @@ function RoleMatrix({ matrix, onSave }: { matrix: RolePermissions; onSave: (m: R
         </table>
       </div>
     </section>
+  );
+}
+
+/** Shows a freshly issued temporary password once; only its hash is kept on the server. */
+function TempPasswordDialog({ name, password, onClose }: { name: string; password: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="backdrop modal-backdrop" onClick={onClose}>
+      <div className="modal" role="dialog" aria-label={`Temporary password for ${name}`} onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="close-btn" onClick={onClose} aria-label="Close">
+          <X size={18} />
+        </button>
+        <h2>Password reset for {name}</h2>
+        <p className="modal-note">
+          Give {name} this temporary password. When they sign in with it they must choose a new one. They have been signed
+          out everywhere.
+        </p>
+        <div className="temp-pw">
+          <code>{password}</code>
+          <button
+            className="btn btn-ghost sm"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(password);
+                setCopied(true);
+              } catch {
+                setCopied(false);
+              }
+            }}
+          >
+            {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+        <p className="set-note">It won't be shown again. If it's lost, reset the password again.</p>
+        <div className="modal-actions">
+          <button className="btn btn-navy" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -289,7 +371,9 @@ function UserModal({
           </label>
         </div>
         <label className="field">
-          <span>{user ? "Reset password (leave blank to keep)" : "Password (8+ characters)"}</span>
+          <span>
+            {user ? "Set a temporary password (leave blank to keep); they choose their own at sign-in" : "Password (8+ characters)"}
+          </span>
           <input
             type="text"
             autoComplete="off"

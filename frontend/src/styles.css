@@ -468,6 +468,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) { .fx-backdrop * { animation: none !important; } }
 :root[data-motion="reduced"] .fx-backdrop * { animation: none !important; }
 
+/* ---------- Password resets ---------- */
+.pw-pending { margin-left: 6px; }
+.temp-pw { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 2px dashed var(--input-line); border-radius: 10px; background: var(--canvas); }
+.temp-pw code { font-size: 20px; font-weight: 800; letter-spacing: 0.06em; color: var(--heading); }
+
 /* ---------- Density: compact ---------- */
 :root[data-density="compact"] .grid { gap: 10px; }
 :root[data-density="compact"] .card { gap: 8px; padding: 11px 12px 8px; }

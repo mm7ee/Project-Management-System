@@ -12,6 +12,7 @@ import UpdateModal, { type ProgressUpdate } from "./components/UpdateModal";
 import AddSystemModal from "./components/AddSystemModal";
 import SettingsPage from "./components/SettingsPage";
 import FuturisticBackdrop from "./components/FuturisticBackdrop";
+import ForcePasswordChange from "./components/ForcePasswordChange";
 import Login from "./components/Login";
 import UsersPage from "./components/UsersPage";
 import ReportsPage from "./components/reports/ReportsPage";
@@ -19,10 +20,18 @@ import UpdateBanner from "./components/UpdateBanner";
 import CountUp from "./components/CountUp";
 
 export default function App() {
-  const { data, loading, reload } = useAppData();
+  const { data, mustChange, loading, reload } = useAppData();
   return (
     <>
-      {loading ? <div className="splash">Loading…</div> : data ? <Dashboard data={data} reload={reload} /> : <Login onSignedIn={reload} />}
+      {loading ? (
+        <div className="splash">Loading…</div>
+      ) : data ? (
+        <Dashboard data={data} reload={reload} />
+      ) : mustChange ? (
+        <ForcePasswordChange message={mustChange} onDone={reload} />
+      ) : (
+        <Login onSignedIn={reload} />
+      )}
       <UpdateBanner />
     </>
   );

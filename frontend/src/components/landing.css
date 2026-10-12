@@ -178,6 +178,12 @@
 .lp-foot a { color: #8fdcfb; text-decoration: none; }
 .lp-foot a:hover { text-decoration: underline; }
 
+/* Single-card screens (forced password change). */
+.lp-main.lp-single { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+.lp-note { font-size: 13.5px; line-height: 1.5; color: var(--lp-dim); }
+.lp-link { align-self: center; border: 0; background: none; color: #8fdcfb; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.lp-link:hover { text-decoration: underline; }
+
 /* ---------- Entrance ---------- */
 .lp-in { animation: lp-in .8s cubic-bezier(.2, .8, .2, 1) both; }
 

@@ -1,7 +1,7 @@
 // OmniTrack Worker: serves the built app (ASSETS) and the JSON API under /api.
 // Every permission check happens here; the UI only hides what a user can't do.
 
-import { hashPassword, newToken, tokenHash, verifyPassword } from "./auth";
+import { hashPassword, newToken, tempPassword, tokenHash, verifyPassword } from "./auth";
 import { STATUS_META, initials, type Status, type System } from "../src/data/systems";
 import {
   DEFAULT_ROLE_PERMISSIONS,
@@ -20,7 +20,7 @@ const COOKIE = "omni_session";
 const SESSION_DAYS = 7;
 
 class HttpError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public code?: string) {
     super(message);
   }
 }
@@ -39,6 +39,7 @@ interface UserRow {
   project_id: string | null;
   password_hash: string;
   prefs: string;
+  must_change_password: number;
 }
 
 const toUser = (r: UserRow): User => ({
@@ -50,6 +51,7 @@ const toUser = (r: UserRow): User => ({
   ...(r.email ? { email: r.email } : {}),
   ...(r.phone ? { phone: r.phone } : {}),
   ...(r.project_id ? { projectId: r.project_id } : {}),
+  ...(r.must_change_password ? { mustChangePassword: true } : {}),
 });
 
 function slug(text: string): string {
@@ -171,6 +173,11 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   // Everything below needs a signed-in user.
   const me = await currentUser(req, db);
   if (!me) throw new HttpError(401, "Not signed in");
+
+  // After an admin reset, the only things a user may do are choose a new password or sign out.
+  if (me.must_change_password && !["/api/me/password", "/api/logout", "/api/logout-all"].includes(path)) {
+    throw new HttpError(403, `Hi ${me.name}, you signed in with a temporary password`, "password_change_required");
+  }
   const matrix = await roleMatrix(db);
   const perms = permissionsFor(me.role, matrix);
   const can = (p: Permission) => perms.includes(p);
@@ -206,8 +213,16 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
 
   if (path === "/api/me/password" && method === "POST") {
     const { current, next } = await body<{ current?: string; next?: string }>(req);
-    if (!(await verifyPassword(String(current ?? ""), me.password_hash))) throw new HttpError(400, "Current password is wrong");
-    await db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").bind(await hashPassword(checkPassword(next)), me.id).run();
+    // A forced change follows a sign-in with the temporary password, so it needs no "current".
+    if (!me.must_change_password && !(await verifyPassword(String(current ?? ""), me.password_hash))) {
+      throw new HttpError(400, "Current password is wrong");
+    }
+    const fresh = checkPassword(next);
+    if (await verifyPassword(fresh, me.password_hash)) throw new HttpError(400, "Choose a password different from the current one");
+    await db
+      .prepare("UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?")
+      .bind(await hashPassword(fresh), me.id)
+      .run();
     return json({ ok: true });
   }
 
@@ -385,6 +400,21 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     return json({ ok: true, id }, 201);
   }
 
+  const resetMatch = path.match(/^\/api\/users\/([a-z0-9._-]+)\/reset-password$/);
+  if (resetMatch && method === "POST") {
+    need("manage_users");
+    if (resetMatch[1] === me.id) throw new HttpError(400, "Change your own password in Settings");
+    const row = await db.prepare("SELECT id FROM users WHERE id = ?").bind(resetMatch[1]).first<{ id: string }>();
+    if (!row) throw new HttpError(404, "User not found");
+    const temp = tempPassword();
+    await db.batch([
+      db.prepare("UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?").bind(await hashPassword(temp), row.id),
+      db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(row.id),
+    ]);
+    // Shown once to the administrator; only its hash is stored.
+    return json({ password: temp });
+  }
+
   const userMatch = path.match(/^\/api\/users\/([a-z0-9._-]+)$/);
   if (userMatch && method === "PATCH") {
     need("manage_users");
@@ -401,7 +431,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     await db
       .prepare(
         `UPDATE users SET name = ?, title = ?, email = ?, phone = ?, role = ?, project_id = ?,
-         password_hash = COALESCE(?, password_hash) WHERE id = ?`,
+         password_hash = COALESCE(?, password_hash), must_change_password = ? WHERE id = ?`,
       )
       .bind(
         b.name !== undefined ? text(b.name, "Name", true) : row.name,
@@ -411,6 +441,8 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
         role,
         projectId,
         b.password ? await hashPassword(checkPassword(b.password)) : null,
+        // A password an admin sets for someone else is temporary: they choose their own at sign-in.
+        b.password && row.id !== me.id ? 1 : row.must_change_password,
         row.id,
       )
       .run();
@@ -459,7 +491,7 @@ export default {
     try {
       return await api(req, env, path);
     } catch (e) {
-      if (e instanceof HttpError) return json({ error: e.message }, e.status);
+      if (e instanceof HttpError) return json({ error: e.message, ...(e.code ? { code: e.code } : {}) }, e.status);
       console.error(e);
       return json({ error: "Something went wrong" }, 500);
     }

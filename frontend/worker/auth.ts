@@ -29,6 +29,21 @@ export async function verifyPassword(password: string, stored: string): Promise<
   return diff === 0;
 }
 
+// Temporary passwords handed out by an administrator: readable, no look-alike characters.
+const TEMP_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+export function tempPassword(): string {
+  // Bytes at or above the largest multiple of the alphabet size are skipped, so every
+  // character is equally likely.
+  const limit = 256 - (256 % TEMP_ALPHABET.length);
+  let chars = "";
+  while (chars.length < 12) {
+    for (const b of crypto.getRandomValues(new Uint8Array(16))) {
+      if (b < limit && chars.length < 12) chars += TEMP_ALPHABET.charAt(b % TEMP_ALPHABET.length);
+    }
+  }
+  return `${chars.slice(0, 4)}-${chars.slice(4, 8)}-${chars.slice(8, 12)}`;
+}
+
 export const newToken = () => toHex(crypto.getRandomValues(new Uint8Array(32)));
 
 /** Sessions are stored by the SHA-256 of their token, so a leaked database can't be replayed. */

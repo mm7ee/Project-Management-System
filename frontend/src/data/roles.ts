@@ -54,6 +54,7 @@ export interface User {
   phone?: string;
   role: Role;
   projectId?: string; // developers are assigned to exactly one project
+  mustChangePassword?: boolean; // reset by an admin; must choose a new password at sign-in
 }
 
 /** Personal display preferences, saved to the account so they follow the user. */
