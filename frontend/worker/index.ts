@@ -139,6 +139,46 @@ const text = (v: unknown, field: string, required = false): string | undefined =
   return v.trim().slice(0, 500);
 };
 
+// ---------- audit trail ----------
+
+const AUDIT_DAYS = 365;
+
+/** Appends one entry to the activity log. Never fails the request it describes. */
+async function audit(
+  db: D1Database,
+  req: Request,
+  who: { id: string | null; name: string },
+  action: string,
+  target: string | null = null,
+  detail: Record<string, unknown> = {},
+) {
+  try {
+    await db
+      .prepare("INSERT INTO activity (at, user_id, actor, action, target, detail, ip, agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(
+        new Date().toISOString(),
+        who.id,
+        who.name.slice(0, 64),
+        action,
+        target,
+        JSON.stringify(detail),
+        req.headers.get("cf-connecting-ip"),
+        (req.headers.get("user-agent") ?? "").slice(0, 300),
+      )
+      .run();
+  } catch (e) {
+    console.error("audit write failed", e);
+  }
+}
+
+const ACTIVITY_KINDS: Record<string, string[]> = {
+  signin: ["login", "logout", "logout_all"],
+  failed: ["login_failed"],
+  account: ["password_changed", "password_set_after_reset", "profile_updated"],
+  systems: ["system_created", "system_progress", "system_updated", "system_deleted", "request_created", "request_dismissed"],
+  admin: ["user_created", "user_updated", "user_password_reset", "user_deleted", "roles_updated"],
+};
+
 // ---------- the API ----------
 
 async function api(req: Request, env: Env, path: string): Promise<Response> {
@@ -153,6 +193,8 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       .first<UserRow>();
     // Same error either way, so usernames can't be probed.
     if (!row || !(await verifyPassword(String(password ?? ""), row.password_hash))) {
+      const tried = String(username ?? "").trim().slice(0, 64);
+      await audit(db, req, { id: row?.id ?? null, name: row?.name ?? (tried || "(blank)") }, "login_failed", null, { username: tried });
       throw new HttpError(401, "Wrong username or password");
     }
     const token = newToken();
@@ -161,12 +203,22 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       .bind(await tokenHash(token), row.id, Date.now() + SESSION_DAYS * 86_400_000)
       .run();
     await db.prepare("DELETE FROM sessions WHERE expires_at < ?").bind(Date.now()).run();
+    await audit(db, req, row, "login", null, row.must_change_password ? { temporaryPassword: true } : {});
+    await db.prepare("DELETE FROM activity WHERE at < ?").bind(new Date(Date.now() - AUDIT_DAYS * 86_400_000).toISOString()).run();
     return json({ ok: true }, 200, { "set-cookie": sessionCookie(token, req, SESSION_DAYS * 86_400) });
   }
 
   if (path === "/api/logout" && method === "POST") {
     const token = cookieToken(req);
-    if (token) await db.prepare("DELETE FROM sessions WHERE token_hash = ?").bind(await tokenHash(token)).run();
+    if (token) {
+      const hash = await tokenHash(token);
+      const who = await db
+        .prepare("SELECT u.id, u.name FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?")
+        .bind(hash)
+        .first<{ id: string; name: string }>();
+      await db.prepare("DELETE FROM sessions WHERE token_hash = ?").bind(hash).run();
+      if (who) await audit(db, req, who, "logout");
+    }
     return json({ ok: true }, 200, { "set-cookie": sessionCookie("", req, 0) });
   }
 
@@ -198,7 +250,15 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       permissions: perms,
       roleMatrix: matrix,
       systems: systems.results.map((r) => JSON.parse(r.data)),
-      users: users.results.map(toUser),
+      users: await (async () => {
+        const list = users.results.map(toUser);
+        if (!can("audit_log")) return list;
+        const last = await db
+          .prepare("SELECT user_id, MAX(at) AS at FROM activity WHERE action = 'login' GROUP BY user_id")
+          .all<{ user_id: string; at: string }>();
+        const byUser = new Map(last.results.map((r) => [r.user_id, r.at]));
+        return list.map((u) => (byUser.has(u.id) ? { ...u, lastLogin: byUser.get(u.id) } : u));
+      })(),
       requests: requests.results.map(
         (r): UpdateRequest => ({
           id: r.id,
@@ -223,6 +283,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       .prepare("UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?")
       .bind(await hashPassword(fresh), me.id)
       .run();
+    await audit(db, req, me, me.must_change_password ? "password_set_after_reset" : "password_changed");
     return json({ ok: true });
   }
 
@@ -240,11 +301,14 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, "That email address doesn't look right");
     if (phone && !/^\+?[\d\s()-]{7,20}$/.test(phone)) throw new HttpError(400, "Phone: digits, spaces and an optional leading +");
     await db.prepare("UPDATE users SET email = ?, phone = ? WHERE id = ?").bind(email, phone, me.id).run();
+    const fields = [email !== me.email && "email", phone !== me.phone && "phone"].filter(Boolean);
+    if (fields.length) await audit(db, req, me, "profile_updated", me.id, { fields });
     return json({ ok: true });
   }
 
   if (path === "/api/logout-all" && method === "POST") {
     await db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(me.id).run();
+    await audit(db, req, me, "logout_all");
     return json({ ok: true }, 200, { "set-cookie": sessionCookie("", req, 0) });
   }
 
@@ -276,6 +340,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     };
     const sort = (await db.prepare("SELECT COALESCE(MAX(sort), 0) + 1 AS s FROM systems").first<{ s: number }>())!.s;
     await db.prepare("INSERT INTO systems (id, sort, data) VALUES (?, ?, ?)").bind(id, sort, JSON.stringify(system)).run();
+    await audit(db, req, me, "system_created", id, { name, status, progress: system.progress });
     return json(system, 201);
   }
 
@@ -330,18 +395,36 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     // Posting progress answers any open update requests for this project.
     if (touchesProgress) stmts.push(db.prepare("DELETE FROM requests WHERE system_id = ?").bind(id));
     await db.batch(stmts);
+    if (touchesProgress) {
+      const snap = (s: System) => ({ progress: s.progress, status: s.status, health: s.health ?? null });
+      await audit(db, req, me, "system_progress", id, {
+        name: next.name,
+        from: snap(current),
+        to: snap(next),
+        ...(next.maintenanceNote && next.maintenanceNote !== current.maintenanceNote ? { note: next.maintenanceNote } : {}),
+      });
+    }
+    const changed = detailFields.filter((f) => b[f] !== undefined && b[f] !== current[f]);
+    if (changed.length) {
+      await audit(db, req, me, "system_updated", id, {
+        name: next.name,
+        fields: changed,
+        ...(changed.includes("lead") ? { lead: { from: current.lead ?? null, to: next.lead ?? null } } : {}),
+      });
+    }
     return json(next);
   }
 
   if (sysMatch && method === "DELETE") {
     need("manage_systems");
     const id = sysMatch[1];
-    await getSystem(db, id);
+    const gone = await getSystem(db, id);
     await db.batch([
       db.prepare("DELETE FROM systems WHERE id = ?").bind(id),
       db.prepare("DELETE FROM requests WHERE system_id = ?").bind(id),
       db.prepare("UPDATE users SET project_id = NULL WHERE project_id = ?").bind(id),
     ]);
+    await audit(db, req, me, "system_deleted", id, { name: gone.name });
     return json({ ok: true });
   }
 
@@ -355,6 +438,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       .prepare("INSERT INTO requests (id, system_id, requested_by, message, created_at) VALUES (?, ?, ?, ?, ?)")
       .bind(id, system.id, me.id, text(b.message, "Message") ?? "", now)
       .run();
+    await audit(db, req, me, "request_created", system.id, { name: system.name, message: text(b.message, "Message") ?? "" });
     return json({ ok: true }, 201);
   }
 
@@ -365,6 +449,8 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     const mayDismiss = r.requested_by === me.id || me.project_id === r.system_id || can("manage_systems");
     if (!mayDismiss) throw new HttpError(403, "You can't dismiss this request");
     await db.prepare("DELETE FROM requests WHERE id = ?").bind(r.id).run();
+    const sys = await db.prepare("SELECT data FROM systems WHERE id = ?").bind(r.system_id).first<{ data: string }>();
+    await audit(db, req, me, "request_dismissed", r.system_id, { name: sys ? JSON.parse(sys.data).name : r.system_id });
     return json({ ok: true });
   }
 
@@ -397,6 +483,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
         await hashPassword(checkPassword(b.password)),
       )
       .run();
+    await audit(db, req, me, "user_created", id, { name: text(b.name, "Name", true), username, role });
     return json({ ok: true, id }, 201);
   }
 
@@ -404,13 +491,14 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   if (resetMatch && method === "POST") {
     need("manage_users");
     if (resetMatch[1] === me.id) throw new HttpError(400, "Change your own password in Settings");
-    const row = await db.prepare("SELECT id FROM users WHERE id = ?").bind(resetMatch[1]).first<{ id: string }>();
+    const row = await db.prepare("SELECT id, name FROM users WHERE id = ?").bind(resetMatch[1]).first<{ id: string; name: string }>();
     if (!row) throw new HttpError(404, "User not found");
     const temp = tempPassword();
     await db.batch([
       db.prepare("UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?").bind(await hashPassword(temp), row.id),
       db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(row.id),
     ]);
+    await audit(db, req, me, "user_password_reset", row.id, { name: row.name });
     // Shown once to the administrator; only its hash is stored.
     return json({ password: temp });
   }
@@ -448,13 +536,26 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       .run();
     // A password reset signs the user out everywhere.
     if (b.password) await db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(row.id).run();
+    const fieldsChanged = (["name", "title", "email", "phone"] as const).filter((f) => {
+      const was = row[f] ?? "";
+      return b[f] !== undefined && (b[f] ?? "") !== was;
+    });
+    const changes: Record<string, unknown> = {};
+    if (role !== row.role) changes.role = { from: row.role, to: role };
+    if (projectId !== row.project_id) changes.project = { from: row.project_id, to: projectId };
+    if (fieldsChanged.length) changes.fields = fieldsChanged;
+    if (b.password) changes.passwordSet = true;
+    if (Object.keys(changes).length) await audit(db, req, me, "user_updated", row.id, { name: b.name ?? row.name, ...changes });
     return json({ ok: true });
   }
 
   if (userMatch && method === "DELETE") {
     need("manage_users");
     if (userMatch[1] === me.id) throw new HttpError(400, "You can't delete your own account");
-    const row = await db.prepare("SELECT role FROM users WHERE id = ?").bind(userMatch[1]).first<{ role: Role }>();
+    const row = await db
+      .prepare("SELECT role, name, username FROM users WHERE id = ?")
+      .bind(userMatch[1])
+      .first<{ role: Role; name: string; username: string }>();
     if (!row) throw new HttpError(404, "User not found");
     if (row.role === "admin" && (await adminCount(db)) <= 1) throw new HttpError(400, "There must always be at least one administrator");
     await db.batch([
@@ -462,6 +563,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       db.prepare("DELETE FROM requests WHERE requested_by = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM users WHERE id = ?").bind(userMatch[1]),
     ]);
+    await audit(db, req, me, "user_deleted", userMatch[1], { name: row.name, username: row.username, role: row.role });
     return json({ ok: true });
   }
 
@@ -478,7 +580,77 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       .prepare("INSERT INTO settings (key, value) VALUES ('role_permissions', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
       .bind(JSON.stringify(next))
       .run();
+    const changes: Record<string, { added: Permission[]; removed: Permission[] }> = {};
+    for (const role of ROLES) {
+      const added = next[role].filter((p) => !matrix[role].includes(p));
+      const removed = matrix[role].filter((p) => !next[role].includes(p));
+      if (added.length || removed.length) changes[role] = { added, removed };
+    }
+    if (Object.keys(changes).length) await audit(db, req, me, "roles_updated", null, { changes });
     return json(next);
+  }
+
+  // ----- activity log -----
+  if (path === "/api/activity" && method === "GET") {
+    need("audit_log");
+    const q = new URL(req.url).searchParams;
+    const limit = Math.min(500, Math.max(1, Number(q.get("limit")) || 100));
+    const where: string[] = [];
+    const args: unknown[] = [];
+    const before = Number(q.get("before"));
+    if (before > 0) {
+      where.push("id < ?");
+      args.push(before);
+    }
+    const user = q.get("user");
+    if (user) {
+      where.push("user_id = ?");
+      args.push(user);
+    }
+    const kind = ACTIVITY_KINDS[q.get("kind") ?? ""];
+    if (kind) {
+      where.push(`action IN (${kind.map(() => "?").join(", ")})`);
+      args.push(...kind);
+    }
+    const search = (q.get("q") ?? "").trim().slice(0, 64);
+    if (search) {
+      where.push("(actor LIKE ? OR detail LIKE ? OR ip LIKE ?)");
+      args.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+    const rows = await db
+      .prepare(`SELECT * FROM activity ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY id DESC LIMIT ?`)
+      .bind(...args, limit + 1)
+      .all<{ id: number; at: string; user_id: string | null; actor: string; action: string; target: string | null; detail: string; ip: string | null; agent: string | null }>();
+    const page = rows.results.slice(0, limit);
+    const items = page.map((r) => ({
+      id: r.id,
+      at: r.at,
+      userId: r.user_id,
+      actor: r.actor,
+      action: r.action,
+      target: r.target,
+      detail: JSON.parse(r.detail || "{}"),
+      ip: r.ip,
+      agent: r.agent,
+    }));
+    const next = rows.results.length > limit ? page.at(-1)!.id : null;
+    let stats: Record<string, number> | undefined;
+    if (!before) {
+      const day = new Date(Date.now() - 86_400_000).toISOString();
+      const week = new Date(Date.now() - 7 * 86_400_000).toISOString();
+      const s = await db
+        .prepare(
+          `SELECT
+             (SELECT COUNT(*) FROM activity WHERE action = 'login' AND at >= ?) AS signins24h,
+             (SELECT COUNT(*) FROM activity WHERE action = 'login_failed' AND at >= ?) AS failed24h,
+             (SELECT COUNT(DISTINCT user_id) FROM activity WHERE action = 'login' AND at >= ?) AS active7d,
+             (SELECT COUNT(*) FROM activity WHERE action NOT IN ('login', 'logout', 'logout_all', 'login_failed') AND at >= ?) AS changes7d`,
+        )
+        .bind(day, day, week, week)
+        .first<Record<string, number>>();
+      stats = s ?? undefined;
+    }
+    return json({ items, next, ...(stats ? { stats } : {}) });
   }
 
   throw new HttpError(404, "Not found");

@@ -1,10 +1,10 @@
-import { BellRing, FileBarChart, FolderGit2, MonitorSmartphone, Moon, Orbit, Plus, Settings, Sun, Users, Wrench, X } from "lucide-react";
+import { BellRing, FileBarChart, FolderGit2, History, MonitorSmartphone, Moon, Orbit, Plus, Settings, Sun, Users, Wrench, X } from "lucide-react";
 import { STATUS_META, initials, type Status } from "../data/systems";
 import { ROLE_LABEL, type Prefs, type User } from "../data/roles";
 import { COMPANY_URL } from "../brand";
 
 export type Filter = "ALL" | Status | "OVERDUE" | "REQUESTED" | "MAINTENANCE" | "MINE";
-export type View = "projects" | "reports" | "users" | "settings";
+export type View = "projects" | "reports" | "users" | "activity" | "settings";
 
 // Order follows the mock-up. Optional items only appear when something is in them.
 const NAV: { key: Filter; label: string; optional?: boolean }[] = [
@@ -31,6 +31,7 @@ interface Props {
   canAdd: boolean;
   canReports: boolean;
   canUsers: boolean;
+  canActivity: boolean;
   onFilter: (f: Filter) => void;
   onView: (v: View) => void;
   onClose: () => void;
@@ -104,6 +105,13 @@ export default function Sidebar(p: Props) {
             <button className={`nav-item ${p.view === "users" ? "active" : ""}`} onClick={go(() => p.onView("users"))}>
               <span>
                 <Users size={16} className="nav-icon" /> Users & roles
+              </span>
+            </button>
+          )}
+          {p.canActivity && (
+            <button className={`nav-item ${p.view === "activity" ? "active" : ""}`} onClick={go(() => p.onView("activity"))}>
+              <span>
+                <History size={16} className="nav-icon" /> Activity log
               </span>
             </button>
           )}

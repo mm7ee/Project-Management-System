@@ -473,6 +473,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .temp-pw { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 2px dashed var(--input-line); border-radius: 10px; background: var(--canvas); }
 .temp-pw code { font-size: 20px; font-weight: 800; letter-spacing: 0.06em; color: var(--heading); }
 
+/* ---------- Activity log ---------- */
+.act-search { width: 240px; padding: 6px 14px; }
+.act-table td { vertical-align: top; }
+.act-when { white-space: nowrap; }
+.act-when b, .act-from span { display: block; font-size: 13.5px; }
+.act-when small, .act-from small { display: block; font-size: 12px; color: var(--faint); }
+.act-what { display: inline-flex; gap: 8px; align-items: flex-start; line-height: 1.45; }
+.act-what svg { flex: none; margin-top: 2px; }
+.act-failed { background: var(--tint-red); }
+.avatar.unknown { background: var(--red); }
+.act-empty { padding: 20px; }
+.act-more { align-self: center; margin-top: 12px; }
+
 /* ---------- Density: compact ---------- */
 :root[data-density="compact"] .grid { gap: 10px; }
 :root[data-density="compact"] .card { gap: 8px; padding: 11px 12px 8px; }

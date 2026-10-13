@@ -13,6 +13,7 @@ import AddSystemModal from "./components/AddSystemModal";
 import SettingsPage from "./components/SettingsPage";
 import FuturisticBackdrop from "./components/FuturisticBackdrop";
 import ForcePasswordChange from "./components/ForcePasswordChange";
+import ActivityPage from "./components/ActivityPage";
 import Login from "./components/Login";
 import UsersPage from "./components/UsersPage";
 import ReportsPage from "./components/reports/ReportsPage";
@@ -143,6 +144,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
         canAdd={can("manage_systems")}
         canReports={can("reports")}
         canUsers={can("manage_users")}
+        canActivity={can("audit_log")}
         onFilter={setFilter}
         onView={setView}
         onClose={() => setMenuOpen(false)}
@@ -191,6 +193,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             onProfileSaved={reload}
             onSignedOut={reload}
           />
+        ) : view === "activity" && can("audit_log") ? (
+          <ActivityPage users={users} systems={systems} now={now} />
         ) : view === "users" && can("manage_users") ? (
           <UsersPage me={me} users={users} systems={systems} roleMatrix={data.roleMatrix} onChanged={reload} />
         ) : view === "reports" && can("reports") ? (

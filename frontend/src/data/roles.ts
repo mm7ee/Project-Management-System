@@ -10,7 +10,8 @@ export type Permission =
   | "manage_systems" // add, delete, edit details, change leads
   | "request_updates" // ask a project's developers for an update
   | "reports" // generate and download reports
-  | "manage_users"; // create users, assign roles/projects, change permissions
+  | "manage_users" // create users, assign roles/projects, change permissions
+  | "audit_log"; // view the activity log: sign-ins, failed sign-ins and every change
 
 export const ROLES: Role[] = ["admin", "manager", "developer", "viewer"];
 
@@ -28,6 +29,7 @@ export const PERMISSIONS: { key: Permission; label: string }[] = [
   { key: "request_updates", label: "Request updates" },
   { key: "reports", label: "Generate reports" },
   { key: "manage_users", label: "Manage users, roles and permissions" },
+  { key: "audit_log", label: "View the activity log" },
 ];
 
 export type RolePermissions = Record<Role, Permission[]>;
@@ -55,6 +57,20 @@ export interface User {
   role: Role;
   projectId?: string; // developers are assigned to exactly one project
   mustChangePassword?: boolean; // reset by an admin; must choose a new password at sign-in
+  lastLogin?: string; // ISO; only sent to people who can view the activity log
+}
+
+/** One line of the activity log. `detail` holds names and before/after values for display. */
+export interface ActivityEntry {
+  id: number;
+  at: string;
+  userId: string | null;
+  actor: string;
+  action: string;
+  target: string | null;
+  detail: Record<string, unknown>;
+  ip: string | null;
+  agent: string | null;
 }
 
 /** Personal display preferences, saved to the account so they follow the user. */

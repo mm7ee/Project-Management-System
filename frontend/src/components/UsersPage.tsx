@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Check, Copy, KeyRound, Pencil, Plus, Trash2, X } from "lucide-react";
 import { api } from "../data/api";
 import { initials, type System } from "../data/systems";
+import { timeAgo } from "../time";
 import {
   PERMISSIONS,
   ROLES,
@@ -21,6 +22,8 @@ interface Props {
 }
 
 export default function UsersPage({ me, users, systems, roleMatrix, onChanged }: Props) {
+  // Last sign-in is only sent to people who can view the activity log.
+  const showLastLogin = users.some((u) => u.lastLogin !== undefined) || me.lastLogin !== undefined;
   const [editing, setEditing] = useState<User | "new" | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [resetting, setResetting] = useState<string | null>(null);
@@ -61,6 +64,7 @@ export default function UsersPage({ me, users, systems, roleMatrix, onChanged }:
               <th>Role</th>
               <th>Assigned project</th>
               <th>Email</th>
+              {showLastLogin && <th>Last sign-in</th>}
               <th aria-label="Actions" />
             </tr>
           </thead>
@@ -82,6 +86,11 @@ export default function UsersPage({ me, users, systems, roleMatrix, onChanged }:
                 </td>
                 <td>{u.role === "developer" ? systemName(u.projectId) ?? <i className="muted">Not assigned</i> : "—"}</td>
                 <td className="muted">{u.email ?? "—"}</td>
+                {showLastLogin && (
+                  <td className="muted" title={u.lastLogin ? new Date(u.lastLogin).toLocaleString("en-GB") : undefined}>
+                    {u.lastLogin ? timeAgo(u.lastLogin, Date.now()) : "Never"}
+                  </td>
+                )}
                 <td>
                   <div className="row-actions">
                     {resetting === u.id ? (
