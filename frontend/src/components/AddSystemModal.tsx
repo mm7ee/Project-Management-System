@@ -2,21 +2,24 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { STATUS_META, type Health, type Status, type System } from "../data/systems";
 import type { User } from "../data/roles";
+import DeveloperPicker from "./DeveloperPicker";
 
 interface Props {
   users: User[];
+  systems: System[];
   error?: string;
-  onSave: (s: Partial<System>) => void;
+  onSave: (s: Partial<System> & { developers: string[] }) => void;
   onClose: () => void;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function AddSystemModal({ users, error, onSave, onClose }: Props) {
+export default function AddSystemModal({ users, systems, error, onSave, onClose }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [url, setUrl] = useState("");
   const [lead, setLead] = useState("");
+  const [developers, setDevelopers] = useState<string[]>([]);
   const [status, setStatus] = useState<Status>("WIP");
   const [progress, setProgress] = useState(0);
   const [startedAt, setStartedAt] = useState(today());
@@ -52,6 +55,7 @@ export default function AddSystemModal({ users, error, onSave, onClose }: Props)
             description: description.trim(),
             url: url.trim(),
             ...(lead ? { lead } : {}),
+            developers,
             status,
             progress,
             startedAt,
@@ -97,6 +101,13 @@ export default function AddSystemModal({ users, error, onSave, onClose }: Props)
               ))}
             </select>
           </label>
+        </div>
+
+        <div className="field">
+          <span>
+            Developers {developers.length > 0 && <b>{developers.length}</b>}
+          </span>
+          <DeveloperPicker users={users} systems={systems} value={developers} onChange={setDevelopers} />
         </div>
 
         <label className="field">

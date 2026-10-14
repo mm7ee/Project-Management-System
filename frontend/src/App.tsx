@@ -241,6 +241,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
 
       <SystemDrawer
         system={selected}
+        systems={systems}
         now={now}
         me={me}
         users={users}
@@ -252,6 +253,10 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
         onUpdate={() => setPosting({ initialId: selected?.id })}
         onChangeLead={async (id, lead) => {
           await api(`/systems/${id}`, "PATCH", { lead });
+          await reload();
+        }}
+        onChangeDevelopers={async (id, developers) => {
+          await api(`/systems/${id}`, "PATCH", { developers });
           await reload();
         }}
         onDelete={async (id) => {
@@ -271,6 +276,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
       {adding && (
         <AddSystemModal
           users={users}
+          systems={systems}
           error={addError}
           onClose={() => setAdding(false)}
           onSave={async (s) => {

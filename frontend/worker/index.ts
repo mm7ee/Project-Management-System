@@ -175,7 +175,7 @@ const ACTIVITY_KINDS: Record<string, string[]> = {
   signin: ["login", "logout", "logout_all"],
   failed: ["login_failed"],
   account: ["password_changed", "password_set_after_reset", "profile_updated"],
-  systems: ["system_created", "system_progress", "system_updated", "system_deleted", "request_created", "request_dismissed"],
+  systems: ["system_created", "system_progress", "system_updated", "system_developers", "system_deleted", "request_created", "request_dismissed"],
   admin: ["user_created", "user_updated", "user_password_reset", "user_deleted", "roles_updated"],
 };
 
@@ -313,9 +313,31 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   }
 
   // ----- systems -----
+  // A developer works on one project (users.project_id). Setting a project's developers assigns
+  // the listed ones to it (moving them off any other project) and unassigns the rest.
+  const setDevelopers = async (systemId: string, list: unknown) => {
+    if (!Array.isArray(list)) throw new HttpError(400, "Developers must be a list");
+    const ids = [...new Set(list.map(String))];
+    const devs = await db.prepare("SELECT id, name, project_id FROM users WHERE role = 'developer'").all<{ id: string; name: string; project_id: string | null }>();
+    const byId = new Map(devs.results.map((d) => [d.id, d]));
+    for (const id of ids) if (!byId.has(id)) throw new HttpError(400, "Only users with the developer role can be assigned");
+    const before = devs.results.filter((d) => d.project_id === systemId);
+    const added = ids.filter((id) => byId.get(id)!.project_id !== systemId);
+    const removed = before.filter((d) => !ids.includes(d.id));
+    const stmts = [
+      ...added.map((id) => db.prepare("UPDATE users SET project_id = ? WHERE id = ?").bind(systemId, id)),
+      ...removed.map((d) => db.prepare("UPDATE users SET project_id = NULL WHERE id = ?").bind(d.id)),
+    ];
+    if (stmts.length) await db.batch(stmts);
+    return {
+      added: added.map((id) => ({ name: byId.get(id)!.name, from: byId.get(id)!.project_id })),
+      removed: removed.map((d) => d.name),
+    };
+  };
+
   if (path === "/api/systems" && method === "POST") {
     need("manage_systems");
-    const b = await body<Partial<System>>(req);
+    const b = await body<Partial<System> & { developers?: string[] }>(req);
     const name = text(b.name, "Name", true)!;
     let id = slug(name);
     for (let n = 2; await db.prepare("SELECT 1 FROM systems WHERE id = ?").bind(id).first(); n++) id = `${slug(name)}-${n}`;
@@ -341,6 +363,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     const sort = (await db.prepare("SELECT COALESCE(MAX(sort), 0) + 1 AS s FROM systems").first<{ s: number }>())!.s;
     await db.prepare("INSERT INTO systems (id, sort, data) VALUES (?, ?, ?)").bind(id, sort, JSON.stringify(system)).run();
     await audit(db, req, me, "system_created", id, { name, status, progress: system.progress });
+    if (b.developers?.length) await audit(db, req, me, "system_developers", id, { name, ...(await setDevelopers(id, b.developers)) });
     return json(system, 201);
   }
 
@@ -348,7 +371,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   if (sysMatch && method === "PATCH") {
     const id = sysMatch[1];
     const current = await getSystem(db, id);
-    const b = await body<Partial<System>>(req);
+    const b = await body<Partial<System> & { developers?: string[] }>(req);
     const next: System = { ...current };
 
     // Progress, status and maintenance are "progress updates": the assigned developer may post them.
@@ -389,6 +412,12 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
         if (lead && !(await db.prepare("SELECT 1 FROM users WHERE id = ?").bind(lead).first())) throw new HttpError(400, "Unknown lead");
         next.lead = lead;
       }
+    }
+
+    if (b.developers !== undefined) {
+      need("manage_systems");
+      const result = await setDevelopers(id, b.developers);
+      if (result.added.length || result.removed.length) await audit(db, req, me, "system_developers", id, { name: next.name, ...result });
     }
 
     const stmts = [db.prepare("UPDATE systems SET data = ? WHERE id = ?").bind(JSON.stringify(next), id)];

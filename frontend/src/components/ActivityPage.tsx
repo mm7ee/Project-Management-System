@@ -104,6 +104,15 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
       ];
       return `Edited ${name}: ${parts.join("; ")}`;
     }
+    case "system_developers": {
+      const added = (d.added as { name: string; from: string | null }[] | undefined) ?? [];
+      const removed = (d.removed as string[] | undefined) ?? [];
+      const parts = [
+        ...added.map((a) => `added ${a.name}${a.from ? ` (moved from ${sysName(a.from)})` : ""}`),
+        ...removed.map((n) => `removed ${n}`),
+      ];
+      return `Developers on ${name}: ${parts.join(", ") || "no change"}`;
+    }
     case "system_deleted":
       return `Deleted system ${name}`;
     case "request_created":
