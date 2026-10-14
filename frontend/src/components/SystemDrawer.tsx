@@ -51,7 +51,7 @@ export default function SystemDrawer(p: Props) {
   if (!system) return null;
   const canOpen = system.status === "LIVE" || system.status === "COMPLETED";
   const lead = users.find((u) => u.id === system.lead);
-  const developers = users.filter((u) => u.role === "developer" && u.projectId === system.id);
+  const developers = users.filter((u) => u.role === "developer" && u.projectIds?.includes(system.id));
   const nameOf = (id: string) => users.find((u) => u.id === id)?.name ?? "Someone";
   const attempt = async (fn: () => Promise<void>) => {
     setError("");
@@ -123,7 +123,7 @@ export default function SystemDrawer(p: Props) {
                   </b>
                   {r.message && <p>“{r.message}”</p>}
                 </div>
-                {(r.requestedBy === me.id || me.projectId === system.id || p.canManage) && (
+                {(r.requestedBy === me.id || me.projectIds?.includes(system.id) || p.canManage) && (
                   <button className="link-btn" onClick={() => attempt(() => p.onDismiss(r.id))}>
                     Dismiss
                   </button>

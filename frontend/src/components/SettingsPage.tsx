@@ -21,7 +21,7 @@ interface Props {
   me: User;
   prefs: Prefs;
   permissions: Permission[];
-  project?: System;
+  projects: System[]; // assigned to or led by this user
   onPrefs: (p: Prefs) => Promise<void>;
   onProfileSaved: () => Promise<void>;
   onSignedOut: () => void;
@@ -82,7 +82,7 @@ function strength(pw: string): number {
 }
 const STRENGTH = ["Too short", "Weak", "Fair", "Good", "Strong"];
 
-export default function SettingsPage({ me, prefs, permissions, project, onPrefs, onProfileSaved, onSignedOut }: Props) {
+export default function SettingsPage({ me, prefs, permissions, projects, onPrefs, onProfileSaved, onSignedOut }: Props) {
   const [saved, setSaved] = useState(false);
   const [email, setEmail] = useState(me.email ?? "");
   const [phone, setPhone] = useState(me.phone ?? "");
@@ -107,7 +107,7 @@ export default function SettingsPage({ me, prefs, permissions, project, onPrefs,
   const score = strength(next);
   const startOptions = [
     { value: "ALL", label: "All projects" },
-    ...(me.projectId ? [{ value: "MINE", label: "My project" }] : []),
+    ...(projects.length ? [{ value: "MINE", label: "Assigned to me" }] : []),
     { value: "LIVE", label: "Live" },
     { value: "WIP", label: "In progress" },
     { value: "TESTING", label: "Testing" },
@@ -141,7 +141,7 @@ export default function SettingsPage({ me, prefs, permissions, project, onPrefs,
               <span>
                 {ROLE_LABEL[me.role]} · {me.username}
               </span>
-              {project && <span>Assigned project: {project.name}</span>}
+              {projects.length > 0 && <span>Assigned to: {projects.map((s) => s.name).join(", ")}</span>}
             </div>
           </div>
           <form

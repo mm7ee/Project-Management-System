@@ -54,7 +54,7 @@ export default function ReportsPage({ systems, users, requests, now }: Props) {
   const paces = view.map((s) => paceOf(s, now)).filter((p): p is Pace => !!p);
   const leads = users.filter((u) => systems.some((s) => s.lead === u.id));
   const userName = (id?: string) => users.find((u) => u.id === id)?.name ?? "";
-  const devs = (id: string) => users.filter((u) => u.role === "developer" && u.projectId === id).map((u) => u.name);
+  const devs = (id: string) => users.filter((u) => u.role === "developer" && u.projectIds?.includes(id)).map((u) => u.name);
   const generated = new Date(now).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
   const scopeText = `${SCOPES.find((s) => s.key === scope)!.label}${lead ? ` · lead: ${userName(lead)}` : ""}`;
 

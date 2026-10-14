@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Menu, Plus, Search } from "lucide-react";
 import { getSchedule, type System } from "./data/systems";
 import { api, useAppData, type AppData } from "./data/api";
-import type { Permission, Prefs } from "./data/roles";
+import { isAssigned, type Permission, type Prefs } from "./data/roles";
 import { useApplyPrefs } from "./prefs";
 import { useNow } from "./time";
 import Sidebar, { type Filter, type View } from "./components/Sidebar";
@@ -57,9 +57,12 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
     }
   };
 
+  const isMine = (s: System) => isAssigned(me, s);
+  const myProjects = systems.filter(isMine);
+
   const [view, setView] = useState<View>("projects");
   const [filter, setFilter] = useState<Filter>(() =>
-    data.prefs.start === "MINE" && !me.projectId ? "ALL" : (data.prefs.start as Filter),
+    data.prefs.start === "MINE" && !myProjects.length ? "ALL" : (data.prefs.start as Filter),
   );
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -73,7 +76,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
     can("edit_any") || can("manage_systems")
       ? systems
       : can("edit_assigned")
-        ? systems.filter((s) => s.id === me.projectId)
+        ? systems.filter((s) => me.projectIds?.includes(s.id))
         : [];
   const mayUpdate = (s: System) => editable.some((e) => e.id === s.id);
   const requestsFor = (id: string) => requests.filter((r) => r.systemId === id);
@@ -87,10 +90,10 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
       if (getSchedule(s, now) === "OVERDUE") c.OVERDUE++;
       if (requests.some((r) => r.systemId === s.id)) c.REQUESTED++;
       if (s.health === "Maintenance") c.MAINTENANCE++;
-      if (s.id === me.projectId) c.MINE++;
+      if (isMine(s)) c.MINE++;
     });
     return c;
-  }, [systems, requests, now]);
+  }, [systems, requests, now, me]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -99,7 +102,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
         filter === "ALL"
           ? true
           : filter === "MINE"
-            ? s.id === me.projectId
+            ? isMine(s)
             : filter === "OVERDUE"
             ? getSchedule(s, now) === "OVERDUE"
             : filter === "REQUESTED"
@@ -109,9 +112,18 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
                 : s.status === filter,
       )
       .filter((s) => !q || s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q))
-      // A developer's own project comes first.
-      .sort((a, b) => Number(b.id === me.projectId) - Number(a.id === me.projectId));
-  }, [systems, requests, filter, query, now, me.projectId]);
+      // Your own projects come first.
+      .sort((a, b) => Number(isMine(b)) - Number(isMine(a)));
+  }, [systems, requests, filter, query, now, me]);
+
+  // On "All projects", the ones assigned to you get their own section above the rest.
+  const sections =
+    filter === "ALL" && visible.some(isMine)
+      ? [
+          { title: "Assigned to you", items: visible.filter(isMine) },
+          { title: "All other projects", items: visible.filter((s) => !isMine(s)) },
+        ].filter((x) => x.items.length)
+      : [{ title: "", items: visible }];
 
   const avgProgress = systems.length ? Math.round(systems.reduce((n, s) => n + s.progress, 0) / systems.length) : 0;
   const atRisk = systems.filter((s) => ["AT_RISK", "OVERDUE"].includes(getSchedule(s, now))).length;
@@ -130,7 +142,6 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   };
 
   const selected = systems.find((s) => s.id === selectedId) ?? null;
-  const myProject = systems.find((s) => s.id === me.projectId);
 
   return (
     <div className="shell">
@@ -188,7 +199,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             me={me}
             prefs={prefs}
             permissions={data.permissions}
-            project={myProject}
+            projects={myProjects}
             onPrefs={savePrefs}
             onProfileSaved={reload}
             onSignedOut={reload}
@@ -201,8 +212,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           <ReportsPage systems={systems} users={users} requests={requests} now={now} />
         ) : (
           <>
-            {me.role === "developer" && !myProject && (
-              <p className="notice">You haven't been assigned a project yet. Ask an administrator to assign you one.</p>
+            {me.role === "developer" && !myProjects.length && (
+              <p className="notice">You haven't been assigned any projects yet. Ask an administrator to assign you one.</p>
             )}
             <section className="stats five">
               {stats.map(({ value, label, tone }) => (
@@ -216,22 +227,31 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             </section>
 
             {visible.length ? (
-              // Keyed on the filter so switching sections replays the entrance.
-              <div className="grid" key={filter}>
-                {visible.map((s, i) => (
-                  <SystemCard
-                    key={s.id}
-                    system={s}
-                    now={now}
-                    lead={users.find((u) => u.id === s.lead)}
-                    developers={users.filter((u) => u.role === "developer" && u.projectId === s.id)}
-                    requests={requestsFor(s.id).length}
-                    mine={s.id === me.projectId}
-                    index={i}
-                    onSelect={(x) => setSelectedId(x.id)}
-                  />
-                ))}
-              </div>
+              sections.map(({ title, items }, n) => (
+                <section key={title || "all"} className="grid-section">
+                  {title && (
+                    <h2 className="grid-title">
+                      {title} <span>{items.length}</span>
+                    </h2>
+                  )}
+                  {/* Keyed on the filter so switching sections replays the entrance. */}
+                  <div className="grid" key={filter}>
+                    {items.map((s, i) => (
+                      <SystemCard
+                        key={s.id}
+                        system={s}
+                        now={now}
+                        lead={users.find((u) => u.id === s.lead)}
+                        developers={users.filter((u) => u.role === "developer" && u.projectIds?.includes(s.id))}
+                        requests={requestsFor(s.id).length}
+                        mine={isMine(s)}
+                        index={n ? sections[0].items.length + i : i}
+                        onSelect={(x) => setSelectedId(x.id)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ))
             ) : (
               <div className="empty">No projects match.</div>
             )}

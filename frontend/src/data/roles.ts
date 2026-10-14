@@ -5,7 +5,7 @@
 export type Role = "admin" | "manager" | "developer" | "viewer";
 
 export type Permission =
-  | "edit_assigned" // update status/progress of the project you're assigned to
+  | "edit_assigned" // update status/progress of the projects you're assigned to
   | "edit_any" // update status/progress of any project
   | "manage_systems" // add, delete, edit details, change leads
   | "request_updates" // ask a project's developers for an update
@@ -23,7 +23,7 @@ export const ROLE_LABEL: Record<Role, string> = {
 };
 
 export const PERMISSIONS: { key: Permission; label: string }[] = [
-  { key: "edit_assigned", label: "Update their assigned project" },
+  { key: "edit_assigned", label: "Update their assigned projects" },
   { key: "edit_any", label: "Update any project" },
   { key: "manage_systems", label: "Add, delete and edit systems" },
   { key: "request_updates", label: "Request updates" },
@@ -55,9 +55,14 @@ export interface User {
   email?: string;
   phone?: string;
   role: Role;
-  projectId?: string; // developers are assigned to exactly one project
+  projectIds?: string[]; // developers only: the projects they're assigned to
   mustChangePassword?: boolean; // reset by an admin; must choose a new password at sign-in
   lastLogin?: string; // ISO; only sent to people who can view the activity log
+}
+
+/** A developer on the project, or its lead: what "Assigned to me" shows. */
+export function isAssigned(user: User, system: { id: string; lead?: string }): boolean {
+  return system.lead === user.id || !!user.projectIds?.includes(system.id);
 }
 
 /** One line of the activity log. `detail` holds names and before/after values for display. */

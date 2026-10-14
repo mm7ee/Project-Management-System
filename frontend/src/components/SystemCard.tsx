@@ -10,7 +10,7 @@ interface Props {
   lead?: User;
   developers: User[]; // developers assigned to this project
   requests: number; // open update requests for this system
-  mine: boolean; // the signed-in developer's assigned project
+  mine: boolean; // the signed-in user is on this project or leads it
   index?: number; // position in the grid, for the staggered entrance
   onSelect: (s: System) => void;
 }
@@ -103,7 +103,7 @@ export default function SystemCard({ system, now, lead, developers, requests, mi
               <Wrench size={13} /> Under maintenance
             </span>
           )}
-          {mine && <span className="flag flag-mine">Your project</span>}
+          {mine && <span className="flag flag-mine">Assigned to you</span>}
           {requests > 0 && (
             <span className="flag flag-request">
               <BellRing size={13} /> Update requested

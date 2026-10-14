@@ -9,7 +9,7 @@ export type View = "projects" | "reports" | "users" | "activity" | "settings";
 // Order follows the mock-up. Optional items only appear when something is in them.
 const NAV: { key: Filter; label: string; optional?: boolean }[] = [
   { key: "ALL", label: "All projects" },
-  { key: "MINE", label: "My project", optional: true },
+  { key: "MINE", label: "Assigned to me", optional: true },
   { key: "LIVE", label: STATUS_META.LIVE.label },
   { key: "WIP", label: STATUS_META.WIP.label },
   { key: "TESTING", label: STATUS_META.TESTING.label, optional: true },

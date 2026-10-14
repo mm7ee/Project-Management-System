@@ -161,6 +161,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ---------- Project cards ---------- */
 .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 15px; }
+.grid-section + .grid-section { margin-top: 26px; }
+.grid-title { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; color: var(--heading); font-size: 15px; font-weight: 800; }
+.grid-title span { padding: 1px 9px; border-radius: 99px; background: var(--track); color: var(--muted); font-size: 12.5px; }
 .card {
   display: flex; flex-direction: column; gap: 12px; padding: 14px 14px 10px;
   background: var(--card); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow);
@@ -443,6 +446,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .choice { display: inline-flex; padding: 3px; border-radius: 99px; background: var(--track); }
 .choice button { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 0; border-radius: 99px; background: none; color: var(--muted); font-size: 13.5px; font-weight: 700; cursor: pointer; }
 .choice button.on { background: var(--card); color: var(--heading); box-shadow: 0 1px 4px rgba(5, 59, 122, 0.15); }
+.choice.wrap { display: flex; flex-wrap: wrap; gap: 2px; border-radius: 14px; }
 .set-select { padding: 8px 12px; border: 2px solid var(--input-line); border-radius: 10px; background: var(--input-bg); font-weight: 600; }
 .saved-tick { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 99px; background: var(--tint-green); color: var(--green-ink); font-size: 13px; font-weight: 700; opacity: 0; transition: opacity .2s; }
 .saved-tick.show { opacity: 1; }

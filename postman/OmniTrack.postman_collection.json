@@ -1122,7 +1122,7 @@
                   "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
                   "const d = pm.response.json();",
                   "",
-                  "pm.test(\"qa-dev projectId\", () => pm.expect(d.users.find(u => u.id === \"qa-dev\").projectId).to.eql(pm.environment.get(\"systemId\")));"
+                  "pm.test(\"qa-dev projectIds\", () => pm.expect(d.users.find(u => u.id === \"qa-dev\").projectIds).to.include(pm.environment.get(\"systemId\")));"
                 ]
               }
             }
@@ -2936,7 +2936,7 @@
                   "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
                   "const d = pm.response.json();",
                   "",
-                  "pm.test(\"qa-dev has no project\", () => pm.expect(d.users.find(u => u.id === \"qa-dev\").projectId).to.be.undefined);",
+                  "pm.test(\"qa-dev is off the deleted project\", () => pm.expect(d.users.find(u => u.id === \"qa-dev\").projectIds ?? []).to.not.include(pm.environment.get(\"systemId\")));",
                   "pm.test(\"system gone\", () => pm.expect(d.systems.map(s => s.id)).to.not.include(pm.environment.get(\"systemId\")));"
                 ]
               }

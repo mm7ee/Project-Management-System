@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ArrowRightLeft, Search, X } from "lucide-react";
+import { Layers, Search, X } from "lucide-react";
 import { initials, type System } from "../data/systems";
 import type { User } from "../data/roles";
 
@@ -13,8 +13,8 @@ interface SearchProps {
 }
 
 /**
- * Type-to-find box for developer accounts. A developer works on one project, so picking one who is
- * already on another moves them; the suggestion says so before they are picked.
+ * Type-to-find box for developer accounts. A developer can be on several projects; each
+ * suggestion says what else they're already on, so the busiest can be spotted before picking.
  */
 export function DeveloperSearch({ users, systems, systemId, exclude, disabled, onPick }: SearchProps) {
   const [query, setQuery] = useState("");
@@ -23,13 +23,14 @@ export function DeveloperSearch({ users, systems, systemId, exclude, disabled, o
   const input = useRef<HTMLInputElement>(null);
 
   const developers = users.filter((u) => u.role === "developer");
+  const others = (d: User) =>
+    (d.projectIds ?? []).filter((id) => id !== systemId).map((id) => systems.find((s) => s.id === id)?.name).filter((n): n is string => !!n);
   const q = query.trim().toLowerCase();
   const matches = developers
     .filter((d) => !exclude.includes(d.id))
     .filter((d) => !q || d.name.toLowerCase().includes(q) || d.title.toLowerCase().includes(q) || d.username.toLowerCase().includes(q))
-    // Free developers first: they are the likeliest pick.
-    .sort((a, b) => Number(!!a.projectId && a.projectId !== systemId) - Number(!!b.projectId && b.projectId !== systemId));
-  const projectName = (id?: string) => (id && id !== systemId ? systems.find((s) => s.id === id)?.name : undefined);
+    // Least busy first: they are the likeliest pick.
+    .sort((a, b) => others(a).length - others(b).length);
 
   const pick = (id: string) => {
     onPick(id);
@@ -81,7 +82,7 @@ export function DeveloperSearch({ users, systems, systemId, exclude, disabled, o
         <ul className="dev-menu" role="listbox">
           {matches.length ? (
             matches.map((d, i) => {
-              const elsewhere = projectName(d.projectId);
+              const elsewhere = others(d);
               return (
                 <li key={d.id} role="option" aria-selected={i === active}>
                   <button
@@ -96,9 +97,9 @@ export function DeveloperSearch({ users, systems, systemId, exclude, disabled, o
                       <b>{d.name}</b>
                       <span>{d.title || d.username}</span>
                     </span>
-                    {elsewhere ? (
-                      <span className="dev-tag busy" title={`Picking ${d.name} moves them off ${elsewhere}`}>
-                        <ArrowRightLeft size={12} /> On {elsewhere}
+                    {elsewhere.length ? (
+                      <span className="dev-tag busy" title={`Also on ${elsewhere.join(", ")}`}>
+                        <Layers size={12} /> {elsewhere.length === 1 ? `On ${elsewhere[0]}` : `On ${elsewhere.length} projects`}
                       </span>
                     ) : (
                       <span className="dev-tag free">Available</span>
@@ -130,19 +131,15 @@ export default function DeveloperPicker({ users, systems, value, onChange }: Pic
     <div className="dev-picker">
       {chosen.length > 0 && (
         <div className="dev-chips">
-          {chosen.map((d) => {
-            const from = d.projectId ? systems.find((s) => s.id === d.projectId)?.name : undefined;
-            return (
-              <span key={d.id} className="dev-chip" title={from ? `Moves off ${from}` : d.title}>
-                <span className="avatar">{initials(d.name)}</span>
-                {d.name}
-                {from && <small>from {from}</small>}
-                <button type="button" aria-label={`Remove ${d.name}`} onClick={() => onChange(value.filter((x) => x !== d.id))}>
-                  <X size={13} />
-                </button>
-              </span>
-            );
-          })}
+          {chosen.map((d) => (
+            <span key={d.id} className="dev-chip" title={d.title}>
+              <span className="avatar">{initials(d.name)}</span>
+              {d.name}
+              <button type="button" aria-label={`Remove ${d.name}`} onClick={() => onChange(value.filter((x) => x !== d.id))}>
+                <X size={13} />
+              </button>
+            </span>
+          ))}
         </div>
       )}
       <DeveloperSearch users={users} systems={systems} exclude={value} onPick={(id) => onChange([...value, id])} />

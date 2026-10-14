@@ -36,13 +36,12 @@ interface UserRow {
   email: string | null;
   phone: string | null;
   role: Role;
-  project_id: string | null;
   password_hash: string;
   prefs: string;
   must_change_password: number;
 }
 
-const toUser = (r: UserRow): User => ({
+const toUser = (r: UserRow, projectIds: string[] = []): User => ({
   id: r.id,
   username: r.username,
   name: r.name,
@@ -50,7 +49,7 @@ const toUser = (r: UserRow): User => ({
   role: r.role,
   ...(r.email ? { email: r.email } : {}),
   ...(r.phone ? { phone: r.phone } : {}),
-  ...(r.project_id ? { projectId: r.project_id } : {}),
+  ...(projectIds.length ? { projectIds } : {}),
   ...(r.must_change_password ? { mustChangePassword: true } : {}),
 });
 
@@ -99,6 +98,12 @@ async function getSystem(db: D1Database, id: string): Promise<System> {
   const row = await db.prepare("SELECT data FROM systems WHERE id = ?").bind(id).first<{ data: string }>();
   if (!row) throw new HttpError(404, "System not found");
   return JSON.parse(row.data);
+}
+
+/** The projects a developer is assigned to. */
+async function projectsOf(db: D1Database, userId: string): Promise<string[]> {
+  const rows = await db.prepare("SELECT system_id FROM assignments WHERE user_id = ?").bind(userId).all<{ system_id: string }>();
+  return rows.results.map((r) => r.system_id);
 }
 
 async function adminCount(db: D1Database): Promise<number> {
@@ -239,19 +244,24 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   const now = new Date().toISOString();
 
   if (path === "/api/data" && method === "GET") {
-    const [systems, users, requests] = await Promise.all([
+    const [systems, users, requests, assigned] = await Promise.all([
       db.prepare("SELECT data FROM systems ORDER BY sort, rowid").all<{ data: string }>(),
       db.prepare("SELECT * FROM users ORDER BY name").all<UserRow>(),
       db.prepare("SELECT * FROM requests ORDER BY created_at DESC").all<Record<string, string>>(),
+      db
+        .prepare("SELECT a.user_id, a.system_id FROM assignments a JOIN systems s ON s.id = a.system_id ORDER BY s.sort, s.rowid")
+        .all<{ user_id: string; system_id: string }>(),
     ]);
+    const projectsByUser = new Map<string, string[]>();
+    for (const a of assigned.results) projectsByUser.set(a.user_id, [...(projectsByUser.get(a.user_id) ?? []), a.system_id]);
     return json({
-      me: toUser(me),
+      me: toUser(me, projectsByUser.get(me.id)),
       prefs: cleanPrefs(JSON.parse(me.prefs || "{}"), START_KEYS),
       permissions: perms,
       roleMatrix: matrix,
       systems: systems.results.map((r) => JSON.parse(r.data)),
       users: await (async () => {
-        const list = users.results.map(toUser);
+        const list = users.results.map((u) => toUser(u, projectsByUser.get(u.id)));
         if (!can("audit_log")) return list;
         const last = await db
           .prepare("SELECT user_id, MAX(at) AS at FROM activity WHERE action = 'login' GROUP BY user_id")
@@ -313,29 +323,30 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   }
 
   // ----- systems -----
-  // A developer works on one project (users.project_id). Setting a project's developers assigns
-  // the listed ones to it (moving them off any other project) and unassigns the rest.
+  // A developer can work on several projects (the assignments table). Setting a project's
+  // developers assigns the listed ones to it and unassigns the rest; their other projects stay.
   const checkDevelopers = async (list: unknown) => {
     if (!Array.isArray(list)) throw new HttpError(400, "Developers must be a list");
     const ids = [...new Set(list.map(String))];
-    const devs = await db.prepare("SELECT id, name, project_id FROM users WHERE role = 'developer'").all<{ id: string; name: string; project_id: string | null }>();
+    const devs = await db.prepare("SELECT id, name FROM users WHERE role = 'developer'").all<{ id: string; name: string }>();
     const byId = new Map(devs.results.map((d) => [d.id, d]));
     for (const id of ids) if (!byId.has(id)) throw new HttpError(400, "Only users with the developer role can be assigned");
-    return { ids, devs, byId };
+    return { ids, byId };
   };
   const setDevelopers = async (systemId: string, list: unknown) => {
-    const { ids, devs, byId } = await checkDevelopers(list);
-    const before = devs.results.filter((d) => d.project_id === systemId);
-    const added = ids.filter((id) => byId.get(id)!.project_id !== systemId);
-    const removed = before.filter((d) => !ids.includes(d.id));
+    const { ids, byId } = await checkDevelopers(list);
+    const rows = await db.prepare("SELECT user_id FROM assignments WHERE system_id = ?").bind(systemId).all<{ user_id: string }>();
+    const before = rows.results.map((r) => r.user_id);
+    const added = ids.filter((id) => !before.includes(id));
+    const removed = before.filter((id) => !ids.includes(id));
     const stmts = [
-      ...added.map((id) => db.prepare("UPDATE users SET project_id = ? WHERE id = ?").bind(systemId, id)),
-      ...removed.map((d) => db.prepare("UPDATE users SET project_id = NULL WHERE id = ?").bind(d.id)),
+      ...added.map((id) => db.prepare("INSERT OR IGNORE INTO assignments (user_id, system_id) VALUES (?, ?)").bind(id, systemId)),
+      ...removed.map((id) => db.prepare("DELETE FROM assignments WHERE user_id = ? AND system_id = ?").bind(id, systemId)),
     ];
     if (stmts.length) await db.batch(stmts);
     return {
-      added: added.map((id) => ({ name: byId.get(id)!.name, from: byId.get(id)!.project_id })),
-      removed: removed.map((d) => d.name),
+      added: added.map((id) => ({ name: byId.get(id)!.name })),
+      removed: removed.map((id) => byId.get(id)?.name ?? id),
     };
   };
 
@@ -384,8 +395,8 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     const touchesProgress =
       b.progress !== undefined || b.status !== undefined || b.health !== undefined || b.maintenanceNote !== undefined;
     if (touchesProgress) {
-      const allowed = can("edit_any") || can("manage_systems") || (can("edit_assigned") && me.project_id === id);
-      if (!allowed) throw new HttpError(403, "You can only update the project you're assigned to");
+      const allowed = can("edit_any") || can("manage_systems") || (can("edit_assigned") && (await projectsOf(db, me.id)).includes(id));
+      if (!allowed) throw new HttpError(403, "You can only update projects you're assigned to");
       if (b.progress !== undefined) next.progress = checkProgress(b.progress);
       if (b.status !== undefined) next.status = checkStatus(b.status);
       if (b.health !== undefined) {
@@ -457,7 +468,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     await db.batch([
       db.prepare("DELETE FROM systems WHERE id = ?").bind(id),
       db.prepare("DELETE FROM requests WHERE system_id = ?").bind(id),
-      db.prepare("UPDATE users SET project_id = NULL WHERE project_id = ?").bind(id),
+      db.prepare("DELETE FROM assignments WHERE system_id = ?").bind(id),
     ]);
     await audit(db, req, me, "system_deleted", id, { name: gone.name });
     return json({ ok: true });
@@ -481,7 +492,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   if (reqMatch && method === "DELETE") {
     const r = await db.prepare("SELECT * FROM requests WHERE id = ?").bind(reqMatch[1]).first<Record<string, string>>();
     if (!r) throw new HttpError(404, "Request not found");
-    const mayDismiss = r.requested_by === me.id || me.project_id === r.system_id || can("manage_systems");
+    const mayDismiss = r.requested_by === me.id || can("manage_systems") || (await projectsOf(db, me.id)).includes(r.system_id);
     if (!mayDismiss) throw new HttpError(403, "You can't dismiss this request");
     await db.prepare("DELETE FROM requests WHERE id = ?").bind(r.id).run();
     const sys = await db.prepare("SELECT data FROM systems WHERE id = ?").bind(r.system_id).first<{ data: string }>();
@@ -490,6 +501,13 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   }
 
   // ----- users, roles and permissions -----
+  const checkProjects = async (list: unknown): Promise<string[]> => {
+    if (list === undefined || list === null) return [];
+    if (!Array.isArray(list)) throw new HttpError(400, "Projects must be a list");
+    const ids = [...new Set(list.map(String))];
+    for (const id of ids) await getSystem(db, id);
+    return ids;
+  };
   if (path === "/api/users" && method === "POST") {
     need("manage_users");
     const b = await body<Partial<User> & { password?: string }>(req);
@@ -497,14 +515,13 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     if (!/^[a-z0-9._-]{3,32}$/.test(username)) throw new HttpError(400, "Username: 3–32 letters, numbers, dots, dashes");
     if (await db.prepare("SELECT 1 FROM users WHERE username = ?").bind(username).first()) throw new HttpError(409, "That username is taken");
     const role = checkRole(b.role ?? "viewer");
-    const projectId = role === "developer" ? text(b.projectId, "Project") : undefined;
-    if (projectId) await getSystem(db, projectId);
+    const projectIds = role === "developer" ? await checkProjects(b.projectIds) : [];
     let id = slug(username);
     for (let n = 2; await db.prepare("SELECT 1 FROM users WHERE id = ?").bind(id).first(); n++) id = `${slug(username)}-${n}`;
     await db
       .prepare(
-        `INSERT INTO users (id, username, name, title, email, phone, role, project_id, password_hash)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO users (id, username, name, title, email, phone, role, password_hash)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         id,
@@ -514,10 +531,12 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
         text(b.email, "Email") ?? null,
         text(b.phone, "Phone") ?? null,
         role,
-        projectId ?? null,
         await hashPassword(checkPassword(b.password)),
       )
       .run();
+    if (projectIds.length) {
+      await db.batch(projectIds.map((p) => db.prepare("INSERT INTO assignments (user_id, system_id) VALUES (?, ?)").bind(id, p)));
+    }
     await audit(db, req, me, "user_created", id, { name: text(b.name, "Name", true), username, role });
     return json({ ok: true, id }, 201);
   }
@@ -548,12 +567,11 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     if (row.role === "admin" && role !== "admin" && (await adminCount(db)) <= 1) {
       throw new HttpError(400, "There must always be at least one administrator");
     }
-    let projectId = b.projectId !== undefined ? text(b.projectId, "Project") ?? null : row.project_id;
-    if (role !== "developer") projectId = null;
-    if (projectId) await getSystem(db, projectId);
+    const before = await projectsOf(db, row.id);
+    const projectIds = role !== "developer" ? [] : b.projectIds !== undefined ? await checkProjects(b.projectIds) : before;
     await db
       .prepare(
-        `UPDATE users SET name = ?, title = ?, email = ?, phone = ?, role = ?, project_id = ?,
+        `UPDATE users SET name = ?, title = ?, email = ?, phone = ?, role = ?,
          password_hash = COALESCE(?, password_hash), must_change_password = ? WHERE id = ?`,
       )
       .bind(
@@ -562,13 +580,20 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
         b.email !== undefined ? text(b.email, "Email") ?? null : row.email,
         b.phone !== undefined ? text(b.phone, "Phone") ?? null : row.phone,
         role,
-        projectId,
         b.password ? await hashPassword(checkPassword(b.password)) : null,
         // A password an admin sets for someone else is temporary: they choose their own at sign-in.
         b.password && row.id !== me.id ? 1 : row.must_change_password,
         row.id,
       )
       .run();
+    const added = projectIds.filter((p) => !before.includes(p));
+    const removed = before.filter((p) => !projectIds.includes(p));
+    if (added.length || removed.length) {
+      await db.batch([
+        ...added.map((p) => db.prepare("INSERT OR IGNORE INTO assignments (user_id, system_id) VALUES (?, ?)").bind(row.id, p)),
+        ...removed.map((p) => db.prepare("DELETE FROM assignments WHERE user_id = ? AND system_id = ?").bind(row.id, p)),
+      ]);
+    }
     // A password reset signs the user out everywhere.
     if (b.password) await db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(row.id).run();
     const fieldsChanged = (["name", "title", "email", "phone"] as const).filter((f) => {
@@ -577,7 +602,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     });
     const changes: Record<string, unknown> = {};
     if (role !== row.role) changes.role = { from: row.role, to: role };
-    if (projectId !== row.project_id) changes.project = { from: row.project_id, to: projectId };
+    if (added.length || removed.length) changes.projects = { added, removed };
     if (fieldsChanged.length) changes.fields = fieldsChanged;
     if (b.password) changes.passwordSet = true;
     if (Object.keys(changes).length) await audit(db, req, me, "user_updated", row.id, { name: b.name ?? row.name, ...changes });
@@ -596,6 +621,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     await db.batch([
       db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM requests WHERE requested_by = ?").bind(userMatch[1]),
+      db.prepare("DELETE FROM assignments WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM users WHERE id = ?").bind(userMatch[1]),
     ]);
     await audit(db, req, me, "user_deleted", userMatch[1], { name: row.name, username: row.username, role: row.role });

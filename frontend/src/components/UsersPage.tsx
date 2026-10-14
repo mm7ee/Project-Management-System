@@ -29,7 +29,8 @@ export default function UsersPage({ me, users, systems, roleMatrix, onChanged }:
   const [resetting, setResetting] = useState<string | null>(null);
   const [issued, setIssued] = useState<{ name: string; password: string } | null>(null);
   const [error, setError] = useState("");
-  const systemName = (id?: string) => systems.find((s) => s.id === id)?.name;
+  const projectNames = (ids: string[] = []) =>
+    ids.map((id) => systems.find((s) => s.id === id)?.name).filter(Boolean).join(", ");
 
   const run = async (fn: () => Promise<unknown>) => {
     setError("");
@@ -48,7 +49,7 @@ export default function UsersPage({ me, users, systems, roleMatrix, onChanged }:
       <header className="page-head">
         <div>
           <h2>Users</h2>
-          <p>{users.length} people can sign in. Developers work on one assigned project each.</p>
+          <p>{users.length} people can sign in. Developers can be assigned to several projects.</p>
         </div>
         <button className="btn btn-amber" onClick={() => setEditing("new")}>
           <Plus size={17} strokeWidth={3} /> Add user
@@ -62,7 +63,7 @@ export default function UsersPage({ me, users, systems, roleMatrix, onChanged }:
             <tr>
               <th>Name</th>
               <th>Role</th>
-              <th>Assigned project</th>
+              <th>Assigned projects</th>
               <th>Email</th>
               {showLastLogin && <th>Last sign-in</th>}
               <th aria-label="Actions" />
@@ -84,7 +85,7 @@ export default function UsersPage({ me, users, systems, roleMatrix, onChanged }:
                   <span className={`role-chip role-${u.role}`}>{ROLE_LABEL[u.role]}</span>
                   {u.mustChangePassword && <span className="flag flag-request pw-pending">Must set a new password</span>}
                 </td>
-                <td>{u.role === "developer" ? systemName(u.projectId) ?? <i className="muted">Not assigned</i> : "—"}</td>
+                <td>{u.role === "developer" ? projectNames(u.projectIds) || <i className="muted">Not assigned</i> : "—"}</td>
                 <td className="muted">{u.email ?? "—"}</td>
                 {showLastLogin && (
                   <td className="muted" title={u.lastLogin ? new Date(u.lastLogin).toLocaleString("en-GB") : undefined}>
@@ -298,6 +299,7 @@ function UserModal({
     user ? { ...user, password: "" } : { role: "viewer", name: "", username: "", title: "", email: "", phone: "", password: "" },
   );
   const set = (k: keyof UserForm) => (e: { target: { value: string } }) => setF((v) => ({ ...v, [k]: e.target.value }));
+  const picked = f.projectIds ?? [];
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -357,17 +359,27 @@ function UserModal({
           </label>
         </div>
         {f.role === "developer" && (
-          <label className="field">
-            <span>Assigned project</span>
-            <select value={f.projectId ?? ""} onChange={set("projectId")}>
-              <option value="">Not assigned yet</option>
+          <div className="field">
+            <span>Assigned projects {picked.length > 0 && <b>{picked.length}</b>}</span>
+            <div className="choice wrap" role="group" aria-label="Assigned projects">
               {systems.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
+                <button
+                  key={s.id}
+                  type="button"
+                  aria-pressed={picked.includes(s.id)}
+                  className={picked.includes(s.id) ? "on" : ""}
+                  onClick={() =>
+                    setF((v) => ({
+                      ...v,
+                      projectIds: picked.includes(s.id) ? picked.filter((x) => x !== s.id) : [...picked, s.id],
+                    }))
+                  }
+                >
+                  {picked.includes(s.id) && <Check size={14} />} {s.name}
+                </button>
               ))}
-            </select>
-          </label>
+            </div>
+          </div>
         )}
         <div className="field-row">
           <label className="field">

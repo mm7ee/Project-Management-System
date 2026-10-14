@@ -108,6 +108,7 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
       const added = (d.added as { name: string; from: string | null }[] | undefined) ?? [];
       const removed = (d.removed as string[] | undefined) ?? [];
       const parts = [
+        // `from` only appears on entries logged when a developer could be on one project at a time.
         ...added.map((a) => `added ${a.name}${a.from ? ` (moved from ${sysName(a.from)})` : ""}`),
         ...removed.map((n) => `removed ${n}`),
       ];
@@ -126,9 +127,12 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
     case "user_updated": {
       const parts: string[] = [];
       const role = d.role as { from: unknown; to: unknown } | undefined;
-      const project = d.project as { from: unknown; to: unknown } | undefined;
+      const project = d.project as { from: unknown; to: unknown } | undefined; // older, one-project entries
+      const projects = d.projects as { added: string[]; removed: string[] } | undefined;
       if (role) parts.push(`role ${roleLabel(role.from)} → ${roleLabel(role.to)}`);
       if (project) parts.push(`project ${sysName(project.from)} → ${sysName(project.to)}`);
+      if (projects?.added.length) parts.push(`assigned to ${projects.added.map(sysName).join(", ")}`);
+      if (projects?.removed.length) parts.push(`taken off ${projects.removed.map(sysName).join(", ")}`);
       if (d.fields) parts.push(`changed ${(d.fields as string[]).join(", ")}`);
       if (d.passwordSet) parts.push("set a temporary password");
       return `Edited user ${str(d.name)}: ${parts.join("; ")}`;
