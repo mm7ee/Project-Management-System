@@ -38,6 +38,8 @@ interface Props {
   onView: (v: View) => void;
   onClose: () => void;
   onAdd: () => void;
+  canLogFeature: boolean;
+  onLogFeature: () => void;
   onAccount: () => void;
   theme: Prefs["theme"];
   onTheme: (t: Prefs["theme"]) => void;
@@ -134,6 +136,11 @@ export default function Sidebar(p: Props) {
         {p.canAdd && (
           <button className="add-btn" onClick={go(p.onAdd)}>
             <Plus size={17} strokeWidth={2.75} /> Add system
+          </button>
+        )}
+        {p.canLogFeature && (
+          <button className={`add-btn ${p.canAdd ? "stacked" : ""}`} onClick={go(p.onLogFeature)}>
+            <ListChecks size={17} strokeWidth={2.5} /> Log feature request
           </button>
         )}
 

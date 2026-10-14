@@ -193,6 +193,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
         }}
         open={menuOpen}
         canAdd={can("manage_systems")}
+        canLogFeature={can("manage_features") && systems.length > 0}
+        onLogFeature={() => setFeatureEdit({ feature: null, systemId: selectedId ?? undefined })}
         canReports={can("reports")}
         canUsers={can("manage_users")}
         canActivity={can("audit_log")}

@@ -103,6 +103,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   transition: background .15s, border-color .15s;
 }
 .add-btn:hover { background: rgba(27, 169, 225, 0.1); border-color: var(--cyan); }
+.add-btn.stacked { margin-top: 8px; }
 
 .profile {
   display: flex; align-items: center; gap: 10px; width: 100%; margin-top: auto;
