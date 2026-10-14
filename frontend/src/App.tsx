@@ -224,6 +224,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
                     system={s}
                     now={now}
                     lead={users.find((u) => u.id === s.lead)}
+                    developers={users.filter((u) => u.role === "developer" && u.projectId === s.id)}
                     requests={requestsFor(s.id).length}
                     mine={s.id === me.projectId}
                     index={i}

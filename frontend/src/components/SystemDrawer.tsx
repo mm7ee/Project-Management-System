@@ -179,9 +179,29 @@ export default function SystemDrawer(p: Props) {
           )}
         </section>
 
+        <section className="lead-card">
+          <span className="lead-label">Developers · {developers.length}</span>
+          {developers.length ? (
+            developers.map((d) => (
+              <div key={d.id} className="dev-row">
+                <div className="lead-head">
+                  <span className="avatar md">{initials(d.name)}</span>
+                  <div className="lead-who">
+                    <b>{d.name}</b>
+                    {d.title && <span className="lead-title">{d.title}</span>}
+                  </div>
+                </div>
+                <LeadContact person={d} about={system.name} />
+              </div>
+            ))
+          ) : (
+            <p className="lead-none">
+              No developers assigned yet.{p.canManage && " Developers are assigned to a project on the Users page."}
+            </p>
+          )}
+        </section>
+
         <dl className="facts">
-          <dt>Developers</dt>
-          <dd>{developers.length ? developers.map((d) => d.name).join(", ") : "None assigned"}</dd>
           <dt>Team</dt>
           <dd>{system.owner}</dd>
           <dt>Started</dt>

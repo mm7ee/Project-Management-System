@@ -228,6 +228,13 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .lead-who b { font-size: 17px; color: var(--heading); }
 .lead-title { font-size: 13.5px; color: var(--muted); }
 .lead-none { font-size: 13.5px; color: var(--faint); }
+.avatar.md { width: 34px; height: 34px; font-size: 12px; background: var(--cyan); }
+.lead-card .dev-row { display: flex; flex-direction: column; gap: 10px; }
+.lead-card .dev-row + .dev-row { padding-top: 14px; border-top: 1px solid var(--border); }
+.lead-card .dev-row .lead-who b { font-size: 15px; }
+.dev-stack { display: inline-flex; margin-left: 2px; }
+.dev-stack .avatar { background: var(--cyan); box-shadow: 0 0 0 2px var(--card, #fff); }
+.dev-stack .avatar + .avatar { margin-left: -6px; }
 .contact-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .contact-btn {
   display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 2px solid var(--cyan);

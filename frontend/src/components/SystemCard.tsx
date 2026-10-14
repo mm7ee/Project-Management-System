@@ -8,6 +8,7 @@ interface Props {
   system: System;
   now: number;
   lead?: User;
+  developers: User[]; // developers assigned to this project
   requests: number; // open update requests for this system
   mine: boolean; // the signed-in developer's assigned project
   index?: number; // position in the grid, for the staggered entrance
@@ -78,7 +79,7 @@ export function updatedText(s: System, now: number): string {
   return !s.updatedAt && new Date(at).getTime() > now ? "No updates yet" : `Updated ${timeAgo(at, now)}`;
 }
 
-export default function SystemCard({ system, now, lead, requests, mine, index = 0, onSelect }: Props) {
+export default function SystemCard({ system, now, lead, developers, requests, mine, index = 0, onSelect }: Props) {
   const maintenance = system.health === "Maintenance";
   return (
     <article
@@ -123,6 +124,16 @@ export default function SystemCard({ system, now, lead, requests, mine, index = 
           <span className="avatar" title={lead ? `Project lead: ${lead.name}` : undefined}>
             {lead ? initials(lead.name) : system.updatedBy ?? initials(system.owner)}
           </span>
+          {developers.length > 0 && (
+            <span className="dev-stack" title={`Developers: ${developers.map((d) => d.name).join(", ")}`}>
+              {developers.slice(0, 3).map((d) => (
+                <span key={d.id} className="avatar">
+                  {initials(d.name)}
+                </span>
+              ))}
+              {developers.length > 3 && <span className="avatar">+{developers.length - 3}</span>}
+            </span>
+          )}
           <span className="updated-text">
             {lead && <b className="lead-name">{lead.name}</b>}
             <span>{updatedText(system, now)}</span>
