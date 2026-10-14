@@ -1,0 +1,3170 @@
+{
+  "info": {
+    "name": "OmniTrack API",
+    "description": "\"Public\" is read-only and safe against the live site. \"Authenticated\" creates and deletes data and expects the local QA accounts (qa-admin, qa-viewer, qa-dev): run it against the local server only.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Public",
+      "item": [
+        {
+          "name": "App shell is served",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"is HTML\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"text/html\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": []
+            }
+          }
+        },
+        {
+          "name": "SPA deep link falls back to the app",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"is HTML\", () => pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"text/html\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/anything",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "anything"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Data needs sign-in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Not signed in\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/data",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "data"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Activity log needs sign-in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Not signed in\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/activity",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "activity"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Creating a system needs sign-in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Not signed in\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"x\",\n  \"startedAt\": \"2026-01-01\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Deleting a user needs sign-in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Not signed in\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/mutsa",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "mutsa"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Changing roles needs sign-in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Not signed in\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "roles"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"viewer\": [\n    \"manage_users\"\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Unknown API route does not leak (401 before 404)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Not signed in\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/does-not-exist",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "does-not-exist"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Forged session cookie is rejected",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.environment.set(\"forgedToken\", \"a\".repeat(64));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Not signed in\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{forgedToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/data",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "data"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Login rejects invalid JSON",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Invalid JSON body\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{not json"
+            }
+          }
+        },
+        {
+          "name": "Login rejects a wrong username/password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Wrong username or password\"));",
+                  "pm.test(\"no session cookie\", () => pm.expect(pm.response.headers.get(\"Set-Cookie\")).to.be.undefined);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"postman-probe-no-such-user\",\n  \"password\": \"wrong-password\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Logout without a session is harmless and clears the cookie",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"clears cookie\", () => pm.expect(pm.response.headers.get(\"Set-Cookie\")).to.include(\"Max-Age=0\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "logout"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Authenticated (local only)",
+      "item": [
+        {
+          "name": "Login as QA admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const sc = pm.response.headers.get(\"Set-Cookie\") || \"\";",
+                  "pm.test(\"sets an HttpOnly, SameSite session cookie\", () => {",
+                  "  pm.expect(sc).to.match(/omni_session=[a-f0-9]{64}/);",
+                  "  pm.expect(sc).to.include(\"HttpOnly\");",
+                  "  pm.expect(sc).to.include(\"SameSite=Lax\");",
+                  "  if (pm.environment.get(\"baseUrl\").startsWith(\"https\")) pm.expect(sc).to.include(\"Secure\");",
+                  "});",
+                  "pm.environment.set(\"adminToken\", (sc.match(/omni_session=([a-f0-9]{64})/) || [])[1]);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"qa-admin\",\n  \"password\": \"{{qaPassword}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login is case-insensitive on username (viewer)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const sc = pm.response.headers.get(\"Set-Cookie\") || \"\";",
+                  "pm.test(\"sets an HttpOnly, SameSite session cookie\", () => {",
+                  "  pm.expect(sc).to.match(/omni_session=[a-f0-9]{64}/);",
+                  "  pm.expect(sc).to.include(\"HttpOnly\");",
+                  "  pm.expect(sc).to.include(\"SameSite=Lax\");",
+                  "  if (pm.environment.get(\"baseUrl\").startsWith(\"https\")) pm.expect(sc).to.include(\"Secure\");",
+                  "});",
+                  "pm.environment.set(\"viewerToken\", (sc.match(/omni_session=([a-f0-9]{64})/) || [])[1]);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"QA-Viewer\",\n  \"password\": \"{{qaPassword}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login as QA developer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const sc = pm.response.headers.get(\"Set-Cookie\") || \"\";",
+                  "pm.test(\"sets an HttpOnly, SameSite session cookie\", () => {",
+                  "  pm.expect(sc).to.match(/omni_session=[a-f0-9]{64}/);",
+                  "  pm.expect(sc).to.include(\"HttpOnly\");",
+                  "  pm.expect(sc).to.include(\"SameSite=Lax\");",
+                  "  if (pm.environment.get(\"baseUrl\").startsWith(\"https\")) pm.expect(sc).to.include(\"Secure\");",
+                  "});",
+                  "pm.environment.set(\"devToken\", (sc.match(/omni_session=([a-f0-9]{64})/) || [])[1]);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"qa-dev\",\n  \"password\": \"{{qaPassword}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Right username, wrong password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Wrong username or password\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"qa-admin\",\n  \"password\": \"nope-nope-nope\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Admin loads data",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "",
+                  "pm.test(\"me is the admin\", () => pm.expect(d.me.role).to.eql(\"admin\"));",
+                  "pm.test(\"admin has every permission\", () => pm.expect(d.permissions).to.include.members([\"manage_users\", \"manage_systems\", \"audit_log\", \"edit_any\"]));",
+                  "pm.test(\"returns systems, users, requests\", () => { pm.expect(d.systems).to.be.an(\"array\").that.is.not.empty; pm.expect(d.users).to.be.an(\"array\"); pm.expect(d.requests).to.be.an(\"array\"); });",
+                  "pm.test(\"no password hashes leak\", () => pm.expect(pm.response.text()).to.not.include(\"pbkdf2\"));",
+                  "pm.test(\"admin sees last sign-in times\", () => pm.expect(d.users.find(u => u.id === \"qa-admin\").lastLogin).to.be.a(\"string\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/data",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "data"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Viewer loads data with no permissions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "",
+                  "pm.test(\"viewer has no permissions\", () => pm.expect(d.permissions).to.eql([]));",
+                  "pm.test(\"viewer does not see last sign-in times\", () => pm.expect(d.users.every(u => u.lastLogin === undefined)).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{viewerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/data",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "data"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Authenticated route rejects invalid JSON",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Invalid JSON body\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{oops"
+            }
+          }
+        },
+        {
+          "name": "Unknown authenticated route is 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Not found\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/nope",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "nope"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Viewer cannot add a system",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"permission\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{viewerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Test System\",\n  \"startedAt\": \"2026-10-01\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Developer cannot add a system",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"permission\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Test System\",\n  \"startedAt\": \"2026-10-01\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Add system: start date is required",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Start date is required\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Test System\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Add system: name is required",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Name is required\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"startedAt\": \"2026-10-01\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Add system: unknown status rejected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Unknown status\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Test System\",\n  \"startedAt\": \"2026-10-01\",\n  \"status\": \"BOGUS\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Add system: progress over 100 rejected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Progress must be 0\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Test System\",\n  \"startedAt\": \"2026-10-01\",\n  \"progress\": 150\n}"
+            }
+          }
+        },
+        {
+          "name": "Add system: non-developer can't be assigned",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Only users with the developer role\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Test System Bad Devs\",\n  \"startedAt\": \"2026-10-01\",\n  \"developers\": [\n    \"qa-viewer\"\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "...and the rejected system was not saved",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "",
+                  "pm.test(\"no half-created system left behind\", () => pm.expect(d.systems.map(s => s.name)).to.not.include(\"QA Test System Bad Devs\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/data",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "data"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin adds a system with a developer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 201\", () => pm.response.to.have.status(201));",
+                  "const s = pm.response.json();",
+                  "pm.environment.set(\"systemId\", s.id);",
+                  "pm.test(\"defaults\", () => { pm.expect(s.status).to.eql(\"WIP\"); pm.expect(s.progress).to.eql(0); pm.expect(s.short).to.eql(\"QT\"); });",
+                  "pm.test(\"slug id\", () => pm.expect(s.id).to.match(/^qa-test-system/));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Test System\",\n  \"startedAt\": \"2026-10-01\",\n  \"description\": \"Created by the Postman suite\",\n  \"developers\": [\n    \"qa-dev\"\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Developer is now assigned to it",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "",
+                  "pm.test(\"qa-dev projectId\", () => pm.expect(d.users.find(u => u.id === \"qa-dev\").projectId).to.eql(pm.environment.get(\"systemId\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/data",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "data"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin requests an update",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requests"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"systemId\": \"{{systemId}}\",\n  \"message\": \"Postman: how is it going?\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Viewer cannot request updates",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"permission\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{viewerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requests"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"systemId\": \"{{systemId}}\",\n  \"message\": \"x\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Request for unknown system is 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"System not found\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "requests"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"systemId\": \"no-such-system\",\n  \"message\": \"x\"\n}"
+            }
+          }
+        },
+        {
+          "name": "The request is listed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "",
+                  "const r = d.requests.find(r => r.systemId === pm.environment.get(\"systemId\"));",
+                  "pm.test(\"request present\", () => pm.expect(r).to.be.an(\"object\"));",
+                  "pm.environment.set(\"requestId\", r && r.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/data",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "data"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Viewer cannot post progress",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"assigned to\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{viewerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems/{{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems",
+                "{{systemId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"progress\": 10\n}"
+            }
+          }
+        },
+        {
+          "name": "Developer cannot rename the project",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"permission\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems/{{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems",
+                "{{systemId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Hijacked\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Developer cannot set progress to 101",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Progress must be 0\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems/{{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems",
+                "{{systemId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"progress\": 101\n}"
+            }
+          }
+        },
+        {
+          "name": "Assigned developer posts progress",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json();",
+                  "pm.test(\"progress saved\", () => pm.expect(s.progress).to.eql(40));",
+                  "pm.test(\"updatedBy is the developer's initials\", () => pm.expect(s.updatedBy).to.eql(\"QD\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems/{{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems",
+                "{{systemId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"progress\": 40,\n  \"status\": \"WIP\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Posting progress answered the open request",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "",
+                  "pm.test(\"request cleared\", () => pm.expect(d.requests.filter(r => r.systemId === pm.environment.get(\"systemId\"))).to.be.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/data",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "data"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Maintenance mode with a note",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json();",
+                  "pm.test(\"maintenance set\", () => { pm.expect(s.health).to.eql(\"Maintenance\"); pm.expect(s.maintenanceSince).to.be.a(\"string\"); pm.expect(s.maintenanceNote).to.eql(\"Patching\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems/{{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems",
+                "{{systemId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"health\": \"Maintenance\",\n  \"maintenanceNote\": \"Patching\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Back to stable clears the note",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json();",
+                  "pm.test(\"note cleared\", () => { pm.expect(s.maintenanceNote).to.be.undefined; pm.expect(s.maintenanceSince).to.be.undefined; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems/{{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems",
+                "{{systemId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"health\": \"Stable\"\n}"
+            }
+          }
+        },
+        {
+          "name": "100% and LIVE stamps a delivery date",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"finishedAt set\", () => pm.expect(pm.response.json().finishedAt).to.be.a(\"string\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems/{{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems",
+                "{{systemId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"progress\": 100,\n  \"status\": \"LIVE\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Admin edits details and sets a lead",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"saved\", () => { const s = pm.response.json(); pm.expect(s.description).to.eql(\"Edited\"); pm.expect(s.lead).to.eql(\"qa-dev\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems/{{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems",
+                "{{systemId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Edited\",\n  \"lead\": \"qa-dev\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Unknown lead is rejected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Unknown lead\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems/{{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems",
+                "{{systemId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lead\": \"nobody-here\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Patching a missing system is 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"System not found\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems/no-such-system",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems",
+                "no-such-system"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"progress\": 5\n}"
+            }
+          }
+        },
+        {
+          "name": "Viewer: bad email rejected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"email address\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{viewerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"not-an-email\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Viewer: bad phone rejected",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Phone\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{viewerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"call me\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Viewer updates own contact details",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{viewerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"qa.viewer@example.com\",\n  \"phone\": \"+263 77 123 4567\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Viewer saves preferences",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"returns an object\", () => pm.expect(pm.response.json()).to.be.an(\"object\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{viewerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/prefs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "prefs"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"theme\": \"dark\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Password change needs the right current password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Current password is wrong\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{viewerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "password"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"current\": \"wrong-one\",\n  \"next\": \"Another-Pass-1\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Viewer cannot create users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"permission\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{viewerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"qa-temp\",\n  \"name\": \"QA Temp\",\n  \"password\": \"Temp-Pass-123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create user: bad username",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Username\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"a b\",\n  \"name\": \"QA Temp\",\n  \"password\": \"Temp-Pass-123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create user: short password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"at least 8\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"qa-temp\",\n  \"name\": \"QA Temp\",\n  \"password\": \"short\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create user: unknown role",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Unknown role\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"qa-temp\",\n  \"name\": \"QA Temp\",\n  \"role\": \"god\",\n  \"password\": \"Temp-Pass-123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Admin creates a user",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"id returned\", () => pm.expect(pm.response.json().id).to.eql(\"qa-temp\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"qa-temp\",\n  \"name\": \"QA Temp\",\n  \"role\": \"viewer\",\n  \"password\": \"Temp-Pass-123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Duplicate username is 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"taken\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"QA-Temp\",\n  \"name\": \"QA Temp\",\n  \"password\": \"Temp-Pass-123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Admin resets the user's password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const p = pm.response.json().password;",
+                  "pm.test(\"readable temp password\", () => pm.expect(p).to.match(/^[A-Za-z2-9]{4}-[A-Za-z2-9]{4}-[A-Za-z2-9]{4}$/));",
+                  "pm.environment.set(\"tempPassword\", p);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/qa-temp/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "qa-temp",
+                "reset-password"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Old password no longer works",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Wrong username or password\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"qa-temp\",\n  \"password\": \"Temp-Pass-123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Sign in with the temporary password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const sc = pm.response.headers.get(\"Set-Cookie\") || \"\";",
+                  "pm.test(\"sets an HttpOnly, SameSite session cookie\", () => {",
+                  "  pm.expect(sc).to.match(/omni_session=[a-f0-9]{64}/);",
+                  "  pm.expect(sc).to.include(\"HttpOnly\");",
+                  "  pm.expect(sc).to.include(\"SameSite=Lax\");",
+                  "  if (pm.environment.get(\"baseUrl\").startsWith(\"https\")) pm.expect(sc).to.include(\"Secure\");",
+                  "});",
+                  "pm.environment.set(\"tempToken\", (sc.match(/omni_session=([a-f0-9]{64})/) || [])[1]);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"qa-temp\",\n  \"password\": \"{{tempPassword}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Temporary password blocks everything else",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"temporary password\"));",
+                  "pm.test(\"code\", () => pm.expect(pm.response.json().code).to.eql(\"password_change_required\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{tempToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/data",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "data"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Forced change still validates length",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"at least 8\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{tempToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "password"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"next\": \"short\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Forced change needs no current password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{tempToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/me/password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "me",
+                "password"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"next\": \"Brand-New-Pass-9\"\n}"
+            }
+          }
+        },
+        {
+          "name": "After the change the user is let in",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "pm.test(\"me\", () => pm.expect(d.me.id).to.eql(\"qa-temp\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{tempToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/data",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "data"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin can't reset own password here",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Settings\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/qa-admin/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "qa-admin",
+                "reset-password"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin can't delete self",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"own account\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/qa-admin",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "qa-admin"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Viewer cannot change role permissions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"permission\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{viewerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "roles"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"viewer\": [\n    \"manage_users\"\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Viewer cannot read the activity log",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"permission\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{viewerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/activity",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "activity"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin reads the activity log",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "",
+                  "pm.test(\"items + stats\", () => { pm.expect(d.items).to.be.an(\"array\").that.is.not.empty; pm.expect(d.stats).to.have.property(\"signins24h\"); });",
+                  "pm.test(\"our failed sign-in was logged\", () => pm.expect(d.items.some(i => i.action === \"login_failed\")).to.be.true);",
+                  "pm.test(\"limit respected\", () => pm.expect(d.items.length).to.be.at.most(50));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/activity?limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "activity"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Activity log filter: systems",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "",
+                  "pm.test(\"only system actions\", () => pm.expect(d.items.every(i => /^(system_|request_)/.test(i.action))).to.be.true);",
+                  "pm.test(\"our system creation is there\", () => pm.expect(d.items.some(i => i.action === \"system_created\" && i.target === pm.environment.get(\"systemId\"))).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/activity?kind=systems",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "activity"
+              ],
+              "query": [
+                {
+                  "key": "kind",
+                  "value": "systems"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin deletes the user",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/qa-temp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "qa-temp"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Deleted user's session is dead",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Not signed in\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{tempToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/data",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "data"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Deleting a missing user is 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"User not found\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/qa-temp",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "users",
+                "qa-temp"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Developer cannot delete the system",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"permission\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems/{{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems",
+                "{{systemId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin deletes the system",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems/{{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems",
+                "{{systemId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Developer was unassigned",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json();",
+                  "",
+                  "pm.test(\"qa-dev has no project\", () => pm.expect(d.users.find(u => u.id === \"qa-dev\").projectId).to.be.undefined);",
+                  "pm.test(\"system gone\", () => pm.expect(d.systems.map(s => s.id)).to.not.include(pm.environment.get(\"systemId\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/data",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "data"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Deleting it again is 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"System not found\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems/{{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems",
+                "{{systemId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Viewer signs out everywhere",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{viewerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/logout-all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "logout-all"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Viewer's session no longer works",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Not signed in\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{viewerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/data",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "data"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin signs out",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "logout"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Admin's old cookie no longer works",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"Not signed in\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/data",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "data"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Developer signs out",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "logout"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

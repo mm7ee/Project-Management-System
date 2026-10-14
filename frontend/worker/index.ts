@@ -315,12 +315,16 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   // ----- systems -----
   // A developer works on one project (users.project_id). Setting a project's developers assigns
   // the listed ones to it (moving them off any other project) and unassigns the rest.
-  const setDevelopers = async (systemId: string, list: unknown) => {
+  const checkDevelopers = async (list: unknown) => {
     if (!Array.isArray(list)) throw new HttpError(400, "Developers must be a list");
     const ids = [...new Set(list.map(String))];
     const devs = await db.prepare("SELECT id, name, project_id FROM users WHERE role = 'developer'").all<{ id: string; name: string; project_id: string | null }>();
     const byId = new Map(devs.results.map((d) => [d.id, d]));
     for (const id of ids) if (!byId.has(id)) throw new HttpError(400, "Only users with the developer role can be assigned");
+    return { ids, devs, byId };
+  };
+  const setDevelopers = async (systemId: string, list: unknown) => {
+    const { ids, devs, byId } = await checkDevelopers(list);
     const before = devs.results.filter((d) => d.project_id === systemId);
     const added = ids.filter((id) => byId.get(id)!.project_id !== systemId);
     const removed = before.filter((d) => !ids.includes(d.id));
@@ -342,6 +346,8 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     let id = slug(name);
     for (let n = 2; await db.prepare("SELECT 1 FROM systems WHERE id = ?").bind(id).first(); n++) id = `${slug(name)}-${n}`;
     const status = checkStatus(b.status ?? "WIP");
+    // Validate before inserting, so a bad list doesn't leave a half-created system behind.
+    if (b.developers !== undefined) await checkDevelopers(b.developers);
     const system: System = {
       id,
       name,
