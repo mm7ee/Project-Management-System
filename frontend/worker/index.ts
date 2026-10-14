@@ -26,6 +26,7 @@ import {
   type Priority,
 } from "../src/data/features";
 import { DEFAULT_LIMITS, MAX_DOCUMENT_BYTES, formatBytes, type Blocker, type Limits, type ProjectDocument } from "../src/data/project";
+import { buildShowcase } from "../src/data/showcase";
 import {
   DEFAULT_ROLE_PERMISSIONS,
   ROLES,
@@ -389,6 +390,28 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     }
     await db.prepare("DELETE FROM mfa_challenges WHERE token_hash = ?").bind(hash).run();
     return startSession(db, req, row, { twoStep: used });
+  }
+
+  // The public showcase (/executive): totals only, no names. Needs no sign-in.
+  if (path === "/api/showcase" && method === "GET") {
+    const [systems, users, assigned, features, blocked, limits] = await Promise.all([
+      db.prepare("SELECT data FROM systems").all<{ data: string }>(),
+      db.prepare("SELECT * FROM users").all<UserRow>(),
+      db.prepare("SELECT user_id, system_id FROM assignments").all<{ user_id: string; system_id: string }>(),
+      db.prepare("SELECT * FROM features").all<FeatureRow>(),
+      db.prepare("SELECT DISTINCT system_id FROM blockers WHERE resolved_at IS NULL").all<{ system_id: string }>(),
+      workloadLimits(db),
+    ]);
+    const projects = (id: string) => assigned.results.filter((a) => a.user_id === id).map((a) => a.system_id);
+    const showcase = buildShowcase(
+      systems.results.map((r) => JSON.parse(r.data)),
+      users.results.map((u) => toUser(u, projects(u.id))),
+      features.results.map(toFeature),
+      new Set(blocked.results.map((b) => b.system_id)),
+      limits,
+      Date.now(),
+    );
+    return json(showcase, 200, { "cache-control": "public, max-age=60" });
   }
 
   if (path === "/api/logout" && method === "POST") {

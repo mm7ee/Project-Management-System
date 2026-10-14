@@ -29,23 +29,24 @@ import type { User } from "./data/roles";
 
 // A project page has its own address (#/projects/<id>), so it can be bookmarked, opened in a
 // new tab and left with the browser's back button.
-// /executive is a separate, read-only overview for leadership. Signing in there lands on it.
+// /executive is a public showcase for leadership: totals only, no sign-in, linked from nowhere.
 const isExecutive = () => /^\/executive\/?$/.test(window.location.pathname);
 
 const projectInHash = () => window.location.hash.match(/^#\/projects\/([a-z0-9-]+)$/)?.[1] ?? null;
 
 export default function App() {
+  // The public showcase needs no account, so it skips sign-in entirely.
+  return isExecutive() ? <ExecutivePage /> : <Tracker />;
+}
+
+function Tracker() {
   const { data, mustChange, mfaSetup, loading, reload } = useAppData();
   return (
     <>
       {loading ? (
         <div className="splash">Loading…</div>
       ) : data ? (
-        isExecutive() ? (
-          <ExecutivePage data={data} />
-        ) : (
-          <Dashboard data={data} reload={reload} />
-        )
+        <Dashboard data={data} reload={reload} />
       ) : mustChange ? (
         <ForcePasswordChange message={mustChange} onDone={reload} />
       ) : mfaSetup ? (

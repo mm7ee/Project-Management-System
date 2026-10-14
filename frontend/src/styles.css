@@ -1026,8 +1026,8 @@ a.nav-item { text-decoration: none; }
 .exec-step p { font-size: 13.5px; line-height: 1.5; color: var(--text); }
 .exec-subhead { font-size: 14.5px; font-weight: 800; color: var(--heading); margin: 6px 0 8px; }
 .exec-roles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px; margin-bottom: 14px; }
-.exec-roles div { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; line-height: 1.45; color: var(--text); }
-.exec-roles svg { flex: none; margin-top: 2px; color: var(--cyan-ink); }
+.exec-roles div { font-size: 14px; line-height: 1.45; color: var(--text); }
+.exec-roles svg { vertical-align: -3px; margin-right: 6px; color: var(--cyan-ink); }
 .exec-foot { margin-top: 18px; text-align: center; font-size: 12.5px; color: var(--faint); }
 @media (max-width: 1100px) {
   .exec-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }

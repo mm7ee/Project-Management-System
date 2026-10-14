@@ -2,7 +2,7 @@ import { STATUS_META, SCHEDULE_META, daysUntil, getSchedule, type System } from 
 import { FEATURE_STATUS_META, type Feature, type FeatureStatus } from "../../data/features";
 import type { User } from "../../data/roles";
 import { formatDate, formatShort, plural } from "../../time";
-import { HEALTH_COLOR, Legend, STAGES, STAGE_COLOR, TipRows, stageOf, useTip, useWidth } from "./chartKit";
+import { HEALTH_COLOR, Legend, STAGES, STAGE_COLOR, TipRows, stageOf, useTip, useWidth, type Stage } from "./chartKit";
 
 const DAY = 86_400_000;
 const t = (iso: string) => new Date(iso).getTime();
@@ -10,13 +10,17 @@ const t = (iso: string) => new Date(iso).getTime();
 // ---------- 1. Pipeline: part-to-whole across lifecycle stages ----------
 
 export function PipelineBar({ systems }: { systems: System[] }) {
+  const counts = Object.fromEntries(STAGES.map((st) => [st.key, systems.filter((s) => stageOf(s.status) === st.key).length])) as Record<Stage, number>;
+  return <StageBar counts={counts} />;
+}
+
+/** The pipeline drawn from counts alone, so the public showcase needs no system details. */
+export function StageBar({ counts }: { counts: Record<Stage, number> }) {
   const [ref, width] = useWidth<HTMLDivElement>();
   const tip = useTip();
-  const total = systems.length || 1;
+  const total = Object.values(counts).reduce((n, c) => n + c, 0) || 1;
   const GAP = 2;
-  const segs = STAGES.map((st) => ({ ...st, items: systems.filter((s) => stageOf(s.status) === st.key) })).filter(
-    (s) => s.items.length,
-  );
+  const segs = STAGES.map((st) => ({ ...st, n: counts[st.key] ?? 0 })).filter((s) => s.n);
   let x = 0;
   const usable = Math.max(0, width - GAP * (segs.length - 1));
 
@@ -26,12 +30,12 @@ export function PipelineBar({ systems }: { systems: System[] }) {
       {width > 0 && (
         <svg width={width} height={64} className="viz-svg">
           {segs.map((seg, i) => {
-            const w = (seg.items.length / total) * usable;
+            const w = (seg.n / total) * usable;
             const x0 = x;
             x += w + GAP;
             const first = i === 0;
             const last = i === segs.length - 1;
-            const label = `${seg.items.length}`;
+            const label = `${seg.n}`;
             const fits = w > 34;
             return (
               <g
@@ -40,11 +44,11 @@ export function PipelineBar({ systems }: { systems: System[] }) {
                   <TipRows
                     title={seg.label}
                     rows={[
-                      ["projects", seg.items.length, STAGE_COLOR[seg.key]],
-                      ["of all projects", `${Math.round((seg.items.length / total) * 100)}%`],
+                      ["projects", seg.n, STAGE_COLOR[seg.key]],
+                      ["of all projects", `${Math.round((seg.n / total) * 100)}%`],
                     ]}
                   />,
-                  `${seg.label}: ${seg.items.length} projects`,
+                  `${seg.label}: ${seg.n} projects`,
                 )}
                 className="viz-hit"
               >

@@ -1,4 +1,4 @@
-import { AlertOctagon, BellRing, FileBarChart, FolderGit2, History, ListChecks, MonitorSmartphone, Presentation, Moon, Orbit, Plus, Settings, Sun, Users, Wrench, X } from "lucide-react";
+import { AlertOctagon, BellRing, FileBarChart, FolderGit2, History, ListChecks, MonitorSmartphone, Moon, Orbit, Plus, Settings, Sun, Users, Wrench, X } from "lucide-react";
 import { STATUS_META, initials, type Status } from "../data/systems";
 import { ROLE_LABEL, type Prefs, type User } from "../data/roles";
 import { COMPANY_URL } from "../brand";
@@ -112,12 +112,6 @@ export default function Sidebar(p: Props) {
               </span>
             </button>
           )}
-          {/* The read-only overview for leadership, at its own address so it can be shared. */}
-          <a className="nav-item" href="/executive" target="_blank" rel="noopener">
-            <span>
-              <Presentation size={16} className="nav-icon" /> Executive view
-            </span>
-          </a>
           {p.canUsers && (
             <button className={`nav-item ${p.view === "users" ? "active" : ""}`} onClick={go(() => p.onView("users"))}>
               <span>
