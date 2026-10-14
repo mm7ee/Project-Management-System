@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { ArrowUpRight, BellRing, Pencil, Trash2, UserMinus, Wrench, X } from "lucide-react";
+import { ArrowUpRight, BellRing, Pencil, Plus, Trash2, UserMinus, Wrench, X } from "lucide-react";
 import { HEALTH_META, initials, type System } from "../data/systems";
 import type { UpdateRequest, User } from "../data/roles";
+import { byUrgency, isLate, isOpen, type Feature } from "../data/features";
+import { FeatureStatusPill, PriorityBadge } from "./FeatureModal";
 import { formatDate, timeAgo } from "../time";
 import { DeveloperSearch } from "./DeveloperPicker";
 import LeadContact from "./LeadContact";
@@ -24,6 +26,10 @@ interface Props {
   onChangeDevelopers: (id: string, developers: string[]) => Promise<void>;
   onRequest: (id: string, message: string) => Promise<void>;
   onDismiss: (requestId: string) => Promise<void>;
+  features: Feature[]; // feature requests on this system
+  canLogFeatures: boolean;
+  onOpenFeature: (f: Feature) => void;
+  onNewFeature: () => void;
 }
 
 export default function SystemDrawer(p: Props) {
@@ -231,6 +237,40 @@ export default function SystemDrawer(p: Props) {
               disabled={saving}
               onPick={(id) => saveDevelopers([...developers.map((d) => d.id), id])}
             />
+          )}
+        </section>
+
+        <section className="lead-card">
+          <span className="lead-label">
+            Feature requests · {p.features.filter(isOpen).length} open
+          </span>
+          {p.features.length ? (
+            <ul className="feature-mini">
+              {[...p.features]
+                .sort((a, b) => Number(!isOpen(a)) - Number(!isOpen(b)) || byUrgency(a, b))
+                .map((f) => (
+                  <li key={f.id}>
+                    <button type="button" onClick={() => p.onOpenFeature(f)}>
+                      <span className="feature-mini-title">
+                        <b>{f.title}</b>
+                        <small className={isLate(f, now) ? "text-red" : ""}>
+                          {users.find((u) => u.id === f.assignee)?.name ?? "Unassigned"}
+                          {f.dueAt && !f.completedAt ? ` · due ${formatDate(f.dueAt)}` : ""}
+                        </small>
+                      </span>
+                      <PriorityBadge priority={f.priority} />
+                      <FeatureStatusPill status={f.status} />
+                    </button>
+                  </li>
+                ))}
+            </ul>
+          ) : (
+            <p className="lead-none">No feature requests on this project.</p>
+          )}
+          {p.canLogFeatures && (
+            <button className="btn btn-ghost sm" onClick={p.onNewFeature}>
+              <Plus size={15} strokeWidth={3} /> Log feature request
+            </button>
           )}
         </section>
 

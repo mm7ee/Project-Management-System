@@ -9,6 +9,7 @@ export type Permission =
   | "edit_any" // update status/progress of any project
   | "manage_systems" // add, delete, edit details, change leads
   | "request_updates" // ask a project's developers for an update
+  | "manage_features" // log client feature requests, set their priority and assign developers
   | "reports" // generate and download reports
   | "manage_users" // create users, assign roles/projects, change permissions
   | "audit_log"; // view the activity log: sign-ins, failed sign-ins and every change
@@ -27,6 +28,7 @@ export const PERMISSIONS: { key: Permission; label: string }[] = [
   { key: "edit_any", label: "Update any project" },
   { key: "manage_systems", label: "Add, delete and edit systems" },
   { key: "request_updates", label: "Request updates" },
+  { key: "manage_features", label: "Log and assign feature requests" },
   { key: "reports", label: "Generate reports" },
   { key: "manage_users", label: "Manage users, roles and permissions" },
   { key: "audit_log", label: "View the activity log" },
@@ -36,7 +38,7 @@ export type RolePermissions = Record<Role, Permission[]>;
 
 export const DEFAULT_ROLE_PERMISSIONS: RolePermissions = {
   admin: PERMISSIONS.map((p) => p.key),
-  manager: ["request_updates", "reports"],
+  manager: ["request_updates", "manage_features", "reports"],
   developer: ["edit_assigned"],
   viewer: [],
 };

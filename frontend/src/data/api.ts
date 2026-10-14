@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { System } from "./systems";
+import type { Feature } from "./features";
 import type { Permission, Prefs, RolePermissions, UpdateRequest, User } from "./roles";
 
 export class ApiError extends Error {
@@ -28,6 +29,7 @@ export interface AppData {
   systems: System[];
   users: User[];
   requests: UpdateRequest[];
+  features: Feature[];
 }
 
 /**

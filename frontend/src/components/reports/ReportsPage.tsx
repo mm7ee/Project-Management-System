@@ -2,15 +2,18 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, ClipboardCopy, Download, Info, Printer, TrendingDown } from "lucide-react";
 import { SCHEDULE_META, STATUS_META, getSchedule, type System } from "../../data/systems";
 import type { UpdateRequest, User } from "../../data/roles";
+import { FEATURE_STATUS_META, KIND_META, PRIORITY_META, byUrgency, isLate, isOpen, type Feature } from "../../data/features";
+import { FeatureStatusPill, PriorityBadge } from "../FeatureModal";
 import { formatDate } from "../../time";
 import { lastUpdate } from "../SystemCard";
 import { TooltipLayer } from "./chartKit";
-import { EngagementBars, PaceChart, PipelineBar, Roadmap, buildBrief, paceOf, type Pace } from "./Charts";
+import { EngagementBars, FeatureStatusBar, PaceChart, PipelineBar, Roadmap, buildBrief, paceOf, type Pace } from "./Charts";
 
 interface Props {
   systems: System[];
   users: User[];
   requests: UpdateRequest[];
+  features: Feature[];
   now: number;
 }
 
@@ -29,7 +32,7 @@ const csvCell = (v: unknown) => {
 
 const TONE_ICON = { good: CheckCircle2, warn: TrendingDown, bad: AlertTriangle, info: Info };
 
-export default function ReportsPage({ systems, users, requests, now }: Props) {
+export default function ReportsPage({ systems, users, requests, features, now }: Props) {
   const [scope, setScope] = useState<Scope>("all");
   const [lead, setLead] = useState("");
   const [copied, setCopied] = useState(false);
@@ -50,6 +53,28 @@ export default function ReportsPage({ systems, users, requests, now }: Props) {
   );
   const ids = new Set(view.map((s) => s.id));
   const viewRequests = requests.filter((r) => ids.has(r.systemId));
+  const viewFeatures = features.filter((f) => ids.has(f.systemId));
+  const openFeatures = viewFeatures.filter(isOpen).sort(byUrgency);
+  const lateFeatures = openFeatures.filter((f) => isLate(f, now)).length;
+  const cancelled = viewFeatures.filter((f) => f.status === "CANCELLED").length;
+  const unassigned = openFeatures.filter((f) => !f.assignee).length;
+  // One row per developer with any request in scope, busiest first.
+  const workload = users
+    .filter((u) => viewFeatures.some((f) => f.assignee === u.id))
+    .map((u) => {
+      const mine = viewFeatures.filter((f) => f.assignee === u.id);
+      const open = mine.filter(isOpen);
+      return {
+        user: u,
+        open: open.length,
+        critical: open.filter((f) => f.priority === "CRITICAL").length,
+        high: open.filter((f) => f.priority === "HIGH").length,
+        late: open.filter((f) => isLate(f, now)).length,
+        completed: mine.filter((f) => f.status === "COMPLETED").length,
+        next: open.map((f) => f.dueAt).filter((d): d is string => !!d).sort()[0],
+      };
+    })
+    .sort((a, b) => b.open - a.open || b.critical - a.critical);
   const brief = buildBrief(view, users, viewRequests.length, now);
   const paces = view.map((s) => paceOf(s, now)).filter((p): p is Pace => !!p);
   const leads = users.filter((u) => systems.some((s) => s.lead === u.id));
@@ -99,6 +124,36 @@ export default function ReportsPage({ systems, users, requests, now }: Props) {
     URL.revokeObjectURL(a.href);
   };
 
+  const downloadFeaturesCsv = () => {
+    const header = ["Feature", "Type", "Project", "Requested by", "Priority", "Status", "Developer", "Expected delivery", "Delivered", "Past due", "Developer notes", "Logged"];
+    const lines = [...viewFeatures]
+      .sort((a, b) => Number(!isOpen(a)) - Number(!isOpen(b)) || byUrgency(a, b))
+      .map((f) =>
+        [
+          f.title,
+          KIND_META[f.kind],
+          systems.find((s) => s.id === f.systemId)?.name ?? "",
+          f.client,
+          PRIORITY_META[f.priority].label,
+          FEATURE_STATUS_META[f.status].label,
+          userName(f.assignee),
+          f.dueAt ?? "",
+          f.completedAt?.slice(0, 10) ?? "",
+          isLate(f, now) ? "Yes" : "",
+          f.notes ?? "",
+          f.createdAt.slice(0, 10),
+        ]
+          .map(csvCell)
+          .join(","),
+      );
+    const blob = new Blob([[header.join(","), ...lines].join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `omnitrack-feature-requests-${new Date(now).toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
   return (
     <TooltipLayer>
       <div className="page report">
@@ -116,6 +171,11 @@ export default function ReportsPage({ systems, users, requests, now }: Props) {
             <button className="btn btn-ghost" onClick={downloadCsv}>
               <Download size={16} /> CSV
             </button>
+            {viewFeatures.length > 0 && (
+              <button className="btn btn-ghost" onClick={downloadFeaturesCsv}>
+                <Download size={16} /> Feature requests CSV
+              </button>
+            )}
             <button className="btn btn-navy" onClick={() => window.print()}>
               <Printer size={16} /> Print / PDF
             </button>
@@ -247,6 +307,100 @@ export default function ReportsPage({ systems, users, requests, now }: Props) {
             </table>
           </div>
         </section>
+
+        <section className="viz-card">
+          <h3>Feature requests</h3>
+          <p className="viz-sub">
+            Client requests on the systems above: {openFeatures.length} open
+            {lateFeatures > 0 && `, ${lateFeatures} past their delivery date`}
+            {unassigned > 0 && `, ${unassigned} not yet assigned`}
+            {cancelled > 0 && `. ${cancelled} cancelled, not shown in the bar`}.
+          </p>
+          {viewFeatures.length ? <FeatureStatusBar features={viewFeatures} /> : <p className="lead-none">No feature requests on these systems.</p>}
+        </section>
+
+        {workload.length > 0 && (
+          <section className="viz-card">
+            <h3>Developer workload</h3>
+            <p className="viz-sub">Feature requests per developer. Open counts leave out completed and cancelled requests.</p>
+            <div className="table-wrap flat">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Developer</th>
+                    <th>Open</th>
+                    <th>Critical</th>
+                    <th>High</th>
+                    <th>Past due</th>
+                    <th>Completed</th>
+                    <th>Next delivery</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {workload.map((w) => (
+                    <tr key={w.user.id}>
+                      <td>
+                        <b>{w.user.name}</b>
+                      </td>
+                      <td className="num">{w.open}</td>
+                      <td className={`num ${w.critical ? "text-red" : ""}`}>{w.critical}</td>
+                      <td className="num">{w.high}</td>
+                      <td className={`num ${w.late ? "text-red" : ""}`}>{w.late}</td>
+                      <td className="num">{w.completed}</td>
+                      <td>{w.next ? formatDate(w.next) : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {openFeatures.length > 0 && (
+          <section className="viz-card">
+            <h3>Open feature requests</h3>
+            <p className="viz-sub">Most urgent first: by priority, then expected delivery.</p>
+            <div className="table-wrap flat">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Feature</th>
+                    <th>Project</th>
+                    <th>Priority</th>
+                    <th>Status</th>
+                    <th>Developer</th>
+                    <th>Expected delivery</th>
+                    <th>Developer notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {openFeatures.map((f) => (
+                    <tr key={f.id}>
+                      <td>
+                        <b>{f.title}</b>
+                        <small className="muted">
+                          {" "}
+                          · {KIND_META[f.kind]}
+                          {f.client ? ` for ${f.client}` : ""}
+                        </small>
+                      </td>
+                      <td>{systems.find((s) => s.id === f.systemId)?.name}</td>
+                      <td>
+                        <PriorityBadge priority={f.priority} />
+                      </td>
+                      <td>
+                        <FeatureStatusPill status={f.status} />
+                      </td>
+                      <td>{userName(f.assignee) || <i className="muted">Unassigned</i>}</td>
+                      <td className={isLate(f, now) ? "text-red" : ""}>{f.dueAt ? formatDate(f.dueAt) : "—"}</td>
+                      <td className="notes-cell">{f.notes || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
       </div>
     </TooltipLayer>
   );

@@ -19,6 +19,9 @@ import UsersPage from "./components/UsersPage";
 import ReportsPage from "./components/reports/ReportsPage";
 import UpdateBanner from "./components/UpdateBanner";
 import CountUp from "./components/CountUp";
+import FeaturesPage from "./components/FeaturesPage";
+import FeatureModal from "./components/FeatureModal";
+import { isLate, isOpen, type Feature } from "./data/features";
 
 export default function App() {
   const { data, mustChange, loading, reload } = useAppData();
@@ -40,7 +43,7 @@ export default function App() {
 
 function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void> }) {
   const now = useNow();
-  const { me, systems, users, requests } = data;
+  const { me, systems, users, requests, features } = data;
   const can = (p: Permission) => data.permissions.includes(p);
 
   // Preferences apply instantly and save in the background.
@@ -70,6 +73,13 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  // The feature request open in the editor: an existing one, or a new one (feature null).
+  const [featureEdit, setFeatureEdit] = useState<{ feature: Feature | null; systemId?: string } | null>(null);
+
+  // The sidebar counts your own open feature requests; managers without any see every open one.
+  const openFeatures = features.filter(isOpen);
+  const myOpenFeatures = openFeatures.filter((f) => f.assignee === me.id);
+  const featureBadge = myOpenFeatures.length ? myOpenFeatures : can("manage_features") ? openFeatures : [];
 
   // The projects this user may post progress for.
   const editable =
@@ -151,6 +161,10 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
         filter={filter}
         view={view}
         counts={counts}
+        features={{
+          count: featureBadge.length,
+          urgent: featureBadge.some((f) => f.priority === "CRITICAL" || isLate(f, now)),
+        }}
         open={menuOpen}
         canAdd={can("manage_systems")}
         canReports={can("reports")}
@@ -204,12 +218,23 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             onProfileSaved={reload}
             onSignedOut={reload}
           />
+        ) : view === "features" ? (
+          <FeaturesPage
+            features={features}
+            systems={systems}
+            users={users}
+            me={me}
+            now={now}
+            canManage={can("manage_features")}
+            onOpen={(feature) => setFeatureEdit({ feature })}
+            onNew={() => setFeatureEdit({ feature: null })}
+          />
         ) : view === "activity" && can("audit_log") ? (
           <ActivityPage users={users} systems={systems} now={now} />
         ) : view === "users" && can("manage_users") ? (
           <UsersPage me={me} users={users} systems={systems} roleMatrix={data.roleMatrix} onChanged={reload} />
         ) : view === "reports" && can("reports") ? (
-          <ReportsPage systems={systems} users={users} requests={requests} now={now} />
+          <ReportsPage systems={systems} users={users} requests={requests} features={features} now={now} />
         ) : (
           <>
             {me.role === "developer" && !myProjects.length && (
@@ -292,7 +317,34 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           await api(`/requests/${requestId}`, "DELETE");
           await reload();
         }}
+        features={selected ? features.filter((f) => f.systemId === selected.id) : []}
+        canLogFeatures={can("manage_features")}
+        onOpenFeature={(feature) => setFeatureEdit({ feature })}
+        onNewFeature={() => setFeatureEdit({ feature: null, systemId: selected?.id })}
       />
+      {featureEdit && (
+        <FeatureModal
+          feature={featureEdit.feature}
+          initialSystemId={featureEdit.systemId}
+          systems={systems}
+          users={users}
+          me={me}
+          now={now}
+          canManage={can("manage_features")}
+          onClose={() => setFeatureEdit(null)}
+          onSave={async (draft) => {
+            const id = featureEdit.feature?.id;
+            await api(id ? `/features/${id}` : "/features", id ? "PATCH" : "POST", draft);
+            await reload();
+            setFeatureEdit(null);
+          }}
+          onDelete={async (id) => {
+            await api(`/features/${id}`, "DELETE");
+            await reload();
+            setFeatureEdit(null);
+          }}
+        />
+      )}
       {adding && (
         <AddSystemModal
           users={users}

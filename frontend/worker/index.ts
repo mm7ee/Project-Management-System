@@ -4,6 +4,15 @@
 import { hashPassword, newToken, tempPassword, tokenHash, verifyPassword } from "./auth";
 import { STATUS_META, initials, type Status, type System } from "../src/data/systems";
 import {
+  FEATURE_KINDS,
+  FEATURE_STATUSES,
+  PRIORITIES,
+  type Feature,
+  type FeatureKind,
+  type FeatureStatus,
+  type Priority,
+} from "../src/data/features";
+import {
   DEFAULT_ROLE_PERMISSIONS,
   ROLES,
   START_KEYS,
@@ -51,6 +60,42 @@ const toUser = (r: UserRow, projectIds: string[] = []): User => ({
   ...(r.phone ? { phone: r.phone } : {}),
   ...(projectIds.length ? { projectIds } : {}),
   ...(r.must_change_password ? { mustChangePassword: true } : {}),
+});
+
+interface FeatureRow {
+  id: string;
+  system_id: string;
+  title: string;
+  description: string;
+  kind: FeatureKind;
+  client: string;
+  status: FeatureStatus;
+  priority: Priority;
+  assignee: string | null;
+  notes: string | null;
+  due_at: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+const toFeature = (r: FeatureRow): Feature => ({
+  id: r.id,
+  systemId: r.system_id,
+  title: r.title,
+  description: r.description,
+  kind: r.kind,
+  client: r.client,
+  status: r.status,
+  priority: r.priority,
+  createdBy: r.created_by,
+  createdAt: r.created_at,
+  updatedAt: r.updated_at,
+  ...(r.assignee ? { assignee: r.assignee } : {}),
+  ...(r.notes ? { notes: r.notes } : {}),
+  ...(r.due_at ? { dueAt: r.due_at } : {}),
+  ...(r.completed_at ? { completedAt: r.completed_at } : {}),
 });
 
 function slug(text: string): string {
@@ -125,6 +170,20 @@ function checkProgress(p: unknown): number {
   return Math.round(n);
 }
 
+function oneOf<T extends string>(v: unknown, allowed: readonly T[], field: string): T {
+  if (!allowed.includes(v as T)) throw new HttpError(400, `Unknown ${field}`);
+  return v as T;
+}
+
+/** An optional YYYY-MM-DD date; empty clears it. */
+function checkDate(v: unknown, field: string): string | null {
+  if (v === undefined || v === null || v === "") return null;
+  if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v) || Number.isNaN(Date.parse(v))) {
+    throw new HttpError(400, `${field} must be a date`);
+  }
+  return v;
+}
+
 function checkRole(r: unknown): Role {
   if (!ROLES.includes(r as Role)) throw new HttpError(400, "Unknown role");
   return r as Role;
@@ -181,6 +240,7 @@ const ACTIVITY_KINDS: Record<string, string[]> = {
   failed: ["login_failed"],
   account: ["password_changed", "password_set_after_reset", "profile_updated"],
   systems: ["system_created", "system_progress", "system_updated", "system_developers", "system_deleted", "request_created", "request_dismissed"],
+  features: ["feature_created", "feature_updated", "feature_deleted"],
   admin: ["user_created", "user_updated", "user_password_reset", "user_deleted", "roles_updated"],
 };
 
@@ -244,13 +304,14 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   const now = new Date().toISOString();
 
   if (path === "/api/data" && method === "GET") {
-    const [systems, users, requests, assigned] = await Promise.all([
+    const [systems, users, requests, assigned, features] = await Promise.all([
       db.prepare("SELECT data FROM systems ORDER BY sort, rowid").all<{ data: string }>(),
       db.prepare("SELECT * FROM users ORDER BY name").all<UserRow>(),
       db.prepare("SELECT * FROM requests ORDER BY created_at DESC").all<Record<string, string>>(),
       db
         .prepare("SELECT a.user_id, a.system_id FROM assignments a JOIN systems s ON s.id = a.system_id ORDER BY s.sort, s.rowid")
         .all<{ user_id: string; system_id: string }>(),
+      db.prepare("SELECT * FROM features ORDER BY created_at DESC").all<FeatureRow>(),
     ]);
     const projectsByUser = new Map<string, string[]>();
     for (const a of assigned.results) projectsByUser.set(a.user_id, [...(projectsByUser.get(a.user_id) ?? []), a.system_id]);
@@ -278,6 +339,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
           createdAt: r.created_at,
         }),
       ),
+      features: features.results.map(toFeature),
     });
   }
 
@@ -469,6 +531,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       db.prepare("DELETE FROM systems WHERE id = ?").bind(id),
       db.prepare("DELETE FROM requests WHERE system_id = ?").bind(id),
       db.prepare("DELETE FROM assignments WHERE system_id = ?").bind(id),
+      db.prepare("DELETE FROM features WHERE system_id = ?").bind(id),
     ]);
     await audit(db, req, me, "system_deleted", id, { name: gone.name });
     return json({ ok: true });
@@ -497,6 +560,127 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     await db.prepare("DELETE FROM requests WHERE id = ?").bind(r.id).run();
     const sys = await db.prepare("SELECT data FROM systems WHERE id = ?").bind(r.system_id).first<{ data: string }>();
     await audit(db, req, me, "request_dismissed", r.system_id, { name: sys ? JSON.parse(sys.data).name : r.system_id });
+    return json({ ok: true });
+  }
+
+  // ----- feature requests -----
+  // Anyone with manage_features logs, edits and assigns them; the assigned developer keeps
+  // the status and their notes current.
+  const checkAssignee = async (v: unknown): Promise<string | null> => {
+    const id = text(v, "Developer");
+    if (!id) return null;
+    if (!(await db.prepare("SELECT 1 FROM users WHERE id = ? AND role = 'developer'").bind(id).first())) {
+      throw new HttpError(400, "Only users with the developer role can be assigned");
+    }
+    return id;
+  };
+
+  if (path === "/api/features" && method === "POST") {
+    need("manage_features");
+    const b = await body<Partial<Feature>>(req);
+    const system = await getSystem(db, String(b.systemId ?? ""));
+    const status = oneOf(b.status ?? "NOT_STARTED", FEATURE_STATUSES, "status");
+    const f: FeatureRow = {
+      id: newToken().slice(0, 16),
+      system_id: system.id,
+      title: text(b.title, "Feature", true)!,
+      description: text(b.description, "Description") ?? "",
+      kind: oneOf(b.kind ?? "CHANGE", FEATURE_KINDS, "request type"),
+      client: text(b.client, "Requested by") ?? "",
+      status,
+      priority: oneOf(b.priority ?? "MEDIUM", PRIORITIES, "priority"),
+      assignee: await checkAssignee(b.assignee),
+      notes: text(b.notes, "Notes") ?? null,
+      due_at: checkDate(b.dueAt, "Expected delivery"),
+      created_by: me.id,
+      created_at: now,
+      updated_at: now,
+      completed_at: status === "COMPLETED" ? now : null,
+    };
+    await db
+      .prepare(
+        `INSERT INTO features (id, system_id, title, description, kind, client, status, priority, assignee, notes, due_at, created_by, created_at, updated_at, completed_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(f.id, f.system_id, f.title, f.description, f.kind, f.client, f.status, f.priority, f.assignee, f.notes, f.due_at, f.created_by, f.created_at, f.updated_at, f.completed_at)
+      .run();
+    await audit(db, req, me, "feature_created", system.id, {
+      name: system.name,
+      title: f.title,
+      priority: f.priority,
+      ...(f.client ? { client: f.client } : {}),
+      ...(f.assignee ? { assignee: f.assignee } : {}),
+    });
+    return json(toFeature(f), 201);
+  }
+
+  const featMatch = path.match(/^\/api\/features\/([a-f0-9]+)$/);
+  if (featMatch && method === "PATCH") {
+    const row = await db.prepare("SELECT * FROM features WHERE id = ?").bind(featMatch[1]).first<FeatureRow>();
+    if (!row) throw new HttpError(404, "Feature request not found");
+    const b = await body<Partial<Feature>>(req);
+    const manager = can("manage_features");
+    const developerFields = ["status", "notes"] as const;
+    const otherFields = ["title", "description", "kind", "client", "priority", "assignee", "dueAt", "systemId"] as const;
+    if (!manager) {
+      if (row.assignee !== me.id) throw new HttpError(403, "Only the assigned developer or a manager can update this request");
+      if (otherFields.some((k) => b[k] !== undefined)) throw new HttpError(403, "You can update the status and your notes only");
+    }
+    const next: FeatureRow = { ...row };
+    if (b.status !== undefined) next.status = oneOf(b.status, FEATURE_STATUSES, "status");
+    if (b.notes !== undefined) next.notes = text(b.notes, "Notes") ?? null;
+    if (b.title !== undefined) next.title = text(b.title, "Feature", true)!;
+    if (b.description !== undefined) next.description = text(b.description, "Description") ?? "";
+    if (b.kind !== undefined) next.kind = oneOf(b.kind, FEATURE_KINDS, "request type");
+    if (b.client !== undefined) next.client = text(b.client, "Requested by") ?? "";
+    if (b.priority !== undefined) next.priority = oneOf(b.priority, PRIORITIES, "priority");
+    if (b.assignee !== undefined) next.assignee = await checkAssignee(b.assignee);
+    if (b.dueAt !== undefined) next.due_at = checkDate(b.dueAt, "Expected delivery");
+    if (b.systemId !== undefined) next.system_id = (await getSystem(db, String(b.systemId))).id;
+    if (next.status === "COMPLETED" && row.status !== "COMPLETED") next.completed_at = now;
+    if (next.status !== "COMPLETED") next.completed_at = null;
+
+    const columns: Record<(typeof developerFields)[number] | (typeof otherFields)[number], keyof FeatureRow> = {
+      status: "status",
+      notes: "notes",
+      title: "title",
+      description: "description",
+      kind: "kind",
+      client: "client",
+      priority: "priority",
+      assignee: "assignee",
+      dueAt: "due_at",
+      systemId: "system_id",
+    };
+    const changed = (Object.keys(columns) as (keyof typeof columns)[]).filter((k) => next[columns[k]] !== row[columns[k]]);
+    if (!changed.length) return json(toFeature(row));
+    next.updated_at = now;
+    await db
+      .prepare(
+        `UPDATE features SET system_id = ?, title = ?, description = ?, kind = ?, client = ?, status = ?, priority = ?,
+         assignee = ?, notes = ?, due_at = ?, updated_at = ?, completed_at = ? WHERE id = ?`,
+      )
+      .bind(next.system_id, next.title, next.description, next.kind, next.client, next.status, next.priority, next.assignee, next.notes, next.due_at, next.updated_at, next.completed_at, row.id)
+      .run();
+    const sys = await db.prepare("SELECT data FROM systems WHERE id = ?").bind(next.system_id).first<{ data: string }>();
+    await audit(db, req, me, "feature_updated", next.system_id, {
+      name: sys ? JSON.parse(sys.data).name : next.system_id,
+      title: next.title,
+      fields: changed,
+      ...(changed.includes("status") ? { status: { from: row.status, to: next.status } } : {}),
+      ...(changed.includes("priority") ? { priority: { from: row.priority, to: next.priority } } : {}),
+      ...(changed.includes("assignee") ? { assignee: { from: row.assignee, to: next.assignee } } : {}),
+    });
+    return json(toFeature(next));
+  }
+
+  if (featMatch && method === "DELETE") {
+    need("manage_features");
+    const row = await db.prepare("SELECT * FROM features WHERE id = ?").bind(featMatch[1]).first<FeatureRow>();
+    if (!row) throw new HttpError(404, "Feature request not found");
+    await db.prepare("DELETE FROM features WHERE id = ?").bind(row.id).run();
+    const sys = await db.prepare("SELECT data FROM systems WHERE id = ?").bind(row.system_id).first<{ data: string }>();
+    await audit(db, req, me, "feature_deleted", row.system_id, { name: sys ? JSON.parse(sys.data).name : row.system_id, title: row.title });
     return json({ ok: true });
   }
 
@@ -594,6 +778,10 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
         ...removed.map((p) => db.prepare("DELETE FROM assignments WHERE user_id = ? AND system_id = ?").bind(row.id, p)),
       ]);
     }
+    // Feature requests can only be assigned to developers.
+    if (role !== "developer" && row.role === "developer") {
+      await db.prepare("UPDATE features SET assignee = NULL WHERE assignee = ?").bind(row.id).run();
+    }
     // A password reset signs the user out everywhere.
     if (b.password) await db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(row.id).run();
     const fieldsChanged = (["name", "title", "email", "phone"] as const).filter((f) => {
@@ -622,6 +810,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM requests WHERE requested_by = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM assignments WHERE user_id = ?").bind(userMatch[1]),
+      db.prepare("UPDATE features SET assignee = NULL WHERE assignee = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM users WHERE id = ?").bind(userMatch[1]),
     ]);
     await audit(db, req, me, "user_deleted", userMatch[1], { name: row.name, username: row.username, role: row.role });

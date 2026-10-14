@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AlertTriangle, Download, LogIn, RefreshCw, Search } from "lucide-react";
 import { api } from "../data/api";
 import { STATUS_META, initials, type Status, type System } from "../data/systems";
+import { FEATURE_STATUS_META, PRIORITY_META, type FeatureStatus, type Priority } from "../data/features";
 import { PERMISSIONS, ROLE_LABEL, type ActivityEntry, type Role, type User } from "../data/roles";
 import { timeAgo } from "../time";
 
@@ -11,12 +12,13 @@ interface Props {
   now: number;
 }
 
-type Kind = "" | "signin" | "failed" | "account" | "systems" | "admin";
+type Kind = "" | "signin" | "failed" | "account" | "systems" | "features" | "admin";
 const KINDS: { key: Kind; label: string }[] = [
   { key: "", label: "Everything" },
   { key: "signin", label: "Sign-ins" },
   { key: "failed", label: "Failed sign-ins" },
   { key: "systems", label: "Systems" },
+  { key: "features", label: "Feature requests" },
   { key: "admin", label: "Users & roles" },
   { key: "account", label: "Own account" },
 ];
@@ -30,6 +32,8 @@ interface Page {
 const str = (v: unknown) => (v == null ? "" : String(v));
 const statusLabel = (s: unknown) => STATUS_META[s as Status]?.label ?? str(s);
 const roleLabel = (r: unknown) => ROLE_LABEL[r as Role] ?? str(r);
+const prioLabel = (p: unknown) => PRIORITY_META[p as Priority]?.label ?? str(p);
+const featureStatusLabel = (s: unknown) => FEATURE_STATUS_META[s as FeatureStatus]?.label ?? str(s);
 const permLabel = (p: string) => PERMISSIONS.find((x) => x.key === p)?.label.toLowerCase() ?? p;
 
 /** "Edge on Windows" from a user-agent string; good enough to recognise a device. */
@@ -118,6 +122,25 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
       return `Deleted system ${name}`;
     case "request_created":
       return `Requested an update on ${name}${d.message ? `: "${str(d.message)}"` : ""}`;
+    case "feature_created":
+      return `Logged feature request "${str(d.title)}" on ${name} (${prioLabel(d.priority)}${d.client ? `, for ${str(d.client)}` : ""}${
+        d.assignee ? `, assigned to ${userName(d.assignee)}` : ""
+      })`;
+    case "feature_updated": {
+      const status = d.status as { from: unknown; to: unknown } | undefined;
+      const priority = d.priority as { from: unknown; to: unknown } | undefined;
+      const assignee = d.assignee as { from: unknown; to: unknown } | undefined;
+      const fields = ((d.fields as string[] | undefined) ?? []).filter((f) => !["status", "priority", "assignee"].includes(f));
+      const parts = [
+        ...(status ? [`status ${featureStatusLabel(status.from)} → ${featureStatusLabel(status.to)}`] : []),
+        ...(priority ? [`priority ${prioLabel(priority.from)} → ${prioLabel(priority.to)}`] : []),
+        ...(assignee ? [`developer ${userName(assignee.from)} → ${userName(assignee.to)}`] : []),
+        ...(fields.length ? [`changed ${fields.join(", ")}`] : []),
+      ];
+      return `Updated feature request "${str(d.title)}" on ${name}: ${parts.join("; ")}`;
+    }
+    case "feature_deleted":
+      return `Deleted feature request "${str(d.title)}" on ${name}`;
     case "request_dismissed":
       return `Dismissed an update request on ${name}`;
     case "user_created":

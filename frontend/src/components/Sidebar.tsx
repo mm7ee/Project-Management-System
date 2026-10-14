@@ -1,10 +1,10 @@
-import { BellRing, FileBarChart, FolderGit2, History, MonitorSmartphone, Moon, Orbit, Plus, Settings, Sun, Users, Wrench, X } from "lucide-react";
+import { BellRing, FileBarChart, FolderGit2, History, ListChecks, MonitorSmartphone, Moon, Orbit, Plus, Settings, Sun, Users, Wrench, X } from "lucide-react";
 import { STATUS_META, initials, type Status } from "../data/systems";
 import { ROLE_LABEL, type Prefs, type User } from "../data/roles";
 import { COMPANY_URL } from "../brand";
 
 export type Filter = "ALL" | Status | "OVERDUE" | "REQUESTED" | "MAINTENANCE" | "MINE";
-export type View = "projects" | "reports" | "users" | "activity" | "settings";
+export type View = "projects" | "features" | "reports" | "users" | "activity" | "settings";
 
 // Order follows the mock-up. Optional items only appear when something is in them.
 const NAV: { key: Filter; label: string; optional?: boolean }[] = [
@@ -27,6 +27,7 @@ interface Props {
   filter: Filter;
   view: View;
   counts: Record<Filter, number>;
+  features: { count: number; urgent: boolean }; // open requests to show beside "Feature requests"
   open: boolean;
   canAdd: boolean;
   canReports: boolean;
@@ -94,6 +95,12 @@ export default function Sidebar(p: Props) {
           ))}
 
           <div className="nav-divider" />
+          <button className={`nav-item ${p.view === "features" ? "active" : ""}`} onClick={go(() => p.onView("features"))}>
+            <span>
+              <ListChecks size={16} className="nav-icon" /> Feature requests
+            </span>
+            {p.features.count > 0 && <span className={`nav-count ${p.features.urgent ? "alert" : ""}`}>{p.features.count}</span>}
+          </button>
           {p.canReports && (
             <button className={`nav-item ${p.view === "reports" ? "active" : ""}`} onClick={go(() => p.onView("reports"))}>
               <span>

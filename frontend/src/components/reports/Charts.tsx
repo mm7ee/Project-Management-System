@@ -1,4 +1,5 @@
 import { STATUS_META, SCHEDULE_META, daysUntil, getSchedule, type System } from "../../data/systems";
+import { FEATURE_STATUS_META, type Feature, type FeatureStatus } from "../../data/features";
 import type { User } from "../../data/roles";
 import { formatDate, formatShort, plural } from "../../time";
 import { HEALTH_COLOR, Legend, STAGES, STAGE_COLOR, TipRows, stageOf, useTip, useWidth } from "./chartKit";
@@ -49,7 +50,7 @@ export function PipelineBar({ systems }: { systems: System[] }) {
               >
                 <path d={roundedRect(x0, 8, w, 32, first ? 4 : 0, last ? 4 : 0)} style={{ fill: STAGE_COLOR[seg.key] }} />
                 {fits && (
-                  <text x={x0 + w / 2} y={29} textAnchor="middle" className="viz-in-label" fill={seg.key === "NOT_STARTED" ? "#15263b" : "#fff"}>
+                  <text x={x0 + w / 2} y={29} textAnchor="middle" className="viz-in-label" style={{ fill: seg.key === "NOT_STARTED" ? "var(--st-not-ink)" : "#fff" }}>
                     {label}
                   </text>
                 )}
@@ -419,3 +420,69 @@ export function buildBrief(systems: System[], users: User[], openRequests: numbe
 }
 
 export { HEALTH_COLOR };
+
+// ---------- 6. Feature requests: part-to-whole across request statuses ----------
+
+const FEATURE_STAGES: { key: FeatureStatus; color: string }[] = [
+  { key: "NOT_STARTED", color: "var(--st-not)" },
+  { key: "IN_PROGRESS", color: "var(--st-wip)" },
+  { key: "ON_HOLD", color: "var(--st-deploy)" },
+  { key: "TESTING", color: "var(--st-testing)" },
+  { key: "COMPLETED", color: "var(--st-live)" },
+];
+
+/** Cancelled requests are left out: they are counted in the caption instead. */
+export function FeatureStatusBar({ features }: { features: Feature[] }) {
+  const [ref, width] = useWidth<HTMLDivElement>();
+  const tip = useTip();
+  const counted = features.filter((f) => f.status !== "CANCELLED");
+  const total = counted.length || 1;
+  const GAP = 2;
+  const segs = FEATURE_STAGES.map((st) => ({ ...st, n: counted.filter((f) => f.status === st.key).length })).filter((s) => s.n);
+  let x = 0;
+  const usable = Math.max(0, width - GAP * (segs.length - 1));
+
+  return (
+    <div ref={ref}>
+      <Legend items={FEATURE_STAGES.map((s) => ({ label: FEATURE_STATUS_META[s.key].label, color: s.color }))} />
+      {width > 0 && (
+        <svg width={width} height={64} className="viz-svg">
+          {segs.map((seg, i) => {
+            const w = (seg.n / total) * usable;
+            const x0 = x;
+            x += w + GAP;
+            const label = FEATURE_STATUS_META[seg.key].label;
+            return (
+              <g
+                key={seg.key}
+                {...tip(
+                  <TipRows
+                    title={label}
+                    rows={[
+                      ["requests", seg.n, seg.color],
+                      ["of all requests", `${Math.round((seg.n / total) * 100)}%`],
+                    ]}
+                  />,
+                  `${label}: ${seg.n} requests`,
+                )}
+                className="viz-hit"
+              >
+                <path d={roundedRect(x0, 8, w, 32, i === 0 ? 4 : 0, i === segs.length - 1 ? 4 : 0)} style={{ fill: seg.color }} />
+                {w > 34 && (
+                  <text x={x0 + w / 2} y={29} textAnchor="middle" className="viz-in-label" style={{ fill: seg.key === "NOT_STARTED" ? "var(--st-not-ink)" : "#fff" }}>
+                    {seg.n}
+                  </text>
+                )}
+                {w > 90 && (
+                  <text x={x0 + 2} y={58} className="viz-axis">
+                    {label}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      )}
+    </div>
+  );
+}
