@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { ArrowUpRight, BellRing, Pencil, Trash2, UserPlus, Wrench, X } from "lucide-react";
+import { ArrowUpRight, BellRing, Pencil, Trash2, UserMinus, Wrench, X } from "lucide-react";
 import { HEALTH_META, initials, type System } from "../data/systems";
 import type { UpdateRequest, User } from "../data/roles";
 import { formatDate, timeAgo } from "../time";
-import DeveloperPicker from "./DeveloperPicker";
+import { DeveloperSearch } from "./DeveloperPicker";
 import LeadContact from "./LeadContact";
 import { DateLine, ProgressBar, ScheduleChip, StatusPill, updatedText } from "./SystemCard";
 
@@ -31,7 +31,7 @@ export default function SystemDrawer(p: Props) {
   const [confirming, setConfirming] = useState(false);
   const [asking, setAsking] = useState(false);
   const [message, setMessage] = useState("");
-  const [picking, setPicking] = useState<string[] | null>(null); // developer ids while editing the list
+  const [saving, setSaving] = useState(false); // a developer change is on its way to the server
   const [error, setError] = useState("");
 
   // Opening a different system resets the panel's in-progress actions.
@@ -39,7 +39,6 @@ export default function SystemDrawer(p: Props) {
     setConfirming(false);
     setAsking(false);
     setMessage("");
-    setPicking(null);
     setError("");
   }, [system?.id]);
 
@@ -62,6 +61,16 @@ export default function SystemDrawer(p: Props) {
       setError(e instanceof Error ? e.message : "Something went wrong");
     }
   };
+
+  const saveDevelopers = (ids: string[]) =>
+    attempt(async () => {
+      setSaving(true);
+      try {
+        await p.onChangeDevelopers(system.id, ids);
+      } finally {
+        setSaving(false);
+      }
+    });
 
   return (
     <div className="backdrop drawer-backdrop" onClick={p.onClose}>
@@ -185,35 +194,8 @@ export default function SystemDrawer(p: Props) {
         </section>
 
         <section className="lead-card">
-          <div className="dev-head">
-            <span className="lead-label">Developers · {developers.length}</span>
-            {p.canManage && !picking && (
-              <button className="link-btn" onClick={() => setPicking(developers.map((d) => d.id))}>
-                <UserPlus size={15} /> {developers.length ? "Edit" : "Add developers"}
-              </button>
-            )}
-          </div>
-          {picking ? (
-            <>
-              <DeveloperPicker users={users} systems={p.systems} systemId={system.id} value={picking} onChange={setPicking} />
-              <div className="confirm-actions">
-                <button className="btn btn-ghost" onClick={() => setPicking(null)}>
-                  Cancel
-                </button>
-                <button
-                  className="btn btn-navy"
-                  onClick={() =>
-                    attempt(async () => {
-                      await p.onChangeDevelopers(system.id, picking);
-                      setPicking(null);
-                    })
-                  }
-                >
-                  Save developers
-                </button>
-              </div>
-            </>
-          ) : developers.length ? (
+          <span className="lead-label">Developers · {developers.length}</span>
+          {developers.length ? (
             developers.map((d) => (
               <div key={d.id} className="dev-row">
                 <div className="lead-head">
@@ -222,12 +204,33 @@ export default function SystemDrawer(p: Props) {
                     <b>{d.name}</b>
                     {d.title && <span className="lead-title">{d.title}</span>}
                   </div>
+                  {p.canManage && (
+                    <button
+                      className="dev-remove"
+                      disabled={saving}
+                      title={`Remove ${d.name} from ${system.name}`}
+                      aria-label={`Remove ${d.name}`}
+                      onClick={() => saveDevelopers(developers.filter((x) => x.id !== d.id).map((x) => x.id))}
+                    >
+                      <UserMinus size={16} />
+                    </button>
+                  )}
                 </div>
                 <LeadContact person={d} about={system.name} />
               </div>
             ))
           ) : (
             <p className="lead-none">No developers assigned yet.</p>
+          )}
+          {p.canManage && (
+            <DeveloperSearch
+              users={users}
+              systems={p.systems}
+              systemId={system.id}
+              exclude={developers.map((d) => d.id)}
+              disabled={saving}
+              onPick={(id) => saveDevelopers([...developers.map((d) => d.id), id])}
+            />
           )}
         </section>
 
