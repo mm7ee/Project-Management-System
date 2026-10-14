@@ -1,10 +1,10 @@
-import { BellRing, FileBarChart, FolderGit2, History, ListChecks, MonitorSmartphone, Moon, Orbit, Plus, Settings, Sun, Users, Wrench, X } from "lucide-react";
+import { AlertOctagon, BellRing, FileBarChart, FolderGit2, History, ListChecks, MonitorSmartphone, Moon, Orbit, Plus, Settings, Sun, Users, Wrench, X } from "lucide-react";
 import { STATUS_META, initials, type Status } from "../data/systems";
 import { ROLE_LABEL, type Prefs, type User } from "../data/roles";
 import { COMPANY_URL } from "../brand";
 
-export type Filter = "ALL" | Status | "OVERDUE" | "REQUESTED" | "MAINTENANCE" | "MINE";
-export type View = "projects" | "features" | "reports" | "users" | "activity" | "settings";
+export type Filter = "ALL" | Status | "OVERDUE" | "REQUESTED" | "MAINTENANCE" | "MINE" | "BLOCKED";
+export type View = "projects" | "project" | "features" | "reports" | "users" | "activity" | "settings";
 
 // Order follows the mock-up. Optional items only appear when something is in them.
 const NAV: { key: Filter; label: string; optional?: boolean }[] = [
@@ -18,6 +18,7 @@ const NAV: { key: Filter; label: string; optional?: boolean }[] = [
   { key: "COMPLETED", label: STATUS_META.COMPLETED.label },
   { key: "IDEA", label: "Ideas", optional: true },
   { key: "MAINTENANCE", label: "Maintenance" },
+  { key: "BLOCKED", label: "Blocked / stalled", optional: true },
   { key: "OVERDUE", label: "Overdue" },
   { key: "REQUESTED", label: "Update requests", optional: true },
 ];
@@ -82,10 +83,11 @@ export default function Sidebar(p: Props) {
                 {key === "REQUESTED" && <BellRing size={15} className="nav-icon" />}
                 {key === "MAINTENANCE" && <Wrench size={15} className="nav-icon" />}
                 {key === "MINE" && <FolderGit2 size={15} className="nav-icon" />}
+                {key === "BLOCKED" && <AlertOctagon size={15} className="nav-icon" />}
                 {label}
               </span>
               <span
-                className={`nav-count ${(key === "OVERDUE" || key === "REQUESTED") && p.counts[key] > 0 ? "alert" : ""} ${
+                className={`nav-count ${(key === "OVERDUE" || key === "REQUESTED" || key === "BLOCKED") && p.counts[key] > 0 ? "alert" : ""} ${
                   key === "MAINTENANCE" && p.counts[key] > 0 ? "maint" : ""
                 }`}
               >

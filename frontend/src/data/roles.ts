@@ -109,7 +109,7 @@ export function cleanPrefs(raw: unknown, startKeys: readonly string[]): Prefs {
   return out;
 }
 
-export const START_KEYS = ["ALL", "MINE", "LIVE", "WIP", "TESTING", "TO_DEPLOY", "UPCOMING", "COMPLETED", "IDEA", "MAINTENANCE", "OVERDUE", "REQUESTED"] as const;
+export const START_KEYS = ["ALL", "MINE", "BLOCKED", "LIVE", "WIP", "TESTING", "TO_DEPLOY", "UPCOMING", "COMPLETED", "IDEA", "MAINTENANCE", "OVERDUE", "REQUESTED"] as const;
 
 export interface UpdateRequest {
   id: string;

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { System } from "./systems";
 import type { Feature } from "./features";
+import type { Blocker, Limits, ProjectDocument } from "./project";
 import type { Permission, Prefs, RolePermissions, UpdateRequest, User } from "./roles";
 
 export class ApiError extends Error {
@@ -21,6 +22,15 @@ export async function api<T = unknown>(path: string, method = "GET", data?: unkn
   return payload as T;
 }
 
+/** Uploads one file to a project's documents (multipart, so it can't go through `api`). */
+export async function uploadDocument(systemId: string, file: File): Promise<void> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`/api/systems/${systemId}/documents`, { method: "POST", credentials: "same-origin", body: form });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, payload.error ?? `Upload failed (${res.status})`, payload.code);
+}
+
 export interface AppData {
   me: User;
   prefs: Prefs;
@@ -30,6 +40,9 @@ export interface AppData {
   users: User[];
   requests: UpdateRequest[];
   features: Feature[];
+  documents: ProjectDocument[];
+  blockers: Blocker[];
+  limits: Limits;
 }
 
 /**

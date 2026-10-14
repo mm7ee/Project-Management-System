@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, Copy, KeyRound, Pencil, Plus, Trash2, X } from "lucide-react";
+import { AlertOctagon, Check, Copy, KeyRound, Pencil, Plus, Trash2, X } from "lucide-react";
 import { api } from "../data/api";
 import { initials, type System } from "../data/systems";
 import { timeAgo } from "../time";
@@ -12,16 +12,19 @@ import {
   type RolePermissions,
   type User,
 } from "../data/roles";
+import type { Limits, Workload } from "../data/project";
 
 interface Props {
   me: User;
   users: User[];
   systems: System[];
   roleMatrix: RolePermissions;
+  limits: Limits;
+  workload: (u: User) => Workload;
   onChanged: () => Promise<void>;
 }
 
-export default function UsersPage({ me, users, systems, roleMatrix, onChanged }: Props) {
+export default function UsersPage({ me, users, systems, roleMatrix, limits, workload, onChanged }: Props) {
   // Last sign-in is only sent to people who can view the activity log.
   const showLastLogin = users.some((u) => u.lastLogin !== undefined) || me.lastLogin !== undefined;
   const [editing, setEditing] = useState<User | "new" | null>(null);
@@ -64,6 +67,7 @@ export default function UsersPage({ me, users, systems, roleMatrix, onChanged }:
               <th>Name</th>
               <th>Role</th>
               <th>Assigned projects</th>
+              <th>Workload</th>
               <th>Email</th>
               {showLastLogin && <th>Last sign-in</th>}
               <th aria-label="Actions" />
@@ -86,6 +90,25 @@ export default function UsersPage({ me, users, systems, roleMatrix, onChanged }:
                   {u.mustChangePassword && <span className="flag flag-request pw-pending">Must set a new password</span>}
                 </td>
                 <td>{u.role === "developer" ? projectNames(u.projectIds) || <i className="muted">Not assigned</i> : "—"}</td>
+                <td>
+                  {u.role === "developer"
+                    ? (() => {
+                        const w = workload(u);
+                        return (
+                          <span className="workload-cell">
+                            <span>
+                              {w.active} active · {w.openFeatures} request{w.openFeatures === 1 ? "" : "s"}
+                            </span>
+                            {w.overloaded && (
+                              <span className="flag flag-overload" title={w.reasons.join("; ")}>
+                                <AlertOctagon size={12} /> Overloaded
+                              </span>
+                            )}
+                          </span>
+                        );
+                      })()
+                    : "—"}
+                </td>
                 <td className="muted">{u.email ?? "—"}</td>
                 {showLastLogin && (
                   <td className="muted" title={u.lastLogin ? new Date(u.lastLogin).toLocaleString("en-GB") : undefined}>
@@ -163,6 +186,8 @@ export default function UsersPage({ me, users, systems, roleMatrix, onChanged }:
         </table>
       </div>
 
+      <LimitsEditor limits={limits} onSave={(l) => run(() => api("/settings/limits", "PUT", l))} />
+
       <RoleMatrix matrix={roleMatrix} onSave={(m) => run(() => api("/roles", "PUT", m))} />
 
       {issued && <TempPasswordDialog {...issued} onClose={() => setIssued(null)} />}
@@ -182,6 +207,49 @@ export default function UsersPage({ me, users, systems, roleMatrix, onChanged }:
         />
       )}
     </div>
+  );
+}
+
+/** When developers are flagged as overloaded and projects as stalled. */
+function LimitsEditor({ limits, onSave }: { limits: Limits; onSave: (l: Limits) => Promise<boolean> }) {
+  const [draft, setDraft] = useState(limits);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => setDraft(limits), [limits]);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(limits);
+  const field = (k: keyof Limits, label: string, hint: string, max: number) => (
+    <label className="field">
+      <span>{label}</span>
+      <input
+        type="number"
+        min={1}
+        max={max}
+        required
+        value={draft[k]}
+        onChange={(e) => {
+          setSaved(false);
+          setDraft((d) => ({ ...d, [k]: Number(e.target.value) }));
+        }}
+      />
+      <small className="field-hint">{hint}</small>
+    </label>
+  );
+  return (
+    <section className="matrix-section">
+      <header className="page-head">
+        <div>
+          <h2>Workload & stall limits</h2>
+          <p>Developers above a limit are flagged as overloaded; active projects without a progress update for too long are flagged as stalled.</p>
+        </div>
+        <button className="btn btn-navy" disabled={!dirty} onClick={async () => setSaved(await onSave(draft))}>
+          {saved && !dirty ? "Saved" : "Save limits"}
+        </button>
+      </header>
+      <div className="limits-grid set-card">
+        {field("projects", "Active projects per developer", "Projects still being built (not live or completed).", 50)}
+        {field("features", "Open feature requests per developer", "Requests not yet completed or cancelled.", 200)}
+        {field("stallDays", "Days without progress before \"stalled\"", "Counted from the last progress update.", 365)}
+      </div>
+    </section>
   );
 }
 

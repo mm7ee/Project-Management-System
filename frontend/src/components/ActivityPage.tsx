@@ -12,13 +12,14 @@ interface Props {
   now: number;
 }
 
-type Kind = "" | "signin" | "failed" | "account" | "systems" | "features" | "admin";
+type Kind = "" | "signin" | "failed" | "account" | "systems" | "features" | "project" | "admin";
 const KINDS: { key: Kind; label: string }[] = [
   { key: "", label: "Everything" },
   { key: "signin", label: "Sign-ins" },
   { key: "failed", label: "Failed sign-ins" },
   { key: "systems", label: "Systems" },
   { key: "features", label: "Feature requests" },
+  { key: "project", label: "Documents & blockers" },
   { key: "admin", label: "Users & roles" },
   { key: "account", label: "Own account" },
 ];
@@ -138,6 +139,24 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
         ...(fields.length ? [`changed ${fields.join(", ")}`] : []),
       ];
       return `Updated feature request "${str(d.title)}" on ${name}: ${parts.join("; ")}`;
+    }
+    case "document_added":
+      return `Added ${d.link ? "link" : "document"} "${str(d.document)}" to ${name}`;
+    case "document_removed":
+      return `Removed document "${str(d.document)}" from ${name}`;
+    case "blocker_raised":
+      return `Raised a blocker on ${name}: "${str(d.blocker)}"`;
+    case "blocker_resolved":
+      return `Resolved a blocker on ${name}: "${str(d.blocker)}"${d.resolution ? `, ${str(d.resolution)}` : ""}`;
+    case "blocker_reopened":
+      return `Reopened a blocker on ${name}: "${str(d.blocker)}"`;
+    case "blocker_deleted":
+      return `Deleted a blocker on ${name}: "${str(d.blocker)}"`;
+    case "limits_updated": {
+      const to = d.to as { projects: number; features: number; stallDays: number } | undefined;
+      return to
+        ? `Set workload limits: ${to.projects} active projects, ${to.features} open requests per developer; stalled after ${to.stallDays} days`
+        : "Changed workload limits";
     }
     case "feature_deleted":
       return `Deleted feature request "${str(d.title)}" on ${name}`;

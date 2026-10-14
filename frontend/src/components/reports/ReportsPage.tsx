@@ -4,6 +4,7 @@ import { SCHEDULE_META, STATUS_META, getSchedule, type System } from "../../data
 import type { UpdateRequest, User } from "../../data/roles";
 import { FEATURE_STATUS_META, KIND_META, PRIORITY_META, byUrgency, isLate, isOpen, type Feature } from "../../data/features";
 import { FeatureStatusPill, PriorityBadge } from "../FeatureModal";
+import { stalledDays, workloadOf, type Blocker, type Limits } from "../../data/project";
 import { formatDate } from "../../time";
 import { lastUpdate } from "../SystemCard";
 import { TooltipLayer } from "./chartKit";
@@ -14,6 +15,8 @@ interface Props {
   users: User[];
   requests: UpdateRequest[];
   features: Feature[];
+  blockers: Blocker[];
+  limits: Limits;
   now: number;
 }
 
@@ -32,7 +35,7 @@ const csvCell = (v: unknown) => {
 
 const TONE_ICON = { good: CheckCircle2, warn: TrendingDown, bad: AlertTriangle, info: Info };
 
-export default function ReportsPage({ systems, users, requests, features, now }: Props) {
+export default function ReportsPage({ systems, users, requests, features, blockers, limits, now }: Props) {
   const [scope, setScope] = useState<Scope>("all");
   const [lead, setLead] = useState("");
   const [copied, setCopied] = useState(false);
@@ -58,14 +61,16 @@ export default function ReportsPage({ systems, users, requests, features, now }:
   const lateFeatures = openFeatures.filter((f) => isLate(f, now)).length;
   const cancelled = viewFeatures.filter((f) => f.status === "CANCELLED").length;
   const unassigned = openFeatures.filter((f) => !f.assignee).length;
-  // One row per developer with any request in scope, busiest first.
+  // One row per developer on a system in scope or with a request in scope, busiest first.
+  // The overload flag counts all their work, not just what this filter shows.
   const workload = users
-    .filter((u) => viewFeatures.some((f) => f.assignee === u.id))
+    .filter((u) => u.role === "developer" && (viewFeatures.some((f) => f.assignee === u.id) || u.projectIds?.some((id) => ids.has(id))))
     .map((u) => {
       const mine = viewFeatures.filter((f) => f.assignee === u.id);
       const open = mine.filter(isOpen);
       return {
         user: u,
+        load: workloadOf(u, systems, features, limits, now),
         open: open.length,
         critical: open.filter((f) => f.priority === "CRITICAL").length,
         high: open.filter((f) => f.priority === "HIGH").length,
@@ -74,7 +79,16 @@ export default function ReportsPage({ systems, users, requests, features, now }:
         next: open.map((f) => f.dueAt).filter((d): d is string => !!d).sort()[0],
       };
     })
-    .sort((a, b) => b.open - a.open || b.critical - a.critical);
+    .sort((a, b) => Number(b.load.overloaded) - Number(a.load.overloaded) || b.load.active - a.load.active || b.open - a.open);
+  // Systems that are blocked or have stopped moving.
+  const stuck = view
+    .map((s) => ({
+      system: s,
+      open: blockers.filter((b) => b.systemId === s.id && !b.resolvedAt),
+      stalled: stalledDays(s, now, limits),
+    }))
+    .filter((x) => x.open.length || x.stalled !== null)
+    .sort((a, b) => b.open.length - a.open.length || (b.stalled ?? 0) - (a.stalled ?? 0));
   const brief = buildBrief(view, users, viewRequests.length, now);
   const paces = view.map((s) => paceOf(s, now)).filter((p): p is Pace => !!p);
   const leads = users.filter((u) => systems.some((s) => s.lead === u.id));
@@ -234,6 +248,46 @@ export default function ReportsPage({ systems, users, requests, features, now }:
         </section>
 
         <section className="viz-card">
+          <h3>Blocked & stalled</h3>
+          <p className="viz-sub">
+            Systems with an open blocker, or still being built with no progress update for {limits.stallDays}+ days.
+          </p>
+          {stuck.length ? (
+            <div className="table-wrap flat">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>System</th>
+                    <th>Blocker</th>
+                    <th>Raised</th>
+                    <th>Last progress update</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stuck.map(({ system, open, stalled }) => (
+                    <tr key={system.id}>
+                      <td>
+                        <b>{system.name}</b>
+                      </td>
+                      <td className="notes-cell">
+                        {open.length ? open.map((b) => <div key={b.id}>{b.text}</div>) : <i className="muted">None recorded</i>}
+                      </td>
+                      <td>{open.length ? open.map((b) => <div key={b.id}>{formatDate(b.raisedAt)} · {userName(b.raisedBy)}</div>) : "—"}</td>
+                      <td className={stalled !== null ? "text-red" : ""}>
+                        {formatDate(lastUpdate(system))}
+                        {stalled !== null && ` (${stalled} days ago)`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="lead-none">Nothing is blocked or stalled.</p>
+          )}
+        </section>
+
+        <section className="viz-card">
           <h3>Pipeline</h3>
           <p className="viz-sub">Where every system sits in its lifecycle.</p>
           <PipelineBar systems={view} />
@@ -322,13 +376,16 @@ export default function ReportsPage({ systems, users, requests, features, now }:
         {workload.length > 0 && (
           <section className="viz-card">
             <h3>Developer workload</h3>
-            <p className="viz-sub">Feature requests per developer. Open counts leave out completed and cancelled requests.</p>
+            <p className="viz-sub">
+              Active projects and feature requests per developer. Flagged when above {limits.projects} active projects or {limits.features} open requests.
+            </p>
             <div className="table-wrap flat">
               <table className="table">
                 <thead>
                   <tr>
                     <th>Developer</th>
-                    <th>Open</th>
+                    <th>Active projects</th>
+                    <th>Open requests</th>
                     <th>Critical</th>
                     <th>High</th>
                     <th>Past due</th>
@@ -341,7 +398,13 @@ export default function ReportsPage({ systems, users, requests, features, now }:
                     <tr key={w.user.id}>
                       <td>
                         <b>{w.user.name}</b>
+                        {w.load.overloaded && (
+                          <span className="flag flag-overload" title={w.load.reasons.join("; ")}>
+                            Overloaded
+                          </span>
+                        )}
                       </td>
+                      <td className={`num ${w.load.active > limits.projects ? "text-red" : ""}`}>{w.load.active}</td>
                       <td className="num">{w.open}</td>
                       <td className={`num ${w.critical ? "text-red" : ""}`}>{w.critical}</td>
                       <td className="num">{w.high}</td>

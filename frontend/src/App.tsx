@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Menu, Plus, Search } from "lucide-react";
 import { getSchedule, type System } from "./data/systems";
 import { api, useAppData, type AppData } from "./data/api";
@@ -7,7 +7,7 @@ import { useApplyPrefs } from "./prefs";
 import { useNow } from "./time";
 import Sidebar, { type Filter, type View } from "./components/Sidebar";
 import SystemCard from "./components/SystemCard";
-import SystemDrawer from "./components/SystemDrawer";
+import ProjectPage from "./components/ProjectPage";
 import UpdateModal, { type ProgressUpdate } from "./components/UpdateModal";
 import AddSystemModal from "./components/AddSystemModal";
 import SettingsPage from "./components/SettingsPage";
@@ -22,6 +22,12 @@ import CountUp from "./components/CountUp";
 import FeaturesPage from "./components/FeaturesPage";
 import FeatureModal from "./components/FeatureModal";
 import { isLate, isOpen, type Feature } from "./data/features";
+import { stalledDays, workloadOf } from "./data/project";
+import type { User } from "./data/roles";
+
+// A project page has its own address (#/projects/<id>), so it can be bookmarked, opened in a
+// new tab and left with the browser's back button.
+const projectInHash = () => window.location.hash.match(/^#\/projects\/([a-z0-9-]+)$/)?.[1] ?? null;
 
 export default function App() {
   const { data, mustChange, loading, reload } = useAppData();
@@ -43,7 +49,7 @@ export default function App() {
 
 function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void> }) {
   const now = useNow();
-  const { me, systems, users, requests, features } = data;
+  const { me, systems, users, requests, features, documents, blockers, limits } = data;
   const can = (p: Permission) => data.permissions.includes(p);
 
   // Preferences apply instantly and save in the background.
@@ -68,7 +74,19 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
     data.prefs.start === "MINE" && !myProjects.length ? "ALL" : (data.prefs.start as Filter),
   );
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(projectInHash);
+  useEffect(() => {
+    const onHash = () => setSelectedId(projectInHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  const openProject = (id: string) => {
+    window.location.hash = `/projects/${id}`;
+  };
+  const closeProject = () => {
+    window.history.pushState(null, "", window.location.pathname + window.location.search);
+    setSelectedId(null);
+  };
   const [posting, setPosting] = useState<{ initialId?: string } | null>(null);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState("");
@@ -90,10 +108,15 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
         : [];
   const mayUpdate = (s: System) => editable.some((e) => e.id === s.id);
   const requestsFor = (id: string) => requests.filter((r) => r.systemId === id);
+  const openBlockersFor = (id: string) => blockers.filter((b) => b.systemId === id && !b.resolvedAt);
+  const isBlocked = (s: System) => openBlockersFor(s.id).length > 0 || stalledDays(s, now, limits) !== null;
+  // Why a developer has too much on; empty when they don't.
+  const overloaded = (u: User) => (u.role === "developer" ? workloadOf(u, systems, features, limits, now).reasons : []);
+  const mayContribute = (s: System) => can("edit_any") || can("manage_systems") || s.lead === me.id || !!me.projectIds?.includes(s.id);
 
   const counts = useMemo(() => {
     const c: Record<Filter, number> = {
-      ALL: systems.length, LIVE: 0, COMPLETED: 0, WIP: 0, TESTING: 0, TO_DEPLOY: 0, UPCOMING: 0, IDEA: 0, OVERDUE: 0, REQUESTED: 0, MAINTENANCE: 0, MINE: 0,
+      ALL: systems.length, LIVE: 0, COMPLETED: 0, WIP: 0, TESTING: 0, TO_DEPLOY: 0, UPCOMING: 0, IDEA: 0, OVERDUE: 0, REQUESTED: 0, MAINTENANCE: 0, MINE: 0, BLOCKED: 0,
     };
     systems.forEach((s) => {
       c[s.status]++;
@@ -101,9 +124,10 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
       if (requests.some((r) => r.systemId === s.id)) c.REQUESTED++;
       if (s.health === "Maintenance") c.MAINTENANCE++;
       if (isMine(s)) c.MINE++;
+      if (isBlocked(s)) c.BLOCKED++;
     });
     return c;
-  }, [systems, requests, now, me]);
+  }, [systems, requests, blockers, limits, now, me]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -113,6 +137,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           ? true
           : filter === "MINE"
             ? isMine(s)
+            : filter === "BLOCKED"
+            ? isBlocked(s)
             : filter === "OVERDUE"
             ? getSchedule(s, now) === "OVERDUE"
             : filter === "REQUESTED"
@@ -124,7 +150,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
       .filter((s) => !q || s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q))
       // Your own projects come first.
       .sort((a, b) => Number(isMine(b)) - Number(isMine(a)));
-  }, [systems, requests, filter, query, now, me]);
+  }, [systems, requests, blockers, limits, filter, query, now, me]);
 
   // On "All projects", the ones assigned to you get their own section above the rest.
   const sections =
@@ -140,7 +166,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   const stats = [
     { value: systems.length, label: "Projects tracked", tone: "navy" },
     { value: counts.LIVE, label: "Live", tone: "green" },
-    { value: counts.TESTING, label: "Testing", tone: "violet" },
+    { value: counts.BLOCKED, label: "Blocked / stalled", tone: "amber" },
     { value: `${avgProgress}%`, label: "Average progress", tone: "cyan" },
     { value: atRisk, label: "At risk / overdue", tone: "red" },
   ];
@@ -159,7 +185,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
       <Sidebar
         me={me}
         filter={filter}
-        view={view}
+        view={selectedId ? "project" : view}
         counts={counts}
         features={{
           count: featureBadge.length,
@@ -170,14 +196,23 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
         canReports={can("reports")}
         canUsers={can("manage_users")}
         canActivity={can("audit_log")}
-        onFilter={setFilter}
-        onView={setView}
+        onFilter={(f) => {
+          setFilter(f);
+          if (selectedId) closeProject();
+        }}
+        onView={(v) => {
+          setView(v);
+          if (selectedId) closeProject();
+        }}
         onClose={() => setMenuOpen(false)}
         onAdd={() => {
           setAddError("");
           setAdding(true);
         }}
-        onAccount={() => setView("settings")}
+        onAccount={() => {
+          setView("settings");
+          if (selectedId) closeProject();
+        }}
         theme={prefs.theme}
         onTheme={(theme) => savePrefs({ ...prefs, theme }).catch(() => undefined)}
       />
@@ -188,7 +223,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             <Menu size={20} />
           </button>
           <h1>Projects Tracker</h1>
-          {view === "projects" && (
+          {view === "projects" && !selectedId && (
             <>
               <label className="search">
                 <Search size={18} />
@@ -208,7 +243,61 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           )}
         </header>
 
-        {view === "settings" ? (
+        {selectedId ? (
+          selected ? (
+            <ProjectPage
+              system={selected}
+              systems={systems}
+              now={now}
+              me={me}
+              users={users}
+              requests={requestsFor(selected.id)}
+              features={features.filter((f) => f.systemId === selected.id)}
+              documents={documents.filter((d) => d.systemId === selected.id)}
+              blockers={blockers.filter((b) => b.systemId === selected.id)}
+              limits={limits}
+              overloaded={overloaded}
+              canUpdate={mayUpdate(selected)}
+              canManage={can("manage_systems")}
+              canRequest={can("request_updates")}
+              canContribute={mayContribute(selected)}
+              canLogFeatures={can("manage_features")}
+              onBack={closeProject}
+              onUpdate={() => setPosting({ initialId: selected.id })}
+              onChangeLead={async (id, lead) => {
+                await api(`/systems/${id}`, "PATCH", { lead });
+                await reload();
+              }}
+              onChangeDevelopers={async (id, developers) => {
+                await api(`/systems/${id}`, "PATCH", { developers });
+                await reload();
+              }}
+              onDelete={async (id) => {
+                await api(`/systems/${id}`, "DELETE");
+                closeProject();
+                await reload();
+              }}
+              onRequest={async (id, message) => {
+                await api("/requests", "POST", { systemId: id, message });
+                await reload();
+              }}
+              onDismiss={async (requestId) => {
+                await api(`/requests/${requestId}`, "DELETE");
+                await reload();
+              }}
+              onOpenFeature={(feature) => setFeatureEdit({ feature })}
+              onNewFeature={() => setFeatureEdit({ feature: null, systemId: selected.id })}
+              onChanged={reload}
+            />
+          ) : (
+            <div className="empty">
+              That project doesn't exist any more.{" "}
+              <button className="link-btn" onClick={closeProject}>
+                Back to all projects
+              </button>
+            </div>
+          )
+        ) : view === "settings" ? (
           <SettingsPage
             me={me}
             prefs={prefs}
@@ -232,9 +321,25 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
         ) : view === "activity" && can("audit_log") ? (
           <ActivityPage users={users} systems={systems} now={now} />
         ) : view === "users" && can("manage_users") ? (
-          <UsersPage me={me} users={users} systems={systems} roleMatrix={data.roleMatrix} onChanged={reload} />
+          <UsersPage
+            me={me}
+            users={users}
+            systems={systems}
+            roleMatrix={data.roleMatrix}
+            limits={limits}
+            workload={(u) => workloadOf(u, systems, features, limits, now)}
+            onChanged={reload}
+          />
         ) : view === "reports" && can("reports") ? (
-          <ReportsPage systems={systems} users={users} requests={requests} features={features} now={now} />
+          <ReportsPage
+            systems={systems}
+            users={users}
+            requests={requests}
+            features={features}
+            blockers={blockers}
+            limits={limits}
+            now={now}
+          />
         ) : (
           <>
             {me.role === "developer" && !myProjects.length && (
@@ -270,8 +375,10 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
                         developers={users.filter((u) => u.role === "developer" && u.projectIds?.includes(s.id))}
                         requests={requestsFor(s.id).length}
                         mine={isMine(s)}
+                        blockers={openBlockersFor(s.id).map((b) => b.text)}
+                        stalled={stalledDays(s, now, limits)}
                         index={n ? sections[0].items.length + i : i}
-                        onSelect={(x) => setSelectedId(x.id)}
+                        onSelect={(x) => openProject(x.id)}
                       />
                     ))}
                   </div>
@@ -284,44 +391,6 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
         )}
       </main>
 
-      <SystemDrawer
-        system={selected}
-        systems={systems}
-        now={now}
-        me={me}
-        users={users}
-        requests={selected ? requestsFor(selected.id) : []}
-        canUpdate={!!selected && mayUpdate(selected)}
-        canManage={can("manage_systems")}
-        canRequest={can("request_updates")}
-        onClose={() => setSelectedId(null)}
-        onUpdate={() => setPosting({ initialId: selected?.id })}
-        onChangeLead={async (id, lead) => {
-          await api(`/systems/${id}`, "PATCH", { lead });
-          await reload();
-        }}
-        onChangeDevelopers={async (id, developers) => {
-          await api(`/systems/${id}`, "PATCH", { developers });
-          await reload();
-        }}
-        onDelete={async (id) => {
-          await api(`/systems/${id}`, "DELETE");
-          setSelectedId(null);
-          await reload();
-        }}
-        onRequest={async (id, message) => {
-          await api("/requests", "POST", { systemId: id, message });
-          await reload();
-        }}
-        onDismiss={async (requestId) => {
-          await api(`/requests/${requestId}`, "DELETE");
-          await reload();
-        }}
-        features={selected ? features.filter((f) => f.systemId === selected.id) : []}
-        canLogFeatures={can("manage_features")}
-        onOpenFeature={(feature) => setFeatureEdit({ feature })}
-        onNewFeature={() => setFeatureEdit({ feature: null, systemId: selected?.id })}
-      />
       {featureEdit && (
         <FeatureModal
           feature={featureEdit.feature}
@@ -330,6 +399,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           users={users}
           me={me}
           now={now}
+          overloaded={overloaded}
           canManage={can("manage_features")}
           onClose={() => setFeatureEdit(null)}
           onSave={async (draft) => {

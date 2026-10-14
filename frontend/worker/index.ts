@@ -12,6 +12,7 @@ import {
   type FeatureStatus,
   type Priority,
 } from "../src/data/features";
+import { DEFAULT_LIMITS, MAX_DOCUMENT_BYTES, formatBytes, type Blocker, type Limits, type ProjectDocument } from "../src/data/project";
 import {
   DEFAULT_ROLE_PERMISSIONS,
   ROLES,
@@ -125,6 +126,11 @@ function sessionCookie(token: string, req: Request, maxAge: number): string {
 async function roleMatrix(db: D1Database): Promise<RolePermissions> {
   const row = await db.prepare("SELECT value FROM settings WHERE key = 'role_permissions'").first<{ value: string }>();
   return row ? { ...DEFAULT_ROLE_PERMISSIONS, ...JSON.parse(row.value) } : DEFAULT_ROLE_PERMISSIONS;
+}
+
+async function workloadLimits(db: D1Database): Promise<Limits> {
+  const row = await db.prepare("SELECT value FROM settings WHERE key = 'workload_limits'").first<{ value: string }>();
+  return row ? { ...DEFAULT_LIMITS, ...JSON.parse(row.value) } : DEFAULT_LIMITS;
 }
 
 async function currentUser(req: Request, db: D1Database): Promise<UserRow | null> {
@@ -241,7 +247,8 @@ const ACTIVITY_KINDS: Record<string, string[]> = {
   account: ["password_changed", "password_set_after_reset", "profile_updated"],
   systems: ["system_created", "system_progress", "system_updated", "system_developers", "system_deleted", "request_created", "request_dismissed"],
   features: ["feature_created", "feature_updated", "feature_deleted"],
-  admin: ["user_created", "user_updated", "user_password_reset", "user_deleted", "roles_updated"],
+  project: ["document_added", "document_removed", "blocker_raised", "blocker_resolved", "blocker_reopened", "blocker_deleted"],
+  admin: ["user_created", "user_updated", "user_password_reset", "user_deleted", "roles_updated", "limits_updated"],
 };
 
 // ---------- the API ----------
@@ -304,7 +311,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   const now = new Date().toISOString();
 
   if (path === "/api/data" && method === "GET") {
-    const [systems, users, requests, assigned, features] = await Promise.all([
+    const [systems, users, requests, assigned, features, documents, blockers, limits] = await Promise.all([
       db.prepare("SELECT data FROM systems ORDER BY sort, rowid").all<{ data: string }>(),
       db.prepare("SELECT * FROM users ORDER BY name").all<UserRow>(),
       db.prepare("SELECT * FROM requests ORDER BY created_at DESC").all<Record<string, string>>(),
@@ -312,6 +319,9 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
         .prepare("SELECT a.user_id, a.system_id FROM assignments a JOIN systems s ON s.id = a.system_id ORDER BY s.sort, s.rowid")
         .all<{ user_id: string; system_id: string }>(),
       db.prepare("SELECT * FROM features ORDER BY created_at DESC").all<FeatureRow>(),
+      db.prepare("SELECT * FROM documents ORDER BY uploaded_at DESC").all<Record<string, string | number | null>>(),
+      db.prepare("SELECT * FROM blockers ORDER BY raised_at DESC").all<Record<string, string | null>>(),
+      workloadLimits(db),
     ]);
     const projectsByUser = new Map<string, string[]>();
     for (const a of assigned.results) projectsByUser.set(a.user_id, [...(projectsByUser.get(a.user_id) ?? []), a.system_id]);
@@ -340,6 +350,31 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
         }),
       ),
       features: features.results.map(toFeature),
+      documents: documents.results.map(
+        (d): ProjectDocument => ({
+          id: String(d.id),
+          systemId: String(d.system_id),
+          name: String(d.name),
+          kind: d.kind === "link" ? "link" : "file",
+          ...(d.url ? { url: String(d.url) } : {}),
+          ...(d.mime ? { mime: String(d.mime) } : {}),
+          ...(d.size != null ? { size: Number(d.size) } : {}),
+          uploadedBy: String(d.uploaded_by),
+          uploadedAt: String(d.uploaded_at),
+        }),
+      ),
+      blockers: blockers.results.map(
+        (b): Blocker => ({
+          id: b.id!,
+          systemId: b.system_id!,
+          text: b.text!,
+          raisedBy: b.raised_by!,
+          raisedAt: b.raised_at!,
+          ...(b.resolved_at ? { resolvedAt: b.resolved_at, resolvedBy: b.resolved_by ?? undefined } : {}),
+          ...(b.resolution ? { resolution: b.resolution } : {}),
+        }),
+      ),
+      limits,
     });
   }
 
@@ -532,6 +567,9 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       db.prepare("DELETE FROM requests WHERE system_id = ?").bind(id),
       db.prepare("DELETE FROM assignments WHERE system_id = ?").bind(id),
       db.prepare("DELETE FROM features WHERE system_id = ?").bind(id),
+      db.prepare("DELETE FROM document_chunks WHERE doc_id IN (SELECT id FROM documents WHERE system_id = ?)").bind(id),
+      db.prepare("DELETE FROM documents WHERE system_id = ?").bind(id),
+      db.prepare("DELETE FROM blockers WHERE system_id = ?").bind(id),
     ]);
     await audit(db, req, me, "system_deleted", id, { name: gone.name });
     return json({ ok: true });
@@ -561,6 +599,168 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     const sys = await db.prepare("SELECT data FROM systems WHERE id = ?").bind(r.system_id).first<{ data: string }>();
     await audit(db, req, me, "request_dismissed", r.system_id, { name: sys ? JSON.parse(sys.data).name : r.system_id });
     return json({ ok: true });
+  }
+
+  // ----- project documents and blockers -----
+  // The people working on a project add documents and raise blockers: its developers and lead,
+  // and anyone who may edit any project.
+  const mayContribute = async (system: System) =>
+    can("edit_any") || can("manage_systems") || system.lead === me.id || (await projectsOf(db, me.id)).includes(system.id);
+
+  const docsMatch = path.match(/^\/api\/systems\/([a-z0-9-]+)\/documents$/);
+  if (docsMatch && method === "POST") {
+    const system = await getSystem(db, docsMatch[1]);
+    if (!(await mayContribute(system))) throw new HttpError(403, "Only people on this project can add documents");
+    const id = newToken().slice(0, 16);
+    if ((req.headers.get("content-type") ?? "").startsWith("multipart/form-data")) {
+      const form = await req.formData().catch(() => {
+        throw new HttpError(400, "Couldn't read the upload");
+      });
+      const file = form.get("file");
+      if (!file || typeof file === "string") throw new HttpError(400, "Choose a file to upload");
+      if (file.size === 0) throw new HttpError(400, "That file is empty");
+      if (file.size > MAX_DOCUMENT_BYTES) throw new HttpError(413, `Files can be up to ${formatBytes(MAX_DOCUMENT_BYTES)}`);
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const name = (text(form.get("name"), "Name") || file.name || "document").slice(0, 200);
+      const CHUNK = 1024 * 1024;
+      const stmts = [
+        db
+          .prepare("INSERT INTO documents (id, system_id, name, kind, mime, size, uploaded_by, uploaded_at) VALUES (?, ?, ?, 'file', ?, ?, ?, ?)")
+          .bind(id, system.id, name, file.type || "application/octet-stream", bytes.length, me.id, now),
+      ];
+      for (let i = 0, seq = 0; i < bytes.length; i += CHUNK, seq++) {
+        stmts.push(db.prepare("INSERT INTO document_chunks (doc_id, seq, data) VALUES (?, ?, ?)").bind(id, seq, bytes.slice(i, i + CHUNK)));
+      }
+      await db.batch(stmts);
+      await audit(db, req, me, "document_added", system.id, { name: system.name, document: name, size: bytes.length });
+    } else {
+      const b = await body<{ name?: string; url?: string }>(req);
+      const url = text(b.url, "Link", true)!;
+      if (!/^https?:\/\/\S+$/i.test(url)) throw new HttpError(400, "Links must start with http:// or https://");
+      const name = text(b.name, "Name") ?? url;
+      await db
+        .prepare("INSERT INTO documents (id, system_id, name, kind, url, uploaded_by, uploaded_at) VALUES (?, ?, ?, 'link', ?, ?, ?)")
+        .bind(id, system.id, name.slice(0, 200), url, me.id, now)
+        .run();
+      await audit(db, req, me, "document_added", system.id, { name: system.name, document: name, link: true });
+    }
+    return json({ ok: true, id }, 201);
+  }
+
+  const docMatch = path.match(/^\/api\/documents\/([a-f0-9]+)$/);
+  if (docMatch && method === "GET") {
+    const doc = await db.prepare("SELECT * FROM documents WHERE id = ? AND kind = 'file'").bind(docMatch[1]).first<Record<string, string>>();
+    if (!doc) throw new HttpError(404, "Document not found");
+    const chunks = await db.prepare("SELECT data FROM document_chunks WHERE doc_id = ? ORDER BY seq").bind(doc.id).all<{ data: ArrayBuffer | number[] }>();
+    const parts = chunks.results.map((c) => new Uint8Array(c.data as ArrayBuffer));
+    const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+    parts.reduce((at, p) => (out.set(p, at), at + p.length), 0);
+    // Uploads are untrusted: only PDFs and images open in the browser, everything else downloads,
+    // and nothing served here may run script on this origin.
+    const inline = /^(application\/pdf|image\/(png|jpeg|gif|webp))$/.test(doc.mime) && new URL(req.url).searchParams.get("download") === null;
+    return new Response(out, {
+      headers: {
+        "content-type": inline ? doc.mime : "application/octet-stream",
+        "content-disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(doc.name)}`,
+        "x-content-type-options": "nosniff",
+        "content-security-policy": "sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'",
+        "cache-control": "private, max-age=300",
+      },
+    });
+  }
+
+  if (docMatch && method === "DELETE") {
+    const doc = await db.prepare("SELECT * FROM documents WHERE id = ?").bind(docMatch[1]).first<Record<string, string>>();
+    if (!doc) throw new HttpError(404, "Document not found");
+    if (doc.uploaded_by !== me.id && !can("manage_systems")) throw new HttpError(403, "Only whoever added it or a manager can remove a document");
+    await db.batch([
+      db.prepare("DELETE FROM document_chunks WHERE doc_id = ?").bind(doc.id),
+      db.prepare("DELETE FROM documents WHERE id = ?").bind(doc.id),
+    ]);
+    const system = await getSystem(db, doc.system_id).catch(() => null);
+    await audit(db, req, me, "document_removed", doc.system_id, { name: system?.name ?? doc.system_id, document: doc.name });
+    return json({ ok: true });
+  }
+
+  const blockersMatch = path.match(/^\/api\/systems\/([a-z0-9-]+)\/blockers$/);
+  if (blockersMatch && method === "POST") {
+    const system = await getSystem(db, blockersMatch[1]);
+    if (!(await mayContribute(system))) throw new HttpError(403, "Only people on this project can raise blockers");
+    const b = await body<{ text?: string }>(req);
+    const id = newToken().slice(0, 16);
+    const blocker = text(b.text, "Blocker", true)!;
+    await db.prepare("INSERT INTO blockers (id, system_id, text, raised_by, raised_at) VALUES (?, ?, ?, ?, ?)").bind(id, system.id, blocker, me.id, now).run();
+    await audit(db, req, me, "blocker_raised", system.id, { name: system.name, blocker });
+    return json({ ok: true, id }, 201);
+  }
+
+  const blockerMatch = path.match(/^\/api\/blockers\/([a-f0-9]+)$/);
+  if (blockerMatch && (method === "PATCH" || method === "DELETE")) {
+    const row = await db.prepare("SELECT * FROM blockers WHERE id = ?").bind(blockerMatch[1]).first<Record<string, string | null>>();
+    if (!row) throw new HttpError(404, "Blocker not found");
+    const system = await getSystem(db, row.system_id!);
+    if (method === "DELETE") {
+      // Deleting is for mistakes; real blockers get resolved so the history stays.
+      if (row.raised_by !== me.id && !can("manage_systems")) throw new HttpError(403, "Only whoever raised it or a manager can delete a blocker");
+      await db.prepare("DELETE FROM blockers WHERE id = ?").bind(row.id).run();
+      await audit(db, req, me, "blocker_deleted", system.id, { name: system.name, blocker: row.text });
+      return json({ ok: true });
+    }
+    if (!(await mayContribute(system))) throw new HttpError(403, "Only people on this project can resolve blockers");
+    const b = await body<{ resolved?: boolean; resolution?: string }>(req);
+    if (b.resolved === false) {
+      await db.prepare("UPDATE blockers SET resolved_by = NULL, resolved_at = NULL, resolution = NULL WHERE id = ?").bind(row.id).run();
+      await audit(db, req, me, "blocker_reopened", system.id, { name: system.name, blocker: row.text });
+    } else {
+      const resolution = text(b.resolution, "Resolution") ?? null;
+      await db.prepare("UPDATE blockers SET resolved_by = ?, resolved_at = ?, resolution = ? WHERE id = ?").bind(me.id, now, resolution, row.id).run();
+      await audit(db, req, me, "blocker_resolved", system.id, { name: system.name, blocker: row.text, ...(resolution ? { resolution } : {}) });
+    }
+    return json({ ok: true });
+  }
+
+  // Everything that happened to one project, for its page. Visible to everyone who can see the project.
+  const historyMatch = path.match(/^\/api\/systems\/([a-z0-9-]+)\/history$/);
+  if (historyMatch && method === "GET") {
+    const rows = await db
+      .prepare("SELECT id, at, user_id, actor, action, target, detail FROM activity WHERE target = ? ORDER BY id DESC LIMIT 100")
+      .bind(historyMatch[1])
+      .all<{ id: number; at: string; user_id: string | null; actor: string; action: string; target: string; detail: string }>();
+    return json(
+      rows.results.map((r) => ({
+        id: r.id,
+        at: r.at,
+        userId: r.user_id,
+        actor: r.actor,
+        action: r.action,
+        target: r.target,
+        detail: JSON.parse(r.detail || "{}"),
+        ip: null,
+        agent: null,
+      })),
+    );
+  }
+
+  if (path === "/api/settings/limits" && method === "PUT") {
+    need("manage_users");
+    const b = await body<Partial<Limits>>(req);
+    const whole = (v: unknown, field: string, max: number) => {
+      const n = Number(v);
+      if (!Number.isInteger(n) || n < 1 || n > max) throw new HttpError(400, `${field} must be a whole number from 1 to ${max}`);
+      return n;
+    };
+    const current = await workloadLimits(db);
+    const next: Limits = {
+      projects: b.projects !== undefined ? whole(b.projects, "Projects per developer", 50) : current.projects,
+      features: b.features !== undefined ? whole(b.features, "Feature requests per developer", 200) : current.features,
+      stallDays: b.stallDays !== undefined ? whole(b.stallDays, "Days without progress", 365) : current.stallDays,
+    };
+    await db
+      .prepare("INSERT INTO settings (key, value) VALUES ('workload_limits', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+      .bind(JSON.stringify(next))
+      .run();
+    await audit(db, req, me, "limits_updated", null, { from: current, to: next });
+    return json(next);
   }
 
   // ----- feature requests -----

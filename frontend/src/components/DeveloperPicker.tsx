@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Layers, Search, X } from "lucide-react";
+import { AlertOctagon, Layers, Search, X } from "lucide-react";
 import { initials, type System } from "../data/systems";
 import type { User } from "../data/roles";
 
@@ -9,6 +9,7 @@ interface SearchProps {
   systemId?: string; // the project being edited; unset while adding a new one
   exclude: string[]; // already on the project
   disabled?: boolean;
+  overloaded?: (u: User) => string[]; // why a developer is overloaded; empty when they're not
   onPick: (id: string) => void;
 }
 
@@ -16,7 +17,7 @@ interface SearchProps {
  * Type-to-find box for developer accounts. A developer can be on several projects; each
  * suggestion says what else they're already on, so the busiest can be spotted before picking.
  */
-export function DeveloperSearch({ users, systems, systemId, exclude, disabled, onPick }: SearchProps) {
+export function DeveloperSearch({ users, systems, systemId, exclude, disabled, overloaded = () => [], onPick }: SearchProps) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -29,8 +30,8 @@ export function DeveloperSearch({ users, systems, systemId, exclude, disabled, o
   const matches = developers
     .filter((d) => !exclude.includes(d.id))
     .filter((d) => !q || d.name.toLowerCase().includes(q) || d.title.toLowerCase().includes(q) || d.username.toLowerCase().includes(q))
-    // Least busy first: they are the likeliest pick.
-    .sort((a, b) => others(a).length - others(b).length);
+    // Least busy first: they are the likeliest pick. Overloaded developers go last.
+    .sort((a, b) => overloaded(a).length - overloaded(b).length || others(a).length - others(b).length);
 
   const pick = (id: string) => {
     onPick(id);
@@ -97,7 +98,11 @@ export function DeveloperSearch({ users, systems, systemId, exclude, disabled, o
                       <b>{d.name}</b>
                       <span>{d.title || d.username}</span>
                     </span>
-                    {elsewhere.length ? (
+                    {overloaded(d).length ? (
+                      <span className="dev-tag overload" title={`Overloaded: ${overloaded(d).join("; ")}`}>
+                        <AlertOctagon size={12} /> Overloaded
+                      </span>
+                    ) : elsewhere.length ? (
                       <span className="dev-tag busy" title={`Also on ${elsewhere.join(", ")}`}>
                         <Layers size={12} /> {elsewhere.length === 1 ? `On ${elsewhere[0]}` : `On ${elsewhere.length} projects`}
                       </span>

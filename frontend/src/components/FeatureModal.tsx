@@ -26,6 +26,7 @@ interface Props {
   users: User[];
   me: User;
   canManage: boolean; // may edit everything; otherwise only the assignee's status and notes
+  overloaded: (u: User) => string[]; // why a developer is overloaded; empty when they're not
   now: number;
   onSave: (draft: Partial<FeatureDraft>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
@@ -47,7 +48,7 @@ function Step({ n, title, sub, children }: { n: number; title: string; sub?: str
   );
 }
 
-export default function FeatureModal({ feature, initialSystemId, systems, users, me, canManage, now, onSave, onDelete, onClose }: Props) {
+export default function FeatureModal({ feature, initialSystemId, systems, users, me, canManage, overloaded, now, onSave, onDelete, onClose }: Props) {
   const [f, setF] = useState<FeatureDraft>(() => ({
     systemId: feature?.systemId ?? initialSystemId ?? systems[0]?.id ?? "",
     title: feature?.title ?? "",
@@ -215,6 +216,7 @@ export default function FeatureModal({ feature, initialSystemId, systems, users,
                     {onProject.map((d) => (
                       <option key={d.id} value={d.id}>
                         {d.name}
+                        {overloaded(d).length ? " (overloaded)" : ""}
                       </option>
                     ))}
                   </optgroup>
@@ -224,11 +226,17 @@ export default function FeatureModal({ feature, initialSystemId, systems, users,
                     {others.map((d) => (
                       <option key={d.id} value={d.id}>
                         {d.name}
+                        {overloaded(d).length ? " (overloaded)" : ""}
                       </option>
                     ))}
                   </optgroup>
                 )}
               </select>
+              {(() => {
+                const dev = developers.find((d) => d.id === f.assignee);
+                const reasons = dev ? overloaded(dev) : [];
+                return reasons.length > 0 && <span className="form-warn">{dev!.name} is already overloaded: {reasons.join("; ")}.</span>;
+              })()}
             </label>
           ) : (
             ro("Assigned developer", name(f.assignee) ?? "Not assigned yet")

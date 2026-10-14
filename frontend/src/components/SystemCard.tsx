@@ -1,4 +1,4 @@
-import { BellRing, ChevronRight, Clock, Mail, Wrench } from "lucide-react";
+import { AlertOctagon, BellRing, ChevronRight, Clock, Mail, Wrench } from "lucide-react";
 import { SCHEDULE_META, STATUS_META, daysUntil, getSchedule, initials, type System } from "../data/systems";
 import { formatShort, plural, timeAgo } from "../time";
 import type { User } from "../data/roles";
@@ -11,6 +11,8 @@ interface Props {
   developers: User[]; // developers assigned to this project
   requests: number; // open update requests for this system
   mine: boolean; // the signed-in user is on this project or leads it
+  blockers?: string[]; // open blockers, as raised
+  stalled?: number | null; // days without a progress update, once that counts as stalled
   index?: number; // position in the grid, for the staggered entrance
   onSelect: (s: System) => void;
 }
@@ -79,12 +81,17 @@ export function updatedText(s: System, now: number): string {
   return !s.updatedAt && new Date(at).getTime() > now ? "No updates yet" : `Updated ${timeAgo(at, now)}`;
 }
 
-export default function SystemCard({ system, now, lead, developers, requests, mine, index = 0, onSelect }: Props) {
+export default function SystemCard({ system, now, lead, developers, requests, mine, blockers = [], stalled = null, index = 0, onSelect }: Props) {
   const maintenance = system.health === "Maintenance";
+  const blocked = blockers.length > 0;
   return (
     <article
-      className={`card ${mine ? "mine" : ""} ${maintenance ? "maint" : ""}`}
+      className={`card ${mine ? "mine" : ""} ${maintenance ? "maint" : ""} ${blocked ? "blocked" : ""}`}
       style={{ ["--i" as string]: Math.min(index, 12) }}
+      // Clicking anywhere on the card opens the project; its own links and buttons keep their job.
+      onClick={(e) => {
+        if (!(e.target as HTMLElement).closest("a, button")) onSelect(system);
+      }}
       // Spotlight that follows the pointer (drawn by .card::before).
       onPointerMove={(e) => {
         const r = e.currentTarget.getBoundingClientRect();
@@ -96,6 +103,22 @@ export default function SystemCard({ system, now, lead, developers, requests, mi
         <h3>{system.name}</h3>
         <StatusPill status={system.status} />
       </header>
+      {(blocked || stalled !== null) && (
+        <div className={`card-blocker ${blocked ? "" : "stalled"}`} title={blockers.join("\n")}>
+          <AlertOctagon size={15} />
+          <span>
+            {blocked ? (
+              <>
+                <b>Blocked{blockers.length > 1 ? ` (${blockers.length})` : ""}:</b> {blockers[0]}
+              </>
+            ) : (
+              <>
+                <b>Stalled:</b> no progress update for {stalled} days
+              </>
+            )}
+          </span>
+        </div>
+      )}
       {(mine || requests > 0 || maintenance) && (
         <div className="card-flags">
           {maintenance && (
@@ -150,9 +173,18 @@ export default function SystemCard({ system, now, lead, developers, requests, mi
               <Mail size={16} />
             </a>
           )}
-          <button className="view-link" onClick={() => onSelect(system)}>
+          {/* A real link, so ctrl-click or middle-click opens the project in a new tab. */}
+          <a
+            className="view-link"
+            href={`#/projects/${system.id}`}
+            onClick={(e) => {
+              if (e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
+              e.preventDefault();
+              onSelect(system);
+            }}
+          >
             View <ChevronRight size={15} />
-          </button>
+          </a>
         </span>
       </footer>
     </article>
