@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertOctagon, Check, Copy, KeyRound, Pencil, Plus, Trash2, X } from "lucide-react";
+import { AlertOctagon, Check, Copy, KeyRound, Pencil, Plus, ShieldCheck, ShieldOff, Trash2, X } from "lucide-react";
 import { api } from "../data/api";
 import { initials, type System } from "../data/systems";
 import { timeAgo } from "../time";
@@ -8,6 +8,7 @@ import {
   ROLES,
   ROLE_LABEL,
   type Permission,
+  type MfaPolicy,
   type Role,
   type RolePermissions,
   type User,
@@ -20,11 +21,13 @@ interface Props {
   systems: System[];
   roleMatrix: RolePermissions;
   limits: Limits;
+  mfaPolicy: MfaPolicy;
   workload: (u: User) => Workload;
   onChanged: () => Promise<void>;
 }
 
-export default function UsersPage({ me, users, systems, roleMatrix, limits, workload, onChanged }: Props) {
+export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaPolicy, workload, onChanged }: Props) {
+  const [mfaResetting, setMfaResetting] = useState<string | null>(null);
   // Last sign-in is only sent to people who can view the activity log.
   const showLastLogin = users.some((u) => u.lastLogin !== undefined) || me.lastLogin !== undefined;
   const [editing, setEditing] = useState<User | "new" | null>(null);
@@ -88,6 +91,13 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, work
                 <td>
                   <span className={`role-chip role-${u.role}`}>{ROLE_LABEL[u.role]}</span>
                   {u.mustChangePassword && <span className="flag flag-request pw-pending">Must set a new password</span>}
+                  {u.mfaEnabled ? (
+                    <span className="flag flag-mfa" title="Signs in with an authenticator app code">
+                      <ShieldCheck size={12} /> 2-step on
+                    </span>
+                  ) : (
+                    mfaPolicy.roles.includes(u.role) && <span className="flag flag-request">2-step required, not set up</span>
+                  )}
                 </td>
                 <td>{u.role === "developer" ? projectNames(u.projectIds) || <i className="muted">Not assigned</i> : "—"}</td>
                 <td>
@@ -135,6 +145,16 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, work
                           Reset
                         </button>
                       </>
+                    ) : mfaResetting === u.id ? (
+                      <>
+                        <span className="confirm-inline">Reset {u.name}'s two-step verification? They'll be signed out and set it up again.</span>
+                        <button className="btn btn-ghost sm" onClick={() => setMfaResetting(null)}>
+                          Cancel
+                        </button>
+                        <button className="btn btn-navy sm" onClick={() => run(() => api(`/users/${u.id}/mfa`, "DELETE")).then(() => setMfaResetting(null))}>
+                          Reset
+                        </button>
+                      </>
                     ) : deleting === u.id ? (
                       <>
                         <span className="confirm-inline">Delete {u.name}?</span>
@@ -166,6 +186,20 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, work
                             <KeyRound size={15} />
                           </button>
                         )}
+                        {u.id !== me.id && u.mfaEnabled && (
+                          <button
+                            className="icon-link"
+                            onClick={() => {
+                              setResetting(null);
+                              setDeleting(null);
+                              setMfaResetting(u.id);
+                            }}
+                            aria-label={`Reset ${u.name}'s two-step verification`}
+                            title="Reset two-step verification (lost phone)"
+                          >
+                            <ShieldOff size={15} />
+                          </button>
+                        )}
                         {u.id !== me.id && (
                           <button
                             className="icon-link danger"
@@ -185,6 +219,8 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, work
           </tbody>
         </table>
       </div>
+
+      <MfaPolicyEditor me={me} policy={mfaPolicy} users={users} onSave={(p) => run(() => api("/settings/mfa", "PUT", p))} />
 
       <LimitsEditor limits={limits} onSave={(l) => run(() => api("/settings/limits", "PUT", l))} />
 
@@ -207,6 +243,52 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, work
         />
       )}
     </div>
+  );
+}
+
+/** Which roles must sign in with two-step verification. */
+function MfaPolicyEditor({ me, policy, users, onSave }: { me: User; policy: MfaPolicy; users: User[]; onSave: (p: MfaPolicy) => Promise<boolean> }) {
+  const [draft, setDraft] = useState<Role[]>(policy.roles);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => setDraft(policy.roles), [policy]);
+  const dirty = [...draft].sort().join() !== [...policy.roles].sort().join();
+  const pending = (r: Role) => users.filter((u) => u.role === r && !u.mfaEnabled).length;
+  return (
+    <section className="matrix-section">
+      <header className="page-head">
+        <div>
+          <h2>Two-step verification</h2>
+          <p>
+            Required roles sign in with a password and a code from an authenticator app. Anyone without it set up is asked to set it
+            up before they can do anything else; everyone else can turn it on in Settings.
+          </p>
+        </div>
+        <button className="btn btn-navy" disabled={!dirty} onClick={async () => setSaved(await onSave({ roles: draft }))}>
+          {saved && !dirty ? "Saved" : "Save"}
+        </button>
+      </header>
+      <div className="set-card mfa-policy">
+        {ROLES.map((r) => (
+          <label key={r} className="mfa-check">
+            <input
+              type="checkbox"
+              checked={draft.includes(r)}
+              // Requiring it for your own role before you have it would lock you out of this page.
+              disabled={r === me.role && !me.mfaEnabled && !draft.includes(r)}
+              onChange={() => {
+                setSaved(false);
+                setDraft((d) => (d.includes(r) ? d.filter((x) => x !== r) : [...d, r]));
+              }}
+            />
+            Require for {ROLE_LABEL[r]}s
+            {r === me.role && !me.mfaEnabled && <em className="muted"> · turn it on for yourself in Settings first</em>}
+            <small>
+              {users.filter((u) => u.role === r).length - pending(r)} of {users.filter((u) => u.role === r).length} set up
+            </small>
+          </label>
+        ))}
+      </div>
+    </section>
   );
 }
 

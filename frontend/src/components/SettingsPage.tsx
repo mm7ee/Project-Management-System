@@ -9,11 +9,13 @@ import {
   Orbit,
   Palette,
   ShieldCheck,
+  Smartphone,
   Sparkles,
   Sun,
   UserRound,
 } from "lucide-react";
 import { api } from "../data/api";
+import MfaSetup, { RecoveryCodes } from "./MfaSetup";
 import { initials, type System } from "../data/systems";
 import { PERMISSIONS, ROLE_LABEL, type Permission, type Prefs, type User } from "../data/roles";
 
@@ -22,6 +24,8 @@ interface Props {
   prefs: Prefs;
   permissions: Permission[];
   projects: System[]; // assigned to or led by this user
+  mfaRequired: boolean; // an administrator requires two-step verification for this role
+  recoveryCodesLeft: number;
   onPrefs: (p: Prefs) => Promise<void>;
   onProfileSaved: () => Promise<void>;
   onSignedOut: () => void;
@@ -82,7 +86,7 @@ function strength(pw: string): number {
 }
 const STRENGTH = ["Too short", "Weak", "Fair", "Good", "Strong"];
 
-export default function SettingsPage({ me, prefs, permissions, projects, onPrefs, onProfileSaved, onSignedOut }: Props) {
+export default function SettingsPage({ me, prefs, permissions, projects, mfaRequired, recoveryCodesLeft, onPrefs, onProfileSaved, onSignedOut }: Props) {
   const [saved, setSaved] = useState(false);
   const [email, setEmail] = useState(me.email ?? "");
   const [phone, setPhone] = useState(me.phone ?? "");
@@ -289,6 +293,8 @@ export default function SettingsPage({ me, prefs, permissions, projects, onPrefs
           </form>
         </Section>
 
+        <TwoStepSection me={me} required={mfaRequired} recoveryCodesLeft={recoveryCodesLeft} onChanged={onProfileSaved} />
+
         <Section icon={<ShieldCheck size={18} />} title="Your access" sub={`What the ${ROLE_LABEL[me.role]} role can do. An administrator manages roles.`}>
           <ul className="perm-list plain">
             <li className="perm-item">
@@ -339,5 +345,121 @@ export default function SettingsPage({ me, prefs, permissions, projects, onPrefs
         </Section>
       </div>
     </div>
+  );
+}
+
+/** Turn two-step verification on or off, and replace recovery codes. */
+function TwoStepSection({ me, required, recoveryCodesLeft, onChanged }: { me: User; required: boolean; recoveryCodesLeft: number; onChanged: () => Promise<void> }) {
+  const [mode, setMode] = useState<"idle" | "setup" | "disable" | "codes">("idle");
+  const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [fresh, setFresh] = useState<string[] | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const reset = () => {
+    setMode("idle");
+    setPassword("");
+    setCode("");
+    setFresh(null);
+  };
+  const attempt = async (fn: () => Promise<void>) => {
+    setMsg(null);
+    try {
+      await fn();
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof Error ? e.message : "Something went wrong" });
+    }
+  };
+
+  return (
+    <Section
+      icon={<Smartphone size={18} />}
+      title="Two-step verification"
+      sub="Sign in with your password and a code from an authenticator app, so a stolen password alone can't get in."
+    >
+      {me.mfaEnabled ? (
+        <>
+          <p className="form-ok">
+            <ShieldCheck size={16} /> On · {recoveryCodesLeft} recovery code{recoveryCodesLeft === 1 ? "" : "s"} left
+            {required && " · required for your role"}
+          </p>
+          {recoveryCodesLeft <= 3 && mode === "idle" && <p className="form-warn">You're running low on recovery codes. Make new ones below.</p>}
+          {mode === "codes" && fresh ? (
+            <>
+              <p className="set-note">Your old recovery codes no longer work. Save these:</p>
+              <RecoveryCodes codes={fresh} username={me.username} />
+              <button className="btn btn-navy" onClick={() => onChanged().then(reset)}>
+                Done
+              </button>
+            </>
+          ) : mode === "codes" || mode === "disable" ? (
+            <form
+              className="set-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                attempt(async () => {
+                  if (mode === "codes") {
+                    setFresh((await api<{ recoveryCodes: string[] }>("/me/mfa/recovery", "POST", { code })).recoveryCodes);
+                  } else {
+                    await api("/me/mfa/disable", "POST", { password, code });
+                    await onChanged();
+                    reset();
+                    setMsg({ ok: true, text: "Two-step verification is off." });
+                  }
+                });
+              }}
+            >
+              {mode === "disable" && (
+                <label className="field">
+                  <span>Your password</span>
+                  <input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+                </label>
+              )}
+              <label className="field">
+                <span>{mode === "codes" ? "Current code from your app" : "Code from your app (or a recovery code)"}</span>
+                <input autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} placeholder="123 456" />
+              </label>
+              <div className="page-actions">
+                <button type="submit" className={`btn ${mode === "disable" ? "btn-danger" : "btn-navy"}`}>
+                  {mode === "disable" ? "Turn off" : "Make new codes"}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={reset}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="page-actions">
+              <button className="btn btn-ghost" onClick={() => setMode("codes")}>
+                <KeyRound size={15} /> New recovery codes
+              </button>
+              {!required && (
+                <button className="btn btn-ghost danger-text" onClick={() => setMode("disable")}>
+                  Turn off
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      ) : mode === "setup" ? (
+        <MfaSetup
+          username={me.username}
+          onCancel={reset}
+          onDone={() =>
+            onChanged().then(() => {
+              reset();
+              setMsg({ ok: true, text: "Two-step verification is on. You'll be asked for a code next time you sign in." });
+            })
+          }
+        />
+      ) : (
+        <>
+          <p className="set-note">Off. Anyone with your password can sign in as you.</p>
+          <button className="btn btn-navy" onClick={() => setMode("setup")}>
+            <ShieldCheck size={16} /> Turn on
+          </button>
+        </>
+      )}
+      {msg && <p className={msg.ok ? "form-ok" : "form-error"}>{msg.text}</p>}
+    </Section>
   );
 }

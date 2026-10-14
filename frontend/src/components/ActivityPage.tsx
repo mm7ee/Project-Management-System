@@ -75,9 +75,31 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
   const name = str(d.name) || sysName(e.target);
   switch (e.action) {
     case "login":
-      return d.temporaryPassword ? "Signed in with a temporary password" : "Signed in";
+      return d.temporaryPassword
+        ? "Signed in with a temporary password"
+        : d.twoStep === "recovery"
+          ? "Signed in with a recovery code"
+          : d.twoStep
+            ? "Signed in with two-step verification"
+            : "Signed in";
     case "login_failed":
-      return e.userId ? "Failed sign-in: wrong password" : `Failed sign-in: unknown username "${str(d.username)}"`;
+      return d.reason
+        ? `Failed sign-in: ${str(d.reason)}`
+        : e.userId
+          ? "Failed sign-in: wrong password"
+          : `Failed sign-in: unknown username "${str(d.username)}"`;
+    case "mfa_enabled":
+      return "Turned on two-step verification";
+    case "mfa_disabled":
+      return "Turned off two-step verification";
+    case "mfa_recovery_regenerated":
+      return "Made new two-step recovery codes";
+    case "mfa_reset":
+      return `Reset two-step verification for ${str(d.name)}`;
+    case "mfa_policy_updated": {
+      const to = (d.to as string[] | undefined) ?? [];
+      return to.length ? `Required two-step verification for: ${to.map(roleLabel).join(", ")}` : "Made two-step verification optional for everyone";
+    }
     case "logout":
       return "Signed out";
     case "logout_all":

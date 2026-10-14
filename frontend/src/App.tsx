@@ -13,6 +13,7 @@ import AddSystemModal from "./components/AddSystemModal";
 import SettingsPage from "./components/SettingsPage";
 import FuturisticBackdrop from "./components/FuturisticBackdrop";
 import ForcePasswordChange from "./components/ForcePasswordChange";
+import ForceMfaSetup from "./components/ForceMfaSetup";
 import ActivityPage from "./components/ActivityPage";
 import Login from "./components/Login";
 import UsersPage from "./components/UsersPage";
@@ -30,7 +31,7 @@ import type { User } from "./data/roles";
 const projectInHash = () => window.location.hash.match(/^#\/projects\/([a-z0-9-]+)$/)?.[1] ?? null;
 
 export default function App() {
-  const { data, mustChange, loading, reload } = useAppData();
+  const { data, mustChange, mfaSetup, loading, reload } = useAppData();
   return (
     <>
       {loading ? (
@@ -39,6 +40,8 @@ export default function App() {
         <Dashboard data={data} reload={reload} />
       ) : mustChange ? (
         <ForcePasswordChange message={mustChange} onDone={reload} />
+      ) : mfaSetup ? (
+        <ForceMfaSetup message={mfaSetup} onDone={reload} />
       ) : (
         <Login onSignedIn={reload} />
       )}
@@ -305,6 +308,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             prefs={prefs}
             permissions={data.permissions}
             projects={myProjects}
+            mfaRequired={data.mfaPolicy.roles.includes(me.role)}
+            recoveryCodesLeft={data.recoveryCodesLeft}
             onPrefs={savePrefs}
             onProfileSaved={reload}
             onSignedOut={reload}
@@ -329,6 +334,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             systems={systems}
             roleMatrix={data.roleMatrix}
             limits={limits}
+            mfaPolicy={data.mfaPolicy}
             workload={(u) => workloadOf(u, systems, features, limits, now)}
             onChanged={reload}
           />

@@ -59,12 +59,18 @@ export interface User {
   role: Role;
   projectIds?: string[]; // developers only: the projects they're assigned to
   mustChangePassword?: boolean; // reset by an admin; must choose a new password at sign-in
+  mfaEnabled?: boolean; // signs in with a code from an authenticator app as well as the password
   lastLogin?: string; // ISO; only sent to people who can view the activity log
 }
 
 /** A developer on the project, or its lead: what "Assigned to me" shows. */
 export function isAssigned(user: User, system: { id: string; lead?: string }): boolean {
   return system.lead === user.id || !!user.projectIds?.includes(system.id);
+}
+
+/** Roles that must use two-step verification. Set by an administrator. */
+export interface MfaPolicy {
+  roles: Role[];
 }
 
 /** One line of the activity log. `detail` holds names and before/after values for display. */

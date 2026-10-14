@@ -26,4 +26,5 @@ interface Fetcher {
 interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
+  MFA_KEY?: string; // encrypts two-step verification secrets; a Worker secret (.dev.vars locally)
 }

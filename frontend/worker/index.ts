@@ -1,7 +1,20 @@
 // OmniTrack Worker: serves the built app (ASSETS) and the JSON API under /api.
 // Every permission check happens here; the UI only hides what a user can't do.
 
-import { hashPassword, newToken, tempPassword, tokenHash, verifyPassword } from "./auth";
+import {
+  hashPassword,
+  newRecoveryCodes,
+  newToken,
+  newTotpSecret,
+  normalizeRecoveryCode,
+  openSecret,
+  sealSecret,
+  tempPassword,
+  tokenHash,
+  totpUri,
+  verifyPassword,
+  verifyTotp,
+} from "./auth";
 import { STATUS_META, initials, type Status, type System } from "../src/data/systems";
 import {
   FEATURE_KINDS,
@@ -16,6 +29,8 @@ import { DEFAULT_LIMITS, MAX_DOCUMENT_BYTES, formatBytes, type Blocker, type Lim
 import {
   DEFAULT_ROLE_PERMISSIONS,
   ROLES,
+  ROLE_LABEL,
+  type MfaPolicy,
   START_KEYS,
   cleanPrefs,
   permissionsFor,
@@ -49,6 +64,10 @@ interface UserRow {
   password_hash: string;
   prefs: string;
   must_change_password: number;
+  mfa_secret: string | null;
+  mfa_pending: string | null;
+  mfa_last_step: number;
+  mfa_enabled_at: string | null;
 }
 
 const toUser = (r: UserRow, projectIds: string[] = []): User => ({
@@ -61,6 +80,7 @@ const toUser = (r: UserRow, projectIds: string[] = []): User => ({
   ...(r.phone ? { phone: r.phone } : {}),
   ...(projectIds.length ? { projectIds } : {}),
   ...(r.must_change_password ? { mustChangePassword: true } : {}),
+  ...(r.mfa_secret ? { mfaEnabled: true } : {}),
 });
 
 interface FeatureRow {
@@ -126,6 +146,68 @@ function sessionCookie(token: string, req: Request, maxAge: number): string {
 async function roleMatrix(db: D1Database): Promise<RolePermissions> {
   const row = await db.prepare("SELECT value FROM settings WHERE key = 'role_permissions'").first<{ value: string }>();
   return row ? { ...DEFAULT_ROLE_PERMISSIONS, ...JSON.parse(row.value) } : DEFAULT_ROLE_PERMISSIONS;
+}
+
+// ---------- two-step verification ----------
+
+const MFA_TICKET_MINUTES = 5;
+const MFA_MAX_ATTEMPTS = 5;
+
+function mfaKey(env: Env): string {
+  if (!env.MFA_KEY) throw new HttpError(500, "Two-step verification isn't configured on the server (MFA_KEY is missing)");
+  return env.MFA_KEY;
+}
+
+/** Which roles must use two-step verification. Set by an admin; nobody until then. */
+async function mfaPolicy(db: D1Database): Promise<MfaPolicy> {
+  const row = await db.prepare("SELECT value FROM settings WHERE key = 'mfa_policy'").first<{ value: string }>();
+  const roles = row ? (JSON.parse(row.value).roles as unknown[]) : [];
+  return { roles: ROLES.filter((r) => roles.includes(r)) };
+}
+
+/**
+ * Accepts a current authenticator code (once only) or an unused recovery code.
+ * Returns how the user got in ("app" or "recovery"), or null.
+ */
+async function checkSecondFactor(db: D1Database, env: Env, row: UserRow, code: string): Promise<"app" | "recovery" | null> {
+  if (!row.mfa_secret) return null;
+  const step = await verifyTotp(await openSecret(row.mfa_secret, mfaKey(env)), code);
+  if (step !== null) {
+    // Each code works once, even inside its 30-second window.
+    const claimed = await db.prepare("UPDATE users SET mfa_last_step = ? WHERE id = ? AND mfa_last_step < ?").bind(step, row.id, step).run();
+    return claimed.meta.changes ? "app" : null;
+  }
+  const recovery = normalizeRecoveryCode(code);
+  if (recovery.length !== 8) return null;
+  const spent = await db
+    .prepare("UPDATE mfa_recovery SET used_at = ? WHERE user_id = ? AND code_hash = ? AND used_at IS NULL")
+    .bind(new Date().toISOString(), row.id, await tokenHash(recovery))
+    .run();
+  return spent.meta.changes ? "recovery" : null;
+}
+
+/** Stores fresh recovery codes (hashed) in place of any old ones and returns them, shown once. */
+async function issueRecoveryCodes(db: D1Database, userId: string): Promise<string[]> {
+  const codes = newRecoveryCodes();
+  await db.batch([
+    db.prepare("DELETE FROM mfa_recovery WHERE user_id = ?").bind(userId),
+    ...(await Promise.all(
+      codes.map(async (c) => db.prepare("INSERT INTO mfa_recovery (user_id, code_hash) VALUES (?, ?)").bind(userId, await tokenHash(normalizeRecoveryCode(c)))),
+    )),
+  ]);
+  return codes;
+}
+
+async function startSession(db: D1Database, req: Request, row: UserRow, detail: Record<string, unknown>): Promise<Response> {
+  const token = newToken();
+  await db
+    .prepare("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)")
+    .bind(await tokenHash(token), row.id, Date.now() + SESSION_DAYS * 86_400_000)
+    .run();
+  await db.prepare("DELETE FROM sessions WHERE expires_at < ?").bind(Date.now()).run();
+  await audit(db, req, row, "login", null, { ...detail, ...(row.must_change_password ? { temporaryPassword: true } : {}) });
+  await db.prepare("DELETE FROM activity WHERE at < ?").bind(new Date(Date.now() - AUDIT_DAYS * 86_400_000).toISOString()).run();
+  return json({ ok: true }, 200, { "set-cookie": sessionCookie(token, req, SESSION_DAYS * 86_400) });
 }
 
 async function workloadLimits(db: D1Database): Promise<Limits> {
@@ -244,11 +326,11 @@ async function audit(
 const ACTIVITY_KINDS: Record<string, string[]> = {
   signin: ["login", "logout", "logout_all"],
   failed: ["login_failed"],
-  account: ["password_changed", "password_set_after_reset", "profile_updated"],
+  account: ["password_changed", "password_set_after_reset", "profile_updated", "mfa_enabled", "mfa_disabled", "mfa_recovery_regenerated"],
   systems: ["system_created", "system_progress", "system_updated", "system_developers", "system_deleted", "request_created", "request_dismissed"],
   features: ["feature_created", "feature_updated", "feature_deleted"],
   project: ["document_added", "document_removed", "blocker_raised", "blocker_resolved", "blocker_reopened", "blocker_deleted"],
-  admin: ["user_created", "user_updated", "user_password_reset", "user_deleted", "roles_updated", "limits_updated"],
+  admin: ["user_created", "user_updated", "user_password_reset", "user_deleted", "roles_updated", "limits_updated", "mfa_reset", "mfa_policy_updated"],
 };
 
 // ---------- the API ----------
@@ -269,15 +351,44 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       await audit(db, req, { id: row?.id ?? null, name: row?.name ?? (tried || "(blank)") }, "login_failed", null, { username: tried });
       throw new HttpError(401, "Wrong username or password");
     }
-    const token = newToken();
-    await db
-      .prepare("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)")
-      .bind(await tokenHash(token), row.id, Date.now() + SESSION_DAYS * 86_400_000)
-      .run();
-    await db.prepare("DELETE FROM sessions WHERE expires_at < ?").bind(Date.now()).run();
-    await audit(db, req, row, "login", null, row.must_change_password ? { temporaryPassword: true } : {});
-    await db.prepare("DELETE FROM activity WHERE at < ?").bind(new Date(Date.now() - AUDIT_DAYS * 86_400_000).toISOString()).run();
-    return json({ ok: true }, 200, { "set-cookie": sessionCookie(token, req, SESSION_DAYS * 86_400) });
+    // With two-step verification on, the right password only earns a short-lived ticket to
+    // trade for a session together with a code from the authenticator app.
+    if (row.mfa_secret) {
+      const ticket = newToken();
+      await db.batch([
+        db.prepare("DELETE FROM mfa_challenges WHERE expires_at < ? OR user_id = ?").bind(Date.now(), row.id),
+        db
+          .prepare("INSERT INTO mfa_challenges (token_hash, user_id, expires_at) VALUES (?, ?, ?)")
+          .bind(await tokenHash(ticket), row.id, Date.now() + MFA_TICKET_MINUTES * 60_000),
+      ]);
+      return json({ mfa: true, ticket });
+    }
+    return startSession(db, req, row, {});
+  }
+
+  if (path === "/api/login/mfa" && method === "POST") {
+    const b = await body<{ ticket?: string; code?: string }>(req);
+    const hash = await tokenHash(String(b.ticket ?? ""));
+    const challenge = await db
+      .prepare("SELECT * FROM mfa_challenges WHERE token_hash = ? AND expires_at > ?")
+      .bind(hash, Date.now())
+      .first<{ user_id: string; attempts: number }>();
+    if (!challenge) throw new HttpError(401, "That sign-in has expired. Enter your password again.", "mfa_expired");
+    const row = await db.prepare("SELECT * FROM users WHERE id = ?").bind(challenge.user_id).first<UserRow>();
+    if (!row?.mfa_secret) throw new HttpError(401, "That sign-in has expired. Enter your password again.", "mfa_expired");
+    const used = await checkSecondFactor(db, env, row, String(b.code ?? ""));
+    if (!used) {
+      const attempts = challenge.attempts + 1;
+      await audit(db, req, row, "login_failed", null, { username: row.username, reason: "wrong two-step code" });
+      if (attempts >= MFA_MAX_ATTEMPTS) {
+        await db.prepare("DELETE FROM mfa_challenges WHERE token_hash = ?").bind(hash).run();
+        throw new HttpError(401, "Too many wrong codes. Enter your password again.", "mfa_expired");
+      }
+      await db.prepare("UPDATE mfa_challenges SET attempts = ? WHERE token_hash = ?").bind(attempts, hash).run();
+      throw new HttpError(401, `That code didn't work. ${MFA_MAX_ATTEMPTS - attempts} ${MFA_MAX_ATTEMPTS - attempts === 1 ? "try" : "tries"} left.`);
+    }
+    await db.prepare("DELETE FROM mfa_challenges WHERE token_hash = ?").bind(hash).run();
+    return startSession(db, req, row, { twoStep: used });
   }
 
   if (path === "/api/logout" && method === "POST") {
@@ -302,6 +413,12 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   if (me.must_change_password && !["/api/me/password", "/api/logout", "/api/logout-all"].includes(path)) {
     throw new HttpError(403, `Hi ${me.name}, you signed in with a temporary password`, "password_change_required");
   }
+  // When the admin requires two-step verification for this role, nothing works until it's set up.
+  const policy = await mfaPolicy(db);
+  if (!me.mfa_secret && policy.roles.includes(me.role) && !["/api/me/mfa/setup", "/api/me/mfa/enable", "/api/logout", "/api/logout-all"].includes(path)) {
+    throw new HttpError(403, `Hi ${me.name}, your organisation requires two-step verification. Set it up to continue.`, "mfa_setup_required");
+  }
+
   const matrix = await roleMatrix(db);
   const perms = permissionsFor(me.role, matrix);
   const can = (p: Permission) => perms.includes(p);
@@ -309,6 +426,86 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     if (!can(p)) throw new HttpError(403, "You don't have permission to do that");
   };
   const now = new Date().toISOString();
+
+  // ----- two-step verification: your own -----
+  if (path === "/api/me/mfa/setup" && method === "POST") {
+    if (me.mfa_secret) throw new HttpError(400, "Two-step verification is already on");
+    const secret = newTotpSecret();
+    await db.prepare("UPDATE users SET mfa_pending = ? WHERE id = ?").bind(await sealSecret(secret, mfaKey(env)), me.id).run();
+    return json({ secret, uri: totpUri(secret, me.username) });
+  }
+
+  if (path === "/api/me/mfa/enable" && method === "POST") {
+    if (me.mfa_secret) throw new HttpError(400, "Two-step verification is already on");
+    if (!me.mfa_pending) throw new HttpError(400, "Start the setup again");
+    const { code } = await body<{ code?: string }>(req);
+    const step = await verifyTotp(await openSecret(me.mfa_pending, mfaKey(env)), String(code ?? ""));
+    if (step === null) throw new HttpError(400, "That code didn't match. Check the time on your phone and try the newest code.");
+    await db
+      .prepare("UPDATE users SET mfa_secret = mfa_pending, mfa_pending = NULL, mfa_last_step = ?, mfa_enabled_at = ? WHERE id = ?")
+      .bind(step, now, me.id)
+      .run();
+    const recoveryCodes = await issueRecoveryCodes(db, me.id);
+    await audit(db, req, me, "mfa_enabled", me.id, { name: me.name });
+    return json({ recoveryCodes });
+  }
+
+  if (path === "/api/me/mfa/recovery" && method === "POST") {
+    const { code } = await body<{ code?: string }>(req);
+    if ((await checkSecondFactor(db, env, me, String(code ?? ""))) !== "app") throw new HttpError(400, "Enter the current code from your authenticator app");
+    const recoveryCodes = await issueRecoveryCodes(db, me.id);
+    await audit(db, req, me, "mfa_recovery_regenerated", me.id, { name: me.name });
+    return json({ recoveryCodes });
+  }
+
+  if (path === "/api/me/mfa/disable" && method === "POST") {
+    if (!me.mfa_secret) throw new HttpError(400, "Two-step verification is already off");
+    if (policy.roles.includes(me.role)) throw new HttpError(400, `Two-step verification is required for ${ROLE_LABEL[me.role]} accounts`);
+    const b = await body<{ password?: string; code?: string }>(req);
+    if (!(await verifyPassword(String(b.password ?? ""), me.password_hash))) throw new HttpError(400, "Password is wrong");
+    if (!(await checkSecondFactor(db, env, me, String(b.code ?? "")))) throw new HttpError(400, "That code didn't work");
+    await db.batch([
+      db.prepare("UPDATE users SET mfa_secret = NULL, mfa_pending = NULL, mfa_last_step = 0, mfa_enabled_at = NULL WHERE id = ?").bind(me.id),
+      db.prepare("DELETE FROM mfa_recovery WHERE user_id = ?").bind(me.id),
+    ]);
+    await audit(db, req, me, "mfa_disabled", me.id, { name: me.name });
+    return json({ ok: true });
+  }
+
+  // ----- two-step verification: administration -----
+  const mfaResetMatch = path.match(/^\/api\/users\/([a-z0-9._-]+)\/mfa$/);
+  if (mfaResetMatch && method === "DELETE") {
+    need("manage_users");
+    // Your own goes through Settings, with a code: a stolen admin session can't strip it.
+    if (mfaResetMatch[1] === me.id) throw new HttpError(400, "Turn off your own two-step verification in Settings");
+    const row = await db.prepare("SELECT id, name, mfa_secret FROM users WHERE id = ?").bind(mfaResetMatch[1]).first<{ id: string; name: string; mfa_secret: string | null }>();
+    if (!row) throw new HttpError(404, "User not found");
+    await db.batch([
+      db.prepare("UPDATE users SET mfa_secret = NULL, mfa_pending = NULL, mfa_last_step = 0, mfa_enabled_at = NULL WHERE id = ?").bind(row.id),
+      db.prepare("DELETE FROM mfa_recovery WHERE user_id = ?").bind(row.id),
+      db.prepare("DELETE FROM mfa_challenges WHERE user_id = ?").bind(row.id),
+      db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(row.id),
+    ]);
+    await audit(db, req, me, "mfa_reset", row.id, { name: row.name });
+    return json({ ok: true });
+  }
+
+  if (path === "/api/settings/mfa" && method === "PUT") {
+    need("manage_users");
+    const b = await body<{ roles?: unknown }>(req);
+    if (!Array.isArray(b.roles)) throw new HttpError(400, "Roles must be a list");
+    const next: MfaPolicy = { roles: ROLES.filter((r) => (b.roles as unknown[]).includes(r)) };
+    // Requiring it for your own role before you have it would lock you into the setup screen.
+    if (next.roles.includes(me.role) && !me.mfa_secret) {
+      throw new HttpError(400, `Turn on two-step verification for yourself first (Settings), then require it for ${ROLE_LABEL[me.role]}s`);
+    }
+    await db
+      .prepare("INSERT INTO settings (key, value) VALUES ('mfa_policy', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+      .bind(JSON.stringify(next))
+      .run();
+    await audit(db, req, me, "mfa_policy_updated", null, { from: policy.roles, to: next.roles });
+    return json(next);
+  }
 
   if (path === "/api/data" && method === "GET") {
     const [systems, users, requests, assigned, features, documents, blockers, limits] = await Promise.all([
@@ -375,6 +572,10 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
         }),
       ),
       limits,
+      mfaPolicy: policy,
+      recoveryCodesLeft: me.mfa_secret
+        ? (await db.prepare("SELECT COUNT(*) AS n FROM mfa_recovery WHERE user_id = ? AND used_at IS NULL").bind(me.id).first<{ n: number }>())!.n
+        : 0,
     });
   }
 
@@ -1008,6 +1209,8 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     if (row.role === "admin" && (await adminCount(db)) <= 1) throw new HttpError(400, "There must always be at least one administrator");
     await db.batch([
       db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(userMatch[1]),
+      db.prepare("DELETE FROM mfa_recovery WHERE user_id = ?").bind(userMatch[1]),
+      db.prepare("DELETE FROM mfa_challenges WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM requests WHERE requested_by = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM assignments WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("UPDATE features SET assignee = NULL WHERE assignee = ?").bind(userMatch[1]),

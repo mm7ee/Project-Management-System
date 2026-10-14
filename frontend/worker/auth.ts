@@ -50,3 +50,104 @@ export const newToken = () => toHex(crypto.getRandomValues(new Uint8Array(32)));
 export async function tokenHash(token: string): Promise<string> {
   return toHex(await crypto.subtle.digest("SHA-256", enc.encode(token)));
 }
+
+// ---------- Two-step verification (TOTP, RFC 6238) ----------
+// Authenticator apps (Microsoft/Google Authenticator, 1Password, ...) show a 6-digit code that
+// changes every 30 seconds, derived from a secret shared once at setup via a QR code.
+
+const B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+const TOTP_STEP = 30;
+
+export function base32Encode(bytes: Uint8Array): string {
+  let bits = 0;
+  let value = 0;
+  let out = "";
+  for (const b of bytes) {
+    value = (value << 8) | b;
+    bits += 8;
+    while (bits >= 5) {
+      out += B32[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) out += B32[(value << (5 - bits)) & 31];
+  return out;
+}
+
+function base32Decode(text: string): Uint8Array {
+  const clean = text.toUpperCase().replace(/[^A-Z2-7]/g, "");
+  const out: number[] = [];
+  let bits = 0;
+  let value = 0;
+  for (const c of clean) {
+    value = (value << 5) | B32.indexOf(c);
+    bits += 5;
+    if (bits >= 8) {
+      out.push((value >>> (bits - 8)) & 255);
+      bits -= 8;
+    }
+  }
+  return new Uint8Array(out);
+}
+
+/** A new 160-bit secret, base32 as authenticator apps expect. */
+export const newTotpSecret = () => base32Encode(crypto.getRandomValues(new Uint8Array(20)));
+
+async function hotp(secret: string, counter: number): Promise<string> {
+  const key = await crypto.subtle.importKey("raw", base32Decode(secret), { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
+  const msg = new DataView(new ArrayBuffer(8));
+  msg.setUint32(0, Math.floor(counter / 2 ** 32));
+  msg.setUint32(4, counter >>> 0);
+  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", key, msg.buffer));
+  const off = mac[mac.length - 1] & 15;
+  const n = ((mac[off] & 127) << 24) | (mac[off + 1] << 16) | (mac[off + 2] << 8) | mac[off + 3];
+  return String(n % 1_000_000).padStart(6, "0");
+}
+
+/**
+ * Checks a 6-digit code against the current 30-second step and one either side (clock drift).
+ * Returns the matching step so the caller can refuse it a second time, or null.
+ */
+export async function verifyTotp(secret: string, code: string, now = Date.now()): Promise<number | null> {
+  const digits = code.replace(/\s/g, "");
+  if (!/^\d{6}$/.test(digits)) return null;
+  const step = Math.floor(now / 1000 / TOTP_STEP);
+  for (const s of [step, step - 1, step + 1]) if ((await hotp(secret, s)) === digits) return s;
+  return null;
+}
+
+/** otpauth:// link the QR code encodes. */
+export const totpUri = (secret: string, account: string) =>
+  `otpauth://totp/${encodeURIComponent(`OmniTrack:${account}`)}?secret=${secret}&issuer=OmniTrack&algorithm=SHA1&digits=6&period=${TOTP_STEP}`;
+
+/** Ten single-use recovery codes like "k7mq-2xpd", for when the phone is lost. */
+export function newRecoveryCodes(): string[] {
+  const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
+  return Array.from({ length: 10 }, () => {
+    const b = crypto.getRandomValues(new Uint8Array(8));
+    const s = [...b].map((x) => alphabet[x % alphabet.length]).join("");
+    return `${s.slice(0, 4)}-${s.slice(4)}`;
+  });
+}
+
+export const normalizeRecoveryCode = (code: string) => code.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+// Secrets are encrypted at rest (AES-GCM) with a key that lives only in the Worker's MFA_KEY
+// secret, so a copy of the database alone can't generate anyone's codes.
+async function aesKey(secret: string): Promise<CryptoKey> {
+  const raw = await crypto.subtle.digest("SHA-256", enc.encode(secret));
+  return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+}
+
+export async function sealSecret(plain: string, keySecret: string): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await aesKey(keySecret), enc.encode(plain));
+  return `v1$${toHex(iv)}$${toHex(data)}`;
+}
+
+export async function openSecret(sealed: string, keySecret: string): Promise<string> {
+  const [v, iv, data] = sealed.split("$");
+  if (v !== "v1") throw new Error("Unknown secret format");
+  const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromHex(iv) }, await aesKey(keySecret), fromHex(data));
+  return new TextDecoder().decode(plain);
+}

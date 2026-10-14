@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, BellRing, FileBarChart, LockKeyhole, Radio, ShieldCheck, UserRound } from "lucide-react";
-import { api } from "../data/api";
+import { ArrowRight, BellRing, FileBarChart, KeyRound, LockKeyhole, Radio, ShieldCheck, UserRound } from "lucide-react";
+import { ApiError, api } from "../data/api";
 import { COMPANY_URL } from "../brand";
 import ParticleField from "./ParticleField";
 import "./landing.css";
@@ -30,7 +30,19 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Set once the password checked out for an account with two-step verification.
+  const [ticket, setTicket] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+  const [useRecovery, setUseRecovery] = useState(false);
   const word = useRotatingWord();
+
+  const backToPassword = (message = "") => {
+    setTicket(null);
+    setCode("");
+    setUseRecovery(false);
+    setPassword("");
+    setError(message);
+  };
 
   return (
     <div className="landing">
@@ -107,6 +119,74 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
             </span>
           </div>
 
+          {ticket ? (
+            <form
+              className="lp-card"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setBusy(true);
+                setError("");
+                try {
+                  await api("/login/mfa", "POST", { ticket, code });
+                  onSignedIn();
+                } catch (err) {
+                  setBusy(false);
+                  if (err instanceof ApiError && err.code === "mfa_expired") return backToPassword(err.message);
+                  setError(err instanceof Error ? err.message : "Sign-in failed");
+                  setCode("");
+                }
+              }}
+            >
+              <div className="lp-card-head">
+                <span className="lp-card-icon">
+                  <ShieldCheck size={20} />
+                </span>
+                <div>
+                  <h2>Two-step verification</h2>
+                  <p>{useRecovery ? "Enter one of your recovery codes" : "Enter the 6-digit code from your authenticator app"}</p>
+                </div>
+              </div>
+              <label className="lp-field">
+                <span>{useRecovery ? "Recovery code" : "Code"}</span>
+                <span className="lp-input">
+                  <KeyRound size={17} />
+                  <input
+                    key={useRecovery ? "recovery" : "app"}
+                    autoFocus
+                    required
+                    autoComplete="one-time-code"
+                    inputMode={useRecovery ? "text" : "numeric"}
+                    maxLength={useRecovery ? 12 : 7}
+                    value={code}
+                    onChange={(e) => setCode(useRecovery ? e.target.value : e.target.value.replace(/[^\d ]/g, ""))}
+                    placeholder={useRecovery ? "xxxx-xxxx" : "123 456"}
+                  />
+                </span>
+              </label>
+              {error && (
+                <p className="lp-error" role="alert">
+                  {error}
+                </p>
+              )}
+              <button type="submit" className="lp-submit" disabled={busy}>
+                {busy ? "Checking…" : "Verify"} {!busy && <ArrowRight size={18} />}
+              </button>
+              <button
+                type="button"
+                className="lp-link"
+                onClick={() => {
+                  setUseRecovery((v) => !v);
+                  setCode("");
+                  setError("");
+                }}
+              >
+                {useRecovery ? "Use a code from the app instead" : "Lost your phone? Use a recovery code"}
+              </button>
+              <button type="button" className="lp-link" onClick={() => backToPassword()}>
+                Back
+              </button>
+            </form>
+          ) : (
           <form
             className="lp-card"
             onSubmit={async (e) => {
@@ -114,7 +194,12 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
               setBusy(true);
               setError("");
               try {
-                await api("/login", "POST", { username, password });
+                const r = await api<{ ok?: boolean; mfa?: boolean; ticket?: string }>("/login", "POST", { username, password });
+                if (r.mfa && r.ticket) {
+                  setTicket(r.ticket);
+                  setBusy(false);
+                  return;
+                }
                 onSignedIn();
               } catch (err) {
                 setError(err instanceof Error ? err.message : "Sign-in failed");
@@ -170,6 +255,7 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
             </button>
             <p className="lp-help">Need an account? Ask your OmniTrack administrator.</p>
           </form>
+          )}
         </section>
       </main>
 

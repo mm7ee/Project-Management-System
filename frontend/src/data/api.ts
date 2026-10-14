@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { System } from "./systems";
 import type { Feature } from "./features";
 import type { Blocker, Limits, ProjectDocument } from "./project";
-import type { Permission, Prefs, RolePermissions, UpdateRequest, User } from "./roles";
+import type { MfaPolicy, Permission, Prefs, RolePermissions, UpdateRequest, User } from "./roles";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code?: string) {
@@ -43,29 +43,38 @@ export interface AppData {
   documents: ProjectDocument[];
   blockers: Blocker[];
   limits: Limits;
+  mfaPolicy: MfaPolicy;
+  recoveryCodesLeft: number; // your unused two-step recovery codes
 }
 
 /**
  * Loads everything the signed-in user can see. `data` is null when signed out.
+ * `mfaSetup` is set when the user's role requires two-step verification and it isn't on yet.
  * `mustChange` is set when an administrator reset the password: the server refuses all data
  * until a new password is chosen.
  */
 export function useAppData() {
   const [data, setData] = useState<AppData | null>(null);
   const [mustChange, setMustChange] = useState<string | null>(null);
+  const [mfaSetup, setMfaSetup] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const reload = useCallback(async () => {
     try {
       setData(await api<AppData>("/data"));
       setMustChange(null);
+      setMfaSetup(null);
     } catch (e) {
+      setMustChange(null);
+      setMfaSetup(null);
       if (e instanceof ApiError && e.status === 401) {
         setData(null);
-        setMustChange(null);
       } else if (e instanceof ApiError && e.code === "password_change_required") {
         setData(null);
         setMustChange(e.message);
+      } else if (e instanceof ApiError && e.code === "mfa_setup_required") {
+        setData(null);
+        setMfaSetup(e.message);
       } else throw e;
     } finally {
       setLoading(false);
@@ -76,5 +85,5 @@ export function useAppData() {
     reload();
   }, [reload]);
 
-  return { data, mustChange, loading, reload };
+  return { data, mustChange, mfaSetup, loading, reload };
 }

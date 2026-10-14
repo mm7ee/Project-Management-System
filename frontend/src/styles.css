@@ -950,3 +950,32 @@ button, input, select, textarea { font: inherit; color: inherit; }
   .project-mono { width: 44px; height: 44px; font-size: 15px; }
 }
 .card-blocker.stalled { background: var(--tint-amber); color: var(--amber-ink); }
+
+/* ---------- Two-step verification ---------- */
+.mfa-setup { display: flex; flex-direction: column; gap: 12px; }
+.mfa-step-text { display: flex; align-items: flex-start; gap: 6px; font-size: 14px; line-height: 1.5; color: var(--text); }
+.mfa-step-text.small { font-size: 13px; color: var(--muted); }
+.mfa-step-text svg { flex: none; margin-top: 3px; }
+.mfa-scan { display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap; }
+.mfa-scan-text { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 10px; }
+/* QR codes need dark-on-light to scan, whatever the theme. */
+.mfa-qr { flex: none; width: 180px; height: 180px; padding: 6px; border-radius: 10px; background: #fff; border: 1px solid var(--border); }
+.mfa-qr svg { display: block; width: 100%; height: 100%; }
+.mfa-key { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.mfa-key code { padding: 6px 10px; border-radius: 8px; background: var(--track); color: var(--heading); font-size: 13.5px; letter-spacing: 0.04em; overflow-wrap: anywhere; }
+.mfa-code-input { max-width: 180px; font-size: 20px !important; letter-spacing: 0.2em; font-variant-numeric: tabular-nums; }
+.mfa-codes ol { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; margin: 0 0 10px; padding: 12px 16px 12px 36px; border-radius: 10px; background: var(--track); }
+.mfa-codes code { font-size: 14.5px; font-weight: 700; color: var(--heading); letter-spacing: 0.04em; }
+.mfa-check { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--text); cursor: pointer; }
+.mfa-check small { margin-left: auto; font-weight: 500; color: var(--faint); }
+.mfa-policy { display: flex; flex-direction: column; gap: 10px; padding: 16px; margin-bottom: 8px; }
+.flag-mfa { background: var(--tint-green); color: var(--green-ink); margin-left: 6px; }
+.form-ok svg, .form-warn svg { vertical-align: -3px; }
+.danger-text { color: var(--red); }
+.mfa-gate { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: var(--canvas); }
+.mfa-gate-card { width: min(560px, 100%); display: flex; flex-direction: column; gap: 14px; }
+.mfa-signout { align-self: center; }
+@media (max-width: 700px) {
+  .mfa-qr { width: 160px; height: 160px; }
+  .mfa-codes ol { grid-template-columns: minmax(0, 1fr); }
+}
