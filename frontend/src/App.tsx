@@ -14,6 +14,7 @@ import SettingsPage from "./components/SettingsPage";
 import FuturisticBackdrop from "./components/FuturisticBackdrop";
 import ForcePasswordChange from "./components/ForcePasswordChange";
 import ForceMfaSetup from "./components/ForceMfaSetup";
+import ExecutivePage from "./components/ExecutivePage";
 import ActivityPage from "./components/ActivityPage";
 import Login from "./components/Login";
 import UsersPage from "./components/UsersPage";
@@ -28,6 +29,9 @@ import type { User } from "./data/roles";
 
 // A project page has its own address (#/projects/<id>), so it can be bookmarked, opened in a
 // new tab and left with the browser's back button.
+// /executive is a separate, read-only overview for leadership. Signing in there lands on it.
+const isExecutive = () => /^\/executive\/?$/.test(window.location.pathname);
+
 const projectInHash = () => window.location.hash.match(/^#\/projects\/([a-z0-9-]+)$/)?.[1] ?? null;
 
 export default function App() {
@@ -37,7 +41,11 @@ export default function App() {
       {loading ? (
         <div className="splash">Loading…</div>
       ) : data ? (
-        <Dashboard data={data} reload={reload} />
+        isExecutive() ? (
+          <ExecutivePage data={data} />
+        ) : (
+          <Dashboard data={data} reload={reload} />
+        )
       ) : mustChange ? (
         <ForcePasswordChange message={mustChange} onDone={reload} />
       ) : mfaSetup ? (
