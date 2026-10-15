@@ -1079,3 +1079,17 @@ a.nav-item { text-decoration: none; }
 .rebalance-row small { color: var(--muted); }
 .dev-option.full { opacity: 0.6; cursor: not-allowed; }
 .choice button:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* ---------- Password policy ---------- */
+.pw-rules { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 14px; font-size: 13px; }
+.pw-rules li { display: flex; align-items: center; gap: 6px; color: var(--red-ink); }
+.pw-rules li.ok { color: var(--green-ink); }
+.pw-rules li svg { flex: none; }
+.pw-rules li.pw-note { color: var(--muted); padding-left: 19px; }
+.lp-rules { margin: -4px 0 4px; }
+.lp-rules li { color: #ffb4ae; }
+.lp-rules li.ok { color: #7fe0bd; }
+.lp-rules li.pw-note { color: rgba(255, 255, 255, 0.6); }
+.pw-issue { display: flex; gap: 8px; align-items: center; }
+.pw-issue input { flex: 1; min-width: 0; }
+@media (max-width: 700px) { .pw-rules { grid-template-columns: minmax(0, 1fr); } }

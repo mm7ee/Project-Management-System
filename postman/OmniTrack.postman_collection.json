@@ -2084,7 +2084,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
-                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"at least 8\"));"
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"at least 12 characters\"));"
                 ]
               }
             }
@@ -2408,7 +2408,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
-                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"at least 8\"));"
+                  "pm.test(\"error message\", () => pm.expect(pm.response.json().error).to.include(\"at least 12 characters\"));"
                 ]
               }
             }

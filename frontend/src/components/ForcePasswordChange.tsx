@@ -2,6 +2,8 @@ import { useState } from "react";
 import { ArrowRight, KeyRound, LockKeyhole } from "lucide-react";
 import { api } from "../data/api";
 import ParticleField from "./ParticleField";
+import PasswordRules from "./PasswordRules";
+import { PASSWORD_MIN, passwordProblem } from "../data/password";
 import "./landing.css";
 
 interface Props {
@@ -14,6 +16,8 @@ interface Props {
  * every other request until this succeeds, so the dashboard can't be reached around it.
  */
 export default function ForcePasswordChange({ message, onDone }: Props) {
+  // The server says why: an administrator-issued password, or one that predates the policy.
+  const policyChange = /password policy/i.test(message);
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
@@ -35,6 +39,7 @@ export default function ForcePasswordChange({ message, onDone }: Props) {
           onSubmit={async (e) => {
             e.preventDefault();
             if (next !== confirm) return setError("The two passwords don't match.");
+            if (passwordProblem(next)) return setError(passwordProblem(next)!);
             setBusy(true);
             setError("");
             try {
@@ -56,11 +61,14 @@ export default function ForcePasswordChange({ message, onDone }: Props) {
             </div>
           </div>
           <p className="lp-note">
-            Your password was reset by an administrator. Choose your own to continue; the temporary one stops working.
+            {policyChange
+              ? "OmniTrack now follows the Omni Contact password policy (ISO 27001 A.5.17). Choose a new password to continue."
+              : "You signed in with a password issued by an administrator. Choose your own to continue; the temporary one stops working."}{" "}
+            Never share it with anyone, including the IT helpdesk.
           </p>
 
           <label className="lp-field">
-            <span>New password (8+ characters)</span>
+            <span>New password</span>
             <span className="lp-input">
               <LockKeyhole size={17} />
               <input
@@ -68,7 +76,7 @@ export default function ForcePasswordChange({ message, onDone }: Props) {
                 autoFocus
                 autoComplete="new-password"
                 required
-                minLength={8}
+                minLength={PASSWORD_MIN}
                 value={next}
                 onChange={(e) => setNext(e.target.value)}
               />
@@ -87,12 +95,13 @@ export default function ForcePasswordChange({ message, onDone }: Props) {
               />
             </span>
           </label>
+          <PasswordRules password={next} showReuse className="lp-rules" />
           {error && (
             <p className="lp-error" role="alert">
               {error}
             </p>
           )}
-          <button type="submit" className="lp-submit" disabled={busy}>
+          <button type="submit" className="lp-submit" disabled={busy || !!passwordProblem(next) || next !== confirm}>
             {busy ? "Saving…" : "Save and continue"} {!busy && <ArrowRight size={18} />}
           </button>
           <button

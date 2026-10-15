@@ -14,6 +14,8 @@ import {
   type User,
 } from "../data/roles";
 import type { Limits, Workload } from "../data/project";
+import PasswordRules, { generatePassword } from "./PasswordRules";
+import { PASSWORD_MIN, passwordProblem } from "../data/password";
 
 interface Props {
   me: User;
@@ -560,25 +562,35 @@ function UserModal({
             <input type="tel" value={f.phone ?? ""} onChange={set("phone")} placeholder="+263 77 123 4567" />
           </label>
         </div>
-        <label className="field">
+        <div className="field">
           <span>
-            {user ? "Set a temporary password (leave blank to keep); they choose their own at sign-in" : "Password (8+ characters)"}
+            {user
+              ? "Set a temporary password (leave blank to keep). They choose their own at their next sign-in."
+              : "Temporary password. They choose their own at first sign-in."}
           </span>
-          <input
-            type="text"
-            autoComplete="off"
-            required={!user}
-            minLength={8}
-            value={f.password ?? ""}
-            onChange={set("password")}
-          />
-        </label>
+          <div className="pw-issue">
+            <input
+              type="text"
+              autoComplete="off"
+              required={!user}
+              minLength={PASSWORD_MIN}
+              value={f.password ?? ""}
+              onChange={set("password")}
+              aria-label="Temporary password"
+            />
+            <button type="button" className="btn btn-ghost sm" onClick={() => setF((v) => ({ ...v, password: generatePassword() }))}>
+              <KeyRound size={14} /> Generate
+            </button>
+          </div>
+          {(!user || f.password) && <PasswordRules password={f.password ?? ""} who={{ username: f.username, name: f.name }} />}
+          {f.password && <small className="field-hint">Give it to them privately; it's only shown here.</small>}
+        </div>
 
         <div className="modal-actions">
           <button type="button" className="btn btn-ghost" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="btn btn-amber">
+          <button type="submit" className="btn btn-amber" disabled={!!f.password && !!passwordProblem(f.password, { username: f.username, name: f.name })}>
             {user ? "Save" : "Add user"}
           </button>
         </div>

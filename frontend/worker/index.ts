@@ -27,6 +27,7 @@ import {
 } from "../src/data/features";
 import { DEFAULT_LIMITS, MAX_DOCUMENT_BYTES, formatBytes, type Blocker, type Limits, type ProjectDocument } from "../src/data/project";
 import { buildShowcase } from "../src/data/showcase";
+import { PASSWORD_HISTORY, passwordProblem } from "../src/data/password";
 import {
   DEFAULT_ROLE_PERMISSIONS,
   ROLES,
@@ -278,9 +279,38 @@ function checkRole(r: unknown): Role {
   return r as Role;
 }
 
-function checkPassword(p: unknown): string {
-  if (typeof p !== "string" || p.length < 8) throw new HttpError(400, "Password must be at least 8 characters");
+/** A new password must meet the policy: 12+ characters, letters, numbers, symbols, not your name. */
+function checkPassword(p: unknown, who: { username?: string; name?: string }): string {
+  if (typeof p !== "string") throw new HttpError(400, "Password is required");
+  const problem = passwordProblem(p, who);
+  if (problem) throw new HttpError(400, problem, "password_policy");
   return p;
+}
+
+/** Refuses the current password and the previous ones kept in password_history. */
+async function checkNotReused(db: D1Database, userId: string, fresh: string, currentHash: string) {
+  const old = await db
+    .prepare("SELECT hash FROM password_history WHERE user_id = ? ORDER BY changed_at DESC LIMIT ?")
+    .bind(userId, PASSWORD_HISTORY - 1)
+    .all<{ hash: string }>();
+  for (const h of [currentHash, ...old.results.map((r) => r.hash)]) {
+    if (await verifyPassword(fresh, h)) {
+      throw new HttpError(400, `Choose a password you haven't used before: your last ${PASSWORD_HISTORY} can't be reused`, "password_reused");
+    }
+  }
+}
+
+/** Statements that keep the outgoing hash in the history, trimmed to what the reuse check reads. */
+function rememberPassword(db: D1Database, userId: string, outgoingHash: string, at: string): D1PreparedStatement[] {
+  return [
+    db.prepare("INSERT INTO password_history (user_id, hash, changed_at) VALUES (?, ?, ?)").bind(userId, outgoingHash, at),
+    db
+      .prepare(
+        `DELETE FROM password_history WHERE user_id = ? AND rowid NOT IN
+         (SELECT rowid FROM password_history WHERE user_id = ? ORDER BY changed_at DESC LIMIT ?)`,
+      )
+      .bind(userId, userId, PASSWORD_HISTORY - 1),
+  ];
 }
 
 const text = (v: unknown, field: string, required = false): string | undefined => {
@@ -351,6 +381,12 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       const tried = String(username ?? "").trim().slice(0, 64);
       await audit(db, req, { id: row?.id ?? null, name: row?.name ?? (tried || "(blank)") }, "login_failed", null, { username: tried });
       throw new HttpError(401, "Wrong username or password");
+    }
+    // Passwords set before the policy may fall short of it. Only now, while we hold the plain text,
+    // can that be checked; such accounts must choose a compliant one before doing anything else.
+    if (!row.must_change_password && passwordProblem(String(password), row)) {
+      await db.prepare("UPDATE users SET must_change_password = 2 WHERE id = ?").bind(row.id).run();
+      row.must_change_password = 2;
     }
     // With two-step verification on, the right password only earns a short-lived ticket to
     // trade for a session together with a code from the authenticator app.
@@ -434,7 +470,13 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
 
   // After an admin reset, the only things a user may do are choose a new password or sign out.
   if (me.must_change_password && !["/api/me/password", "/api/logout", "/api/logout-all"].includes(path)) {
-    throw new HttpError(403, `Hi ${me.name}, you signed in with a temporary password`, "password_change_required");
+    throw new HttpError(
+      403,
+      me.must_change_password === 2
+        ? `Hi ${me.name}, the password policy has changed and your password no longer meets it`
+        : `Hi ${me.name}, you signed in with a temporary password`,
+      "password_change_required",
+    );
   }
   // When the admin requires two-step verification for this role, nothing works until it's set up.
   const policy = await mfaPolicy(db);
@@ -608,13 +650,20 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     if (!me.must_change_password && !(await verifyPassword(String(current ?? ""), me.password_hash))) {
       throw new HttpError(400, "Current password is wrong");
     }
-    const fresh = checkPassword(next);
-    if (await verifyPassword(fresh, me.password_hash)) throw new HttpError(400, "Choose a password different from the current one");
-    await db
-      .prepare("UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?")
-      .bind(await hashPassword(fresh), me.id)
-      .run();
-    await audit(db, req, me, me.must_change_password ? "password_set_after_reset" : "password_changed");
+    const fresh = checkPassword(next, me);
+    await checkNotReused(db, me.id, fresh, me.password_hash);
+    await db.batch([
+      db.prepare("UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?").bind(await hashPassword(fresh), me.id),
+      ...rememberPassword(db, me.id, me.password_hash, now),
+    ]);
+    await audit(
+      db,
+      req,
+      me,
+      me.must_change_password === 1 ? "password_set_after_reset" : "password_changed",
+      null,
+      me.must_change_password === 2 ? { reason: "policy" } : {},
+    );
     return json({ ok: true });
   }
 
@@ -1161,8 +1210,9 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     for (let n = 2; await db.prepare("SELECT 1 FROM users WHERE id = ?").bind(id).first(); n++) id = `${slug(username)}-${n}`;
     await db
       .prepare(
-        `INSERT INTO users (id, username, name, title, email, phone, role, password_hash)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        // An administrator-issued password is temporary: the person chooses their own at first sign-in.
+        `INSERT INTO users (id, username, name, title, email, phone, role, password_hash, must_change_password)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       )
       .bind(
         id,
@@ -1172,7 +1222,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
         text(b.email, "Email") ?? null,
         text(b.phone, "Phone") ?? null,
         role,
-        await hashPassword(checkPassword(b.password)),
+        await hashPassword(checkPassword(b.password, { username, name: text(b.name, "Name", true) })),
       )
       .run();
     if (projectIds.length) {
@@ -1186,12 +1236,17 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   if (resetMatch && method === "POST") {
     need("manage_users");
     if (resetMatch[1] === me.id) throw new HttpError(400, "Change your own password in Settings");
-    const row = await db.prepare("SELECT id, name FROM users WHERE id = ?").bind(resetMatch[1]).first<{ id: string; name: string }>();
+    const row = await db
+      .prepare("SELECT id, name, password_hash FROM users WHERE id = ?")
+      .bind(resetMatch[1])
+      .first<{ id: string; name: string; password_hash: string }>();
     if (!row) throw new HttpError(404, "User not found");
     const temp = tempPassword();
     await db.batch([
       db.prepare("UPDATE users SET password_hash = ?, must_change_password = 1 WHERE id = ?").bind(await hashPassword(temp), row.id),
       db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(row.id),
+      // The password being replaced still can't come back when they choose their own.
+      ...rememberPassword(db, row.id, row.password_hash, now),
     ]);
     await audit(db, req, me, "user_password_reset", row.id, { name: row.name });
     // Shown once to the administrator; only its hash is stored.
@@ -1212,6 +1267,14 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     const projectIds = role !== "developer" ? [] : b.projectIds !== undefined ? await checkProjects(b.projectIds) : before;
     // Taking projects away is always fine; adding is only allowed up to the limit.
     await checkProjectLimit(projectIds, projectIds.some((p) => !before.includes(p)));
+    let newHash: string | null = null;
+    if (b.password) {
+      const pw = checkPassword(b.password, { username: row.username, name: b.name ?? row.name });
+      // Your own password is yours to choose, so the no-reuse rule applies; one set for someone
+      // else is temporary and replaced at their next sign-in.
+      if (row.id === me.id) await checkNotReused(db, row.id, pw, row.password_hash);
+      newHash = await hashPassword(pw);
+    }
     await db
       .prepare(
         `UPDATE users SET name = ?, title = ?, email = ?, phone = ?, role = ?,
@@ -1223,12 +1286,13 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
         b.email !== undefined ? text(b.email, "Email") ?? null : row.email,
         b.phone !== undefined ? text(b.phone, "Phone") ?? null : row.phone,
         role,
-        b.password ? await hashPassword(checkPassword(b.password)) : null,
+        newHash,
         // A password an admin sets for someone else is temporary: they choose their own at sign-in.
-        b.password && row.id !== me.id ? 1 : row.must_change_password,
+        newHash && row.id !== me.id ? 1 : newHash ? 0 : row.must_change_password,
         row.id,
       )
       .run();
+    if (newHash) await db.batch(rememberPassword(db, row.id, row.password_hash, now));
     const added = projectIds.filter((p) => !before.includes(p));
     const removed = before.filter((p) => !projectIds.includes(p));
     if (added.length || removed.length) {
@@ -1268,6 +1332,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     await db.batch([
       db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM mfa_recovery WHERE user_id = ?").bind(userMatch[1]),
+      db.prepare("DELETE FROM password_history WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM mfa_challenges WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM requests WHERE requested_by = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM assignments WHERE user_id = ?").bind(userMatch[1]),

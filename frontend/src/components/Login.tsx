@@ -253,7 +253,9 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
             <button type="submit" className="lp-submit" disabled={busy}>
               {busy ? "Signing in…" : "Sign in"} {!busy && <ArrowRight size={18} />}
             </button>
-            <p className="lp-help">Need an account? Ask your OmniTrack administrator.</p>
+            <p className="lp-help">
+              Need an account? Ask your OmniTrack administrator. Never share your password, including with the IT helpdesk.
+            </p>
           </form>
           )}
         </section>

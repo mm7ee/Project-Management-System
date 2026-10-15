@@ -41,6 +41,9 @@ export function tempPassword(): string {
       if (b < limit && chars.length < 12) chars += TEMP_ALPHABET.charAt(b % TEMP_ALPHABET.length);
     }
   }
+  // The dashes are its symbols; make sure it has a letter and a number too, so even a
+  // temporary password meets the policy (12+ characters with letters, numbers and symbols).
+  if (!/\d/.test(chars) || !/[A-Za-z]/.test(chars)) return tempPassword();
   return `${chars.slice(0, 4)}-${chars.slice(4, 8)}-${chars.slice(8, 12)}`;
 }
 

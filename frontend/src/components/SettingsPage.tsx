@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { api } from "../data/api";
 import MfaSetup, { RecoveryCodes } from "./MfaSetup";
+import PasswordRules from "./PasswordRules";
+import { PASSWORD_MIN, passwordProblem } from "../data/password";
 import { initials, type System } from "../data/systems";
 import { PERMISSIONS, ROLE_LABEL, type Permission, type Prefs, type User } from "../data/roles";
 
@@ -75,16 +77,6 @@ function Choice<T extends string>({
   );
 }
 
-/** 0–4: length and character variety. A guide, not a gate (the server enforces 8+). */
-function strength(pw: string): number {
-  if (!pw) return 0;
-  let s = pw.length >= 8 ? 1 : 0;
-  if (pw.length >= 12) s++;
-  if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) s++;
-  if (/\d/.test(pw) && /[^A-Za-z0-9]/.test(pw)) s++;
-  return s;
-}
-const STRENGTH = ["Too short", "Weak", "Fair", "Good", "Strong"];
 
 export default function SettingsPage({ me, prefs, permissions, projects, mfaRequired, recoveryCodesLeft, onPrefs, onProfileSaved, onSignedOut }: Props) {
   const [saved, setSaved] = useState(false);
@@ -108,7 +100,6 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
     setSaved(true);
   };
 
-  const score = strength(next);
   const startOptions = [
     { value: "ALL", label: "All projects" },
     ...(projects.length ? [{ value: "MINE", label: "Assigned to me" }] : []),
@@ -244,12 +235,17 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
           </div>
         </Section>
 
-        <Section icon={<KeyRound size={18} />} title="Password">
+        <Section
+          icon={<KeyRound size={18} />}
+          title="Password"
+          sub="Never share your password with anyone, including the IT helpdesk. OmniTrack staff will never ask for it."
+        >
           <form
             className="set-form"
             onSubmit={async (e) => {
               e.preventDefault();
               if (next !== confirm) return setPwMsg({ ok: false, text: "The new passwords don't match." });
+              if (passwordProblem(next, me)) return setPwMsg({ ok: false, text: passwordProblem(next, me)! });
               try {
                 await api("/me/password", "POST", { current, next });
                 setPwMsg({ ok: true, text: "Password changed." });
@@ -268,26 +264,17 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
             <div className="field-row">
               <label className="field">
                 <span>New password</span>
-                <input type="password" autoComplete="new-password" required minLength={8} value={next} onChange={(e) => setNext(e.target.value)} />
+                <input type="password" autoComplete="new-password" required minLength={PASSWORD_MIN} value={next} onChange={(e) => setNext(e.target.value)} />
               </label>
               <label className="field">
                 <span>Confirm new password</span>
                 <input type="password" autoComplete="new-password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
               </label>
             </div>
-            {next && (
-              <div className={`pw-meter s${score}`} aria-live="polite">
-                <span className="pw-bars">
-                  {[1, 2, 3, 4].map((i) => (
-                    <i key={i} className={i <= score ? "on" : ""} />
-                  ))}
-                </span>
-                {STRENGTH[score]}
-                {score < 3 && " · use 12+ characters with mixed case, numbers and a symbol"}
-              </div>
-            )}
+            <PasswordRules password={next} who={me} showReuse />
+            <p className="set-note">Use a password you don't use for any other system.</p>
             {pwMsg && <p className={pwMsg.ok ? "form-ok" : "form-error"}>{pwMsg.text}</p>}
-            <button type="submit" className="btn btn-navy">
+            <button type="submit" className="btn btn-navy" disabled={!!passwordProblem(next, me) || next !== confirm}>
               Change password
             </button>
           </form>
