@@ -2,7 +2,7 @@
 // what you can't do). The administrator can change which permissions each role has; these
 // are the defaults a fresh database starts with.
 
-export type Role = "admin" | "manager" | "developer" | "viewer";
+export type Role = "admin" | "manager" | "team_lead" | "assistant" | "developer" | "viewer";
 
 export type Permission =
   | "edit_assigned" // update status/progress of the projects you're assigned to
@@ -15,11 +15,13 @@ export type Permission =
   | "manage_users" // create users, assign roles/projects, change permissions
   | "audit_log"; // view the activity log: sign-ins, failed sign-ins and every change
 
-export const ROLES: Role[] = ["admin", "manager", "developer", "viewer"];
+export const ROLES: Role[] = ["admin", "manager", "team_lead", "assistant", "developer", "viewer"];
 
 export const ROLE_LABEL: Record<Role, string> = {
   admin: "Administrator",
   manager: "Manager",
+  team_lead: "Team Leader",
+  assistant: "Projects Assistant",
   developer: "Developer",
   viewer: "Standard user",
 };
@@ -41,6 +43,8 @@ export type RolePermissions = Record<Role, Permission[]>;
 export const DEFAULT_ROLE_PERMISSIONS: RolePermissions = {
   admin: PERMISSIONS.map((p) => p.key),
   manager: ["request_updates", "manage_features", "assign_developers", "reports"],
+  team_lead: ["manage_systems", "assign_developers", "request_updates", "manage_features", "reports"],
+  assistant: ["request_updates", "reports"],
   developer: ["edit_assigned"],
   viewer: [],
 };

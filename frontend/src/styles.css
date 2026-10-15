@@ -410,6 +410,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .role-chip { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
 .role-admin { background: var(--navy); color: #fff; }
 .role-manager { background: var(--amber); color: var(--navy-900); }
+.role-team_lead { background: var(--violet); color: #fff; }
+.role-assistant { background: var(--tint-green); color: var(--green-ink); }
 .role-developer { background: var(--cyan); color: #fff; }
 .role-viewer { background: var(--track); color: var(--heading); }
 .row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; white-space: nowrap; }

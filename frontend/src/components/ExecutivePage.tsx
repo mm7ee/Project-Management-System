@@ -230,6 +230,13 @@ function HowItWorks({ stallDays }: { stallDays: number }) {
           <Users size={16} /> <b>Managers</b> request updates, log client requests and produce reports.
         </div>
         <div>
+          <Users size={16} /> <b>Team Leaders</b> run their systems: add and edit them, staff them with developers, log client
+          requests and produce reports.
+        </div>
+        <div>
+          <Users size={16} /> <b>Projects Assistants</b> follow up on progress with update requests and produce reports.
+        </div>
+        <div>
           <Users size={16} /> <b>Developers</b> update the systems they're assigned to and raise blockers.
         </div>
         <div>
