@@ -463,6 +463,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
         <AddSystemModal
           users={users}
           systems={systems}
+          limit={limits.projects}
           error={addError}
           onClose={() => setAdding(false)}
           onSave={async (s) => {

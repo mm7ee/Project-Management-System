@@ -654,11 +654,37 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     for (const id of ids) if (!byId.has(id)) throw new HttpError(400, "Only users with the developer role can be assigned");
     return { ids, byId };
   };
+  /**
+   * Refuses to give any of `adding` one more project when they're already at the workload limit,
+   * naming developers who have room instead. Removing people is always allowed.
+   */
+  const checkRoom = async (adding: string[]) => {
+    if (!adding.length) return;
+    const limit = (await workloadLimits(db)).projects;
+    const counts = await db
+      .prepare(
+        `SELECT u.id, u.name, COUNT(s.id) AS n FROM users u
+         LEFT JOIN assignments a ON a.user_id = u.id
+         LEFT JOIN systems s ON s.id = a.system_id
+         WHERE u.role = 'developer' GROUP BY u.id ORDER BY n, u.name`,
+      )
+      .all<{ id: string; name: string; n: number }>();
+    const full = counts.results.filter((d) => adding.includes(d.id) && d.n >= limit);
+    if (!full.length) return;
+    const room = counts.results.filter((d) => d.n < limit && !adding.includes(d.id)).slice(0, 3);
+    const who = full.map((d) => `${d.name} already has ${d.n} project${d.n === 1 ? "" : "s"}`).join("; ");
+    const suggest = room.length
+      ? ` Developers with room: ${room.map((d) => `${d.name} (${d.n || "no"} project${d.n === 1 ? "" : "s"})`).join(", ")}.`
+      : " Every developer is at the limit; free someone up first.";
+    throw new HttpError(400, `${who}, the most a developer can have (${limit}).${suggest}`, "developer_full");
+  };
+
   const setDevelopers = async (systemId: string, list: unknown) => {
     const { ids, byId } = await checkDevelopers(list);
     const rows = await db.prepare("SELECT user_id FROM assignments WHERE system_id = ?").bind(systemId).all<{ user_id: string }>();
     const before = rows.results.map((r) => r.user_id);
     const added = ids.filter((id) => !before.includes(id));
+    await checkRoom(added);
     const removed = before.filter((id) => !ids.includes(id));
     const stmts = [
       ...added.map((id) => db.prepare("INSERT OR IGNORE INTO assignments (user_id, system_id) VALUES (?, ?)").bind(id, systemId)),
@@ -679,7 +705,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     for (let n = 2; await db.prepare("SELECT 1 FROM systems WHERE id = ?").bind(id).first(); n++) id = `${slug(name)}-${n}`;
     const status = checkStatus(b.status ?? "WIP");
     // Validate before inserting, so a bad list doesn't leave a half-created system behind.
-    if (b.developers !== undefined) await checkDevelopers(b.developers);
+    if (b.developers !== undefined) await checkRoom((await checkDevelopers(b.developers)).ids);
     const system: System = {
       id,
       name,
@@ -1109,6 +1135,12 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   }
 
   // ----- users, roles and permissions -----
+  const checkProjectLimit = async (projectIds: string[], adding: boolean) => {
+    const limit = (await workloadLimits(db)).projects;
+    if (adding && projectIds.length > limit) {
+      throw new HttpError(400, `A developer can be on at most ${limit} projects; this would give them ${projectIds.length}.`, "developer_full");
+    }
+  };
   const checkProjects = async (list: unknown): Promise<string[]> => {
     if (list === undefined || list === null) return [];
     if (!Array.isArray(list)) throw new HttpError(400, "Projects must be a list");
@@ -1124,6 +1156,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     if (await db.prepare("SELECT 1 FROM users WHERE username = ?").bind(username).first()) throw new HttpError(409, "That username is taken");
     const role = checkRole(b.role ?? "viewer");
     const projectIds = role === "developer" ? await checkProjects(b.projectIds) : [];
+    await checkProjectLimit(projectIds, projectIds.length > 0);
     let id = slug(username);
     for (let n = 2; await db.prepare("SELECT 1 FROM users WHERE id = ?").bind(id).first(); n++) id = `${slug(username)}-${n}`;
     await db
@@ -1177,6 +1210,8 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     }
     const before = await projectsOf(db, row.id);
     const projectIds = role !== "developer" ? [] : b.projectIds !== undefined ? await checkProjects(b.projectIds) : before;
+    // Taking projects away is always fine; adding is only allowed up to the limit.
+    await checkProjectLimit(projectIds, projectIds.some((p) => !before.includes(p)));
     await db
       .prepare(
         `UPDATE users SET name = ?, title = ?, email = ?, phone = ?, role = ?,

@@ -7,6 +7,7 @@ import DeveloperPicker from "./DeveloperPicker";
 interface Props {
   users: User[];
   systems: System[];
+  limit: number; // most projects a developer may have
   error?: string;
   onSave: (s: Partial<System> & { developers: string[] }) => void;
   onClose: () => void;
@@ -14,7 +15,7 @@ interface Props {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function AddSystemModal({ users, systems, error, onSave, onClose }: Props) {
+export default function AddSystemModal({ users, systems, limit, error, onSave, onClose }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [url, setUrl] = useState("");
@@ -107,7 +108,7 @@ export default function AddSystemModal({ users, systems, error, onSave, onClose 
           <span>
             Developers {developers.length > 0 && <b>{developers.length}</b>}
           </span>
-          <DeveloperPicker users={users} systems={systems} value={developers} onChange={setDevelopers} />
+          <DeveloperPicker users={users} systems={systems} value={developers} limit={limit} onChange={setDevelopers} />
         </div>
 
         <label className="field">

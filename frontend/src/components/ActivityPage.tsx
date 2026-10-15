@@ -177,7 +177,7 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
     case "limits_updated": {
       const to = d.to as { projects: number; features: number; stallDays: number } | undefined;
       return to
-        ? `Set workload limits: ${to.projects} active projects, ${to.features} open requests per developer; stalled after ${to.stallDays} days`
+        ? `Set workload limits: ${to.projects} projects, ${to.features} open requests per developer; stalled after ${to.stallDays} days`
         : "Changed workload limits";
     }
     case "feature_deleted":

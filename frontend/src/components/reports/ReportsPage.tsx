@@ -79,7 +79,7 @@ export default function ReportsPage({ systems, users, requests, features, blocke
         next: open.map((f) => f.dueAt).filter((d): d is string => !!d).sort()[0],
       };
     })
-    .sort((a, b) => Number(b.load.overloaded) - Number(a.load.overloaded) || b.load.active - a.load.active || b.open - a.open);
+    .sort((a, b) => Number(b.load.overloaded) - Number(a.load.overloaded) || b.load.projects - a.load.projects || b.open - a.open);
   // Systems that are blocked or have stopped moving.
   const stuck = view
     .map((s) => ({
@@ -377,14 +377,14 @@ export default function ReportsPage({ systems, users, requests, features, blocke
           <section className="viz-card">
             <h3>Developer workload</h3>
             <p className="viz-sub">
-              Active projects and feature requests per developer. Flagged when above {limits.projects} active projects or {limits.features} open requests.
+              Projects and feature requests per developer. Flagged when above {limits.projects} projects or {limits.features} open requests.
             </p>
             <div className="table-wrap flat">
               <table className="table">
                 <thead>
                   <tr>
                     <th>Developer</th>
-                    <th>Active projects</th>
+                    <th>Projects</th>
                     <th>Open requests</th>
                     <th>Critical</th>
                     <th>High</th>
@@ -404,7 +404,7 @@ export default function ReportsPage({ systems, users, requests, features, blocke
                           </span>
                         )}
                       </td>
-                      <td className={`num ${w.load.active > limits.projects ? "text-red" : ""}`}>{w.load.active}</td>
+                      <td className={`num ${w.load.projects > limits.projects ? "text-red" : ""}`}>{w.load.projects}</td>
                       <td className="num">{w.open}</td>
                       <td className={`num ${w.critical ? "text-red" : ""}`}>{w.critical}</td>
                       <td className="num">{w.high}</td>

@@ -30,7 +30,7 @@ export interface Blocker {
 
 /** When a developer counts as overloaded, and when a project counts as stalled. Set by an admin. */
 export interface Limits {
-  projects: number; // most active (not yet delivered) projects per developer
+  projects: number; // most projects a developer can be assigned to, live ones included
   features: number; // most open feature requests per developer
   stallDays: number; // days without a progress update before an active project is flagged
 }
@@ -56,20 +56,21 @@ export function stalledDays(s: System, now: number, limits: Limits): number | nu
 }
 
 export interface Workload {
-  active: number; // active projects assigned
+  projects: number; // projects assigned, whatever their status
+  full: boolean; // at the limit: can't be given another project
   openFeatures: number;
   overloaded: boolean;
   reasons: string[]; // why, in words, for tooltips and flags
 }
 
-export function workloadOf(user: User, systems: System[], features: Feature[], limits: Limits, now: number): Workload {
-  const active = systems.filter((s) => user.projectIds?.includes(s.id) && isActive(s, now)).length;
+export function workloadOf(user: User, systems: System[], features: Feature[], limits: Limits, _now?: number): Workload {
+  const projects = systems.filter((s) => user.projectIds?.includes(s.id)).length;
   const openFeatures = features.filter((f) => f.assignee === user.id && isOpen(f)).length;
   const reasons = [
-    ...(active > limits.projects ? [`${active} active projects (limit ${limits.projects})`] : []),
+    ...(projects > limits.projects ? [`${projects} projects (limit ${limits.projects})`] : []),
     ...(openFeatures > limits.features ? [`${openFeatures} open feature requests (limit ${limits.features})`] : []),
   ];
-  return { active, openFeatures, overloaded: reasons.length > 0, reasons };
+  return { projects, full: projects >= limits.projects, openFeatures, overloaded: reasons.length > 0, reasons };
 }
 
 export function formatBytes(n: number): string {
@@ -81,7 +82,7 @@ export function formatBytes(n: number): string {
 export interface Suggestion {
   user: User;
   load: Workload;
-  why: string; // "No projects", "1 active project, 2 open requests"
+  why: string; // "No projects", "1 project, 2 open requests"
 }
 
 /**
@@ -100,16 +101,16 @@ export function suggestDevelopers(
   return users
     .filter((u) => u.role === "developer" && !(excludeSystem && u.projectIds?.includes(excludeSystem)))
     .map((user) => ({ user, load: workloadOf(user, systems, features, limits, now) }))
-    .filter((x) => !x.load.overloaded && x.load.active < limits.projects)
-    .sort((a, b) => a.load.active - b.load.active || a.load.openFeatures - b.load.openFeatures || a.user.name.localeCompare(b.user.name))
+    .filter((x) => !x.load.overloaded && !x.load.full)
+    .sort((a, b) => a.load.projects - b.load.projects || a.load.openFeatures - b.load.openFeatures || a.user.name.localeCompare(b.user.name))
     .slice(0, max)
     .map((x) => ({
       ...x,
       why:
-        !x.user.projectIds?.length && !x.load.openFeatures
+        !x.load.projects && !x.load.openFeatures
           ? "No projects"
           : [
-              `${x.load.active} active project${x.load.active === 1 ? "" : "s"}`,
+              `${x.load.projects} project${x.load.projects === 1 ? "" : "s"}`,
               ...(x.load.openFeatures ? [`${x.load.openFeatures} open request${x.load.openFeatures === 1 ? "" : "s"}`] : []),
             ].join(", "),
     }));

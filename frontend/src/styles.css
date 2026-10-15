@@ -1075,3 +1075,5 @@ a.nav-item { text-decoration: none; }
 .rebalance-projects > li { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--canvas); }
 .rebalance-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .rebalance-row small { color: var(--muted); }
+.dev-option.full { opacity: 0.6; cursor: not-allowed; }
+.choice button:disabled { opacity: 0.45; cursor: not-allowed; }

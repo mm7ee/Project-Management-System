@@ -3,7 +3,7 @@ import { AlertOctagon, ArrowRightLeft, UserMinus, UserPlus, X } from "lucide-rea
 import { initials, type System } from "../data/systems";
 import type { User } from "../data/roles";
 import type { Feature } from "../data/features";
-import { isActive, suggestDevelopers, workloadOf, type Limits, type Suggestion } from "../data/project";
+import { suggestDevelopers, workloadOf, type Limits, type Suggestion } from "../data/project";
 
 /**
  * Who could take a project over from an overloaded developer. "Hand over" swaps them;
@@ -66,7 +66,7 @@ export function HandoverSuggestions({
 }
 
 /**
- * Every overloaded developer and their active projects, with suggestions for each, so an admin or
+ * Every overloaded developer and their projects, with suggestions for each, so an admin or
  * manager can spread the work in one place.
  */
 export default function RebalanceModal({
@@ -100,7 +100,7 @@ export default function RebalanceModal({
     .filter((u) => u.role === "developer")
     .map((u) => ({ user: u, load: workloadOf(u, systems, features, limits, now) }))
     .filter((x) => x.load.overloaded)
-    .sort((a, b) => b.load.active - a.load.active);
+    .sort((a, b) => b.load.projects - a.load.projects);
   const teamOf = (s: System) => users.filter((u) => u.role === "developer" && u.projectIds?.includes(s.id)).map((u) => u.id);
 
   const save = async (systemId: string, ids: string[]) => {
@@ -124,7 +124,7 @@ export default function RebalanceModal({
         </button>
         <h2>Rebalance workload</h2>
         <p className="modal-note">
-          Developers with more than {limits.projects} active projects or {limits.features} open client requests. Hand a project to someone
+          Developers with more than {limits.projects} projects or {limits.features} open client requests. Hand a project to someone
           with fewer, add help, or take them off it.
         </p>
         {error && <p className="form-error">{error}</p>}
@@ -143,7 +143,7 @@ export default function RebalanceModal({
               </header>
               <ul className="rebalance-projects">
                 {systems
-                  .filter((s) => user.projectIds?.includes(s.id) && isActive(s, now))
+                  .filter((s) => user.projectIds?.includes(s.id))
                   .map((s) => {
                     const key = `${user.id}:${s.id}`;
                     return (

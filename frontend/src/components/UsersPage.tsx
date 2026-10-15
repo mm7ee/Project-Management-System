@@ -55,7 +55,7 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaP
       <header className="page-head">
         <div>
           <h2>Users</h2>
-          <p>{users.length} people can sign in. Developers can be assigned to several projects.</p>
+          <p>{users.length} people can sign in. Developers can be on up to {limits.projects} projects each.</p>
         </div>
         <button className="btn btn-amber" onClick={() => setEditing("new")}>
           <Plus size={17} strokeWidth={3} /> Add user
@@ -107,7 +107,7 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaP
                         return (
                           <span className="workload-cell">
                             <span>
-                              {w.active} active · {w.openFeatures} request{w.openFeatures === 1 ? "" : "s"}
+                              {w.projects} project{w.projects === 1 ? "" : "s"} · {w.openFeatures} request{w.openFeatures === 1 ? "" : "s"}
                             </span>
                             {w.overloaded && (
                               <span className="flag flag-overload" title={w.reasons.join("; ")}>
@@ -232,6 +232,7 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaP
         <UserModal
           user={editing === "new" ? null : editing}
           systems={systems}
+          limit={limits.projects}
           onClose={() => setEditing(null)}
           onSave={async (data) => {
             const ok = await run(() =>
@@ -320,14 +321,14 @@ function LimitsEditor({ limits, onSave }: { limits: Limits; onSave: (l: Limits) 
       <header className="page-head">
         <div>
           <h2>Workload & stall limits</h2>
-          <p>Developers above a limit are flagged as overloaded; active projects without a progress update for too long are flagged as stalled.</p>
+          <p>Nobody can be assigned more projects than the limit, and anyone already over it is flagged. Projects still being built without a progress update for too long are flagged as stalled.</p>
         </div>
         <button className="btn btn-navy" disabled={!dirty} onClick={async () => setSaved(await onSave(draft))}>
           {saved && !dirty ? "Saved" : "Save limits"}
         </button>
       </header>
       <div className="limits-grid set-card">
-        {field("projects", "Active projects per developer", "Projects still being built (not live or completed).", 50)}
+        {field("projects", "Projects per developer", "Every project they're on, live ones included. Nobody can be given more.", 50)}
         {field("features", "Open feature requests per developer", "Requests not yet completed or cancelled.", 200)}
         {field("stallDays", "Days without progress before \"stalled\"", "Counted from the last progress update.", 365)}
       </div>
@@ -437,11 +438,13 @@ type UserForm = Partial<User> & { password?: string };
 function UserModal({
   user,
   systems,
+  limit,
   onSave,
   onClose,
 }: {
   user: User | null;
   systems: System[];
+  limit: number; // most projects a developer may have
   onSave: (u: UserForm) => Promise<boolean>;
   onClose: () => void;
 }) {
@@ -449,7 +452,9 @@ function UserModal({
     user ? { ...user, password: "" } : { role: "viewer", name: "", username: "", title: "", email: "", phone: "", password: "" },
   );
   const set = (k: keyof UserForm) => (e: { target: { value: string } }) => setF((v) => ({ ...v, [k]: e.target.value }));
-  const picked = f.projectIds ?? [];
+  // Only projects that still exist count; at the limit, the rest can't be ticked.
+  const picked = (f.projectIds ?? []).filter((id) => systems.some((s) => s.id === id));
+  const atLimit = picked.length >= limit;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -510,7 +515,12 @@ function UserModal({
         </div>
         {f.role === "developer" && (
           <div className="field">
-            <span>Assigned projects {picked.length > 0 && <b>{picked.length}</b>}</span>
+            <span>
+              Assigned projects{" "}
+              <b className={picked.length > limit ? "text-red" : ""}>
+                {picked.length}/{limit}
+              </b>
+            </span>
             <div className="choice wrap" role="group" aria-label="Assigned projects">
               {systems.map((s) => (
                 <button
@@ -518,6 +528,8 @@ function UserModal({
                   type="button"
                   aria-pressed={picked.includes(s.id)}
                   className={picked.includes(s.id) ? "on" : ""}
+                  disabled={atLimit && !picked.includes(s.id)}
+                  title={atLimit && !picked.includes(s.id) ? `A developer can be on at most ${limit} projects` : undefined}
                   onClick={() =>
                     setF((v) => ({
                       ...v,
@@ -529,6 +541,13 @@ function UserModal({
                 </button>
               ))}
             </div>
+            {atLimit && (
+              <small className={picked.length > limit ? "form-warn" : "field-hint"}>
+                {picked.length > limit
+                  ? `Over the limit of ${limit}. Untick ${picked.length - limit} to save, or hand projects over from the dashboard's Rebalance.`
+                  : `That's the limit of ${limit} projects. Untick one to choose another.`}
+              </small>
+            )}
           </div>
         )}
         <div className="field-row">

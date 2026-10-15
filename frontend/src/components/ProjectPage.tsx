@@ -494,6 +494,7 @@ export default function ProjectPage(p: Props) {
                 exclude={developers.map((d) => d.id)}
                 disabled={saving}
                 overloaded={p.overloaded}
+                limit={p.limits.projects}
                 onPick={(id) => saveDevelopers([...developers.map((d) => d.id), id])}
               />
             )}
