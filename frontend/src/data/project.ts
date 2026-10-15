@@ -77,3 +77,40 @@ export function formatBytes(n: number): string {
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
+
+export interface Suggestion {
+  user: User;
+  load: Workload;
+  why: string; // "No projects", "1 active project, 2 open requests"
+}
+
+/**
+ * Developers who could take on (more of) a project, best first: not overloaded, fewest active
+ * projects, then fewest open requests. People already on `excludeSystem` are left out.
+ */
+export function suggestDevelopers(
+  users: User[],
+  systems: System[],
+  features: Feature[],
+  limits: Limits,
+  now: number,
+  excludeSystem?: string,
+  max = 3,
+): Suggestion[] {
+  return users
+    .filter((u) => u.role === "developer" && !(excludeSystem && u.projectIds?.includes(excludeSystem)))
+    .map((user) => ({ user, load: workloadOf(user, systems, features, limits, now) }))
+    .filter((x) => !x.load.overloaded && x.load.active < limits.projects)
+    .sort((a, b) => a.load.active - b.load.active || a.load.openFeatures - b.load.openFeatures || a.user.name.localeCompare(b.user.name))
+    .slice(0, max)
+    .map((x) => ({
+      ...x,
+      why:
+        !x.user.projectIds?.length && !x.load.openFeatures
+          ? "No projects"
+          : [
+              `${x.load.active} active project${x.load.active === 1 ? "" : "s"}`,
+              ...(x.load.openFeatures ? [`${x.load.openFeatures} open request${x.load.openFeatures === 1 ? "" : "s"}`] : []),
+            ].join(", "),
+    }));
+}

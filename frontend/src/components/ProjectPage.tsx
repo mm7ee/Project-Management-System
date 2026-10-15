@@ -21,7 +21,8 @@ import {
 import { HEALTH_META, initials, type System } from "../data/systems";
 import type { ActivityEntry, UpdateRequest, User } from "../data/roles";
 import { byUrgency, isLate, isOpen, type Feature } from "../data/features";
-import { MAX_DOCUMENT_BYTES, formatBytes, stalledDays, type Blocker, type Limits, type ProjectDocument } from "../data/project";
+import { MAX_DOCUMENT_BYTES, formatBytes, stalledDays, type Blocker, type Limits, type ProjectDocument, type Suggestion } from "../data/project";
+import { HandoverSuggestions } from "./Rebalance";
 import { api, uploadDocument } from "../data/api";
 import { formatDate, timeAgo } from "../time";
 import { describe } from "./ActivityPage";
@@ -44,6 +45,8 @@ interface Props {
   overloaded: (u: User) => string[]; // why a developer is overloaded; empty when they're not
   canUpdate: boolean;
   canManage: boolean;
+  canAssign: boolean; // add and remove developers
+  suggestions: Suggestion[]; // developers with room, best first, for an overloaded developer's hand-over
   canRequest: boolean;
   canContribute: boolean; // add documents, raise and resolve blockers
   canLogFeatures: boolean;
@@ -444,7 +447,7 @@ export default function ProjectPage(p: Props) {
                         <b>{d.name}</b>
                         {d.title && <span className="lead-title">{d.title}</span>}
                       </div>
-                      {p.canManage && (
+                      {p.canAssign && (
                         <button
                           className="dev-remove"
                           disabled={saving}
@@ -457,9 +460,24 @@ export default function ProjectPage(p: Props) {
                       )}
                     </div>
                     {reasons.length > 0 && (
-                      <span className="flag flag-overload" title={reasons.join("; ")}>
-                        <AlertOctagon size={13} /> Overloaded: {reasons.join("; ")}
-                      </span>
+                      <div className="overload-callout">
+                        <span className="flag flag-overload" title={reasons.join("; ")}>
+                          <AlertOctagon size={13} /> Too many projects: {reasons.join("; ")}
+                        </span>
+                        {p.canAssign && (
+                          <>
+                            <p className="overload-hint">Developers with room to take this on:</p>
+                            <HandoverSuggestions
+                              system={system}
+                              from={d}
+                              suggestions={p.suggestions}
+                              teamIds={developers.map((x) => x.id)}
+                              busy={saving}
+                              onSave={saveDevelopers}
+                            />
+                          </>
+                        )}
+                      </div>
                     )}
                     <LeadContact person={d} about={system.name} />
                   </div>
@@ -468,7 +486,7 @@ export default function ProjectPage(p: Props) {
             ) : (
               <p className="lead-none">No developers assigned yet.</p>
             )}
-            {p.canManage && (
+            {p.canAssign && (
               <DeveloperSearch
                 users={users}
                 systems={p.systems}

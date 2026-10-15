@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Menu, Plus, Search } from "lucide-react";
+import { AlertOctagon, Menu, Plus, Search } from "lucide-react";
 import { getSchedule, type System } from "./data/systems";
 import { api, useAppData, type AppData } from "./data/api";
 import { isAssigned, type Permission, type Prefs } from "./data/roles";
@@ -24,7 +24,8 @@ import CountUp from "./components/CountUp";
 import FeaturesPage from "./components/FeaturesPage";
 import FeatureModal from "./components/FeatureModal";
 import { isLate, isOpen, type Feature } from "./data/features";
-import { stalledDays, workloadOf } from "./data/project";
+import { stalledDays, suggestDevelopers, workloadOf } from "./data/project";
+import RebalanceModal from "./components/Rebalance";
 import type { User } from "./data/roles";
 
 // A project page has its own address (#/projects/<id>), so it can be bookmarked, opened in a
@@ -124,6 +125,10 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   const isBlocked = (s: System) => openBlockersFor(s.id).length > 0 || stalledDays(s, now, limits) !== null;
   // Why a developer has too much on; empty when they don't.
   const overloaded = (u: User) => (u.role === "developer" ? workloadOf(u, systems, features, limits, now).reasons : []);
+  // Admins and managers can add and remove developers, and are told when someone has too much on.
+  const canAssign = can("manage_systems") || can("assign_developers");
+  const overloadedDevs = users.filter((u) => overloaded(u).length > 0);
+  const [rebalancing, setRebalancing] = useState(false);
   const mayContribute = (s: System) => can("edit_any") || can("manage_systems") || s.lead === me.id || !!me.projectIds?.includes(s.id);
 
   const counts = useMemo(() => {
@@ -273,6 +278,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
               overloaded={overloaded}
               canUpdate={mayUpdate(selected)}
               canManage={can("manage_systems")}
+              canAssign={canAssign}
+              suggestions={suggestDevelopers(users, systems, features, limits, now, selected.id)}
               canRequest={can("request_updates")}
               canContribute={mayContribute(selected)}
               canLogFeatures={can("manage_features")}
@@ -359,6 +366,26 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           />
         ) : (
           <>
+            {canAssign && overloadedDevs.length > 0 && (
+              <div className="overload-banner" role="status">
+                <AlertOctagon size={18} />
+                <span>
+                  <b>
+                    {overloadedDevs.length === 1
+                      ? `${overloadedDevs[0].name} has too many projects`
+                      : `${overloadedDevs.length} developers have too many projects`}
+                  </b>{" "}
+                  (
+                  {overloadedDevs.length === 1
+                    ? overloaded(overloadedDevs[0]).join(", ")
+                    : overloadedDevs.map((u) => `${u.name}: ${overloaded(u).join(", ")}`).join("; ")}
+                  ). Others have room to help.
+                </span>
+                <button className="btn btn-navy sm" onClick={() => setRebalancing(true)}>
+                  Rebalance
+                </button>
+              </div>
+            )}
             {me.role === "developer" && !myProjects.length && (
               <p className="notice">You haven't been assigned any projects yet. Ask an administrator to assign you one.</p>
             )}
@@ -449,6 +476,20 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
               setAddError(e instanceof Error ? e.message : "Couldn't add the system");
             }
           }}
+        />
+      )}
+      {rebalancing && (
+        <RebalanceModal
+          users={users}
+          systems={systems}
+          features={features}
+          limits={limits}
+          now={now}
+          onSave={async (id, developers) => {
+            await api(`/systems/${id}`, "PATCH", { developers });
+            await reload();
+          }}
+          onClose={() => setRebalancing(false)}
         />
       )}
       {posting && (

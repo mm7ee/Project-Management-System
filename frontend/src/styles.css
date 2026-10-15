@@ -1047,3 +1047,31 @@ a.nav-item { text-decoration: none; }
   .exec-pair { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .exec-step, .exec-kpis .stat { break-inside: avoid; }
 }
+
+/* ---------- Overloaded developers: suggestions and rebalancing ---------- */
+.overload-banner {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; padding: 12px 16px;
+  border: 2px solid var(--red); border-radius: 10px; background: var(--tint-red); color: var(--red-ink); font-size: 14px; line-height: 1.45;
+}
+.overload-banner svg { flex: none; }
+.overload-banner span { flex: 1; min-width: 220px; color: var(--text); }
+.overload-banner b { color: var(--red-ink); }
+.overload-callout { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 10px; background: var(--tint-red); }
+.overload-hint { font-size: 13px; font-weight: 600; color: var(--text); }
+.handover { display: flex; flex-direction: column; gap: 8px; }
+.handover ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.handover li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 6px 8px; border-radius: 8px; background: var(--card); border: 1px solid var(--border); }
+.handover-who { flex: 1; min-width: 110px; display: flex; flex-direction: column; line-height: 1.25; }
+.handover-who b { font-size: 13.5px; color: var(--heading); }
+.handover-who small { font-size: 12px; color: var(--muted); }
+.handover-who small.text-green { color: var(--green-ink); font-weight: 700; }
+.handover > .btn { align-self: flex-start; }
+.rebalance { width: min(640px, 100%); }
+.rebalance-dev { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; }
+.rebalance-dev header { display: flex; align-items: center; gap: 10px; }
+.rebalance-dev header > div { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.rebalance-dev header b { font-size: 15.5px; color: var(--heading); }
+.rebalance-projects { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.rebalance-projects > li { display: flex; flex-direction: column; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--canvas); }
+.rebalance-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.rebalance-row small { color: var(--muted); }

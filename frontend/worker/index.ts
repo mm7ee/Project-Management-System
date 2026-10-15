@@ -753,7 +753,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     }
 
     if (b.developers !== undefined) {
-      need("manage_systems");
+      if (!can("manage_systems") && !can("assign_developers")) throw new HttpError(403, "You don't have permission to change a project's developers");
       const result = await setDevelopers(id, b.developers);
       if (result.added.length || result.removed.length) await audit(db, req, me, "system_developers", id, { name: next.name, ...result });
     }
