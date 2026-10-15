@@ -4,11 +4,13 @@ import { PASSWORD_HISTORY, passwordRules } from "../data/password";
 /** The password policy as a live checklist, ticked off while typing. */
 export default function PasswordRules({
   password,
+  confirm,
   who,
   showReuse = false,
   className = "",
 }: {
   password: string;
+  confirm?: string; // when given, "Both passwords match" is one of the rules
   who?: { username?: string; name?: string };
   showReuse?: boolean; // mention the no-reuse rule (checked on the server)
   className?: string;
@@ -20,6 +22,11 @@ export default function PasswordRules({
           {r.ok ? <Check size={13} /> : <X size={13} />} {r.label}
         </li>
       ))}
+      {confirm !== undefined && (
+        <li className={password && confirm === password ? "ok" : ""}>
+          {password && confirm === password ? <Check size={13} /> : <X size={13} />} Both passwords match
+        </li>
+      )}
       {showReuse && <li className="pw-note">Not one of your last {PASSWORD_HISTORY} passwords</li>}
     </ul>
   );

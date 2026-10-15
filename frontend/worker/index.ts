@@ -49,7 +49,7 @@ const COOKIE = "omni_session";
 const SESSION_DAYS = 7;
 
 class HttpError extends Error {
-  constructor(public status: number, message: string, public code?: string) {
+  constructor(public status: number, message: string, public code?: string, public extra?: Record<string, unknown>) {
     super(message);
   }
 }
@@ -496,6 +496,8 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
         ? `Hi ${me.name}, the password policy has changed and your password no longer meets it`
         : `Hi ${me.name}, you signed in with a temporary password`,
       "password_change_required",
+      // So the change-password screen can check "not your name or username" before submitting.
+      { who: { username: me.username, name: me.name } },
     );
   }
   // When the admin requires two-step verification for this role, nothing works until it's set up.
@@ -1609,7 +1611,7 @@ export default {
     try {
       return await api(req, env, path);
     } catch (e) {
-      if (e instanceof HttpError) return json({ error: e.message, ...(e.code ? { code: e.code } : {}) }, e.status);
+      if (e instanceof HttpError) return json({ error: e.message, ...(e.code ? { code: e.code } : {}), ...(e.extra ?? {}) }, e.status);
       console.error(e);
       return json({ error: "Something went wrong" }, 500);
     }

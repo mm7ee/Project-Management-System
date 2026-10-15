@@ -169,7 +169,7 @@
   transform: skewX(-20deg); animation: lp-shine 3.8s ease-in-out infinite;
 }
 .lp-submit:hover { transform: translateY(-1px); box-shadow: 0 14px 36px rgba(242, 169, 0, 0.42); }
-.lp-submit:disabled { opacity: .7; cursor: default; transform: none; }
+.lp-submit:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; filter: grayscale(.6); }
 .lp-submit svg { transition: transform .2s; }
 .lp-submit:hover svg { transform: translateX(3px); }
 .lp-help { text-align: center; font-size: 13px; color: #7f98b8; }

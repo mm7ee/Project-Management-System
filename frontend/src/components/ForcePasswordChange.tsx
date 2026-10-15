@@ -7,7 +7,8 @@ import { PASSWORD_MIN, passwordProblem } from "../data/password";
 import "./landing.css";
 
 interface Props {
-  message: string; // from the server, e.g. "Hi Donald, you signed in with a temporary password"
+  message: string;
+  who?: { username?: string; name?: string }; // whose password: for the "not your name" rule // from the server, e.g. "Hi Donald, you signed in with a temporary password"
   onDone: () => void;
 }
 
@@ -15,7 +16,7 @@ interface Props {
  * Shown after signing in with a temporary password from an administrator. The server refuses
  * every other request until this succeeds, so the dashboard can't be reached around it.
  */
-export default function ForcePasswordChange({ message, onDone }: Props) {
+export default function ForcePasswordChange({ message, who, onDone }: Props) {
   // The server says why: an administrator-issued password, or one that predates the policy.
   const policyChange = /password policy/i.test(message);
   const [next, setNext] = useState("");
@@ -39,7 +40,7 @@ export default function ForcePasswordChange({ message, onDone }: Props) {
           onSubmit={async (e) => {
             e.preventDefault();
             if (next !== confirm) return setError("The two passwords don't match.");
-            if (passwordProblem(next)) return setError(passwordProblem(next)!);
+            if (passwordProblem(next, who)) return setError(passwordProblem(next, who)!);
             setBusy(true);
             setError("");
             try {
@@ -95,13 +96,13 @@ export default function ForcePasswordChange({ message, onDone }: Props) {
               />
             </span>
           </label>
-          <PasswordRules password={next} showReuse className="lp-rules" />
+          <PasswordRules password={next} confirm={confirm} who={who} showReuse className="lp-rules" />
           {error && (
             <p className="lp-error" role="alert">
               {error}
             </p>
           )}
-          <button type="submit" className="lp-submit" disabled={busy || !!passwordProblem(next) || next !== confirm}>
+          <button type="submit" className="lp-submit" disabled={busy || !!passwordProblem(next, who) || next !== confirm}>
             {busy ? "Saving…" : "Save and continue"} {!busy && <ArrowRight size={18} />}
           </button>
           <button

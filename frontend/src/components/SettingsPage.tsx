@@ -271,7 +271,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
                 <input type="password" autoComplete="new-password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
               </label>
             </div>
-            <PasswordRules password={next} who={me} showReuse />
+            <PasswordRules password={next} confirm={confirm} who={me} showReuse />
             <p className="set-note">Use a password you don't use for any other system.</p>
             {pwMsg && <p className={pwMsg.ok ? "form-ok" : "form-error"}>{pwMsg.text}</p>}
             <button type="submit" className="btn btn-navy" disabled={!!passwordProblem(next, me) || next !== confirm}>

@@ -6,7 +6,7 @@ import type { ProjectTemplate } from "./templates";
 import type { MfaPolicy, Permission, Prefs, RolePermissions, UpdateRequest, User } from "./roles";
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string, public code?: string) {
+  constructor(public status: number, message: string, public code?: string, public payload: Record<string, unknown> = {}) {
     super(message);
   }
 }
@@ -19,7 +19,7 @@ export async function api<T = unknown>(path: string, method = "GET", data?: unkn
     body: data !== undefined ? JSON.stringify(data) : undefined,
   });
   const payload = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, payload.error ?? `Request failed (${res.status})`, payload.code);
+  if (!res.ok) throw new ApiError(res.status, payload.error ?? `Request failed (${res.status})`, payload.code, payload);
   return payload as T;
 }
 
@@ -58,6 +58,7 @@ export interface AppData {
 export function useAppData() {
   const [data, setData] = useState<AppData | null>(null);
   const [mustChange, setMustChange] = useState<string | null>(null);
+  const [changeFor, setChangeFor] = useState<{ username?: string; name?: string } | undefined>(); // whose password it is
   const [mfaSetup, setMfaSetup] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -74,6 +75,7 @@ export function useAppData() {
       } else if (e instanceof ApiError && e.code === "password_change_required") {
         setData(null);
         setMustChange(e.message);
+        setChangeFor(e.payload.who as { username?: string; name?: string } | undefined);
       } else if (e instanceof ApiError && e.code === "mfa_setup_required") {
         setData(null);
         setMfaSetup(e.message);
@@ -87,5 +89,5 @@ export function useAppData() {
     reload();
   }, [reload]);
 
-  return { data, mustChange, mfaSetup, loading, reload };
+  return { data, mustChange, changeFor, mfaSetup, loading, reload };
 }

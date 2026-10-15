@@ -46,7 +46,7 @@ export default function App() {
 }
 
 function Tracker() {
-  const { data, mustChange, mfaSetup, loading, reload } = useAppData();
+  const { data, mustChange, changeFor, mfaSetup, loading, reload } = useAppData();
   return (
     <>
       {loading ? (
@@ -54,7 +54,7 @@ function Tracker() {
       ) : data ? (
         <Dashboard data={data} reload={reload} />
       ) : mustChange ? (
-        <ForcePasswordChange message={mustChange} onDone={reload} />
+        <ForcePasswordChange message={mustChange} who={changeFor} onDone={reload} />
       ) : mfaSetup ? (
         <ForceMfaSetup message={mfaSetup} onDone={reload} />
       ) : (
