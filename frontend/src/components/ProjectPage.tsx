@@ -9,6 +9,7 @@ import {
   ExternalLink,
   FileText,
   History,
+  LayoutTemplate,
   Link2,
   Pencil,
   Plus,
@@ -246,6 +247,12 @@ export default function ProjectPage(p: Props) {
             <dl className="facts">
               <dt>Team</dt>
               <dd>{system.owner}</dd>
+              {system.template && (
+                <>
+                  <dt>Template</dt>
+                  <dd>{system.template}</dd>
+                </>
+              )}
               <dt>Started</dt>
               <dd>{formatDate(system.startedAt)}</dd>
               {system.dueAt && (
@@ -500,6 +507,7 @@ export default function ProjectPage(p: Props) {
             )}
           </section>
 
+          {p.canManage && <SaveAsTemplate system={system} attempt={attempt} onChanged={p.onChanged} />}
           {p.canManage &&
             (confirming ? (
               <div className="confirm" role="alertdialog" aria-label="Confirm delete">
@@ -761,4 +769,65 @@ function hostOf(url?: string): string {
   } catch {
     return "link";
   }
+}
+
+/** Saves this project's set-up (description, status, duration) as a template for new projects. */
+function SaveAsTemplate({ system, attempt, onChanged }: { system: System; attempt: (fn: () => Promise<unknown>) => Promise<boolean>; onChanged: () => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [summary, setSummary] = useState("");
+  const [done, setDone] = useState("");
+
+  if (!open) {
+    return (
+      <>
+        {done && <p className="form-ok">Saved "{done}". Pick it under Add system → Start from a template.</p>}
+        <button
+          className="btn btn-ghost block-sm"
+          onClick={() => {
+            setName(`${system.name} template`);
+            setSummary("");
+            setDone("");
+            setOpen(true);
+          }}
+        >
+          <LayoutTemplate size={15} /> Save as template
+        </button>
+      </>
+    );
+  }
+  return (
+    <form
+      className="lead-card template-form"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (await attempt(() => api("/templates", "POST", { fromSystem: system.id, name: name.trim(), summary: summary.trim() }).then(onChanged))) {
+          setDone(name.trim());
+          setOpen(false);
+        }
+      }}
+    >
+      <span className="lead-label">Save as template</span>
+      <p className="set-note">
+        New projects made from it start with this description, the same status (or Upcoming, if this one is delivered) and the same
+        length of time to the due date. People and dates aren't copied.
+      </p>
+      <label className="field">
+        <span>Template name</span>
+        <input required autoFocus maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
+      </label>
+      <label className="field">
+        <span>What kind of project is it for? (optional)</span>
+        <input value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="e.g. A staff portal with sign-in and reports" />
+      </label>
+      <div className="confirm-actions">
+        <button type="button" className="btn btn-ghost" onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+        <button type="submit" className="btn btn-navy" disabled={!name.trim()}>
+          Save template
+        </button>
+      </div>
+    </form>
+  );
 }

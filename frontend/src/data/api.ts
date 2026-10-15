@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { System } from "./systems";
 import type { Feature } from "./features";
 import type { Blocker, Limits, ProjectDocument } from "./project";
+import type { ProjectTemplate } from "./templates";
 import type { MfaPolicy, Permission, Prefs, RolePermissions, UpdateRequest, User } from "./roles";
 
 export class ApiError extends Error {
@@ -45,6 +46,7 @@ export interface AppData {
   limits: Limits;
   mfaPolicy: MfaPolicy;
   recoveryCodesLeft: number; // your unused two-step recovery codes
+  templates: ProjectTemplate[];
 }
 
 /**

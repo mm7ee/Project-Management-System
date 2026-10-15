@@ -464,7 +464,16 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           users={users}
           systems={systems}
           limit={limits.projects}
+          templates={data.templates}
           error={addError}
+          onDeleteTemplate={async (id) => {
+            try {
+              await api(`/templates/${id}`, "DELETE");
+              await reload();
+            } catch (e) {
+              setAddError(e instanceof Error ? e.message : "Couldn't delete the template");
+            }
+          }}
           onClose={() => setAdding(false)}
           onSave={async (s) => {
             try {

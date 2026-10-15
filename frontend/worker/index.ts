@@ -28,6 +28,7 @@ import {
 import { DEFAULT_LIMITS, MAX_DOCUMENT_BYTES, formatBytes, type Blocker, type Limits, type ProjectDocument } from "../src/data/project";
 import { buildShowcase } from "../src/data/showcase";
 import { PASSWORD_HISTORY, passwordProblem } from "../src/data/password";
+import type { ProjectTemplate } from "../src/data/templates";
 import {
   DEFAULT_ROLE_PERMISSIONS,
   ROLES,
@@ -119,6 +120,24 @@ const toFeature = (r: FeatureRow): Feature => ({
   ...(r.notes ? { notes: r.notes } : {}),
   ...(r.due_at ? { dueAt: r.due_at } : {}),
   ...(r.completed_at ? { completedAt: r.completed_at } : {}),
+});
+
+interface TemplateRow {
+  id: string;
+  name: string;
+  summary: string;
+  data: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+const toTemplate = (r: TemplateRow): ProjectTemplate => ({
+  id: r.id,
+  name: r.name,
+  summary: r.summary,
+  ...(JSON.parse(r.data) as Pick<ProjectTemplate, "description" | "status" | "progress" | "durationWeeks">),
+  ...(r.created_by ? { createdBy: r.created_by } : {}),
+  createdAt: r.created_at,
 });
 
 function slug(text: string): string {
@@ -358,7 +377,7 @@ const ACTIVITY_KINDS: Record<string, string[]> = {
   signin: ["login", "logout", "logout_all"],
   failed: ["login_failed"],
   account: ["password_changed", "password_set_after_reset", "profile_updated", "mfa_enabled", "mfa_disabled", "mfa_recovery_regenerated"],
-  systems: ["system_created", "system_progress", "system_updated", "system_developers", "system_deleted", "request_created", "request_dismissed"],
+  systems: ["system_created", "system_progress", "system_updated", "system_developers", "system_deleted", "request_created", "request_dismissed", "template_created", "template_deleted"],
   features: ["feature_created", "feature_updated", "feature_deleted"],
   project: ["document_added", "document_removed", "blocker_raised", "blocker_resolved", "blocker_reopened", "blocker_deleted"],
   admin: ["user_created", "user_updated", "user_password_reset", "user_deleted", "roles_updated", "limits_updated", "mfa_reset", "mfa_policy_updated"],
@@ -573,7 +592,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   }
 
   if (path === "/api/data" && method === "GET") {
-    const [systems, users, requests, assigned, features, documents, blockers, limits] = await Promise.all([
+    const [systems, users, requests, assigned, features, documents, blockers, limits, templates] = await Promise.all([
       db.prepare("SELECT data FROM systems ORDER BY sort, rowid").all<{ data: string }>(),
       db.prepare("SELECT * FROM users ORDER BY name").all<UserRow>(),
       db.prepare("SELECT * FROM requests ORDER BY created_at DESC").all<Record<string, string>>(),
@@ -584,6 +603,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       db.prepare("SELECT * FROM documents ORDER BY uploaded_at DESC").all<Record<string, string | number | null>>(),
       db.prepare("SELECT * FROM blockers ORDER BY raised_at DESC").all<Record<string, string | null>>(),
       workloadLimits(db),
+      db.prepare("SELECT * FROM templates ORDER BY created_by IS NOT NULL, created_at").all<TemplateRow>(),
     ]);
     const projectsByUser = new Map<string, string[]>();
     for (const a of assigned.results) projectsByUser.set(a.user_id, [...(projectsByUser.get(a.user_id) ?? []), a.system_id]);
@@ -638,6 +658,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       ),
       limits,
       mfaPolicy: policy,
+      templates: templates.results.map(toTemplate),
       recoveryCodesLeft: me.mfa_secret
         ? (await db.prepare("SELECT COUNT(*) AS n FROM mfa_recovery WHERE user_id = ? AND used_at IS NULL").bind(me.id).first<{ n: number }>())!.n
         : 0,
@@ -770,12 +791,13 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       ...(b.dueAt ? { dueAt: text(b.dueAt, "Due date") } : {}),
       ...(b.health ? { health: b.health === "Maintenance" ? "Maintenance" : "Stable" } : {}),
       ...(b.lead ? { lead: text(b.lead, "Lead") } : {}),
+      ...(b.template ? { template: text(b.template, "Template")!.slice(0, 100) } : {}),
       updatedAt: now,
       updatedBy: initials(me.name),
     };
     const sort = (await db.prepare("SELECT COALESCE(MAX(sort), 0) + 1 AS s FROM systems").first<{ s: number }>())!.s;
     await db.prepare("INSERT INTO systems (id, sort, data) VALUES (?, ?, ?)").bind(id, sort, JSON.stringify(system)).run();
-    await audit(db, req, me, "system_created", id, { name, status, progress: system.progress });
+    await audit(db, req, me, "system_created", id, { name, status, progress: system.progress, ...(system.template ? { template: system.template } : {}) });
     if (b.developers?.length) await audit(db, req, me, "system_developers", id, { name, ...(await setDevelopers(id, b.developers)) });
     return json(system, 201);
   }
@@ -1060,6 +1082,53 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       .run();
     await audit(db, req, me, "limits_updated", null, { from: current, to: next });
     return json(next);
+  }
+
+  // ----- project templates -----
+  // Starting points for "Add system". Saved from scratch or from an existing project.
+  if (path === "/api/templates" && method === "POST") {
+    need("manage_systems");
+    const b = await body<Partial<ProjectTemplate> & { fromSystem?: string }>(req);
+    const name = text(b.name, "Template name", true)!.slice(0, 80);
+    let data: Pick<ProjectTemplate, "description" | "status" | "progress" | "durationWeeks">;
+    if (b.fromSystem) {
+      // A template is for new projects, so a delivered one starts again from the beginning.
+      const s = await getSystem(db, String(b.fromSystem));
+      const weeks = s.dueAt ? Math.max(1, Math.round((Date.parse(s.dueAt) - Date.parse(s.startedAt)) / (7 * 86_400_000))) : undefined;
+      data = {
+        description: s.description,
+        status: s.status === "LIVE" || s.status === "COMPLETED" ? "UPCOMING" : s.status,
+        progress: 0,
+        ...(weeks ? { durationWeeks: weeks } : {}),
+      };
+    } else {
+      const weeks = b.durationWeeks === undefined || b.durationWeeks === null ? undefined : Number(b.durationWeeks);
+      if (weeks !== undefined && (!Number.isInteger(weeks) || weeks < 1 || weeks > 260)) throw new HttpError(400, "Duration must be 1 to 260 weeks");
+      data = {
+        description: text(b.description, "Description") ?? "",
+        status: checkStatus(b.status ?? "UPCOMING"),
+        progress: checkProgress(b.progress ?? 0),
+        ...(weeks ? { durationWeeks: weeks } : {}),
+      };
+    }
+    let id = slug(name);
+    for (let n = 2; await db.prepare("SELECT 1 FROM templates WHERE id = ?").bind(id).first(); n++) id = `${slug(name)}-${n}`;
+    await db
+      .prepare("INSERT INTO templates (id, name, summary, data, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .bind(id, name, text(b.summary, "Summary") ?? "", JSON.stringify(data), me.id, now)
+      .run();
+    await audit(db, req, me, "template_created", null, { template: name, ...(b.fromSystem ? { from: b.fromSystem } : {}) });
+    return json({ ok: true, id }, 201);
+  }
+
+  const templateMatch = path.match(/^\/api\/templates\/([a-z0-9-]+)$/);
+  if (templateMatch && method === "DELETE") {
+    need("manage_systems");
+    const row = await db.prepare("SELECT name FROM templates WHERE id = ?").bind(templateMatch[1]).first<{ name: string }>();
+    if (!row) throw new HttpError(404, "Template not found");
+    await db.prepare("DELETE FROM templates WHERE id = ?").bind(templateMatch[1]).run();
+    await audit(db, req, me, "template_deleted", null, { template: row.name });
+    return json({ ok: true });
   }
 
   // ----- feature requests -----

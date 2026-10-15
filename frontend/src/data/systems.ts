@@ -24,6 +24,7 @@ export interface System {
   dueAt?: string; // target date while in progress
   updatedAt?: string; // last progress update; falls back to finishedAt / startedAt
   updatedBy?: string; // initials of whoever posted it; falls back to the owner's
+  template?: string; // name of the template it was created from, if any
 }
 
 export const STATUS_META: Record<Status, { label: string; tone: string }> = {

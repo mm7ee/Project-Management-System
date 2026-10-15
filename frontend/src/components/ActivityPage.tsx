@@ -111,7 +111,11 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
     case "profile_updated":
       return `Updated their ${(d.fields as string[] | undefined)?.join(" and ") ?? "contact details"}`;
     case "system_created":
-      return `Added system ${name} (${statusLabel(d.status)}, ${str(d.progress)}%)`;
+      return `Added system ${name} (${statusLabel(d.status)}, ${str(d.progress)}%)${d.template ? ` from the "${str(d.template)}" template` : ""}`;
+    case "template_created":
+      return `Saved project template "${str(d.template)}"${d.from ? ` from ${sysName(d.from)}` : ""}`;
+    case "template_deleted":
+      return `Deleted project template "${str(d.template)}"`;
     case "system_progress": {
       const from = (d.from ?? {}) as Record<string, unknown>;
       const to = (d.to ?? {}) as Record<string, unknown>;
