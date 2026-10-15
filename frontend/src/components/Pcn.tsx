@@ -1,9 +1,12 @@
 import { useState, type ReactNode } from "react";
 import { ArrowLeft, Check, CheckCircle2, CircleSlash, FileText, Plus, Printer, Trash2, X } from "lucide-react";
 import type { System } from "../data/systems";
-import type { User } from "../data/roles";
+import { ROLE_LABEL, type User } from "../data/roles";
 import { PCN_STATUS_META, PCN_TYPES, PILLARS, pcnMissing, pcnStatus, type Pcn, type Signatory, type SignoffStatus } from "../data/pcn";
 import { formatDate } from "../time";
+
+const EXTERNAL = "__external__";
+const SIGNER_ORDER: User["role"][] = ["manager", "admin", "team_lead", "assistant", "developer", "viewer"];
 
 function Section({ n, title, children }: { n: string; title: string; children: ReactNode }) {
   return (
@@ -22,6 +25,10 @@ function Section({ n, title, children }: { n: string; title: string; children: R
  * statuses read-only (they're recorded by managers as approvals arrive through Econet).
  */
 export function PcnForm({ value, onChange, users }: { value: Pcn; onChange: (p: Pcn) => void; users: User[] }) {
+  // Managers first: a PCN goes to them for sign-off by default.
+  const signers = [...users].sort((a, b) => SIGNER_ORDER.indexOf(a.role) - SIGNER_ORDER.indexOf(b.role) || a.name.localeCompare(b.name));
+  // Rows where "Someone without an account" was chosen, so their name box shows while still empty.
+  const [external, setExternal] = useState<Set<number>>(() => new Set());
   const set = <K extends keyof Pcn>(k: K, v: Pcn[K]) => onChange({ ...value, [k]: v });
   const setSignatory = (i: number, patch: Partial<Signatory>) =>
     set(
@@ -129,18 +136,38 @@ export function PcnForm({ value, onChange, users }: { value: Pcn; onChange: (p: 
       </Section>
 
       <Section n="4" title="PCN signatories">
-        <datalist id="pcn-people">
-          {users.map((u) => (
-            <option key={u.id} value={u.name}>
-              {u.title}
-            </option>
-          ))}
-        </datalist>
         <div className="pcn-signers">
           {value.signatories.map((s, i) => (
             <div key={i} className="pcn-signer">
               <span className="pcn-n small">{i + 1}</span>
-              <input list="pcn-people" placeholder="Name" maxLength={120} value={s.name} onChange={(e) => setSignatory(i, { name: e.target.value })} />
+              <span className="pcn-who">
+                <select
+                  aria-label={`Signatory ${i + 1}`}
+                  value={s.userId ?? (s.name || external.has(i) ? EXTERNAL : "")}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    const u = signers.find((x) => x.id === v);
+                    setExternal((x) => {
+                      const n = new Set(x);
+                      if (v === EXTERNAL) n.add(i);
+                      else n.delete(i);
+                      return n;
+                    });
+                    setSignatory(i, u ? { userId: u.id, name: u.name } : { userId: undefined, name: v === EXTERNAL && !s.userId ? s.name : "" });
+                  }}
+                >
+                  <option value="">Choose a signatory…</option>
+                  {signers.map((u) => (
+                    <option key={u.id} value={u.id} disabled={value.signatories.some((o, j) => j !== i && o.userId === u.id)}>
+                      {u.name} · {ROLE_LABEL[u.role]}
+                    </option>
+                  ))}
+                  <option value={EXTERNAL}>Someone without an account…</option>
+                </select>
+                {!s.userId && (s.name || external.has(i)) && (
+                  <input placeholder="Their name" maxLength={120} value={s.name} onChange={(e) => setSignatory(i, { name: e.target.value })} />
+                )}
+              </span>
               <input placeholder="Remarks (optional)" maxLength={500} value={s.remarks} onChange={(e) => setSignatory(i, { remarks: e.target.value })} />
               <label className="mfa-check pcn-primary" title="Primary signatory">
                 <input type="radio" name="pcn-primary" checked={s.primary} onChange={() => setSignatory(i, { primary: true })} /> Primary
@@ -150,7 +177,10 @@ export function PcnForm({ value, onChange, users }: { value: Pcn; onChange: (p: 
                   type="button"
                   className="icon-link danger"
                   aria-label={`Remove signatory ${i + 1}`}
-                  onClick={() => set("signatories", value.signatories.filter((_, j) => j !== i))}
+                  onClick={() => {
+                    set("signatories", value.signatories.filter((_, j) => j !== i));
+                    setExternal(new Set()); // row numbers shift; rows with a name keep their name box
+                  }}
                 >
                   <Trash2 size={14} />
                 </button>
@@ -168,8 +198,8 @@ export function PcnForm({ value, onChange, users }: { value: Pcn; onChange: (p: 
           </button>
         )}
         <p className="pcn-note">
-          The PCN is shared through Econet with all signatories for approval. Approval received through Econet is final; no hard-copy sign-off
-          is needed. Record each approval on the project's page as it arrives.
+          On submission the PCN goes to each signatory with an account: they approve or decline it from their Concept Notes page. For
+          anyone without an account, share it through Econet and a manager records their decision. No hard-copy sign-off is needed.
         </p>
       </Section>
 
@@ -178,50 +208,63 @@ export function PcnForm({ value, onChange, users }: { value: Pcn; onChange: (p: 
   );
 }
 
-/** Summary and approval tracking on a project's page. */
+/** Summary and sign-off on a project's page (and in the Concept Notes list). */
 export function PcnCard({
   system,
+  me,
   canRecord,
   canEdit,
   canMoveOn,
-  onRecord,
+  compact = false,
+  onSign,
   onEdit,
   onMoveOn,
 }: {
   system: System & { pcn: Pcn };
-  canRecord: boolean; // record approvals as they arrive
+  me: User;
+  canRecord: boolean; // may record decisions for signatories without an account
   canEdit: boolean;
   canMoveOn: boolean; // may move an approved idea to Upcoming
-  onRecord: (signatories: Signatory[]) => Promise<void>;
-  onEdit: () => void;
-  onMoveOn: () => Promise<void>;
+  compact?: boolean; // in a list: link to the project instead of the full controls
+  onSign: (index: number, decision: SignoffStatus, remarks?: string) => Promise<void>;
+  onEdit?: () => void;
+  onMoveOn?: () => Promise<void>;
 }) {
   const pcn = system.pcn;
   const status = pcnStatus(pcn);
   const meta = PCN_STATUS_META[status];
   const [busy, setBusy] = useState(false);
-  const today = new Date().toISOString().slice(0, 10);
-  const record = async (i: number, st: SignoffStatus) => {
+  const [deciding, setDeciding] = useState<{ index: number; decision: SignoffStatus } | null>(null);
+  const [remarks, setRemarks] = useState("");
+  const sign = async (index: number, decision: SignoffStatus, note?: string) => {
     setBusy(true);
     try {
-      await onRecord(pcn.signatories.map((s, j) => (j === i ? { ...s, status: st, ...(st === "PENDING" ? { date: undefined } : { date: s.date ?? today }) } : s)));
+      await onSign(index, decision, note);
+      setDeciding(null);
+      setRemarks("");
     } finally {
       setBusy(false);
     }
   };
   const approved = pcn.signatories.filter((s) => s.status === "APPROVED").length;
+  const mine = pcn.signatories.findIndex((s) => s.userId === me.id && s.status === "PENDING");
 
   return (
-    <section className={`p-card pcn-card ${status === "APPROVED" ? "pcn-ok" : status === "DECLINED" ? "p-card-alert" : ""}`}>
+    <section className={`p-card pcn-card ${status === "APPROVED" ? "pcn-ok" : status === "DECLINED" ? "p-card-alert" : ""} ${mine >= 0 && status !== "DECLINED" ? "pcn-yours" : ""}`}>
       <header className="p-card-head">
         <h3>
-          <FileText size={17} /> Project Concept Note
+          <FileText size={17} /> {compact ? pcn.title : "Project Concept Note"}
         </h3>
         <div className="page-actions">
+          {compact && (
+            <a className="btn btn-ghost sm" href={`#/projects/${system.id}`}>
+              Open project
+            </a>
+          )}
           <a className="btn btn-ghost sm" href={`#/projects/${system.id}/pcn`}>
             <Printer size={14} /> View / print
           </a>
-          {canEdit && (
+          {canEdit && onEdit && (
             <button className="btn btn-ghost sm" onClick={onEdit}>
               Edit
             </button>
@@ -240,7 +283,13 @@ export function PcnCard({
           {pcn.mainPillar && ` · ${pcn.mainPillar}`}
         </span>
       </div>
-      {status === "APPROVED" && system.status === "IDEA" && canMoveOn && (
+      {compact && pcn.concept && <p className="pcn-concept">{pcn.concept}</p>}
+      {mine >= 0 && status !== "DECLINED" && (
+        <p className="pcn-ask">
+          <b>Your signature is needed.</b> Read the PCN, then approve or decline it below.
+        </p>
+      )}
+      {status === "APPROVED" && system.status === "IDEA" && canMoveOn && onMoveOn && (
         <div className="pcn-next">
           <CheckCircle2 size={18} />
           <span>Every signatory has approved. Move the project from Idea to Upcoming to start planning it.</span>
@@ -256,48 +305,92 @@ export function PcnCard({
               <th>Signatory</th>
               <th>Status</th>
               <th>Remarks</th>
-              {canRecord && <th aria-label="Record" />}
+              <th aria-label="Sign" />
             </tr>
           </thead>
           <tbody>
-            {pcn.signatories.map((s, i) => (
-              <tr key={i}>
-                <td>
-                  <b>{s.name}</b>
-                  {s.primary && <small className="muted"> · primary</small>}
-                </td>
-                <td className={s.status === "APPROVED" ? "text-green" : s.status === "DECLINED" ? "text-red" : "muted"}>
-                  {s.status === "APPROVED" ? "Approved" : s.status === "DECLINED" ? "Declined" : "Pending"}
-                  {s.date && ` · ${formatDate(s.date)}`}
-                </td>
-                <td className="notes-cell">{s.remarks || "—"}</td>
-                {canRecord && (
+            {pcn.signatories.map((s, i) => {
+              const own = s.userId === me.id;
+              const mayAct = own || (!s.userId && canRecord);
+              return (
+                <tr key={i} className={own && s.status === "PENDING" ? "pcn-you" : ""}>
                   <td>
-                    <div className="row-actions">
-                      {s.status !== "APPROVED" && (
-                        <button className="btn btn-ghost sm" disabled={busy} title="Approval received through Econet" onClick={() => record(i, "APPROVED")}>
-                          <Check size={14} /> Approved
-                        </button>
-                      )}
-                      {s.status !== "DECLINED" && (
-                        <button className="btn btn-ghost sm" disabled={busy} onClick={() => record(i, "DECLINED")}>
-                          <CircleSlash size={14} /> Declined
-                        </button>
-                      )}
-                      {s.status !== "PENDING" && (
-                        <button className="icon-link" disabled={busy} title="Back to pending" aria-label="Back to pending" onClick={() => record(i, "PENDING")}>
-                          <X size={14} />
-                        </button>
-                      )}
-                    </div>
+                    <b>{s.name}</b>
+                    {s.primary && <small className="muted"> · primary</small>}
+                    {own && <small className="muted"> · you</small>}
+                    {!s.userId && <small className="muted"> · no account (via Econet)</small>}
                   </td>
-                )}
-              </tr>
-            ))}
+                  <td className={s.status === "APPROVED" ? "text-green" : s.status === "DECLINED" ? "text-red" : "muted"}>
+                    {s.status === "APPROVED" ? "Approved" : s.status === "DECLINED" ? "Declined" : "Awaiting signature"}
+                    {s.date && ` · ${formatDate(s.date)}`}
+                  </td>
+                  <td className="notes-cell">{s.remarks || "—"}</td>
+                  <td>
+                    {mayAct &&
+                      (deciding?.index === i ? (
+                        <form
+                          className="pcn-decide"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            sign(i, deciding.decision, remarks.trim());
+                          }}
+                        >
+                          <input
+                            autoFocus
+                            maxLength={500}
+                            value={remarks}
+                            onChange={(e) => setRemarks(e.target.value)}
+                            placeholder={deciding.decision === "DECLINED" ? "Reason (recommended)" : "Remarks (optional)"}
+                          />
+                          <button type="submit" className={`btn sm ${deciding.decision === "DECLINED" ? "btn-danger" : "btn-navy"}`} disabled={busy}>
+                            {deciding.decision === "DECLINED" ? "Decline" : "Approve"}
+                          </button>
+                          <button type="button" className="icon-link" aria-label="Cancel" onClick={() => setDeciding(null)}>
+                            <X size={14} />
+                          </button>
+                        </form>
+                      ) : (
+                        <div className="row-actions">
+                          {s.status !== "APPROVED" && (
+                            <button
+                              className="btn btn-ghost sm"
+                              disabled={busy}
+                              title={own ? "Approve this PCN" : "Approval received through Econet"}
+                              onClick={() => {
+                                setRemarks("");
+                                setDeciding({ index: i, decision: "APPROVED" });
+                              }}
+                            >
+                              <Check size={14} /> {own ? "Approve" : "Approved"}
+                            </button>
+                          )}
+                          {s.status !== "DECLINED" && (
+                            <button
+                              className="btn btn-ghost sm"
+                              disabled={busy}
+                              onClick={() => {
+                                setRemarks("");
+                                setDeciding({ index: i, decision: "DECLINED" });
+                              }}
+                            >
+                              <CircleSlash size={14} /> {own ? "Decline" : "Declined"}
+                            </button>
+                          )}
+                          {s.status !== "PENDING" && (
+                            <button className="icon-link" disabled={busy} title="Undo" aria-label="Undo" onClick={() => sign(i, "PENDING")}>
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       ) : (
-        <p className="lead-none">No signatories yet. Add them with Edit before sharing the PCN through Econet.</p>
+        <p className="lead-none">No signatories yet. Add them with Edit so the PCN reaches them.</p>
       )}
     </section>
   );

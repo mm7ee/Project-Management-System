@@ -17,10 +17,11 @@ export const PILLARS = [
 export type SignoffStatus = "PENDING" | "APPROVED" | "DECLINED";
 
 export interface Signatory {
+  userId?: string; // an OmniTrack account: they sign in the app. Unset for someone without one.
   name: string;
   primary: boolean; // the primary signatory
   remarks: string;
-  status: SignoffStatus; // as received through Econet
+  status: SignoffStatus; // signed in the app, or recorded by a manager as received through Econet
   date?: string; // when they approved or declined (YYYY-MM-DD)
 }
 
@@ -55,7 +56,11 @@ export function pcnStatus(p: Pcn): PcnStatus {
   return p.signatories.every((s) => s.status === "APPROVED") ? "APPROVED" : "PENDING";
 }
 
-export function emptyPcn(originator: string, today: string): Pcn {
+/**
+ * A blank PCN. `signers` (normally every Manager) are listed as signatories so the note goes to
+ * them on submission; the first is primary. The author can change the list.
+ */
+export function emptyPcn(originator: string, today: string, signers: { id: string; name: string }[] = []): Pcn {
   return {
     title: "",
     originator,
@@ -68,9 +73,15 @@ export function emptyPcn(originator: string, today: string): Pcn {
     mainPillar: "",
     supportingPillars: [],
     proposedDates: [""],
-    signatories: [{ name: "", primary: true, remarks: "", status: "PENDING" }],
+    signatories: signers.length
+      ? signers.map((u, i) => ({ userId: u.id, name: u.name, primary: i === 0, remarks: "", status: "PENDING" as const }))
+      : [{ name: "", primary: true, remarks: "", status: "PENDING" }],
   };
 }
+
+/** Signatories whose account is `userId` and who haven't signed yet. */
+export const awaitingSignature = (p: Pcn | undefined, userId: string) =>
+  !!p && pcnStatus(p) !== "DECLINED" && p.signatories.some((s) => s.userId === userId && s.status === "PENDING");
 
 /** The sections still empty, in the document's own words, so the form can say what's left. */
 export function pcnMissing(p: Pcn): string[] {
@@ -96,6 +107,7 @@ export function cleanPcn(raw: unknown): Pcn {
     .map((x) => (x && typeof x === "object" ? (x as Record<string, unknown>) : {}))
     .map(
       (s): Signatory => ({
+        ...(typeof s.userId === "string" && /^[a-z0-9._-]{1,64}$/.test(s.userId) ? { userId: s.userId } : {}),
         name: str(s.name, 120),
         primary: s.primary === true,
         remarks: str(s.remarks, 500),
@@ -103,7 +115,7 @@ export function cleanPcn(raw: unknown): Pcn {
         ...(typeof s.date === "string" && DATE.test(s.date) ? { date: s.date } : {}),
       }),
     )
-    .filter((s) => s.name);
+    .filter((s) => s.name || s.userId); // an account is enough: the Worker fills in its name
   // Exactly one primary signatory when there are any.
   if (signatories.length && !signatories.some((s) => s.primary)) signatories[0].primary = true;
   let seen = false;

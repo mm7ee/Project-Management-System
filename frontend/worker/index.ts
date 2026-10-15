@@ -29,7 +29,7 @@ import { DEFAULT_LIMITS, MAX_DOCUMENT_BYTES, formatBytes, type Blocker, type Lim
 import { buildShowcase } from "../src/data/showcase";
 import { PASSWORD_HISTORY, passwordProblem } from "../src/data/password";
 import type { ProjectTemplate } from "../src/data/templates";
-import { cleanPcn, pcnStatus } from "../src/data/pcn";
+import { cleanPcn, pcnStatus, type Signatory } from "../src/data/pcn";
 import {
   DEFAULT_ROLE_PERMISSIONS,
   ROLES,
@@ -378,7 +378,7 @@ const ACTIVITY_KINDS: Record<string, string[]> = {
   signin: ["login", "logout", "logout_all"],
   failed: ["login_failed"],
   account: ["password_changed", "password_set_after_reset", "profile_updated", "mfa_enabled", "mfa_disabled", "mfa_recovery_regenerated"],
-  systems: ["system_created", "system_progress", "system_updated", "system_developers", "system_deleted", "request_created", "request_dismissed", "template_created", "template_deleted", "pcn_updated"],
+  systems: ["system_created", "system_progress", "system_updated", "system_developers", "system_deleted", "request_created", "request_dismissed", "template_created", "template_deleted", "pcn_updated", "pcn_signed"],
   features: ["feature_created", "feature_updated", "feature_deleted"],
   project: ["document_added", "document_removed", "blocker_raised", "blocker_resolved", "blocker_reopened", "blocker_deleted"],
   admin: ["user_created", "user_updated", "user_password_reset", "user_deleted", "roles_updated", "limits_updated", "mfa_reset", "mfa_policy_updated"],
@@ -768,6 +768,22 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     };
   };
 
+  /** Signatories linked to an account get that account's current name; unknown accounts are refused. */
+  const resolveSigners = async (list: Signatory[]): Promise<Signatory[]> => {
+    const ids = list.map((s) => s.userId).filter((id): id is string => !!id);
+    if (!ids.length) return list;
+    const rows = await db
+      .prepare(`SELECT id, name FROM users WHERE id IN (${ids.map(() => "?").join(", ")})`)
+      .bind(...ids)
+      .all<{ id: string; name: string }>();
+    const names = new Map(rows.results.map((r) => [r.id, r.name]));
+    return list.map((s) => {
+      if (!s.userId) return s;
+      if (!names.has(s.userId)) throw new HttpError(400, "A signatory's account no longer exists");
+      return { ...s, name: names.get(s.userId)! };
+    });
+  };
+
   if (path === "/api/systems" && method === "POST") {
     const b = await body<Partial<System> & { developers?: string[] }>(req);
     // Managers add systems outright. Anyone allowed to propose may add one with a Concept Note,
@@ -777,7 +793,8 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     const pcn = b.pcn !== undefined ? cleanPcn(b.pcn) : undefined;
     if (pcn && !pcn.title) throw new HttpError(400, "The PCN needs a title");
     // A proposer can't arrive with sign-offs already recorded; only managers record approvals.
-    if (pcn && proposal) pcn.signatories = pcn.signatories.map(({ date: _date, ...s }) => ({ ...s, status: "PENDING" }));
+    // Sign-offs only ever happen through /pcn/sign, so a new PCN starts with all of them pending.
+    if (pcn) pcn.signatories = await resolveSigners(pcn.signatories.map(({ date: _date, ...s }) => ({ ...s, status: "PENDING" as const })));
     const name = text(b.name ?? pcn?.title, "Name", true)!;
     let id = slug(name);
     for (let n = 2; await db.prepare("SELECT 1 FROM systems WHERE id = ?").bind(id).first(); n++) id = `${slug(name)}-${n}`;
@@ -825,6 +842,45 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     return json(system, 201);
   }
 
+  // A signatory approves or declines a PCN themselves. For someone without an account, a manager
+  // records the decision as it arrives through Econet. Nobody signs on behalf of an account holder.
+  const signMatch = path.match(/^\/api\/systems\/([a-z0-9-]+)\/pcn\/sign$/);
+  if (signMatch && method === "POST") {
+    const current = await getSystem(db, signMatch[1]);
+    if (!current.pcn) throw new HttpError(404, "This project has no Concept Note");
+    const b = await body<{ index?: number; decision?: string; remarks?: string }>(req);
+    const i = Number(b.index);
+    const signer = current.pcn.signatories[i];
+    if (!Number.isInteger(i) || !signer) throw new HttpError(400, "Unknown signatory");
+    if (signer.userId ? signer.userId !== me.id : !can("manage_systems")) {
+      throw new HttpError(403, signer.userId ? `Only ${signer.name} can sign their part of this PCN` : "Only someone who can add systems (an administrator or team leader) can record this sign-off");
+    }
+    const decision = b.decision === "APPROVED" || b.decision === "DECLINED" || b.decision === "PENDING" ? b.decision : null;
+    if (!decision) throw new HttpError(400, "Choose approve or decline");
+    const before = pcnStatus(current.pcn);
+    const signatories = current.pcn.signatories.map((s, j) => {
+      if (j !== i) return s;
+      const { date: _date, ...rest } = s;
+      return {
+        ...rest,
+        status: decision,
+        ...(b.remarks !== undefined ? { remarks: (text(b.remarks, "Remarks") ?? "").slice(0, 500) } : {}),
+        ...(decision !== "PENDING" ? { date: now.slice(0, 10) } : {}),
+      } as Signatory;
+    });
+    const next: System = { ...current, pcn: { ...current.pcn, signatories } };
+    await db.prepare("UPDATE systems SET data = ? WHERE id = ?").bind(JSON.stringify(next), current.id).run();
+    await audit(db, req, me, "pcn_signed", current.id, {
+      name: current.name,
+      signatory: signer.name,
+      decision,
+      ...(signer.userId ? {} : { recordedFor: true }),
+      from: before,
+      to: pcnStatus(next.pcn!),
+    });
+    return json(next);
+  }
+
   const sysMatch = path.match(/^\/api\/systems\/([a-z0-9-]+)$/);
   if (sysMatch && method === "PATCH") {
     const id = sysMatch[1];
@@ -836,24 +892,21 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     // in through Econet. Authors can't mark their own PCN approved: their sign-off changes are ignored.
     let pcnChange: Record<string, unknown> | null = null;
     if (b.pcn !== undefined) {
-      const manager = can("manage_systems");
-      if (!manager && current.pcnBy !== me.id) throw new HttpError(403, "Only whoever wrote the PCN or a manager can change it");
+      if (!can("manage_systems") && current.pcnBy !== me.id) throw new HttpError(403, "Only whoever wrote the PCN or a manager can change it");
       const pcn = cleanPcn(b.pcn);
       if (!pcn.title) throw new HttpError(400, "The PCN needs a title");
-      if (!manager) {
-        pcn.signatories = pcn.signatories.map((s) => {
-          const was = current.pcn?.signatories.find((o) => o.name === s.name);
-          const { date: _date, ...rest } = s;
-          return { ...rest, status: was?.status ?? "PENDING", ...(was?.date ? { date: was.date } : {}) };
-        });
-      }
-      const signoffs = pcn.signatories
-        .filter((s) => (current.pcn?.signatories.find((o) => o.name === s.name)?.status ?? "PENDING") !== s.status)
-        .map((s) => `${s.name}: ${s.status.toLowerCase()}`);
+      // Editing never changes a sign-off: each signatory keeps what they (or, for someone without an
+      // account, a manager) recorded through /pcn/sign. New signatories start pending.
+      pcn.signatories = await resolveSigners(
+        pcn.signatories.map(({ date: _date, remarks, ...s }) => {
+          const was = current.pcn?.signatories.find((o) => (s.userId ? o.userId === s.userId : !o.userId && o.name === s.name));
+          return { ...s, remarks: was && was.status !== "PENDING" ? was.remarks : remarks, status: was?.status ?? "PENDING", ...(was?.date ? { date: was.date } : {}) };
+        }),
+      );
       const before = current.pcn ? pcnStatus(current.pcn) : null;
       next.pcn = pcn;
       if (!current.pcnBy) next.pcnBy = me.id;
-      pcnChange = { name: current.name, from: before, to: pcnStatus(pcn), ...(signoffs.length ? { signoffs } : {}) };
+      pcnChange = { name: current.name, from: before, to: pcnStatus(pcn) };
     }
 
     // Progress, status and maintenance are "progress updates": the assigned developer may post them.

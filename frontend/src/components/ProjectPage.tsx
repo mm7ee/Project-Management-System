@@ -26,7 +26,7 @@ import { byUrgency, isLate, isOpen, type Feature } from "../data/features";
 import { MAX_DOCUMENT_BYTES, formatBytes, stalledDays, type Blocker, type Limits, type ProjectDocument, type Suggestion } from "../data/project";
 import { HandoverSuggestions } from "./Rebalance";
 import { PcnCard, PcnForm } from "./Pcn";
-import { emptyPcn, type Pcn } from "../data/pcn";
+import { emptyPcn, type Pcn, type SignoffStatus } from "../data/pcn";
 import { api, uploadDocument } from "../data/api";
 import { formatDate, timeAgo } from "../time";
 import { describe } from "./ActivityPage";
@@ -65,6 +65,7 @@ interface Props {
   onNewFeature: () => void;
   onChanged: () => Promise<void>; // reload after a document or blocker change
   canEditPcn: boolean; // wrote the Concept Note, or may manage systems
+  onSignPcn: (index: number, decision: SignoffStatus, remarks?: string) => Promise<void>;
 }
 
 function Card({ title, icon, count, action, children, tone }: { title: string; icon?: ReactNode; count?: ReactNode; action?: ReactNode; children: ReactNode; tone?: "alert" }) {
@@ -231,19 +232,18 @@ export default function ProjectPage(p: Props) {
           {system.pcn ? (
             <PcnCard
               system={{ ...system, pcn: system.pcn }}
+              me={me}
               canRecord={p.canManage}
               canEdit={p.canEditPcn}
               canMoveOn={p.canManage}
-              onRecord={(signatories) =>
-                attempt(() => api(`/systems/${system.id}`, "PATCH", { pcn: { ...system.pcn!, signatories } }).then(p.onChanged)).then(() => undefined)
-              }
+              onSign={(i, d, r) => attempt(() => p.onSignPcn(i, d, r)).then(() => undefined)}
               onEdit={() => setEditingPcn(system.pcn!)}
               onMoveOn={() => attempt(() => api(`/systems/${system.id}`, "PATCH", { status: "UPCOMING" }).then(p.onChanged)).then(() => undefined)}
             />
           ) : (
             p.canManage &&
             system.status === "IDEA" && (
-              <button className="btn btn-ghost block-sm pcn-add" onClick={() => setEditingPcn({ ...emptyPcn(me.name, new Date().toISOString().slice(0, 10)), title: system.name, concept: system.description })}>
+              <button className="btn btn-ghost block-sm pcn-add" onClick={() => setEditingPcn({ ...emptyPcn(me.name, new Date().toISOString().slice(0, 10), users.filter((u) => u.role === "manager")), title: system.name, concept: system.description })}>
                 <FileText size={15} /> Add a Project Concept Note
               </button>
             )

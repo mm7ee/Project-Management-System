@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertOctagon, Menu, Plus, Search } from "lucide-react";
+import { AlertOctagon, FileText, Menu, Plus, Search } from "lucide-react";
 import { getSchedule, type System } from "./data/systems";
 import { api, useAppData, type AppData } from "./data/api";
 import { isAssigned, type Permission, type Prefs } from "./data/roles";
@@ -27,6 +27,8 @@ import { isLate, isOpen, type Feature } from "./data/features";
 import { stalledDays, suggestDevelopers, workloadOf } from "./data/project";
 import RebalanceModal from "./components/Rebalance";
 import { PcnDocument } from "./components/Pcn";
+import ConceptNotesPage from "./components/ConceptNotesPage";
+import { awaitingSignature, type SignoffStatus } from "./data/pcn";
 import type { User } from "./data/roles";
 
 // A project page has its own address (#/projects/<id>), so it can be bookmarked, opened in a
@@ -135,6 +137,12 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   // Admins and managers can add and remove developers, and are told when someone has too much on.
   const canAssign = can("manage_systems") || can("assign_developers");
   const overloadedDevs = users.filter((u) => overloaded(u).length > 0);
+  // Concept Notes waiting for this person's signature.
+  const pcnsToSign = systems.filter((s) => awaitingSignature(s.pcn, me.id));
+  const signPcn = async (systemId: string, index: number, decision: SignoffStatus, remarks?: string) => {
+    await api(`/systems/${systemId}/pcn/sign`, "POST", { index, decision, ...(remarks !== undefined ? { remarks } : {}) });
+    await reload();
+  };
   const [rebalancing, setRebalancing] = useState(false);
   const mayContribute = (s: System) => can("edit_any") || can("manage_systems") || s.lead === me.id || !!me.projectIds?.includes(s.id);
 
@@ -211,6 +219,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
         filter={filter}
         view={selectedId ? "project" : view}
         counts={counts}
+        pcnsToSign={pcnsToSign.length}
         features={{
           count: featureBadge.length,
           urgent: featureBadge.some((f) => f.priority === "CRITICAL" || isLate(f, now)),
@@ -320,6 +329,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
               onNewFeature={() => setFeatureEdit({ feature: null, systemId: selected.id })}
               onChanged={reload}
               canEditPcn={can("manage_systems") || selected.pcnBy === me.id}
+              onSignPcn={(index, decision, remarks) => signPcn(selected.id, index, decision, remarks)}
             />
           ) : (
             <div className="empty">
@@ -340,6 +350,18 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             onPrefs={savePrefs}
             onProfileSaved={reload}
             onSignedOut={reload}
+          />
+        ) : view === "pcns" ? (
+          <ConceptNotesPage
+            systems={systems}
+            me={me}
+            canRecord={can("manage_systems")}
+            canPropose={can("propose_projects") || can("manage_systems")}
+            onSign={signPcn}
+            onPropose={() => {
+              setAddError("");
+              setAdding(true);
+            }}
           />
         ) : view === "features" ? (
           <FeaturesPage
@@ -377,6 +399,22 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           />
         ) : (
           <>
+            {pcnsToSign.length > 0 && (
+              <div className="pcn-banner" role="status">
+                <FileText size={18} />
+                <span>
+                  <b>
+                    {pcnsToSign.length === 1
+                      ? `"${pcnsToSign[0].pcn!.title}" is waiting for your signature`
+                      : `${pcnsToSign.length} Concept Notes are waiting for your signature`}
+                  </b>{" "}
+                  Read the PCN, then approve or decline it.
+                </span>
+                <button className="btn btn-navy sm" onClick={() => setView("pcns")}>
+                  Review
+                </button>
+              </div>
+            )}
             {canAssign && overloadedDevs.length > 0 && (
               <div className="overload-banner" role="status">
                 <AlertOctagon size={18} />

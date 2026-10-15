@@ -4,7 +4,7 @@ import { ROLE_LABEL, type Prefs, type User } from "../data/roles";
 import { COMPANY_URL } from "../brand";
 
 export type Filter = "ALL" | Status | "OVERDUE" | "REQUESTED" | "MAINTENANCE" | "MINE" | "BLOCKED";
-export type View = "projects" | "project" | "features" | "reports" | "users" | "activity" | "settings";
+export type View = "projects" | "project" | "features" | "pcns" | "reports" | "users" | "activity" | "settings";
 
 // Order follows the mock-up. Optional items only appear when something is in them.
 const NAV: { key: Filter; label: string; optional?: boolean }[] = [
@@ -29,6 +29,7 @@ interface Props {
   view: View;
   counts: Record<Filter, number>;
   features: { count: number; urgent: boolean }; // open requests to show beside "Feature requests"
+  pcnsToSign: number; // Concept Notes waiting for your signature
   open: boolean;
   canAdd: boolean;
   canPropose: boolean; // may propose a project with a Concept Note
@@ -105,6 +106,16 @@ export default function Sidebar(p: Props) {
               <ListChecks size={16} className="nav-icon" /> Feature requests
             </span>
             {p.features.count > 0 && <span className={`nav-count ${p.features.urgent ? "alert" : ""}`}>{p.features.count}</span>}
+          </button>
+          <button className={`nav-item ${p.view === "pcns" ? "active" : ""}`} onClick={go(() => p.onView("pcns"))}>
+            <span>
+              <FileText size={16} className="nav-icon" /> Concept Notes
+            </span>
+            {p.pcnsToSign > 0 && (
+              <span className="nav-count alert" title={`${p.pcnsToSign} waiting for your signature`}>
+                {p.pcnsToSign}
+              </span>
+            )}
           </button>
           {p.canReports && (
             <button className={`nav-item ${p.view === "reports" ? "active" : ""}`} onClick={go(() => p.onView("reports"))}>

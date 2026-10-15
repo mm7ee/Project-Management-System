@@ -25,7 +25,8 @@ const today = () => new Date().toISOString().slice(0, 10);
 export default function AddSystemModal({ users, systems, limit, templates, me, proposeOnly = false, error, onSave, onDeleteTemplate, onClose }: Props) {
   // First choose how to start: a Concept Note, blank, or a template that prefills the form.
   const [step, setStep] = useState<"start" | "form" | "pcn">(proposeOnly ? "pcn" : "start");
-  const [pcn, setPcn] = useState<Pcn>(() => emptyPcn(me.name, today()));
+  // The PCN goes to the Managers for sign-off by default.
+  const [pcn, setPcn] = useState<Pcn>(() => emptyPcn(me.name, today(), users.filter((u) => u.role === "manager")));
   const [template, setTemplate] = useState<ProjectTemplate | null>(null);
   const [dueFromTemplate, setDueFromTemplate] = useState(false); // due date still the template's suggestion
   const [deleting, setDeleting] = useState<string | null>(null);

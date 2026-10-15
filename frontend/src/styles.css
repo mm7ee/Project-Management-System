@@ -1178,7 +1178,7 @@ a.nav-item { text-decoration: none; }
   .pcn-body { padding-left: 0; }
   .pcn-pillars { grid-template-columns: minmax(0, 1fr); }
   .pcn-signer { grid-template-columns: auto minmax(0, 1fr) auto; }
-  .pcn-signer input:nth-of-type(2) { grid-column: 2 / -1; }
+  .pcn-signer > input { grid-column: 2 / -1; }
   .pcn-doc { padding: 14px; }
   .pcn-doc-meta { grid-template-columns: minmax(0, 1fr); }
 }
@@ -1190,3 +1190,28 @@ a.nav-item { text-decoration: none; }
 /* Checkboxes and radios inside a .field keep their natural size, not the text-input styling. */
 .field .mfa-check input[type="checkbox"], .field .mfa-check input[type="radio"] { width: auto; padding: 0; margin: 0; border: 0; flex: none; }
 .pcn-pillars .mfa-check { justify-content: flex-start; text-align: left; }
+
+/* ---------- PCN sign-off ---------- */
+.pcn-who { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pcn-who select { padding: 8px 10px; border: 2px solid var(--input-line); border-radius: 10px; background: var(--input-bg); color: var(--text); min-width: 0; }
+.pcn-who select:focus { outline: 0; border-color: var(--cyan); }
+.pcn-signer { align-items: start; }
+.pcn-signer > .pcn-n, .pcn-signer > .pcn-primary, .pcn-signer > .icon-link { margin-top: 8px; }
+.pcn-banner {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; padding: 12px 16px;
+  border: 2px solid var(--cyan); border-radius: 10px; background: var(--tint-cyan); color: var(--cyan-ink); font-size: 14px; line-height: 1.45;
+}
+.pcn-banner svg { flex: none; }
+.pcn-banner span { flex: 1; min-width: 220px; color: var(--text); }
+.pcn-banner b { color: var(--heading); }
+.pcn-card.pcn-yours { border: 2px solid var(--cyan); }
+.pcn-ask { padding: 8px 12px; border-radius: 8px; background: var(--tint-cyan); color: var(--text); font-size: 14px; }
+.pcn-signoffs tr.pcn-you td { background: var(--tint-cyan); }
+.pcn-decide { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pcn-decide input { flex: 1; min-width: 160px; padding: 6px 10px; border: 2px solid var(--input-line); border-radius: 8px; background: var(--input-bg); color: var(--text); font-size: 13px; }
+.pcn-decide input:focus { outline: 0; border-color: var(--cyan); }
+.pcn-concept { font-size: 14px; line-height: 1.5; color: var(--text); white-space: pre-wrap; }
+.pcn-queue { display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px; }
+.pcn-signer-list { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.pcn-link { color: var(--heading); }
+.pcn-link:hover { text-decoration: underline; }

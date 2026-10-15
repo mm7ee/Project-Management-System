@@ -114,6 +114,11 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
       return d.pcn
         ? `Proposed ${name} with a Project Concept Note`
         : `Added system ${name} (${statusLabel(d.status)}, ${str(d.progress)}%)${d.template ? ` from the "${str(d.template)}" template` : ""}`;
+    case "pcn_signed": {
+      const verb = d.decision === "APPROVED" ? "approved" : d.decision === "DECLINED" ? "declined" : "withdrew a decision on";
+      const who = d.recordedFor ? `Recorded that ${str(d.signatory)} ${verb}` : `Signed: ${verb}`;
+      return `${who} the Project Concept Note for ${name}${d.from !== d.to ? `; now ${String(d.to).toLowerCase()}` : ""}`;
+    }
     case "pcn_updated": {
       const signoffs = (d.signoffs as string[] | undefined) ?? [];
       const moved = d.from !== d.to ? `; now ${String(d.to).toLowerCase()}` : "";
