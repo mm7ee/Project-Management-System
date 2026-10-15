@@ -501,8 +501,12 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     );
   }
   // When the admin requires two-step verification for this role, nothing works until it's set up.
+  // A required password change comes first, so it stays allowed: the order is password, then
+  // two-step setup, then the app.
   const policy = await mfaPolicy(db);
-  if (!me.mfa_secret && policy.roles.includes(me.role) && !["/api/me/mfa/setup", "/api/me/mfa/enable", "/api/logout", "/api/logout-all"].includes(path)) {
+  const mfaSetupPaths = ["/api/me/mfa/setup", "/api/me/mfa/enable", "/api/logout", "/api/logout-all"];
+  if (me.must_change_password) mfaSetupPaths.push("/api/me/password");
+  if (!me.mfa_secret && policy.roles.includes(me.role) && !mfaSetupPaths.includes(path)) {
     throw new HttpError(403, `Hi ${me.name}, your organisation requires two-step verification. Set it up to continue.`, "mfa_setup_required");
   }
 
