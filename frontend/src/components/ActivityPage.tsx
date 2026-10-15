@@ -111,7 +111,16 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
     case "profile_updated":
       return `Updated their ${(d.fields as string[] | undefined)?.join(" and ") ?? "contact details"}`;
     case "system_created":
-      return `Added system ${name} (${statusLabel(d.status)}, ${str(d.progress)}%)${d.template ? ` from the "${str(d.template)}" template` : ""}`;
+      return d.pcn
+        ? `Proposed ${name} with a Project Concept Note`
+        : `Added system ${name} (${statusLabel(d.status)}, ${str(d.progress)}%)${d.template ? ` from the "${str(d.template)}" template` : ""}`;
+    case "pcn_updated": {
+      const signoffs = (d.signoffs as string[] | undefined) ?? [];
+      const moved = d.from !== d.to ? `; now ${String(d.to).toLowerCase()}` : "";
+      return signoffs.length
+        ? `Recorded PCN approvals on ${name}: ${signoffs.join(", ")}${moved}`
+        : `${d.from ? "Edited" : "Added"} the Project Concept Note for ${name}${moved}`;
+    }
     case "template_created":
       return `Saved project template "${str(d.template)}"${d.from ? ` from ${sysName(d.from)}` : ""}`;
     case "template_deleted":

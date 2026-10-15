@@ -1,4 +1,6 @@
 // The System shape and the status/schedule rules, shared by the UI and the Worker.
+
+import type { Pcn } from "./pcn";
 // The systems themselves live in the D1 database (seeded by migrations/0002_seed.sql).
 
 export type Status = "LIVE" | "COMPLETED" | "WIP" | "TESTING" | "TO_DEPLOY" | "UPCOMING" | "IDEA";
@@ -25,6 +27,8 @@ export interface System {
   updatedAt?: string; // last progress update; falls back to finishedAt / startedAt
   updatedBy?: string; // initials of whoever posted it; falls back to the owner's
   template?: string; // name of the template it was created from, if any
+  pcn?: Pcn; // its Project Concept Note, if it was proposed with one
+  pcnBy?: string; // user id of whoever wrote the PCN; they may keep editing it
 }
 
 export const STATUS_META: Record<Status, { label: string; tone: string }> = {

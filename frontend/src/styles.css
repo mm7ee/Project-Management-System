@@ -1116,3 +1116,77 @@ a.nav-item { text-decoration: none; }
 .start-chosen b { color: var(--heading); }
 .start-chosen .link-btn { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; }
 .template-form { gap: 10px; }
+
+/* ---------- Project Concept Note (PCN) ---------- */
+.start-option.pcn { border: 2px solid var(--cyan); background: var(--tint-cyan); }
+.start-option.pcn .start-icon { background: var(--cyan); }
+.pcn-modal { width: min(760px, 100%); }
+.pcn-form { display: flex; flex-direction: column; gap: 14px; }
+.pcn-section { display: flex; flex-direction: column; gap: 10px; padding-top: 14px; border-top: 1px solid var(--border); }
+.pcn-section > header { display: flex; align-items: center; gap: 10px; }
+.pcn-section h3 { font-size: 15.5px; font-weight: 800; color: var(--heading); }
+.pcn-n { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--navy); color: #fff; font-size: 13px; font-weight: 800; }
+.pcn-n.small { width: 22px; height: 22px; font-size: 12px; }
+.pcn-body { display: flex; flex-direction: column; gap: 10px; padding-left: 36px; }
+.pcn-pillars { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; }
+.pcn-pillars .mfa-check { font-weight: 500; }
+.pcn-date { display: flex; align-items: center; gap: 8px; }
+.pcn-date input, .pcn-signer input:not([type="radio"]) {
+  padding: 8px 12px; border: 2px solid var(--input-line); border-radius: 10px; background: var(--input-bg); color: var(--text); min-width: 0;
+}
+.pcn-date input:focus, .pcn-signer input:focus { outline: 0; border-color: var(--cyan); }
+.pcn-signers { display: flex; flex-direction: column; gap: 8px; }
+.pcn-signer { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.2fr) auto auto; align-items: center; gap: 8px; }
+.pcn-primary { font-size: 13px; font-weight: 600; white-space: nowrap; }
+.pcn-note { font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.pcn-body .link-btn { align-self: flex-start; display: inline-flex; align-items: center; gap: 3px; }
+.pcn-card .pcn-summary { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13.5px; }
+.pcn-card.pcn-ok { border: 2px solid var(--green); }
+.pcn-next { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: 10px; background: var(--tint-green); color: var(--green-ink); font-size: 14px; }
+.pcn-next span { flex: 1; min-width: 200px; color: var(--text); }
+.pcn-signoffs td, .pcn-signoffs th { padding: 8px 10px; }
+.pcn-add { align-self: flex-start; }
+
+/* The printable PCN, laid out like the OmniContact BPO document. */
+.pcn-doc-page .page-actions { justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.pcn-doc-page .back-link { margin-bottom: 0; }
+.pcn-doc { max-width: 860px; margin: 0 auto; padding: 22px 26px 28px; background: #fff; color: #111; border: 3px solid #1b2fb5; border-radius: 4px; font-size: 13.5px; line-height: 1.45; }
+.pcn-doc-banner { display: flex; align-items: center; gap: 16px; padding: 12px 18px; border-radius: 10px; background: linear-gradient(180deg, #1c69b4, #0d4a8f); color: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.pcn-doc-banner img { height: 36px; width: auto; }
+.pcn-doc-banner div { flex: 1; display: flex; flex-direction: column; align-items: center; }
+.pcn-doc-banner b { font-size: 21px; }
+.pcn-doc-banner span { font-size: 13.5px; font-style: italic; font-weight: 700; color: #cfe6ff; }
+.pcn-doc-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 20px; margin: 16px 0; }
+.pcn-doc-table { width: 100%; border-collapse: collapse; margin-bottom: 0; }
+.pcn-doc-table th, .pcn-doc-table td { border: 1px solid #222; padding: 8px 10px; vertical-align: top; text-align: left; }
+.pcn-doc-table > tbody > tr > th:first-child { width: 36px; }
+.pcn-doc-table > tbody > tr > th:nth-child(2) { width: 130px; }
+.pcn-doc-table.signers { margin-top: -1px; }
+.pcn-doc-table.signers th { font-weight: 700; }
+.pcn-doc-table h4 { margin: 0 0 4px; font-size: 13.5px; }
+.pcn-doc-table h4:not(:first-child) { margin-top: 12px; }
+.pcn-doc-table p { margin: 4px 0; }
+.pcn-doc-text { white-space: pre-wrap; }
+.pcn-doc-empty { color: #888; font-style: italic; }
+.pcn-doc-pillars { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 2px; }
+.pcn-box { display: inline-block; width: 18px; }
+.pcn-doc-table ol { margin: 0; padding-left: 20px; }
+.pcn-doc-note { border: 1px solid #222; border-top: 0; padding: 8px 10px; font-weight: 700; }
+.pcn-doc-note ul { margin: 4px 0 0; padding-left: 22px; }
+
+@media (max-width: 700px) {
+  .pcn-body { padding-left: 0; }
+  .pcn-pillars { grid-template-columns: minmax(0, 1fr); }
+  .pcn-signer { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .pcn-signer input:nth-of-type(2) { grid-column: 2 / -1; }
+  .pcn-doc { padding: 14px; }
+  .pcn-doc-meta { grid-template-columns: minmax(0, 1fr); }
+}
+@media print {
+  .pcn-doc-page { padding: 0; }
+  .pcn-doc { border-width: 2px; max-width: none; }
+  .topbar { display: none !important; }
+}
+/* Checkboxes and radios inside a .field keep their natural size, not the text-input styling. */
+.field .mfa-check input[type="checkbox"], .field .mfa-check input[type="radio"] { width: auto; padding: 0; margin: 0; border: 0; flex: none; }
+.pcn-pillars .mfa-check { justify-content: flex-start; text-align: left; }

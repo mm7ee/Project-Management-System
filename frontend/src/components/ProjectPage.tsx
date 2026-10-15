@@ -18,12 +18,15 @@ import {
   Upload,
   UserMinus,
   Wrench,
+  X,
 } from "lucide-react";
 import { HEALTH_META, initials, type System } from "../data/systems";
 import type { ActivityEntry, UpdateRequest, User } from "../data/roles";
 import { byUrgency, isLate, isOpen, type Feature } from "../data/features";
 import { MAX_DOCUMENT_BYTES, formatBytes, stalledDays, type Blocker, type Limits, type ProjectDocument, type Suggestion } from "../data/project";
 import { HandoverSuggestions } from "./Rebalance";
+import { PcnCard, PcnForm } from "./Pcn";
+import { emptyPcn, type Pcn } from "../data/pcn";
 import { api, uploadDocument } from "../data/api";
 import { formatDate, timeAgo } from "../time";
 import { describe } from "./ActivityPage";
@@ -61,6 +64,7 @@ interface Props {
   onOpenFeature: (f: Feature) => void;
   onNewFeature: () => void;
   onChanged: () => Promise<void>; // reload after a document or blocker change
+  canEditPcn: boolean; // wrote the Concept Note, or may manage systems
 }
 
 function Card({ title, icon, count, action, children, tone }: { title: string; icon?: ReactNode; count?: ReactNode; action?: ReactNode; children: ReactNode; tone?: "alert" }) {
@@ -79,6 +83,7 @@ function Card({ title, icon, count, action, children, tone }: { title: string; i
 
 export default function ProjectPage(p: Props) {
   const { system, now, me, users } = p;
+  const [editingPcn, setEditingPcn] = useState<Pcn | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [asking, setAsking] = useState(false);
   const [message, setMessage] = useState("");
@@ -223,6 +228,56 @@ export default function ProjectPage(p: Props) {
 
       <div className="project-grid">
         <div className="project-main">
+          {system.pcn ? (
+            <PcnCard
+              system={{ ...system, pcn: system.pcn }}
+              canRecord={p.canManage}
+              canEdit={p.canEditPcn}
+              canMoveOn={p.canManage}
+              onRecord={(signatories) =>
+                attempt(() => api(`/systems/${system.id}`, "PATCH", { pcn: { ...system.pcn!, signatories } }).then(p.onChanged)).then(() => undefined)
+              }
+              onEdit={() => setEditingPcn(system.pcn!)}
+              onMoveOn={() => attempt(() => api(`/systems/${system.id}`, "PATCH", { status: "UPCOMING" }).then(p.onChanged)).then(() => undefined)}
+            />
+          ) : (
+            p.canManage &&
+            system.status === "IDEA" && (
+              <button className="btn btn-ghost block-sm pcn-add" onClick={() => setEditingPcn({ ...emptyPcn(me.name, new Date().toISOString().slice(0, 10)), title: system.name, concept: system.description })}>
+                <FileText size={15} /> Add a Project Concept Note
+              </button>
+            )
+          )}
+          {editingPcn && (
+            <div className="backdrop modal-backdrop" onClick={() => setEditingPcn(null)}>
+              <form
+                className="modal modal-wide pcn-modal"
+                role="dialog"
+                aria-label="Edit Project Concept Note"
+                onClick={(e) => e.stopPropagation()}
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const pcn = { ...editingPcn, proposedDates: editingPcn.proposedDates.filter((d) => d) };
+                  if (await attempt(() => api(`/systems/${system.id}`, "PATCH", { pcn }).then(p.onChanged))) setEditingPcn(null);
+                }}
+              >
+                <button type="button" className="close-btn" onClick={() => setEditingPcn(null)} aria-label="Close">
+                  <X size={18} />
+                </button>
+                <h2>{system.pcn ? "Edit Project Concept Note" : "Add a Project Concept Note"}</h2>
+                <PcnForm value={editingPcn} onChange={setEditingPcn} users={users} />
+                {error && <p className="form-error">{error}</p>}
+                <div className="modal-actions">
+                  <button type="button" className="btn btn-ghost" onClick={() => setEditingPcn(null)}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-amber" disabled={!editingPcn.title.trim()}>
+                    Save PCN
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
           <Card title="Overview">
             {system.description ? <p className="drawer-desc flush">{system.description}</p> : <p className="lead-none">No description yet.</p>}
             {system.health === "Maintenance" && (

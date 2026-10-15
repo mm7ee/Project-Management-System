@@ -29,6 +29,7 @@ import { DEFAULT_LIMITS, MAX_DOCUMENT_BYTES, formatBytes, type Blocker, type Lim
 import { buildShowcase } from "../src/data/showcase";
 import { PASSWORD_HISTORY, passwordProblem } from "../src/data/password";
 import type { ProjectTemplate } from "../src/data/templates";
+import { cleanPcn, pcnStatus } from "../src/data/pcn";
 import {
   DEFAULT_ROLE_PERMISSIONS,
   ROLES,
@@ -377,7 +378,7 @@ const ACTIVITY_KINDS: Record<string, string[]> = {
   signin: ["login", "logout", "logout_all"],
   failed: ["login_failed"],
   account: ["password_changed", "password_set_after_reset", "profile_updated", "mfa_enabled", "mfa_disabled", "mfa_recovery_regenerated"],
-  systems: ["system_created", "system_progress", "system_updated", "system_developers", "system_deleted", "request_created", "request_dismissed", "template_created", "template_deleted"],
+  systems: ["system_created", "system_progress", "system_updated", "system_developers", "system_deleted", "request_created", "request_dismissed", "template_created", "template_deleted", "pcn_updated"],
   features: ["feature_created", "feature_updated", "feature_deleted"],
   project: ["document_added", "document_removed", "blocker_raised", "blocker_resolved", "blocker_reopened", "blocker_deleted"],
   admin: ["user_created", "user_updated", "user_password_reset", "user_deleted", "roles_updated", "limits_updated", "mfa_reset", "mfa_policy_updated"],
@@ -768,12 +769,27 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   };
 
   if (path === "/api/systems" && method === "POST") {
-    need("manage_systems");
     const b = await body<Partial<System> & { developers?: string[] }>(req);
-    const name = text(b.name, "Name", true)!;
+    // Managers add systems outright. Anyone allowed to propose may add one with a Concept Note,
+    // which starts as an Idea with nobody assigned until it's approved and planned.
+    const proposal = !can("manage_systems");
+    if (proposal && !(b.pcn !== undefined && can("propose_projects"))) throw new HttpError(403, "You don't have permission to do that");
+    const pcn = b.pcn !== undefined ? cleanPcn(b.pcn) : undefined;
+    if (pcn && !pcn.title) throw new HttpError(400, "The PCN needs a title");
+    // A proposer can't arrive with sign-offs already recorded; only managers record approvals.
+    if (pcn && proposal) pcn.signatories = pcn.signatories.map(({ date: _date, ...s }) => ({ ...s, status: "PENDING" }));
+    const name = text(b.name ?? pcn?.title, "Name", true)!;
     let id = slug(name);
     for (let n = 2; await db.prepare("SELECT 1 FROM systems WHERE id = ?").bind(id).first(); n++) id = `${slug(name)}-${n}`;
-    const status = checkStatus(b.status ?? "WIP");
+    const status = proposal ? "IDEA" : checkStatus(b.status ?? "WIP");
+    if (proposal) {
+      delete b.developers;
+      delete b.lead;
+      delete b.dueAt;
+      delete b.finishedAt;
+      delete b.health;
+      b.progress = 0;
+    }
     // Validate before inserting, so a bad list doesn't leave a half-created system behind.
     if (b.developers !== undefined) await checkRoom((await checkDevelopers(b.developers)).ids);
     const system: System = {
@@ -792,12 +808,19 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       ...(b.health ? { health: b.health === "Maintenance" ? "Maintenance" : "Stable" } : {}),
       ...(b.lead ? { lead: text(b.lead, "Lead") } : {}),
       ...(b.template ? { template: text(b.template, "Template")!.slice(0, 100) } : {}),
+      ...(pcn ? { pcn, pcnBy: me.id } : {}),
       updatedAt: now,
       updatedBy: initials(me.name),
     };
     const sort = (await db.prepare("SELECT COALESCE(MAX(sort), 0) + 1 AS s FROM systems").first<{ s: number }>())!.s;
     await db.prepare("INSERT INTO systems (id, sort, data) VALUES (?, ?, ?)").bind(id, sort, JSON.stringify(system)).run();
-    await audit(db, req, me, "system_created", id, { name, status, progress: system.progress, ...(system.template ? { template: system.template } : {}) });
+    await audit(db, req, me, "system_created", id, {
+      name,
+      status,
+      progress: system.progress,
+      ...(system.template ? { template: system.template } : {}),
+      ...(pcn ? { pcn: true } : {}),
+    });
     if (b.developers?.length) await audit(db, req, me, "system_developers", id, { name, ...(await setDevelopers(id, b.developers)) });
     return json(system, 201);
   }
@@ -808,6 +831,30 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     const current = await getSystem(db, id);
     const b = await body<Partial<System> & { developers?: string[] }>(req);
     const next: System = { ...current };
+
+    // The Concept Note: its author keeps editing it; managers also record approvals as they come
+    // in through Econet. Authors can't mark their own PCN approved: their sign-off changes are ignored.
+    let pcnChange: Record<string, unknown> | null = null;
+    if (b.pcn !== undefined) {
+      const manager = can("manage_systems");
+      if (!manager && current.pcnBy !== me.id) throw new HttpError(403, "Only whoever wrote the PCN or a manager can change it");
+      const pcn = cleanPcn(b.pcn);
+      if (!pcn.title) throw new HttpError(400, "The PCN needs a title");
+      if (!manager) {
+        pcn.signatories = pcn.signatories.map((s) => {
+          const was = current.pcn?.signatories.find((o) => o.name === s.name);
+          const { date: _date, ...rest } = s;
+          return { ...rest, status: was?.status ?? "PENDING", ...(was?.date ? { date: was.date } : {}) };
+        });
+      }
+      const signoffs = pcn.signatories
+        .filter((s) => (current.pcn?.signatories.find((o) => o.name === s.name)?.status ?? "PENDING") !== s.status)
+        .map((s) => `${s.name}: ${s.status.toLowerCase()}`);
+      const before = current.pcn ? pcnStatus(current.pcn) : null;
+      next.pcn = pcn;
+      if (!current.pcnBy) next.pcnBy = me.id;
+      pcnChange = { name: current.name, from: before, to: pcnStatus(pcn), ...(signoffs.length ? { signoffs } : {}) };
+    }
 
     // Progress, status and maintenance are "progress updates": the assigned developer may post them.
     const touchesProgress =
@@ -856,6 +903,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     }
 
     const stmts = [db.prepare("UPDATE systems SET data = ? WHERE id = ?").bind(JSON.stringify(next), id)];
+    if (pcnChange) await audit(db, req, me, "pcn_updated", id, pcnChange);
     // Posting progress answers any open update requests for this project.
     if (touchesProgress) stmts.push(db.prepare("DELETE FROM requests WHERE system_id = ?").bind(id));
     await db.batch(stmts);

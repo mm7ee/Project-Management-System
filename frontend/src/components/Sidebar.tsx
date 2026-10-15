@@ -1,4 +1,4 @@
-import { AlertOctagon, BellRing, FileBarChart, FolderGit2, History, ListChecks, MonitorSmartphone, Moon, Orbit, Plus, Settings, Sun, Users, Wrench, X } from "lucide-react";
+import { AlertOctagon, BellRing, FileBarChart, FileText, FolderGit2, History, ListChecks, MonitorSmartphone, Moon, Orbit, Plus, Settings, Sun, Users, Wrench, X } from "lucide-react";
 import { STATUS_META, initials, type Status } from "../data/systems";
 import { ROLE_LABEL, type Prefs, type User } from "../data/roles";
 import { COMPANY_URL } from "../brand";
@@ -31,6 +31,7 @@ interface Props {
   features: { count: number; urgent: boolean }; // open requests to show beside "Feature requests"
   open: boolean;
   canAdd: boolean;
+  canPropose: boolean; // may propose a project with a Concept Note
   canReports: boolean;
   canUsers: boolean;
   canActivity: boolean;
@@ -133,13 +134,20 @@ export default function Sidebar(p: Props) {
           </button>
         </nav>
 
-        {p.canAdd && (
+        {p.canAdd ? (
           <button className="add-btn" onClick={go(p.onAdd)}>
             <Plus size={17} strokeWidth={2.75} /> Add system
           </button>
+        ) : (
+          // Without the right to add systems outright, new projects start as a Concept Note.
+          p.canPropose && (
+            <button className="add-btn" onClick={go(p.onAdd)}>
+              <FileText size={17} strokeWidth={2.5} /> Propose a project
+            </button>
+          )
         )}
         {p.canLogFeature && (
-          <button className={`add-btn ${p.canAdd ? "stacked" : ""}`} onClick={go(p.onLogFeature)}>
+          <button className={`add-btn ${p.canAdd || p.canPropose ? "stacked" : ""}`} onClick={go(p.onLogFeature)}>
             <ListChecks size={17} strokeWidth={2.5} /> Log feature request
           </button>
         )}

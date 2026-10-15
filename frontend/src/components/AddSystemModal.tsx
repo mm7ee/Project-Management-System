@@ -1,15 +1,19 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, FilePlus2, LayoutTemplate, Trash2, X } from "lucide-react";
+import { ArrowLeft, FilePlus2, FileText, LayoutTemplate, Trash2, X } from "lucide-react";
 import { STATUS_META, type Health, type Status, type System } from "../data/systems";
 import type { User } from "../data/roles";
 import { templateDueDate, type ProjectTemplate } from "../data/templates";
 import DeveloperPicker from "./DeveloperPicker";
+import { emptyPcn, pcnMissing, type Pcn } from "../data/pcn";
+import { PcnForm } from "./Pcn";
 
 interface Props {
   users: User[];
   systems: System[];
   limit: number; // most projects a developer may have
   templates: ProjectTemplate[];
+  me: User;
+  proposeOnly?: boolean; // may only propose with a Concept Note, not add systems outright
   error?: string;
   onSave: (s: Partial<System> & { developers: string[] }) => void;
   onDeleteTemplate: (id: string) => Promise<void>;
@@ -18,9 +22,10 @@ interface Props {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function AddSystemModal({ users, systems, limit, templates, error, onSave, onDeleteTemplate, onClose }: Props) {
-  // First choose how to start: blank, or from a template that prefills the form.
-  const [step, setStep] = useState<"start" | "form">("start");
+export default function AddSystemModal({ users, systems, limit, templates, me, proposeOnly = false, error, onSave, onDeleteTemplate, onClose }: Props) {
+  // First choose how to start: a Concept Note, blank, or a template that prefills the form.
+  const [step, setStep] = useState<"start" | "form" | "pcn">(proposeOnly ? "pcn" : "start");
+  const [pcn, setPcn] = useState<Pcn>(() => emptyPcn(me.name, today()));
   const [template, setTemplate] = useState<ProjectTemplate | null>(null);
   const [dueFromTemplate, setDueFromTemplate] = useState(false); // due date still the template's suggestion
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -66,6 +71,63 @@ export default function AddSystemModal({ users, systems, limit, templates, error
     if (template && dueFromTemplate) setDueAt(templateDueDate(template, v));
   };
 
+  if (step === "pcn") {
+    // Everything but the signatories is needed to submit; without signatories it stays a draft.
+    const missing = pcnMissing(pcn).filter((m) => !m.startsWith("4."));
+    return (
+      <div className="backdrop modal-backdrop" onClick={onClose}>
+        <form
+          className="modal modal-wide pcn-modal"
+          role="dialog"
+          aria-label="Project Concept Note"
+          onClick={(e) => e.stopPropagation()}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (missing.length) return;
+            const start = pcn.proposedDates.find((d) => d) ?? today();
+            onSave({
+              name: pcn.title.trim(),
+              description: pcn.concept.trim(),
+              status: "IDEA",
+              progress: 0,
+              startedAt: start,
+              template: "Project Concept Note",
+              developers: [],
+              pcn: { ...pcn, proposedDates: pcn.proposedDates.filter((d) => d) },
+            });
+          }}
+        >
+          <button type="button" className="close-btn" onClick={onClose} aria-label="Close">
+            <X size={18} />
+          </button>
+          <h2>Project Concept Note</h2>
+          <p className="modal-note">
+            OmniContact BPO's PCN for proposing a new project. It's saved as an <b>Idea</b>; once every signatory approves through Econet,
+            it moves on to planning.
+            {!proposeOnly && (
+              <>
+                {" "}
+                <button type="button" className="link-btn" onClick={() => setStep("start")}>
+                  <ArrowLeft size={13} /> Other ways to start
+                </button>
+              </>
+            )}
+          </p>
+          <PcnForm value={pcn} onChange={setPcn} users={users} />
+          {error && <p className="form-error">{error}</p>}
+          <div className="modal-actions">
+            <button type="button" className="btn btn-ghost" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-amber" disabled={missing.length > 0}>
+              Submit PCN
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
   if (step === "start") {
     return (
       <div className="backdrop modal-backdrop" onClick={onClose}>
@@ -76,7 +138,17 @@ export default function AddSystemModal({ users, systems, limit, templates, error
           <h2>Add a system</h2>
           <p className="modal-note">How do you want to start?</p>
 
-          <button type="button" className="start-option blank" onClick={() => begin(null)} autoFocus>
+          <button type="button" className="start-option pcn" onClick={() => setStep("pcn")} autoFocus>
+            <span className="start-icon">
+              <FileText size={20} />
+            </span>
+            <span className="start-text">
+              <b>Project Concept Note (PCN)</b>
+              <small>For a new idea that needs approval: fill in the OmniContact PCN and track sign-off from its signatories.</small>
+            </span>
+          </button>
+
+          <button type="button" className="start-option blank" onClick={() => begin(null)}>
             <span className="start-icon">
               <FilePlus2 size={20} />
             </span>

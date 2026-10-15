@@ -26,6 +26,7 @@ import FeatureModal from "./components/FeatureModal";
 import { isLate, isOpen, type Feature } from "./data/features";
 import { stalledDays, suggestDevelopers, workloadOf } from "./data/project";
 import RebalanceModal from "./components/Rebalance";
+import { PcnDocument } from "./components/Pcn";
 import type { User } from "./data/roles";
 
 // A project page has its own address (#/projects/<id>), so it can be bookmarked, opened in a
@@ -33,7 +34,9 @@ import type { User } from "./data/roles";
 // /executive is a public showcase for leadership: totals only, no sign-in, linked from nowhere.
 const isExecutive = () => /^\/executive\/?$/.test(window.location.pathname);
 
-const projectInHash = () => window.location.hash.match(/^#\/projects\/([a-z0-9-]+)$/)?.[1] ?? null;
+const projectInHash = () => window.location.hash.match(/^#\/projects\/([a-z0-9-]+)(\/pcn)?$/)?.[1] ?? null;
+// #/projects/<id>/pcn shows that project's Concept Note as a printable document.
+const pcnInHash = () => /^#\/projects\/[a-z0-9-]+\/pcn$/.test(window.location.hash);
 
 export default function App() {
   // The public showcase needs no account, so it skips sign-in entirely.
@@ -88,8 +91,12 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   );
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(projectInHash);
+  const [showPcn, setShowPcn] = useState(pcnInHash);
   useEffect(() => {
-    const onHash = () => setSelectedId(projectInHash());
+    const onHash = () => {
+      setSelectedId(projectInHash());
+      setShowPcn(pcnInHash());
+    };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -210,6 +217,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
         }}
         open={menuOpen}
         canAdd={can("manage_systems")}
+        canPropose={can("propose_projects")}
         canLogFeature={can("manage_features") && systems.length > 0}
         onLogFeature={() => setFeatureEdit({ feature: null, systemId: selectedId ?? undefined })}
         canReports={can("reports")}
@@ -263,7 +271,9 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
         </header>
 
         {selectedId ? (
-          selected ? (
+          selected && showPcn && selected.pcn ? (
+            <PcnDocument system={{ ...selected, pcn: selected.pcn }} onBack={() => openProject(selected.id)} />
+          ) : selected ? (
             <ProjectPage
               system={selected}
               systems={systems}
@@ -309,6 +319,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
               onOpenFeature={(feature) => setFeatureEdit({ feature })}
               onNewFeature={() => setFeatureEdit({ feature: null, systemId: selected.id })}
               onChanged={reload}
+              canEditPcn={can("manage_systems") || selected.pcnBy === me.id}
             />
           ) : (
             <div className="empty">
@@ -465,6 +476,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           systems={systems}
           limit={limits.projects}
           templates={data.templates}
+          me={me}
+          proposeOnly={!can("manage_systems")}
           error={addError}
           onDeleteTemplate={async (id) => {
             try {
