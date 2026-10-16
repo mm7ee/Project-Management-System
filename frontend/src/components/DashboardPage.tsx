@@ -24,6 +24,7 @@ import { ProgressBar, StatusPill } from "./SystemCard";
 import { STAGES, STAGE_COLOR, TooltipLayer, stageOf } from "./reports/chartKit";
 import { WorkloadBars } from "./reports/Charts";
 import { Columns, Donut, TrendChart } from "./reports/DashCharts";
+import Panel from "./Panel";
 
 interface Props {
   me: User;
@@ -38,19 +39,6 @@ interface Props {
   isMine: (s: System) => boolean;
   onOpen: (id: string) => void;
   onTab: (f: Filter) => void; // open the Projects page on a tab
-}
-
-/** A dashboard card: title on the left, an optional control on the right, a rule under both. */
-function Panel({ title, action, children, className = "" }: { title: string; action?: ReactNode; children: ReactNode; className?: string }) {
-  return (
-    <section className={`d-card ${className}`}>
-      <header className="d-card-head">
-        <h3>{title}</h3>
-        {action}
-      </header>
-      <div className="d-card-body">{children}</div>
-    </section>
-  );
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

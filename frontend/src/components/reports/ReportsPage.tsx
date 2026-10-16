@@ -1,13 +1,16 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, ClipboardCopy, Download, Info, Printer, TrendingDown } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronRight, ClipboardCopy, Download, FolderKanban, Info, Printer, TrendingDown, TrendingUp } from "lucide-react";
 import { SCHEDULE_META, STATUS_META, getSchedule, type System } from "../../data/systems";
 import type { UpdateRequest, User } from "../../data/roles";
 import { FEATURE_STATUS_META, KIND_META, PRIORITY_META, byUrgency, isLate, isOpen, type Feature } from "../../data/features";
 import { FeatureStatusPill, PriorityBadge } from "../FeatureModal";
-import { stalledDays, workloadOf, type Blocker, type Limits } from "../../data/project";
+import { isActive, stalledDays, workloadOf, type Blocker, type Limits } from "../../data/project";
 import { formatDate } from "../../time";
 import { lastUpdate } from "../SystemCard";
-import { TooltipLayer } from "./chartKit";
+import { STAGES, STAGE_COLOR, TooltipLayer, stageOf } from "./chartKit";
+import { Donut, TrendChart } from "./DashCharts";
+import Panel from "../Panel";
+import CountUp from "../CountUp";
 import { EngagementBars, FeatureStatusBar, PaceChart, PipelineBar, Roadmap, buildBrief, paceOf, type Pace } from "./Charts";
 
 interface Props {
@@ -34,6 +37,7 @@ const csvCell = (v: unknown) => {
 };
 
 const TONE_ICON = { good: CheckCircle2, warn: TrendingDown, bad: AlertTriangle, info: Info };
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export default function ReportsPage({ systems, users, requests, features, blockers, limits, now }: Props) {
   const [scope, setScope] = useState<Scope>("all");
@@ -90,6 +94,72 @@ export default function ReportsPage({ systems, users, requests, features, blocke
     .filter((x) => x.open.length || x.stalled !== null)
     .sort((a, b) => b.open.length - a.open.length || (b.stalled ?? 0) - (a.stalled ?? 0));
   const brief = buildBrief(view, users, viewRequests.length, now);
+
+  // ---- figure cards ----
+  const inFlight = view.filter((s) => isActive(s, now));
+  const avgInFlight = inFlight.length ? Math.round(inFlight.reduce((n, s) => n + s.progress, 0) / inFlight.length) : 0;
+  const attention = new Set([
+    ...view.filter((s) => ["AT_RISK", "OVERDUE"].includes(getSchedule(s, now))).map((s) => s.id),
+    ...stuck.map((x) => x.system.id),
+  ]).size;
+  const kpis = [
+    { label: "Systems in report", value: view.length, delta: `${systems.length} in the portfolio`, good: true, icon: FolderKanban, tone: "cyan" },
+    { label: "Delivered", value: brief.delivered, delta: `${view.length ? Math.round((brief.delivered / view.length) * 100) : 0}% of this report`, good: true, icon: CheckCircle2, tone: "green" },
+    {
+      label: "In flight",
+      value: brief.active,
+      delta: inFlight.length ? `${avgInFlight}% average progress` : "None in this report",
+      good: !inFlight.length || avgInFlight >= 50,
+      icon: TrendingUp,
+      tone: "violet",
+    },
+    {
+      label: "Need attention",
+      value: attention,
+      delta: attention ? `${stuck.length} blocked or stalled · ${openFeatures.length} open requests` : "Nothing at risk, overdue or stuck",
+      good: !attention,
+      icon: AlertTriangle,
+      tone: "red",
+    },
+  ];
+
+  // ---- monthly trend ----
+  const [range, setRange] = useState<"year" | "12m">("12m");
+  const year = new Date(now).getFullYear();
+  const buckets =
+    range === "year"
+      ? MONTHS.map((m, i) => ({ label: m, y: year, m: i }))
+      : Array.from({ length: 12 }, (_, k) => {
+          const d = new Date(now);
+          d.setDate(1);
+          d.setMonth(d.getMonth() - 11 + k);
+          return { label: MONTHS[d.getMonth()], y: d.getFullYear(), m: d.getMonth() };
+        });
+  const countIn = (dates: (string | undefined)[]) =>
+    buckets.map((b) =>
+      dates.filter((iso) => {
+        if (!iso) return false;
+        const d = new Date(iso);
+        return d.getFullYear() === b.y && d.getMonth() === b.m && d.getTime() <= now;
+      }).length,
+    );
+  const trend = [
+    { key: "started", label: "Projects started", color: "var(--st-wip)", values: countIn(view.map((s) => s.startedAt)) },
+    { key: "delivered", label: "Projects delivered", color: "var(--st-live)", values: countIn(view.map((s) => s.finishedAt)) },
+    { key: "requests", label: "Client requests", color: "var(--st-deploy)", values: countIn(viewFeatures.map((f) => f.createdAt)) },
+  ];
+
+  // ---- projects by stage ----
+  const stageRows = STAGES.map((st) => {
+    const items = view.filter((s) => stageOf(s.status) === st.key);
+    return {
+      key: st.key,
+      label: st.label,
+      color: STAGE_COLOR[st.key],
+      value: items.length,
+      avg: items.length ? Math.round(items.reduce((n, s) => n + s.progress, 0) / items.length) : 0,
+    };
+  });
   const paces = view.map((s) => paceOf(s, now)).filter((p): p is Pace => !!p);
   const leads = users.filter((u) => systems.some((s) => s.lead === u.id));
   const userName = (id?: string) => users.find((u) => u.id === id)?.name ?? "";
@@ -170,33 +240,20 @@ export default function ReportsPage({ systems, users, requests, features, blocke
 
   return (
     <TooltipLayer>
-      <div className="page report">
-        <header className="page-head">
+      <div className="page report d-style">
+        <header className="d-pagehead">
           <div>
             <h2>Projects report</h2>
-            <p>
+            <p className="d-sub">
               Generated {generated} · {scopeText}
             </p>
           </div>
-          <div className="page-actions no-print">
-            <button className="btn btn-ghost" onClick={copyBrief}>
-              <ClipboardCopy size={16} /> {copied ? "Copied" : "Copy brief"}
-            </button>
-            <button className="btn btn-ghost" onClick={downloadCsv}>
-              <Download size={16} /> CSV
-            </button>
-            {viewFeatures.length > 0 && (
-              <button className="btn btn-ghost" onClick={downloadFeaturesCsv}>
-                <Download size={16} /> Feature requests CSV
-              </button>
-            )}
-            <button className="btn btn-navy" onClick={() => window.print()}>
-              <Printer size={16} /> Print / PDF
-            </button>
-          </div>
+          <nav aria-label="Breadcrumb" className="d-crumbs">
+            OmniTrack <ChevronRight size={14} /> <b>Reports</b>
+          </nav>
         </header>
 
-        <div className="viz-filters no-print" role="group" aria-label="Report filters">
+        <section className="d-card d-toolbar no-print" role="group" aria-label="Report filters">
           <div className="seg" role="radiogroup" aria-label="Scope">
             {SCOPES.map((s) => (
               <button key={s.key} role="radio" aria-checked={scope === s.key} className={scope === s.key ? "on" : ""} onClick={() => setScope(s.key)}>
@@ -204,7 +261,7 @@ export default function ReportsPage({ systems, users, requests, features, blocke
               </button>
             ))}
           </div>
-          <select value={lead} onChange={(e) => setLead(e.target.value)} aria-label="Project lead">
+          <select className="d-select" value={lead} onChange={(e) => setLead(e.target.value)} aria-label="Project lead">
             <option value="">All leads</option>
             {leads.map((u) => (
               <option key={u.id} value={u.id}>
@@ -212,43 +269,116 @@ export default function ReportsPage({ systems, users, requests, features, blocke
               </option>
             ))}
           </select>
-          <span className="viz-count">{view.length} of {systems.length} systems</span>
-        </div>
-
-        <section className="viz-card brief">
-          <div className="brief-hero">
-            <span className="brief-figure">
-              {brief.delivered}
-              <small>/{view.length}</small>
-            </span>
-            <span className="brief-caption">systems delivered</span>
-            <div className="brief-mini">
-              <span>
-                <b>{brief.active}</b> in flight
-              </span>
-              <span>
-                <b>{brief.flagged}</b> need attention
-              </span>
-              <span>
-                <b>{viewRequests.length}</b> open requests
-              </span>
-            </div>
+          <span className="viz-count">
+            {view.length} of {systems.length} systems
+          </span>
+          <div className="page-actions d-toolbar-actions">
+            <button className="btn btn-ghost sm" onClick={copyBrief}>
+              <ClipboardCopy size={15} /> {copied ? "Copied" : "Copy brief"}
+            </button>
+            <button className="btn btn-ghost sm" onClick={downloadCsv}>
+              <Download size={15} /> Systems CSV
+            </button>
+            {viewFeatures.length > 0 && (
+              <button className="btn btn-ghost sm" onClick={downloadFeaturesCsv}>
+                <Download size={15} /> Requests CSV
+              </button>
+            )}
+            <button className="btn btn-navy sm" onClick={() => window.print()}>
+              <Printer size={15} /> Print / PDF
+            </button>
           </div>
-          <ul className="brief-lines">
-            {brief.lines.map((l, i) => {
-              const Icon = TONE_ICON[l.tone];
-              return (
-                <li key={i} className={`tone-${l.tone}`}>
-                  <Icon size={17} aria-hidden="true" />
-                  <span>{l.text}</span>
-                </li>
-              );
-            })}
-          </ul>
         </section>
 
-        <section className="viz-card">
-          <h3>Blocked & stalled</h3>
+        <section className="d-kpis d-kpis-report" aria-label="Key figures">
+          {kpis.map((k) => (
+            <div key={k.label} className="d-kpi static">
+              <span className="d-kpi-label">{k.label}</span>
+              <span className="d-kpi-value">
+                <CountUp value={k.value} />
+              </span>
+              <span className={`d-kpi-delta ${k.good ? "up" : "down"}`}>{k.delta}</span>
+              <span className={`d-kpi-icon tone-${k.tone}`}>
+                <k.icon size={18} />
+              </span>
+            </div>
+          ))}
+        </section>
+
+        <div className="d-top">
+          <div className="d-top-main">
+            <Panel
+              title="Project activity"
+              action={
+                <select className="d-select no-print" value={range} onChange={(e) => setRange(e.target.value as "year" | "12m")} aria-label="Period">
+                  <option value="year">This year</option>
+                  <option value="12m">Last 12 months</option>
+                </select>
+              }
+            >
+              <div className="d-trend-totals">
+                {trend.map((s) => (
+                  <span key={s.key}>
+                    <i style={{ background: s.color }} />
+                    <b>{s.values.reduce((n, x) => n + x, 0)}</b> {s.label.toLowerCase()}
+                  </span>
+                ))}
+              </div>
+              <TrendChart months={buckets.map((b) => b.label)} series={trend} legend={false} />
+            </Panel>
+            <Panel title="Summary" action={<span className="d-hint">for this report's systems</span>}>
+              <ul className="brief-lines">
+                {brief.lines.map((l, i) => {
+                  const Icon = TONE_ICON[l.tone];
+                  return (
+                    <li key={i} className={`tone-${l.tone}`}>
+                      <Icon size={17} aria-hidden="true" />
+                      <span>{l.text}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Panel>
+          </div>
+          <Panel title="Projects by stage" className="d-side">
+            <div className="d-donut-wrap">
+              <Donut slices={stageRows} centre="in report" />
+            </div>
+            <ul className="viz-legend d-donut-legend">
+              {stageRows.map((r) => (
+                <li key={r.key}>
+                  <i className="viz-key rect" style={{ background: r.color }} />
+                  {r.label}
+                </li>
+              ))}
+            </ul>
+            <p className="d-range">
+              {scopeText} · {formatDate(new Date(now).toISOString())}
+            </p>
+            <table className="d-table">
+              <thead>
+                <tr>
+                  <th>Stage</th>
+                  <th>Projects</th>
+                  <th>Share</th>
+                  <th>Avg %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stageRows.map((r) => (
+                  <tr key={r.key}>
+                    <td>{r.label}</td>
+                    <td>{r.value}</td>
+                    <td>{view.length ? Math.round((r.value / view.length) * 100) : 0}%</td>
+                    <td>{r.value ? `${r.avg}%` : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Panel>
+        </div>
+
+        <Panel title="Blocked & stalled">
           <p className="viz-sub">
             Systems with an open blocker, or still being built with no progress update for {limits.stallDays}+ days.
           </p>
@@ -285,37 +415,32 @@ export default function ReportsPage({ systems, users, requests, features, blocke
           ) : (
             <p className="lead-none">Nothing is blocked or stalled.</p>
           )}
-        </section>
+        </Panel>
 
-        <section className="viz-card">
-          <h3>Pipeline</h3>
+        <Panel title="Pipeline">
           <p className="viz-sub">Where every system sits in its lifecycle.</p>
           <PipelineBar systems={view} />
-        </section>
+        </Panel>
 
-        <section className="viz-card">
-          <h3>Delivery roadmap</h3>
+        <Panel title="Delivery roadmap">
           <p className="viz-sub">
             Solid bars show time spent so far (or start to delivery); pale bars show the time left until the due date.
           </p>
           <Roadmap systems={view} now={now} />
-        </section>
+        </Panel>
 
-        <div className="viz-pair">
-          <section className="viz-card">
-            <h3>Pace check</h3>
+        <div className="dash-pair d-pair">
+          <Panel title="Pace check">
             <p className="viz-sub">Progress against the share of planned time already used. Behind-pace projects are listed first.</p>
             <PaceChart paces={paces} now={now} />
-          </section>
-          <section className="viz-card">
-            <h3>Engagement</h3>
+          </Panel>
+          <Panel title="Engagement">
             <p className="viz-sub">Visits in the last 30 days.</p>
             <EngagementBars systems={view} />
-          </section>
+          </Panel>
         </div>
 
-        <section className="viz-card">
-          <h3>Data table</h3>
+        <Panel title="Data table">
           <div className="table-wrap flat">
             <table className="table">
               <thead>
@@ -360,10 +485,9 @@ export default function ReportsPage({ systems, users, requests, features, blocke
               </tbody>
             </table>
           </div>
-        </section>
+        </Panel>
 
-        <section className="viz-card">
-          <h3>Feature requests</h3>
+        <Panel title="Feature requests">
           <p className="viz-sub">
             Client requests on the systems above: {openFeatures.length} open
             {lateFeatures > 0 && `, ${lateFeatures} past their delivery date`}
@@ -371,11 +495,10 @@ export default function ReportsPage({ systems, users, requests, features, blocke
             {cancelled > 0 && `. ${cancelled} cancelled, not shown in the bar`}.
           </p>
           {viewFeatures.length ? <FeatureStatusBar features={viewFeatures} /> : <p className="lead-none">No feature requests on these systems.</p>}
-        </section>
+        </Panel>
 
         {workload.length > 0 && (
-          <section className="viz-card">
-            <h3>Developer workload</h3>
+          <Panel title="Developer workload">
             <p className="viz-sub">
               Projects and feature requests per developer. Flagged when above {limits.projects} projects or {limits.features} open requests.
             </p>
@@ -416,12 +539,11 @@ export default function ReportsPage({ systems, users, requests, features, blocke
                 </tbody>
               </table>
             </div>
-          </section>
+          </Panel>
         )}
 
         {openFeatures.length > 0 && (
-          <section className="viz-card">
-            <h3>Open feature requests</h3>
+          <Panel title="Open feature requests">
             <p className="viz-sub">Most urgent first: by priority, then expected delivery.</p>
             <div className="table-wrap flat">
               <table className="table">
@@ -462,7 +584,7 @@ export default function ReportsPage({ systems, users, requests, features, blocke
                 </tbody>
               </table>
             </div>
-          </section>
+          </Panel>
         )}
       </div>
     </TooltipLayer>

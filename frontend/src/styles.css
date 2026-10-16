@@ -1437,3 +1437,19 @@ a.nav-item { text-decoration: none; }
 .d-mini-list .d-deadline > .dash-days { display: grid; flex-direction: column; gap: 0; }
 .d-top { align-items: stretch; }
 .d-top-main > .d-card { flex: 1; }
+
+/* ---------- Reports, admin-template style ---------- */
+.d-sub { font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+.d-toolbar { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 10px 12px; padding: 12px 16px; margin-bottom: 16px; }
+.d-toolbar-actions { margin-left: auto; }
+.d-kpis-report { margin-bottom: 16px; }
+.d-kpi.static { cursor: default; }
+.d-kpi.static:hover { transform: none; border-color: var(--border); }
+.d-pair { margin-bottom: 16px; }
+.d-card-body > .viz-sub:first-child { margin-top: 0; }
+.report .d-card .table-wrap.flat { border: 0; box-shadow: none; }
+@media print {
+  .d-card, .d-kpi { box-shadow: none; break-inside: avoid; }
+  .d-top { grid-template-columns: minmax(0, 1fr) 320px; }
+}
+@media (max-width: 700px) { .d-toolbar-actions { margin-left: 0; } }
