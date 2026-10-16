@@ -99,16 +99,18 @@ export interface Prefs {
   theme: "light" | "dark" | "futuristic" | "system";
   motion: "full" | "reduced";
   density: "comfortable" | "compact";
-  start: string; // sidebar section to open on sign-in (a Filter key, or "MINE")
+  start: string; // page to open on sign-in: "DASHBOARD", or a Projects tab (a Filter key)
+  projectsView: "grid" | "list"; // how the Projects page lays out projects
 }
 
-export const DEFAULT_PREFS: Prefs = { theme: "light", motion: "full", density: "comfortable", start: "ALL" };
+export const DEFAULT_PREFS: Prefs = { theme: "light", motion: "full", density: "comfortable", start: "DASHBOARD", projectsView: "grid" };
 
 const PREF_CHOICES: { [K in keyof Prefs]: readonly string[] | null } = {
   theme: ["light", "dark", "futuristic", "system"],
   motion: ["full", "reduced"],
   density: ["comfortable", "compact"],
   start: null, // checked against the known sections by the caller
+  projectsView: ["grid", "list"],
 };
 
 /** Keeps only known keys with allowed values; anything else falls back to the default. */
@@ -123,7 +125,7 @@ export function cleanPrefs(raw: unknown, startKeys: readonly string[]): Prefs {
   return out;
 }
 
-export const START_KEYS = ["ALL", "MINE", "BLOCKED", "LIVE", "WIP", "TESTING", "TO_DEPLOY", "UPCOMING", "COMPLETED", "IDEA", "MAINTENANCE", "OVERDUE", "REQUESTED"] as const;
+export const START_KEYS = ["DASHBOARD", "ALL", "MINE", "BLOCKED", "LIVE", "WIP", "TESTING", "TO_DEPLOY", "UPCOMING", "COMPLETED", "IDEA", "MAINTENANCE", "OVERDUE", "REQUESTED"] as const;
 
 export interface UpdateRequest {
   id: string;

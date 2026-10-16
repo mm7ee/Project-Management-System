@@ -20,7 +20,6 @@ import Login from "./components/Login";
 import UsersPage from "./components/UsersPage";
 import ReportsPage from "./components/reports/ReportsPage";
 import UpdateBanner from "./components/UpdateBanner";
-import CountUp from "./components/CountUp";
 import FeaturesPage from "./components/FeaturesPage";
 import FeatureModal from "./components/FeatureModal";
 import { isLate, isOpen, type Feature } from "./data/features";
@@ -28,6 +27,8 @@ import { stalledDays, suggestDevelopers, workloadOf } from "./data/project";
 import RebalanceModal from "./components/Rebalance";
 import { PcnDocument } from "./components/Pcn";
 import ConceptNotesPage from "./components/ConceptNotesPage";
+import DashboardPage from "./components/DashboardPage";
+import ProjectsPage from "./components/ProjectsPage";
 import { awaitingSignature, type SignoffStatus } from "./data/pcn";
 import type { User } from "./data/roles";
 
@@ -87,10 +88,15 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   const isMine = (s: System) => isAssigned(me, s);
   const myProjects = systems.filter(isMine);
 
-  const [view, setView] = useState<View>("projects");
+  // Sign-in opens the Dashboard, unless someone chose a Projects tab to start on.
+  const [view, setView] = useState<View>(() => (data.prefs.start === "DASHBOARD" ? "dashboard" : "projects"));
   const [filter, setFilter] = useState<Filter>(() =>
-    data.prefs.start === "MINE" && !myProjects.length ? "ALL" : (data.prefs.start as Filter),
+    data.prefs.start === "DASHBOARD" || (data.prefs.start === "MINE" && !myProjects.length) ? "ALL" : (data.prefs.start as Filter),
   );
+  const showTab = (f: Filter) => {
+    setFilter(f);
+    setView("projects");
+  };
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(projectInHash);
   const [showPcn, setShowPcn] = useState(pcnInHash);
@@ -193,16 +199,6 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
         ].filter((x) => x.items.length)
       : [{ title: "", items: visible }];
 
-  const avgProgress = systems.length ? Math.round(systems.reduce((n, s) => n + s.progress, 0) / systems.length) : 0;
-  const atRisk = systems.filter((s) => ["AT_RISK", "OVERDUE"].includes(getSchedule(s, now))).length;
-  const stats = [
-    { value: systems.length, label: "Projects tracked", tone: "navy" },
-    { value: counts.LIVE, label: "Live", tone: "green" },
-    { value: counts.BLOCKED, label: "Blocked / stalled", tone: "amber" },
-    { value: `${avgProgress}%`, label: "Average progress", tone: "cyan" },
-    { value: atRisk, label: "At risk / overdue", tone: "red" },
-  ];
-
   const saveUpdate = async ({ id, ...update }: ProgressUpdate) => {
     await api(`/systems/${id}`, "PATCH", update);
     await reload();
@@ -210,13 +206,56 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   };
 
   const selected = systems.find((s) => s.id === selectedId) ?? null;
+  // Things waiting on this person, shown above the Dashboard and the Projects page.
+  const banners = (
+    <>
+            {pcnsToSign.length > 0 && (
+              <div className="pcn-banner" role="status">
+                <FileText size={18} />
+                <span>
+                  <b>
+                    {pcnsToSign.length === 1
+                      ? `"${pcnsToSign[0].pcn!.title}" is waiting for your signature`
+                      : `${pcnsToSign.length} Concept Notes are waiting for your signature`}
+                  </b>{" "}
+                  Read the PCN, then approve or decline it.
+                </span>
+                <button className="btn btn-navy sm" onClick={() => setView("pcns")}>
+                  Review
+                </button>
+              </div>
+            )}
+            {canAssign && overloadedDevs.length > 0 && (
+              <div className="overload-banner" role="status">
+                <AlertOctagon size={18} />
+                <span>
+                  <b>
+                    {overloadedDevs.length === 1
+                      ? `${overloadedDevs[0].name} has too many projects`
+                      : `${overloadedDevs.length} developers have too many projects`}
+                  </b>{" "}
+                  (
+                  {overloadedDevs.length === 1
+                    ? overloaded(overloadedDevs[0]).join(", ")
+                    : overloadedDevs.map((u) => `${u.name}: ${overloaded(u).join(", ")}`).join("; ")}
+                  ). Others have room to help.
+                </span>
+                <button className="btn btn-navy sm" onClick={() => setRebalancing(true)}>
+                  Rebalance
+                </button>
+              </div>
+            )}
+            {me.role === "developer" && !myProjects.length && (
+              <p className="notice">You haven't been assigned any projects yet. Ask an administrator to assign you one.</p>
+            )}
+    </>
+  );
 
   return (
     <div className="shell">
       {prefs.theme === "futuristic" && <FuturisticBackdrop />}
       <Sidebar
         me={me}
-        filter={filter}
         view={selectedId ? "project" : view}
         counts={counts}
         pcnsToSign={pcnsToSign.length}
@@ -232,10 +271,6 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
         canReports={can("reports")}
         canUsers={can("manage_users")}
         canActivity={can("audit_log")}
-        onFilter={(f) => {
-          setFilter(f);
-          if (selectedId) closeProject();
-        }}
         onView={(v) => {
           setView(v);
           if (selectedId) closeProject();
@@ -259,7 +294,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             <Menu size={20} />
           </button>
           <h1>Projects Tracker</h1>
-          {view === "projects" && !selectedId && (
+          {(view === "projects" || view === "dashboard") && !selectedId && (
             <>
               <label className="search">
                 <Search size={18} />
@@ -397,90 +432,58 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             limits={limits}
             now={now}
           />
-        ) : (
+        ) : view === "dashboard" ? (
           <>
-            {pcnsToSign.length > 0 && (
-              <div className="pcn-banner" role="status">
-                <FileText size={18} />
-                <span>
-                  <b>
-                    {pcnsToSign.length === 1
-                      ? `"${pcnsToSign[0].pcn!.title}" is waiting for your signature`
-                      : `${pcnsToSign.length} Concept Notes are waiting for your signature`}
-                  </b>{" "}
-                  Read the PCN, then approve or decline it.
-                </span>
-                <button className="btn btn-navy sm" onClick={() => setView("pcns")}>
-                  Review
-                </button>
-              </div>
-            )}
-            {canAssign && overloadedDevs.length > 0 && (
-              <div className="overload-banner" role="status">
-                <AlertOctagon size={18} />
-                <span>
-                  <b>
-                    {overloadedDevs.length === 1
-                      ? `${overloadedDevs[0].name} has too many projects`
-                      : `${overloadedDevs.length} developers have too many projects`}
-                  </b>{" "}
-                  (
-                  {overloadedDevs.length === 1
-                    ? overloaded(overloadedDevs[0]).join(", ")
-                    : overloadedDevs.map((u) => `${u.name}: ${overloaded(u).join(", ")}`).join("; ")}
-                  ). Others have room to help.
-                </span>
-                <button className="btn btn-navy sm" onClick={() => setRebalancing(true)}>
-                  Rebalance
-                </button>
-              </div>
-            )}
-            {me.role === "developer" && !myProjects.length && (
-              <p className="notice">You haven't been assigned any projects yet. Ask an administrator to assign you one.</p>
-            )}
-            <section className="stats five">
-              {stats.map(({ value, label, tone }) => (
-                <div className="stat" key={label}>
-                  <span className={`stat-value text-${tone}`}>
-                    <CountUp value={value} />
-                  </span>
-                  <span className="stat-label">{label}</span>
-                </div>
-              ))}
-            </section>
-
-            {visible.length ? (
-              sections.map(({ title, items }, n) => (
-                <section key={title || "all"} className="grid-section">
-                  {title && (
-                    <h2 className="grid-title">
-                      {title} <span>{items.length}</span>
-                    </h2>
-                  )}
-                  {/* Keyed on the filter so switching sections replays the entrance. */}
-                  <div className="grid" key={filter}>
-                    {items.map((s, i) => (
-                      <SystemCard
-                        key={s.id}
-                        system={s}
-                        now={now}
-                        lead={users.find((u) => u.id === s.lead)}
-                        developers={users.filter((u) => u.role === "developer" && u.projectIds?.includes(s.id))}
-                        requests={requestsFor(s.id).length}
-                        mine={isMine(s)}
-                        blockers={openBlockersFor(s.id).map((b) => b.text)}
-                        stalled={stalledDays(s, now, limits)}
-                        index={n ? sections[0].items.length + i : i}
-                        onSelect={(x) => openProject(x.id)}
-                      />
-                    ))}
-                  </div>
-                </section>
-              ))
-            ) : (
-              <div className="empty">No projects match.</div>
-            )}
+            {banners}
+            <DashboardPage
+              me={me}
+              systems={systems}
+              users={users}
+              requests={requests}
+              features={features}
+              blockers={blockers}
+              limits={limits}
+              now={now}
+              isMine={isMine}
+              onOpen={openProject}
+              onTab={showTab}
+            />
           </>
+        ) : (
+          <ProjectsPage
+            counts={counts}
+            filter={filter}
+            onFilter={setFilter}
+            mode={prefs.projectsView}
+            onMode={(projectsView) => savePrefs({ ...prefs, projectsView }).catch(() => undefined)}
+            sections={sections}
+            now={now}
+            banners={banners}
+            onOpen={openProject}
+            info={(s) => ({
+              lead: users.find((u) => u.id === s.lead),
+              developers: users.filter((u) => u.role === "developer" && u.projectIds?.includes(s.id)),
+              requests: requestsFor(s.id).length,
+              blockers: openBlockersFor(s.id).map((b) => b.text),
+              stalled: stalledDays(s, now, limits),
+              mine: isMine(s),
+            })}
+            card={(s, index) => (
+              <SystemCard
+                key={s.id}
+                system={s}
+                now={now}
+                lead={users.find((u) => u.id === s.lead)}
+                developers={users.filter((u) => u.role === "developer" && u.projectIds?.includes(s.id))}
+                requests={requestsFor(s.id).length}
+                mine={isMine(s)}
+                blockers={openBlockersFor(s.id).map((b) => b.text)}
+                stalled={stalledDays(s, now, limits)}
+                index={index}
+                onSelect={(x) => openProject(x.id)}
+              />
+            )}
+          />
         )}
       </main>
 

@@ -490,3 +490,67 @@ export function FeatureStatusBar({ features }: { features: Feature[] }) {
     </div>
   );
 }
+
+// ---------- 7. Team workload: projects per developer against the limit ----------
+
+/**
+ * One bar per developer: how many projects they're on, with the limit marked. Over the limit is
+ * drawn in the "overdue" red and labelled, so it never relies on colour alone.
+ */
+export function WorkloadBars({ rows, limit }: { rows: { name: string; projects: number; openRequests: number }[]; limit: number }) {
+  const [ref, width] = useWidth<HTMLDivElement>();
+  const tip = useTip();
+  const LABEL = Math.min(170, Math.max(100, width * 0.28));
+  const ROW = 30;
+  const maxV = Math.max(limit + 1, ...rows.map((r) => r.projects));
+  const plotW = Math.max(10, width - LABEL - 92);
+  const x = (v: number) => LABEL + (v / maxV) * plotW;
+
+  return (
+    <div ref={ref}>
+      {width > 0 &&
+        (rows.length ? (
+          <svg width={width} height={rows.length * ROW + 18} className="viz-svg">
+            {rows.map((r, i) => {
+              const y = i * ROW;
+              const over = r.projects > limit;
+              const color = over ? "var(--st-overdue)" : "var(--st-wip)";
+              return (
+                <g
+                  key={r.name}
+                  className="viz-hit"
+                  {...tip(
+                    <TipRows
+                      title={r.name}
+                      rows={[
+                        ["projects", `${r.projects} of ${limit}`, color],
+                        ["open client requests", r.openRequests],
+                      ]}
+                    />,
+                    `${r.name}: ${r.projects} projects, limit ${limit}`,
+                  )}
+                >
+                  <rect x={0} y={y} width={width} height={ROW} fill="transparent" />
+                  <text x={0} y={y + 19} className="viz-row-label">
+                    {truncate(r.name, Math.floor(LABEL / 7.6))}
+                  </text>
+                  {r.projects > 0 && <path d={endRounded(LABEL, y + 7, Math.max(4, x(r.projects) - LABEL), 16)} style={{ fill: color }} />}
+                  <text x={x(r.projects) + 8} y={y + 19} className={`viz-end-label ${over ? "viz-over" : ""}`}>
+                    {r.projects}
+                    {over ? " · over limit" : ""}
+                  </text>
+                </g>
+              );
+            })}
+            {/* The limit, as a dashed line across all rows. */}
+            <line x1={x(limit)} x2={x(limit)} y1={0} y2={rows.length * ROW} className="viz-limit" />
+            <text x={x(limit)} y={rows.length * ROW + 13} textAnchor="middle" className="viz-axis">
+              limit {limit}
+            </text>
+          </svg>
+        ) : (
+          <p className="viz-empty">No developers yet.</p>
+        ))}
+    </div>
+  );
+}

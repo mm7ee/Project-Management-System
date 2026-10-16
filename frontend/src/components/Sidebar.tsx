@@ -1,31 +1,13 @@
-import { AlertOctagon, BellRing, FileBarChart, FileText, FolderGit2, History, ListChecks, MonitorSmartphone, Moon, Orbit, Plus, Settings, Sun, Users, Wrench, X } from "lucide-react";
-import { STATUS_META, initials, type Status } from "../data/systems";
+import { FileBarChart, FileText, FolderKanban, History, LayoutDashboard, ListChecks, MonitorSmartphone, Moon, Orbit, Plus, Settings, Sun, Users, X } from "lucide-react";
+import { initials, type Status } from "../data/systems";
 import { ROLE_LABEL, type Prefs, type User } from "../data/roles";
 import { COMPANY_URL } from "../brand";
 
 export type Filter = "ALL" | Status | "OVERDUE" | "REQUESTED" | "MAINTENANCE" | "MINE" | "BLOCKED";
-export type View = "projects" | "project" | "features" | "pcns" | "reports" | "users" | "activity" | "settings";
-
-// Order follows the mock-up. Optional items only appear when something is in them.
-const NAV: { key: Filter; label: string; optional?: boolean }[] = [
-  { key: "ALL", label: "All projects" },
-  { key: "MINE", label: "Assigned to me", optional: true },
-  { key: "LIVE", label: STATUS_META.LIVE.label },
-  { key: "WIP", label: STATUS_META.WIP.label },
-  { key: "TESTING", label: STATUS_META.TESTING.label, optional: true },
-  { key: "TO_DEPLOY", label: STATUS_META.TO_DEPLOY.label, optional: true },
-  { key: "UPCOMING", label: STATUS_META.UPCOMING.label },
-  { key: "COMPLETED", label: STATUS_META.COMPLETED.label },
-  { key: "IDEA", label: "Ideas", optional: true },
-  { key: "MAINTENANCE", label: "Maintenance" },
-  { key: "BLOCKED", label: "Blocked / stalled", optional: true },
-  { key: "OVERDUE", label: "Overdue" },
-  { key: "REQUESTED", label: "Update requests", optional: true },
-];
+export type View = "dashboard" | "projects" | "project" | "features" | "pcns" | "reports" | "users" | "activity" | "settings";
 
 interface Props {
   me: User;
-  filter: Filter;
   view: View;
   counts: Record<Filter, number>;
   features: { count: number; urgent: boolean }; // open requests to show beside "Feature requests"
@@ -36,7 +18,6 @@ interface Props {
   canReports: boolean;
   canUsers: boolean;
   canActivity: boolean;
-  onFilter: (f: Filter) => void;
   onView: (v: View) => void;
   onClose: () => void;
   onAdd: () => void;
@@ -74,31 +55,18 @@ export default function Sidebar(p: Props) {
         </div>
 
         <nav className="nav">
-          {NAV.filter((n) => !n.optional || p.counts[n.key] > 0).map(({ key, label }) => (
-            <button
-              key={key}
-              className={`nav-item ${p.view === "projects" && p.filter === key ? "active" : ""}`}
-              onClick={go(() => {
-                p.onFilter(key);
-                p.onView("projects");
-              })}
-            >
-              <span>
-                {key === "REQUESTED" && <BellRing size={15} className="nav-icon" />}
-                {key === "MAINTENANCE" && <Wrench size={15} className="nav-icon" />}
-                {key === "MINE" && <FolderGit2 size={15} className="nav-icon" />}
-                {key === "BLOCKED" && <AlertOctagon size={15} className="nav-icon" />}
-                {label}
-              </span>
-              <span
-                className={`nav-count ${(key === "OVERDUE" || key === "REQUESTED" || key === "BLOCKED") && p.counts[key] > 0 ? "alert" : ""} ${
-                  key === "MAINTENANCE" && p.counts[key] > 0 ? "maint" : ""
-                }`}
-              >
-                {p.counts[key]}
-              </span>
-            </button>
-          ))}
+          <button className={`nav-item ${p.view === "dashboard" ? "active" : ""}`} onClick={go(() => p.onView("dashboard"))}>
+            <span>
+              <LayoutDashboard size={16} className="nav-icon" /> Dashboard
+            </span>
+          </button>
+          {/* The stage and status filters live on the Projects page itself. */}
+          <button className={`nav-item ${p.view === "projects" ? "active" : ""}`} onClick={go(() => p.onView("projects"))}>
+            <span>
+              <FolderKanban size={16} className="nav-icon" /> Projects
+            </span>
+            <span className="nav-count">{p.counts.ALL}</span>
+          </button>
 
           <div className="nav-divider" />
           <button className={`nav-item ${p.view === "features" ? "active" : ""}`} onClick={go(() => p.onView("features"))}>

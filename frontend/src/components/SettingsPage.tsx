@@ -101,7 +101,9 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
   };
 
   const startOptions = [
+    { value: "DASHBOARD", label: "Dashboard" },
     { value: "ALL", label: "All projects" },
+    { value: "BLOCKED", label: "Blocked / stalled" },
     ...(projects.length ? [{ value: "MINE", label: "Assigned to me" }] : []),
     { value: "LIVE", label: "Live" },
     { value: "WIP", label: "In progress" },
