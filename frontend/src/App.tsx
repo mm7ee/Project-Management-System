@@ -442,6 +442,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
               requests={requests}
               features={features}
               blockers={blockers}
+              documents={documents}
               limits={limits}
               now={now}
               isMine={isMine}

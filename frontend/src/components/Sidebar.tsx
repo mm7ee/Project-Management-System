@@ -55,6 +55,7 @@ export default function Sidebar(p: Props) {
         </div>
 
         <nav className="nav">
+          <div className="nav-section">Navigation</div>
           <button className={`nav-item ${p.view === "dashboard" ? "active" : ""}`} onClick={go(() => p.onView("dashboard"))}>
             <span>
               <LayoutDashboard size={16} className="nav-icon" /> Dashboard
@@ -68,7 +69,7 @@ export default function Sidebar(p: Props) {
             <span className="nav-count">{p.counts.ALL}</span>
           </button>
 
-          <div className="nav-divider" />
+          <div className="nav-section">Workspace</div>
           <button className={`nav-item ${p.view === "features" ? "active" : ""}`} onClick={go(() => p.onView("features"))}>
             <span>
               <ListChecks size={16} className="nav-icon" /> Feature requests
@@ -92,6 +93,7 @@ export default function Sidebar(p: Props) {
               </span>
             </button>
           )}
+          {(p.canUsers || p.canActivity) && <div className="nav-section">Administration</div>}
           {p.canUsers && (
             <button className={`nav-item ${p.view === "users" ? "active" : ""}`} onClick={go(() => p.onView("users"))}>
               <span>
