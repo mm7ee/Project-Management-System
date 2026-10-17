@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertOctagon, FileText, History, Menu, Plus, Search, Settings } from "lucide-react";
+import { AlertOctagon, FileText, History, Menu, Plus, Search, Settings, Users } from "lucide-react";
 import { getSchedule, type System } from "./data/systems";
 import { api, useAppData, type AppData } from "./data/api";
 import { isAssigned, type Permission, type Prefs } from "./data/roles";
@@ -376,7 +376,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           )
         ) : view === "settings" ? (
           <>
-          {can("audit_log") && <SettingsTabs active="settings" onChange={setView} />}
+          {(can("audit_log") || can("manage_users")) && <SettingsTabs active="settings" onChange={setView} canUsers={can("manage_users")} canActivity={can("audit_log")} />}
           <SettingsPage
             me={me}
             prefs={prefs}
@@ -414,10 +414,12 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           />
         ) : view === "activity" && can("audit_log") ? (
           <>
-            <SettingsTabs active="activity" onChange={setView} />
+            <SettingsTabs active="activity" onChange={setView} canUsers={can("manage_users")} canActivity={can("audit_log")} />
             <ActivityPage users={users} systems={systems} now={now} />
           </>
         ) : view === "users" && can("manage_users") ? (
+          <>
+          <SettingsTabs active="users" onChange={setView} canUsers={can("manage_users")} canActivity={can("audit_log")} />
           <UsersPage
             me={me}
             users={users}
@@ -428,6 +430,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             workload={(u) => workloadOf(u, systems, features, limits, now)}
             onChanged={reload}
           />
+          </>
         ) : view === "reports" && can("reports") ? (
           <ReportsPage
             systems={systems}
@@ -575,16 +578,30 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   );
 }
 
-/** Tabs at the top of Settings: your own settings, and the activity log for those allowed to see it. */
-function SettingsTabs({ active, onChange }: { active: "settings" | "activity"; onChange: (v: View) => void }) {
+/** Tabs at the top of Settings: your own settings, then the admin pages each person may open. */
+function SettingsTabs({
+  active,
+  onChange,
+  canUsers,
+  canActivity,
+}: {
+  active: "settings" | "users" | "activity";
+  onChange: (v: View) => void;
+  canUsers: boolean;
+  canActivity: boolean;
+}) {
+  const tabs = [
+    { key: "settings" as const, label: "My settings", icon: Settings, show: true },
+    { key: "users" as const, label: "Users & roles", icon: Users, show: canUsers },
+    { key: "activity" as const, label: "Activity log", icon: History, show: canActivity },
+  ].filter((t) => t.show);
   return (
     <div className="view-toggle settings-tabs no-print" role="tablist" aria-label="Settings">
-      <button role="tab" aria-selected={active === "settings"} className={active === "settings" ? "on" : ""} onClick={() => onChange("settings")}>
-        <Settings size={15} /> My settings
-      </button>
-      <button role="tab" aria-selected={active === "activity"} className={active === "activity" ? "on" : ""} onClick={() => onChange("activity")}>
-        <History size={15} /> Activity log
-      </button>
+      {tabs.map(({ key, label, icon: Icon }) => (
+        <button key={key} role="tab" aria-selected={active === key} className={active === key ? "on" : ""} onClick={() => onChange(key)}>
+          <Icon size={15} /> {label}
+        </button>
+      ))}
     </div>
   );
 }
