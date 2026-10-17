@@ -1446,3 +1446,53 @@ a.nav-item { text-decoration: none; }
 }
 @media (max-width: 700px) { .d-toolbar-actions { margin-left: 0; } }
 .settings-tabs { align-self: flex-start; margin-bottom: 16px; }
+
+/* ---------- Chart motion ---------- */
+.viz-area { stroke: none; }
+.viz-draw { stroke-dasharray: 1; }
+.viz-band { fill: var(--cyan); opacity: .06; }
+.viz-spark-wrap { width: 100%; height: 34px; margin-top: 4px; }
+.viz-spark { display: block; overflow: visible; }
+.viz-spark .viz-line { stroke-width: 2; }
+.d-kpi { position: relative; overflow: hidden; }
+.viz-donut-slice { transition: opacity .2s, stroke-width .25s cubic-bezier(.2, .8, .2, 1); }
+.viz-donut-slice.dim { opacity: .35; }
+.viz-cols .viz-col { transition: opacity .2s, filter .2s; }
+.viz-cols:has(.viz-hit:hover) .viz-hit:not(:hover) .viz-col { opacity: .4; }
+.viz-cols .viz-hit:hover .viz-col { filter: brightness(1.08) drop-shadow(0 4px 10px rgba(5, 59, 122, 0.25)); }
+.viz-now-ring { opacity: 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Lines draw themselves left to right, one after another; the fill fades in behind. */
+  .viz-draw { animation: draw 1.4s cubic-bezier(.65, 0, .35, 1) backwards; animation-delay: calc(var(--i, 0) * 180ms); }
+  .viz-area { animation: fade 1s ease-out backwards; animation-delay: calc(var(--i, 0) * 180ms + 700ms); }
+  /* Today's point appears once its line arrives, then keeps a soft pulse. */
+  .viz-now { animation: fade .4s ease-out backwards; animation-delay: calc(var(--i, 0) * 180ms + 1.3s); }
+  .viz-now-ring { transform-box: fill-box; transform-origin: center; animation: ripple 2.2s ease-out infinite; animation-delay: calc(var(--i, 0) * 300ms + 1.6s); }
+  .viz-pop { transform-box: fill-box; transform-origin: center; animation: pop-in .25s cubic-bezier(.2, .8, .2, 1.4); }
+  .viz-band { animation: fade .2s ease-out; }
+  /* The donut sweeps round, slice by slice. */
+  .viz-donut-slice { animation: sweep-in .9s cubic-bezier(.2, .8, .2, 1) backwards; animation-delay: calc(var(--i, 0) * 120ms + 150ms); }
+  .viz-donut-total { animation: fade .6s ease-out backwards; }
+  /* Columns grow up from the baseline; their figures follow. */
+  .viz-col { transform-box: fill-box; transform-origin: 50% 100%; animation: grow-y .9s cubic-bezier(.2, .8, .2, 1.15) backwards; animation-delay: calc(var(--i, 0) * 90ms + 100ms); }
+  .viz-col-label { animation: fade .5s ease-out backwards; animation-delay: calc(var(--i, 0) * 90ms + 600ms); }
+  /* Report bars (pipeline, roadmap, pace, workload, visits) slide out from their start. */
+  .viz-svg .viz-hit rect:not([fill="transparent"]) { transform-box: fill-box; transform-origin: 0 50%; animation: grow-x 1s cubic-bezier(.2, .8, .2, 1) backwards; animation-delay: 150ms; }
+  .viz-svg .viz-hit:nth-of-type(2n) rect:not([fill="transparent"]) { animation-delay: 230ms; }
+  .viz-svg .viz-hit:nth-of-type(3n) rect:not([fill="transparent"]) { animation-delay: 310ms; }
+  /* Figure cards: a light passes across now and then. */
+  .d-kpi::after {
+    content: ""; position: absolute; top: 0; bottom: 0; left: -40%; width: 30%; pointer-events: none;
+    background: linear-gradient(100deg, transparent, color-mix(in srgb, var(--cyan) 10%, transparent), transparent);
+    animation: sweep 7s ease-in-out infinite; animation-delay: calc(var(--i, 0) * 400ms + 2s);
+  }
+  .d-kpi { animation: rise .55s cubic-bezier(.2, .8, .2, 1) backwards; animation-delay: calc(var(--i, 0) * 70ms); }
+  .d-kpi:hover .d-kpi-icon { animation: pop-in .35s cubic-bezier(.2, .8, .2, 1.4); }
+}
+@keyframes draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes ripple { 0% { transform: scale(1); opacity: .55; } 100% { transform: scale(3.4); opacity: 0; } }
+@keyframes pop-in { from { transform: scale(.4); } }
+@keyframes sweep-in { from { stroke-dasharray: 0 1000; } }
+@keyframes grow-y { from { transform: scaleY(0); } }
+@keyframes grow-x { from { transform: scaleX(0); } }

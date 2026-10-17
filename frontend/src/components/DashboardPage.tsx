@@ -23,7 +23,7 @@ import CountUp from "./CountUp";
 import { ProgressBar, StatusPill } from "./SystemCard";
 import { STAGES, STAGE_COLOR, TooltipLayer, stageOf } from "./reports/chartKit";
 import { WorkloadBars } from "./reports/Charts";
-import { Columns, Donut, TrendChart } from "./reports/DashCharts";
+import { Columns, Donut, Sparkline, TrendChart } from "./reports/DashCharts";
 import Panel from "./Panel";
 
 interface Props {
@@ -110,6 +110,14 @@ export default function DashboardPage({ systems, users, features, blockers, docu
     { key: "requests", label: "Client requests", color: "var(--st-deploy)", values: countIn(features.map((f) => f.createdAt)) },
   ];
   const sum = (v: number[]) => v.reduce((n, x) => n + x, 0);
+  // Card sparklines over the same months as the trend.
+  const running = (v: number[]) => v.map((_, i) => sum(v.slice(0, i + 1)));
+  const sparks: Record<string, { values: number[]; color: string; label: string }> = {
+    Projects: { values: running(trend[0].values), color: "var(--cyan)", label: "Projects started, running total" },
+    Live: { values: trend[1].values, color: "var(--st-live)", label: "Projects delivered per month" },
+    "In progress": { values: trend[0].values, color: "var(--violet)", label: "Projects started per month" },
+    "Need attention": { values: trend[2].values, color: "var(--red)", label: "Client requests per month" },
+  };
 
   // ---- projects by stage ----
   const scoped = stageScope === "mine" ? systems.filter(isMine) : systems;
@@ -222,12 +230,13 @@ export default function DashboardPage({ systems, users, features, blockers, docu
           <div className="d-top-main">
             <section className="d-kpis" aria-label="Key figures">
               {kpis.map((k) => (
-                <button key={k.label} className="d-kpi" onClick={() => onTab(k.tab)} title="Show these on the Projects page">
+                <button key={k.label} className="d-kpi" style={{ ["--i" as string]: kpis.indexOf(k) }} onClick={() => onTab(k.tab)} title="Show these on the Projects page">
                   <span className="d-kpi-label">{k.label}</span>
                   <span className="d-kpi-value">
                     <CountUp value={k.value} />
                   </span>
                   <span className={`d-kpi-delta ${k.good ? "up" : "down"}`}>{k.delta}</span>
+                  {sparks[k.label] && <Sparkline {...sparks[k.label]} />}
                   <span className={`d-kpi-icon tone-${k.tone}`}>
                     <k.icon size={18} />
                   </span>
