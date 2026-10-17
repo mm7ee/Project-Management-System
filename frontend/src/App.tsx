@@ -284,8 +284,6 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           setView("settings");
           if (selectedId) closeProject();
         }}
-        theme={prefs.theme}
-        onTheme={(theme) => savePrefs({ ...prefs, theme }).catch(() => undefined)}
       />
 
       <main className="main">

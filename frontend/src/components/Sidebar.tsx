@@ -1,6 +1,6 @@
-import { FileBarChart, FileText, FolderKanban, LayoutDashboard, ListChecks, MonitorSmartphone, Moon, Orbit, Plus, Settings, Sun, X } from "lucide-react";
+import { FileBarChart, FileText, FolderKanban, LayoutDashboard, ListChecks, Plus, Settings, X } from "lucide-react";
 import { initials, type Status } from "../data/systems";
-import { ROLE_LABEL, type Prefs, type User } from "../data/roles";
+import { ROLE_LABEL, type User } from "../data/roles";
 import { COMPANY_URL } from "../brand";
 
 export type Filter = "ALL" | Status | "OVERDUE" | "REQUESTED" | "MAINTENANCE" | "MINE" | "BLOCKED";
@@ -24,16 +24,7 @@ interface Props {
   canLogFeature: boolean;
   onLogFeature: () => void;
   onAccount: () => void;
-  theme: Prefs["theme"];
-  onTheme: (t: Prefs["theme"]) => void;
 }
-
-const THEMES: { value: Prefs["theme"]; label: string; icon: typeof Sun }[] = [
-  { value: "light", label: "Light", icon: Sun },
-  { value: "dark", label: "Dark", icon: Moon },
-  { value: "futuristic", label: "Futuristic", icon: Orbit },
-  { value: "system", label: "Match device", icon: MonitorSmartphone },
-];
 
 export default function Sidebar(p: Props) {
   const go = (fn: () => void) => () => {
@@ -118,22 +109,6 @@ export default function Sidebar(p: Props) {
             <ListChecks size={17} strokeWidth={2.5} /> Log feature request
           </button>
         )}
-
-        <div className="theme-switch" role="radiogroup" aria-label="Theme">
-          {THEMES.map(({ value, label, icon: Icon }) => (
-            <button
-              key={value}
-              role="radio"
-              aria-checked={p.theme === value}
-              aria-label={label}
-              title={label}
-              className={p.theme === value ? "on" : ""}
-              onClick={() => p.onTheme(value)}
-            >
-              <Icon size={16} />
-            </button>
-          ))}
-        </div>
 
         <button className={`profile ${p.view === "settings" ? "on" : ""}`} onClick={go(p.onAccount)} aria-label="Your settings">
           <span className="profile-avatar">{initials(p.me.name)}</span>
