@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertOctagon, FileText, History, Menu, Plus, Search, Settings, Users } from "lucide-react";
+import { AlertOctagon, FileText, History, Menu, Plus, Search, Settings, Sparkles, Users } from "lucide-react";
 import { getSchedule, type System } from "./data/systems";
 import { api, useAppData, type AppData } from "./data/api";
 import { isAssigned, type Permission, type Prefs } from "./data/roles";
@@ -31,6 +31,7 @@ import DashboardPage from "./components/DashboardPage";
 import ProjectsPage from "./components/ProjectsPage";
 import { awaitingSignature, type SignoffStatus } from "./data/pcn";
 import type { User } from "./data/roles";
+import AskPanel from "./components/AskPanel";
 
 // A project page has its own address (#/projects/<id>), so it can be bookmarked, opened in a
 // new tab and left with the browser's back button.
@@ -98,6 +99,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
     setView("projects");
   };
   const [query, setQuery] = useState("");
+  const [asking, setAsking] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(projectInHash);
   const [showPcn, setShowPcn] = useState(pcnInHash);
   useEffect(() => {
@@ -310,7 +312,18 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
               )}
             </>
           )}
+          <button className="ask-btn" onClick={() => setAsking(true)} title="Ask a question about projects, people and deadlines">
+            <Sparkles size={17} /> <span>Ask OmniTrack</span>
+          </button>
         </header>
+        <AskPanel
+          open={asking}
+          onClose={() => setAsking(false)}
+          systems={systems}
+          users={users}
+          features={features}
+          onOpenProject={openProject}
+        />
 
         {selectedId ? (
           selected && showPcn && selected.pcn ? (

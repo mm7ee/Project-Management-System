@@ -30,6 +30,7 @@ import { buildShowcase } from "../src/data/showcase";
 import { PASSWORD_HISTORY, passwordProblem } from "../src/data/password";
 import type { ProjectTemplate } from "../src/data/templates";
 import { cleanPcn, pcnStatus, type Signatory } from "../src/data/pcn";
+import { MAX_QUESTION, askModel, buildSnapshot, type AskPerson, type AskTurn } from "./ask";
 import {
   DEFAULT_ROLE_PERMISSIONS,
   ROLES,
@@ -46,6 +47,10 @@ import {
 } from "../src/data/roles";
 
 const COOKIE = "omni_session";
+/** Ask OmniTrack: questions per person per window, kept per Worker instance (a guard, not a quota). */
+const ASK_LIMIT = 20;
+const ASK_WINDOW_MS = 10 * 60_000;
+const askLog = new Map<string, number[]>();
 const SESSION_DAYS = 7;
 
 class HttpError extends Error {
@@ -670,6 +675,56 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
         ? (await db.prepare("SELECT COUNT(*) AS n FROM mfa_recovery WHERE user_id = ? AND used_at IS NULL").bind(me.id).first<{ n: number }>())!.n
         : 0,
     });
+  }
+
+  // Ask OmniTrack: a plain-English question answered from the data every signed-in user can see.
+  if (path === "/api/ask" && method === "POST") {
+    if (!env.AI) throw new HttpError(503, "Ask OmniTrack isn't switched on for this server");
+    const b = await body<{ question?: string; history?: AskTurn[] }>(req);
+    const question = String(b.question ?? "").trim();
+    if (!question) throw new HttpError(400, "Type a question");
+    if (question.length > MAX_QUESTION) throw new HttpError(400, `Keep questions under ${MAX_QUESTION} characters`);
+    const t = Date.now();
+    const recent = (askLog.get(me.id) ?? []).filter((at) => t - at < ASK_WINDOW_MS);
+    if (recent.length >= ASK_LIMIT) throw new HttpError(429, "You've asked a lot in a short time. Try again in a few minutes.");
+    askLog.set(me.id, [...recent, t]);
+    const history = (Array.isArray(b.history) ? b.history : [])
+      .filter((h) => h && typeof h.q === "string" && typeof h.a === "string")
+      .slice(-2);
+
+    const [systems, people, assignments, features, blockers, limits] = await Promise.all([
+      db.prepare("SELECT data FROM systems ORDER BY sort, rowid").all<{ data: string }>(),
+      db.prepare("SELECT id, name, username, role FROM users ORDER BY name").all<AskPerson>(),
+      db.prepare("SELECT user_id, system_id FROM assignments").all<{ user_id: string; system_id: string }>(),
+      db.prepare("SELECT * FROM features ORDER BY created_at DESC").all<FeatureRow>(),
+      db.prepare("SELECT * FROM blockers ORDER BY raised_at DESC").all<Record<string, string | null>>(),
+      workloadLimits(db),
+    ]);
+    const snapshot = buildSnapshot({
+      now: t,
+      systems: systems.results.map((r) => JSON.parse(r.data) as System),
+      people: people.results,
+      assignments: assignments.results,
+      features: features.results.map(toFeature),
+      blockers: blockers.results.map(
+        (r): Blocker => ({
+          id: r.id!,
+          systemId: r.system_id!,
+          text: r.text!,
+          raisedBy: r.raised_by!,
+          raisedAt: r.raised_at!,
+          ...(r.resolved_at ? { resolvedAt: r.resolved_at } : {}),
+          ...(r.resolution ? { resolution: r.resolution } : {}),
+        }),
+      ),
+      limits,
+    });
+    try {
+      return json({ answer: await askModel(env.AI, snapshot, question, history) });
+    } catch (e) {
+      console.error("ask failed", e);
+      throw new HttpError(502, "The assistant didn't respond. Try again in a moment.");
+    }
   }
 
   if (path === "/api/me/password" && method === "POST") {

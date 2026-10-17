@@ -23,8 +23,14 @@ interface Fetcher {
   fetch(request: Request): Promise<Response>;
 }
 
+/** Workers AI: runs a model on Cloudflare's network. */
+interface Ai {
+  run(model: string, input: Record<string, unknown>): Promise<{ response?: string } & Record<string, unknown>>;
+}
+
 interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
+  AI?: Ai; // Workers AI binding, for Ask OmniTrack
   MFA_KEY?: string; // encrypts two-step verification secrets; a Worker secret (.dev.vars locally)
 }

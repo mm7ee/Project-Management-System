@@ -11,6 +11,8 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"]
   },
+  // Workers AI, for Ask OmniTrack. Calls are billed to the account (a generous free daily allowance).
+  "ai": { "binding": "AI" },
   "d1_databases": [
     {
       "binding": "DB",

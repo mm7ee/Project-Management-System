@@ -1496,3 +1496,81 @@ a.nav-item { text-decoration: none; }
 @keyframes sweep-in { from { stroke-dasharray: 0 1000; } }
 @keyframes grow-y { from { transform: scaleY(0); } }
 @keyframes grow-x { from { transform: scaleX(0); } }
+
+/* ---------- Ask OmniTrack ---------- */
+.ask-btn {
+  position: relative; display: inline-flex; align-items: center; gap: 7px; flex: none; padding: 9px 16px; border: 0; border-radius: 99px;
+  font: inherit; font-size: 14.5px; font-weight: 700; color: #fff; cursor: pointer; overflow: hidden;
+  background: linear-gradient(120deg, var(--violet), var(--cyan));
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--violet) 30%, transparent);
+  transition: transform .15s, box-shadow .15s;
+}
+.ask-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px color-mix(in srgb, var(--violet) 38%, transparent); }
+.ask-btn:focus-visible { outline: 3px solid color-mix(in srgb, var(--cyan) 45%, transparent); outline-offset: 2px; }
+.drawer.ask { display: flex; flex-direction: column; width: min(520px, 100%); padding: 0; overflow: hidden; }
+.ask-head { position: relative; display: flex; align-items: center; gap: 12px; padding: 20px 64px 16px 22px; border-bottom: 1px solid var(--border); }
+.ask-head h2 { padding-right: 0; font-size: 20px; }
+.ask-head p { font-size: 13.5px; color: var(--muted); margin-top: 2px; }
+.ask-head .close-btn { top: 20px; }
+.ask-badge {
+  display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 12px; color: #fff;
+  background: linear-gradient(135deg, var(--violet), var(--cyan));
+}
+.ask-clear {
+  position: absolute; top: 20px; right: 58px; display: grid; place-items: center; width: 34px; height: 34px;
+  border: 0; border-radius: 50%; background: var(--track); color: var(--heading); cursor: pointer;
+}
+.ask-body { flex: 1; overflow-y: auto; padding: 18px 22px; display: flex; flex-direction: column; gap: 18px; }
+.ask-empty p { font-size: 14.5px; color: var(--muted); line-height: 1.5; }
+.ask-examples { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.ask-examples button {
+  text-align: left; padding: 11px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--canvas);
+  font: inherit; font-size: 14px; color: var(--heading); cursor: pointer; transition: border-color .15s, background .15s, transform .15s;
+}
+.ask-examples button:hover { border-color: var(--cyan); background: var(--tint-cyan); transform: translateX(3px); }
+.ask-turn { display: flex; flex-direction: column; gap: 10px; }
+.ask-q {
+  align-self: flex-end; max-width: 85%; padding: 10px 14px; border-radius: 14px 14px 4px 14px;
+  background: var(--navy); color: #fff; font-size: 14.5px; line-height: 1.45; white-space: pre-wrap;
+}
+.ask-a {
+  align-self: flex-start; max-width: 100%; padding: 12px 15px; border-radius: 14px 14px 14px 4px;
+  background: var(--canvas); border: 1px solid var(--border); color: var(--text); font-size: 14.5px; line-height: 1.55;
+}
+.ask-a p + p, .ask-a p + ul, .ask-a ul + p { margin-top: 8px; }
+.ask-a ul { margin: 6px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.ask-a b { color: var(--heading); }
+.ask-error { border-color: var(--red); background: var(--tint-red); color: var(--red-ink); }
+.ask-link {
+  display: inline; padding: 0; border: 0; background: none; font: inherit; font-weight: 600; color: var(--cyan-ink);
+  text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--cyan) 45%, transparent); text-underline-offset: 2px; cursor: pointer;
+}
+.ask-link:hover { text-decoration-color: currentColor; }
+.ask-thinking { display: inline-flex; align-items: center; gap: 10px; color: var(--muted); }
+.ask-dots { display: inline-flex; gap: 4px; }
+.ask-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--cyan); opacity: .4; }
+.ask-form { display: flex; align-items: flex-end; gap: 8px; margin: 0 22px; padding: 8px 8px 8px 14px; border: 2px solid var(--input-line); border-radius: 16px; background: var(--input-bg); }
+.ask-form:focus-within { border-color: var(--cyan); }
+.ask-form textarea { flex: 1; resize: none; border: 0; outline: 0; background: transparent; font: inherit; font-size: 15px; color: var(--text); padding: 6px 0; max-height: 120px; }
+.ask-send {
+  display: grid; place-items: center; flex: none; width: 36px; height: 36px; border: 0; border-radius: 50%;
+  background: linear-gradient(135deg, var(--violet), var(--cyan)); color: #fff; cursor: pointer;
+}
+.ask-send:disabled { opacity: .4; cursor: default; }
+.ask-note { padding: 8px 22px 16px; font-size: 12px; color: var(--faint); text-align: center; }
+@media (max-width: 900px) {
+  .ask-btn span { display: none; }
+  .ask-btn { padding: 10px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ask-dots i { animation: ask-bounce 1.1s ease-in-out infinite; }
+  .ask-dots i:nth-child(2) { animation-delay: .15s; }
+  .ask-dots i:nth-child(3) { animation-delay: .3s; }
+  .ask-turn { animation: rise .35s cubic-bezier(.2, .8, .2, 1); }
+  .ask-btn::after {
+    content: ""; position: absolute; top: 0; bottom: 0; left: -40%; width: 30%;
+    background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+    animation: sweep 4.5s ease-in-out infinite;
+  }
+}
+@keyframes ask-bounce { 0%, 80%, 100% { transform: translateY(0); opacity: .4; } 40% { transform: translateY(-5px); opacity: 1; } }
