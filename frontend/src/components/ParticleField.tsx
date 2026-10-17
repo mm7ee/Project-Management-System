@@ -34,7 +34,8 @@ export default function ParticleField({ className, palette = "dark" }: { classNa
       canvas.width = w * dpr;
       canvas.height = h * dpr;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const count = Math.round(Math.min(90, (w * h) / 16000));
+      // Denser in narrow spaces (the sidebar) so the web still reads; none while hidden.
+      const count = w && h ? Math.round(Math.min(90, Math.max((w * h) / 16000, 24))) : 0;
       points = Array.from({ length: count }, () => ({
         x: Math.random() * w,
         y: Math.random() * h,
@@ -109,13 +110,15 @@ export default function ParticleField({ className, palette = "dark" }: { classNa
 
     resize();
     draw();
-    window.addEventListener("resize", onResize);
+    // Its own size, not the window's: it also starts when a hidden canvas is shown (theme change).
+    const watch = new ResizeObserver(onResize);
+    watch.observe(canvas);
     window.addEventListener("pointermove", onMove);
     document.addEventListener("pointerleave", onLeave);
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelAnimationFrame(frame);
-      window.removeEventListener("resize", onResize);
+      watch.disconnect();
       window.removeEventListener("pointermove", onMove);
       document.removeEventListener("pointerleave", onLeave);
       document.removeEventListener("visibilitychange", onVisible);

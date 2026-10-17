@@ -1611,10 +1611,20 @@ a.nav-item { text-decoration: none; }
 
 /* Frosted glass, so the backdrop shows through while text stays crisp. */
 :root[data-theme="light"] :is(.card, .stat, .d-card, .d-kpi, .viz-card, .set-card, .table-wrap) {
-  background-color: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(14px) saturate(160%); -webkit-backdrop-filter: blur(14px) saturate(160%);
-  border-color: rgba(5, 59, 122, 0.09);
+  /* Light enough to watch the web move behind, with a touch of blur to keep text crisp. */
+  background-color: rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(2.5px) saturate(150%); -webkit-backdrop-filter: blur(2.5px) saturate(150%);
+  border-color: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 8px 28px rgba(5, 59, 122, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
+/* Navy glass sidebar with its own glowing web inside. */
+:root[data-theme="light"] .sidebar {
+  background: linear-gradient(180deg, rgba(7, 32, 74, 0.8) 0%, rgba(4, 22, 54, 0.86) 100%);
+  backdrop-filter: blur(4px) saturate(140%); -webkit-backdrop-filter: blur(4px) saturate(140%);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+}
+.sidebar-web { display: none; }
+:root[data-theme="light"] .sidebar-web { display: block; position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }
 :root[data-theme="light"] .search { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 :root[data-theme="light"] :is(.topbar h1, .page-head h2, .d-pagehead h2, .projects-head h2) {
   background: linear-gradient(90deg, #053b7a 0%, #0b6fb0 45%, #1ba9e1 75%, #053b7a 100%);
