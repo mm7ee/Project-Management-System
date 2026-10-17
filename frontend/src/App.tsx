@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertOctagon, FileText, History, Menu, Plus, Search, Settings, Sparkles, Users } from "lucide-react";
+import { AlertOctagon, FileText, History, LifeBuoy, Menu, Plus, Search, Settings, Sparkles, Users } from "lucide-react";
 import { getSchedule, type System } from "./data/systems";
 import { api, useAppData, type AppData } from "./data/api";
 import { isAssigned, type Permission, type Prefs } from "./data/roles";
@@ -212,6 +212,22 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   // Things waiting on this person, shown above the Dashboard and the Projects page.
   const banners = (
     <>
+            {can("manage_users") && data.mfaHelp.length > 0 && (
+              <div className="pcn-banner mfa-help-banner" role="status">
+                <LifeBuoy size={18} />
+                <span>
+                  <b>
+                    {data.mfaHelp.length === 1
+                      ? `${data.mfaHelp[0].name} can't complete two-step verification`
+                      : `${data.mfaHelp.length} people can't complete two-step verification`}
+                  </b>{" "}
+                  Confirm it's really them, then reset it.
+                </span>
+                <button className="btn btn-navy sm" onClick={() => setView("users")}>
+                  Review
+                </button>
+              </div>
+            )}
             {pcnsToSign.length > 0 && (
               <div className="pcn-banner" role="status">
                 <FileText size={18} />
@@ -396,6 +412,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             projects={myProjects}
             mfaRequired={data.mfaPolicy.roles.includes(me.role)}
             recoveryCodesLeft={data.recoveryCodesLeft}
+            twoStep={data.twoStep}
             onPrefs={savePrefs}
             onProfileSaved={reload}
             onSignedOut={reload}
@@ -439,6 +456,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             roleMatrix={data.roleMatrix}
             limits={limits}
             mfaPolicy={data.mfaPolicy}
+            mfaHelp={data.mfaHelp}
             workload={(u) => workloadOf(u, systems, features, limits, now)}
             onChanged={reload}
           />

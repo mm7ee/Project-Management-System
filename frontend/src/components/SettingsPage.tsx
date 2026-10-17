@@ -1,19 +1,27 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
   Check,
+  Fingerprint,
   KeyRound,
   LayoutDashboard,
+  LifeBuoy,
   LogOut,
   MonitorSmartphone,
   Moon,
   Palette,
+  Plus,
+  RefreshCw,
   ShieldCheck,
+  ShieldOff,
   Smartphone,
   Sparkles,
   Sun,
   UserRound,
 } from "lucide-react";
-import { api } from "../data/api";
+import { api, type Passkey, type TwoStep } from "../data/api";
+import { createPasskey, passkeysSupported, type RegisterOptions } from "../data/passkeys";
+import { RECOVERY_SIGNIN } from "./Login";
+import { formatDate, plural } from "../time";
 import MfaSetup, { RecoveryCodes } from "./MfaSetup";
 import PasswordRules from "./PasswordRules";
 import { PASSWORD_MIN, passwordProblem } from "../data/password";
@@ -26,6 +34,7 @@ interface Props {
   permissions: Permission[];
   projects: System[]; // assigned to or led by this user
   mfaRequired: boolean; // an administrator requires two-step verification for this role
+  twoStep: TwoStep; // your own second-step methods
   recoveryCodesLeft: number;
   onPrefs: (p: Prefs) => Promise<void>;
   onProfileSaved: () => Promise<void>;
@@ -77,7 +86,7 @@ function Choice<T extends string>({
 }
 
 
-export default function SettingsPage({ me, prefs, permissions, projects, mfaRequired, recoveryCodesLeft, onPrefs, onProfileSaved, onSignedOut }: Props) {
+export default function SettingsPage({ me, prefs, permissions, projects, mfaRequired, recoveryCodesLeft, twoStep, onPrefs, onProfileSaved, onSignedOut }: Props) {
   const [saved, setSaved] = useState(false);
   const [email, setEmail] = useState(me.email ?? "");
   const [phone, setPhone] = useState(me.phone ?? "");
@@ -280,7 +289,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
           </form>
         </Section>
 
-        <TwoStepSection me={me} required={mfaRequired} recoveryCodesLeft={recoveryCodesLeft} onChanged={onProfileSaved} />
+        <TwoStepSection me={me} required={mfaRequired} recoveryCodesLeft={recoveryCodesLeft} twoStep={twoStep} onChanged={onProfileSaved} />
 
         <Section icon={<ShieldCheck size={18} />} title="Your access" sub={`What the ${ROLE_LABEL[me.role]} role can do. An administrator manages roles.`}>
           <ul className="perm-list plain">
@@ -335,50 +344,310 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
   );
 }
 
-/** Turn two-step verification on or off, and replace recovery codes. */
-function TwoStepSection({ me, required, recoveryCodesLeft, onChanged }: { me: User; required: boolean; recoveryCodesLeft: number; onChanged: () => Promise<void> }) {
-  const [mode, setMode] = useState<"idle" | "setup" | "disable" | "codes">("idle");
+/**
+ * Two-step verification: an authenticator app and/or passkeys, recovery codes, and what to do
+ * when a phone is lost (move to a new phone, or remove it straight away).
+ */
+function TwoStepSection({
+  me,
+  required,
+  recoveryCodesLeft,
+  twoStep,
+  onChanged,
+}: {
+  me: User;
+  required: boolean;
+  recoveryCodesLeft: number;
+  twoStep: TwoStep;
+  onChanged: () => Promise<void>;
+}) {
+  type Mode = "idle" | "setup" | "replace" | "replaceScan" | "removeApp" | "addKey" | "removeKey" | "codes" | "disable";
+  const [mode, setMode] = useState<Mode>("idle");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
+  const [keyName, setKeyName] = useState("");
+  const [target, setTarget] = useState<Passkey | null>(null);
+  const [scan, setScan] = useState<{ secret: string; uri: string } | null>(null);
   const [fresh, setFresh] = useState<string[] | null>(null);
+  const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [usedRecovery, setUsedRecovery] = useState(() => {
+    try {
+      return sessionStorage.getItem(RECOVERY_SIGNIN) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const on = twoStep.app || twoStep.passkeys.length > 0;
+
   const reset = () => {
     setMode("idle");
     setPassword("");
     setCode("");
-    setFresh(null);
+    setKeyName("");
+    setTarget(null);
+    setScan(null);
   };
   const attempt = async (fn: () => Promise<void>) => {
     setMsg(null);
+    setBusy(true);
     try {
       await fn();
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : "Something went wrong" });
+    } finally {
+      setBusy(false);
     }
   };
+  const done = async (text: string, codes?: string[]) => {
+    await onChanged();
+    reset();
+    if (codes?.length) setFresh(codes);
+    setMsg({ ok: true, text });
+    try {
+      sessionStorage.removeItem(RECOVERY_SIGNIN);
+    } catch {
+      // Only a reminder.
+    }
+    setUsedRecovery(false);
+  };
+
+  const passwordField = (
+    <label className="field">
+      <span>Your password</span>
+      <input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+    </label>
+  );
+  const codeField = (label: string) => (
+    <label className="field">
+      <span>{label}</span>
+      <input autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} placeholder="123 456 or xxxx-xxxx" />
+    </label>
+  );
+  const actions = (submit: string, danger = false) => (
+    <div className="page-actions">
+      <button type="submit" className={`btn ${danger ? "btn-danger" : "btn-navy"}`} disabled={busy}>
+        {busy ? "Working…" : submit}
+      </button>
+      <button type="button" className="btn btn-ghost" onClick={reset}>
+        Cancel
+      </button>
+    </div>
+  );
+
+  // Fresh recovery codes take over the section until they're saved.
+  if (fresh) {
+    return (
+      <Section icon={<Smartphone size={18} />} title="Two-step verification">
+        <p className="set-note">
+          <b>Save your new recovery codes.</b> Any old ones no longer work. Each code gets you in once if you lose your phone.
+        </p>
+        <RecoveryCodes codes={fresh} username={me.username} />
+        <button className="btn btn-navy" onClick={() => setFresh(null)}>
+          I've saved them
+        </button>
+      </Section>
+    );
+  }
 
   return (
     <Section
       icon={<Smartphone size={18} />}
       title="Two-step verification"
-      sub="Sign in with your password and a code from an authenticator app, so a stolen password alone can't get in."
+      sub="After your password, prove it's you with your phone or a passkey, so a stolen password alone can't get in."
     >
-      {me.mfaEnabled ? (
-        <>
-          <p className="form-ok">
-            <ShieldCheck size={16} /> On · {recoveryCodesLeft} recovery code{recoveryCodesLeft === 1 ? "" : "s"} left
-            {required && " · required for your role"}
-          </p>
-          {recoveryCodesLeft <= 3 && mode === "idle" && <p className="form-warn">You're running low on recovery codes. Make new ones below.</p>}
-          {mode === "codes" && fresh ? (
-            <>
-              <p className="set-note">Your old recovery codes no longer work. Save these:</p>
-              <RecoveryCodes codes={fresh} username={me.username} />
-              <button className="btn btn-navy" onClick={() => onChanged().then(reset)}>
-                Done
+      {on ? (
+        <p className="form-ok">
+          <ShieldCheck size={16} /> On · {[twoStep.app && "authenticator app", twoStep.passkeys.length && plural(twoStep.passkeys.length, "passkey")].filter(Boolean).join(" + ")} ·{" "}
+          {recoveryCodesLeft} recovery code{recoveryCodesLeft === 1 ? "" : "s"} left{required && " · required for your role"}
+        </p>
+      ) : (
+        <p className="set-note">Off. Anyone with your password can sign in as you.</p>
+      )}
+      {usedRecovery && (
+        <p className="form-warn">
+          You signed in with a recovery code. If your phone is lost or stolen, remove it below and set up your new one (or add a passkey).
+        </p>
+      )}
+      {on && recoveryCodesLeft <= 3 && mode === "idle" && <p className="form-warn">You're running low on recovery codes. Make new ones below.</p>}
+
+      {/* ---- authenticator app ---- */}
+      <div className="mfa-method">
+        <div className="mfa-method-head">
+          <span className="mfa-method-icon">
+            <Smartphone size={17} />
+          </span>
+          <div>
+            <b>Authenticator app</b>
+            <span>{twoStep.app ? "Codes from the app on your phone" : "Not set up"}</span>
+          </div>
+        </div>
+        {mode === "setup" ? (
+          <MfaSetup username={me.username} onCancel={reset} onDone={() => done("Authenticator app added.")} />
+        ) : mode === "replace" ? (
+          <form
+            className="set-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              attempt(async () => {
+                setScan(await api<{ secret: string; uri: string }>("/me/mfa/replace", "POST", { password, code }));
+                setMode("replaceScan");
+              });
+            }}
+          >
+            <p className="set-note">Your old phone keeps working until the new one is confirmed. Lost the old phone? Use a recovery code.</p>
+            {passwordField}
+            {codeField("Code from your app, or a recovery code")}
+            {actions("Next: scan with the new phone")}
+          </form>
+        ) : mode === "replaceScan" && scan ? (
+          <MfaSetup
+            username={me.username}
+            initial={scan}
+            confirmLabel="Switch to this phone"
+            onCancel={reset}
+            onDone={(codes) => done("Moved to your new phone. The old one no longer works, and other browsers were signed out.", codes)}
+          />
+        ) : mode === "removeApp" ? (
+          <form
+            className="set-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              attempt(() =>
+                api("/me/mfa/app", "DELETE", { password, code }).then(() =>
+                  done(
+                    twoStep.passkeys.length
+                      ? "Authenticator app removed. Your passkeys still work, and other browsers were signed out."
+                      : "Authenticator app removed and other browsers signed out. Set up your new phone or a passkey now.",
+                  ),
+                ),
+              );
+            }}
+          >
+            <p className="set-note">
+              <b>For a lost or stolen phone.</b> Codes from it stop working at once and every other browser is signed out.
+            </p>
+            {passwordField}
+            {codeField("A recovery code (or a code from the app)")}
+            {actions("Remove the app", true)}
+          </form>
+        ) : (
+          <div className="page-actions">
+            {twoStep.app ? (
+              <>
+                <button className="btn btn-ghost" onClick={() => setMode("replace")}>
+                  <RefreshCw size={15} /> Move to a new phone
+                </button>
+                <button className="btn btn-ghost danger-text" onClick={() => setMode("removeApp")}>
+                  <ShieldOff size={15} /> Remove (lost or stolen phone)
+                </button>
+              </>
+            ) : (
+              <button className="btn btn-ghost" onClick={() => setMode("setup")}>
+                <Smartphone size={15} /> Set up an authenticator app
               </button>
-            </>
-          ) : mode === "codes" || mode === "disable" ? (
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ---- passkeys and security keys ---- */}
+      <div className="mfa-method">
+        <div className="mfa-method-head">
+          <span className="mfa-method-icon">
+            <Fingerprint size={17} />
+          </span>
+          <div>
+            <b>Passkeys and security keys</b>
+            <span>Windows Hello, your phone's fingerprint or face, or a USB/NFC key. A backup that doesn't need codes.</span>
+          </div>
+        </div>
+        {twoStep.passkeys.length > 0 && (
+          <ul className="mfa-keys">
+            {twoStep.passkeys.map((k) => (
+              <li key={k.id}>
+                <KeyRound size={15} />
+                <span>
+                  <b>{k.name}</b>
+                  <small>
+                    Added {formatDate(k.createdAt)}
+                    {k.lastUsedAt ? ` · last used ${formatDate(k.lastUsedAt)}` : " · not used yet"}
+                  </small>
+                </span>
+                {mode !== "removeKey" && (
+                  <button
+                    className="btn btn-ghost sm danger-text"
+                    onClick={() => {
+                      setTarget(k);
+                      setMode("removeKey");
+                    }}
+                  >
+                    Remove
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        {mode === "removeKey" && target ? (
+          <form
+            className="set-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              attempt(() => api(`/me/passkeys/${target.id}`, "DELETE", { password }).then(() => done(`Removed "${target.name}". Other browsers were signed out.`)));
+            }}
+          >
+            <p className="set-note">
+              Remove <b>{target.name}</b>? It stops working at once.
+            </p>
+            {passwordField}
+            {actions("Remove passkey", true)}
+          </form>
+        ) : mode === "addKey" ? (
+          <form
+            className="set-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              attempt(async () => {
+                const options = await api<RegisterOptions>("/me/passkeys/options", "POST", { password });
+                const credential = await createPasskey(options);
+                const r = await api<{ recoveryCodes?: string[] }>("/me/passkeys", "POST", { name: keyName, credential });
+                await done(`Passkey "${keyName || "Passkey"}" added. You can use it at sign-in instead of a code.`, r.recoveryCodes);
+              });
+            }}
+          >
+            <label className="field">
+              <span>Name it</span>
+              <input required maxLength={60} value={keyName} onChange={(e) => setKeyName(e.target.value)} placeholder="e.g. Work laptop, YubiKey" />
+            </label>
+            {passwordField}
+            <p className="set-note">Your browser will then ask you to confirm with your fingerprint, face, PIN or security key.</p>
+            {actions("Add passkey")}
+          </form>
+        ) : passkeysSupported() ? (
+          <div className="page-actions">
+            <button className="btn btn-ghost" onClick={() => setMode("addKey")}>
+              <Plus size={15} /> Add a passkey or security key
+            </button>
+          </div>
+        ) : (
+          <p className="set-note">This browser can't use passkeys. Try a current Edge, Chrome, Safari or Firefox.</p>
+        )}
+      </div>
+
+      {/* ---- recovery codes and turning it off ---- */}
+      {on && (
+        <div className="mfa-method">
+          <div className="mfa-method-head">
+            <span className="mfa-method-icon">
+              <KeyRound size={17} />
+            </span>
+            <div>
+              <b>Recovery codes</b>
+              <span>One-time codes for when you don't have your phone. Keep them somewhere safe, away from your phone.</span>
+            </div>
+          </div>
+          {mode === "codes" || mode === "disable" ? (
             <form
               className="set-form"
               onSubmit={(e) => {
@@ -386,66 +655,49 @@ function TwoStepSection({ me, required, recoveryCodesLeft, onChanged }: { me: Us
                 attempt(async () => {
                   if (mode === "codes") {
                     setFresh((await api<{ recoveryCodes: string[] }>("/me/mfa/recovery", "POST", { code })).recoveryCodes);
+                    reset();
                   } else {
                     await api("/me/mfa/disable", "POST", { password, code });
-                    await onChanged();
-                    reset();
-                    setMsg({ ok: true, text: "Two-step verification is off." });
+                    await done("Two-step verification is off.");
                   }
                 });
               }}
             >
-              {mode === "disable" && (
-                <label className="field">
-                  <span>Your password</span>
-                  <input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-                </label>
-              )}
-              <label className="field">
-                <span>{mode === "codes" ? "Current code from your app" : "Code from your app (or a recovery code)"}</span>
-                <input autoComplete="one-time-code" required value={code} onChange={(e) => setCode(e.target.value)} placeholder="123 456" />
-              </label>
-              <div className="page-actions">
-                <button type="submit" className={`btn ${mode === "disable" ? "btn-danger" : "btn-navy"}`}>
-                  {mode === "disable" ? "Turn off" : "Make new codes"}
-                </button>
-                <button type="button" className="btn btn-ghost" onClick={reset}>
-                  Cancel
-                </button>
-              </div>
+              {mode === "disable" && passwordField}
+              {codeField(mode === "codes" ? "Current code from your app" : "Code from your app, or a recovery code")}
+              {actions(mode === "disable" ? "Turn off two-step verification" : "Make new codes", mode === "disable")}
             </form>
           ) : (
             <div className="page-actions">
-              <button className="btn btn-ghost" onClick={() => setMode("codes")}>
-                <KeyRound size={15} /> New recovery codes
-              </button>
+              {twoStep.app && (
+                <button className="btn btn-ghost" onClick={() => setMode("codes")}>
+                  <KeyRound size={15} /> New recovery codes
+                </button>
+              )}
               {!required && (
                 <button className="btn btn-ghost danger-text" onClick={() => setMode("disable")}>
-                  Turn off
+                  Turn off two-step verification
                 </button>
               )}
             </div>
           )}
-        </>
-      ) : mode === "setup" ? (
-        <MfaSetup
-          username={me.username}
-          onCancel={reset}
-          onDone={() =>
-            onChanged().then(() => {
-              reset();
-              setMsg({ ok: true, text: "Two-step verification is on. You'll be asked for a code next time you sign in." });
-            })
-          }
-        />
-      ) : (
-        <>
-          <p className="set-note">Off. Anyone with your password can sign in as you.</p>
-          <button className="btn btn-navy" onClick={() => setMode("setup")}>
-            <ShieldCheck size={16} /> Turn on
-          </button>
-        </>
+        </div>
       )}
+
+      <details className="mfa-help">
+        <summary>
+          <LifeBuoy size={15} /> Lost your phone?
+        </summary>
+        <ol>
+          <li>On the sign-in screen, after your password, choose <b>Lost your phone? Use a recovery code</b>, or use a passkey.</li>
+          <li>
+            Then here, choose <b>Remove (lost or stolen phone)</b> to cut it off at once, or <b>Move to a new phone</b>.
+          </li>
+          <li>
+            No codes or passkey? On the sign-in screen choose <b>Can't use any of these? Ask an administrator</b>. They'll confirm it's you and reset it.
+          </li>
+        </ol>
+      </details>
       {msg && <p className={msg.ok ? "form-ok" : "form-error"}>{msg.text}</p>}
     </Section>
   );

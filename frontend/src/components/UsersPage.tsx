@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { AlertOctagon, Check, Copy, KeyRound, Pencil, Plus, ShieldCheck, ShieldOff, Trash2, X } from "lucide-react";
-import { api } from "../data/api";
+import { AlertOctagon, Check, Copy, Fingerprint, KeyRound, LifeBuoy, Pencil, Plus, ShieldCheck, ShieldOff, Smartphone, Trash2, X } from "lucide-react";
+import { api, type MfaHelpRequest } from "../data/api";
 import { initials, type System } from "../data/systems";
 import { timeAgo } from "../time";
 import {
@@ -24,12 +24,15 @@ interface Props {
   roleMatrix: RolePermissions;
   limits: Limits;
   mfaPolicy: MfaPolicy;
+  mfaHelp: MfaHelpRequest[]; // people locked out of two-step verification
   workload: (u: User) => Workload;
   onChanged: () => Promise<void>;
 }
 
-export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaPolicy, workload, onChanged }: Props) {
+export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaPolicy, mfaHelp, workload, onChanged }: Props) {
+  const now = Date.now();
   const [mfaResetting, setMfaResetting] = useState<string | null>(null);
+  const [confirmHelp, setConfirmHelp] = useState<string | null>(null);
   // Last sign-in is only sent to people who can view the activity log.
   const showLastLogin = users.some((u) => u.lastLogin !== undefined) || me.lastLogin !== undefined;
   const [editing, setEditing] = useState<User | "new" | null>(null);
@@ -65,6 +68,57 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaP
       </header>
       {error && <p className="form-error banner">{error}</p>}
 
+      {mfaHelp.length > 0 && (
+        <section className="set-card mfa-requests" aria-label="Two-step verification help requests">
+          <header className="set-head">
+            <span className="set-icon">
+              <LifeBuoy size={18} />
+            </span>
+            <div>
+              <h3>Locked out of two-step verification</h3>
+              <p>
+                They signed in with the right password but have lost their phone, recovery codes and passkeys. <b>Confirm it's really them</b> (a call to a
+                number you already have, or in person) before resetting. A reset signs them out everywhere; they set it up again at next sign-in.
+              </p>
+            </div>
+          </header>
+          <ul>
+            {mfaHelp.map((h) => (
+              <li key={h.id}>
+                <span className="avatar">{initials(h.name)}</span>
+                <span className="mfa-request-text">
+                  <b>{h.name}</b>
+                  <small>
+                    Asked {timeAgo(h.createdAt, now)}
+                    {h.ip ? ` · from ${h.ip}` : ""}
+                  </small>
+                  {h.message && <q>{h.message}</q>}
+                </span>
+                {confirmHelp === h.id ? (
+                  <span className="page-actions">
+                    <button className="btn btn-ghost sm" onClick={() => setConfirmHelp(null)}>
+                      Cancel
+                    </button>
+                    <button className="btn btn-navy sm" onClick={() => run(() => api(`/users/${h.userId}/mfa`, "DELETE")).then(() => setConfirmHelp(null))}>
+                      Yes, I've confirmed it's them: reset
+                    </button>
+                  </span>
+                ) : (
+                  <span className="page-actions">
+                    <button className="btn btn-ghost sm" onClick={() => run(() => api(`/mfa-help/${h.id}`, "DELETE"))} title="Not genuine, or no longer needed">
+                      Dismiss
+                    </button>
+                    <button className="btn btn-navy sm" onClick={() => setConfirmHelp(h.id)}>
+                      <ShieldOff size={14} /> Reset two-step
+                    </button>
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <div className="table-wrap">
         <table className="table">
           <thead>
@@ -94,8 +148,13 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaP
                   <span className={`role-chip role-${u.role}`}>{ROLE_LABEL[u.role]}</span>
                   {u.mustChangePassword && <span className="flag flag-request pw-pending">Must set a new password</span>}
                   {u.mfaEnabled ? (
-                    <span className="flag flag-mfa" title="Signs in with an authenticator app code">
+                    <span
+                      className="flag flag-mfa"
+                      title={`Two-step with ${(u.mfaMethods ?? ["app"]).map((m) => (m === "app" ? "an authenticator app" : "a passkey")).join(" and ")}`}
+                    >
                       <ShieldCheck size={12} /> 2-step on
+                      {u.mfaMethods?.includes("app") && <Smartphone size={11} aria-label="authenticator app" />}
+                      {u.mfaMethods?.includes("passkey") && <Fingerprint size={11} aria-label="passkey" />}
                     </span>
                   ) : (
                     mfaPolicy.roles.includes(u.role) && <span className="flag flag-request">2-step required, not set up</span>

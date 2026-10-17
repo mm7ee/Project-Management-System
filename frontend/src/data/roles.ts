@@ -67,7 +67,8 @@ export interface User {
   role: Role;
   projectIds?: string[]; // developers only: the projects they're assigned to
   mustChangePassword?: boolean; // reset by an admin; must choose a new password at sign-in
-  mfaEnabled?: boolean; // signs in with a code from an authenticator app as well as the password
+  mfaEnabled?: boolean; // two-step verification is on: an authenticator app and/or a passkey
+  mfaMethods?: ("app" | "passkey")[]; // which ones (shown to administrators)
   lastLogin?: string; // ISO; only sent to people who can view the activity log
 }
 

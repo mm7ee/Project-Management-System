@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, BellRing, FileBarChart, KeyRound, LockKeyhole, Radio, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowRight, BellRing, FileBarChart, Fingerprint, KeyRound, LifeBuoy, LockKeyhole, Radio, ShieldCheck, UserRound } from "lucide-react";
 import { ApiError, api } from "../data/api";
+import { passkeysSupported, signWithPasskey } from "../data/passkeys";
 import { COMPANY_URL } from "../brand";
 import ParticleField from "./ParticleField";
 import "./landing.css";
@@ -32,14 +33,11 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
   const [busy, setBusy] = useState(false);
   // Set once the password checked out for an account with two-step verification.
   const [ticket, setTicket] = useState<string | null>(null);
-  const [code, setCode] = useState("");
-  const [useRecovery, setUseRecovery] = useState(false);
+  const [methods, setMethods] = useState<Methods>({ app: true, passkey: false });
   const word = useRotatingWord();
 
   const backToPassword = (message = "") => {
     setTicket(null);
-    setCode("");
-    setUseRecovery(false);
     setPassword("");
     setError(message);
   };
@@ -120,72 +118,7 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
           </div>
 
           {ticket ? (
-            <form
-              className="lp-card"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                setBusy(true);
-                setError("");
-                try {
-                  await api("/login/mfa", "POST", { ticket, code });
-                  onSignedIn();
-                } catch (err) {
-                  setBusy(false);
-                  if (err instanceof ApiError && err.code === "mfa_expired") return backToPassword(err.message);
-                  setError(err instanceof Error ? err.message : "Sign-in failed");
-                  setCode("");
-                }
-              }}
-            >
-              <div className="lp-card-head">
-                <span className="lp-card-icon">
-                  <ShieldCheck size={20} />
-                </span>
-                <div>
-                  <h2>Two-step verification</h2>
-                  <p>{useRecovery ? "Enter one of your recovery codes" : "Enter the 6-digit code from your authenticator app"}</p>
-                </div>
-              </div>
-              <label className="lp-field">
-                <span>{useRecovery ? "Recovery code" : "Code"}</span>
-                <span className="lp-input">
-                  <KeyRound size={17} />
-                  <input
-                    key={useRecovery ? "recovery" : "app"}
-                    autoFocus
-                    required
-                    autoComplete="one-time-code"
-                    inputMode={useRecovery ? "text" : "numeric"}
-                    maxLength={useRecovery ? 12 : 7}
-                    value={code}
-                    onChange={(e) => setCode(useRecovery ? e.target.value : e.target.value.replace(/[^\d ]/g, ""))}
-                    placeholder={useRecovery ? "xxxx-xxxx" : "123 456"}
-                  />
-                </span>
-              </label>
-              {error && (
-                <p className="lp-error" role="alert">
-                  {error}
-                </p>
-              )}
-              <button type="submit" className="lp-submit" disabled={busy}>
-                {busy ? "Checking…" : "Verify"} {!busy && <ArrowRight size={18} />}
-              </button>
-              <button
-                type="button"
-                className="lp-link"
-                onClick={() => {
-                  setUseRecovery((v) => !v);
-                  setCode("");
-                  setError("");
-                }}
-              >
-                {useRecovery ? "Use a code from the app instead" : "Lost your phone? Use a recovery code"}
-              </button>
-              <button type="button" className="lp-link" onClick={() => backToPassword()}>
-                Back
-              </button>
-            </form>
+            <SecondStep ticket={ticket} methods={methods} onSignedIn={onSignedIn} onBack={backToPassword} />
           ) : (
           <form
             className="lp-card"
@@ -194,8 +127,9 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
               setBusy(true);
               setError("");
               try {
-                const r = await api<{ ok?: boolean; mfa?: boolean; ticket?: string }>("/login", "POST", { username, password });
+                const r = await api<{ ok?: boolean; mfa?: boolean; ticket?: string; methods?: Methods }>("/login", "POST", { username, password });
                 if (r.mfa && r.ticket) {
+                  setMethods(r.methods ?? { app: true, passkey: false });
                   setTicket(r.ticket);
                   setBusy(false);
                   return;
@@ -268,5 +202,189 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
         </a>
       </footer>
     </div>
+  );
+}
+
+interface Methods {
+  app: boolean;
+  passkey: boolean;
+}
+
+/** Set after signing in with a recovery code, so the app can suggest moving to a new phone. */
+export const RECOVERY_SIGNIN = "omnitrack:recovery-signin";
+
+/**
+ * The second sign-in step. Offers whichever methods the account has (authenticator app,
+ * passkey or security key), recovery codes for a lost phone, and, when nothing is left, a
+ * request to an administrator.
+ */
+function SecondStep({ ticket, methods, onSignedIn, onBack }: { ticket: string; methods: Methods; onSignedIn: () => void; onBack: (message?: string) => void }) {
+  type Mode = "app" | "passkey" | "recovery" | "help" | "helpSent";
+  const canPasskey = methods.passkey && passkeysSupported();
+  const [mode, setMode] = useState<Mode>(methods.app ? "app" : canPasskey ? "passkey" : "recovery");
+  const [code, setCode] = useState("");
+  const [note, setNote] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const go = (m: Mode) => {
+    setMode(m);
+    setCode("");
+    setError("");
+  };
+  const attempt = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setError("");
+    try {
+      await fn();
+    } catch (err) {
+      setBusy(false);
+      if (err instanceof ApiError && err.code === "mfa_expired") return onBack(err.message);
+      setError(err instanceof Error ? err.message : "Sign-in failed");
+      setCode("");
+    }
+  };
+  const signInWithPasskey = () =>
+    attempt(async () => {
+      const options = await api<{ challenge: string; rpId: string; allow: string[] }>("/login/passkey/options", "POST", { ticket });
+      const credential = await signWithPasskey(options);
+      await api("/login/passkey", "POST", { ticket, credential });
+      onSignedIn();
+    });
+
+  const head = {
+    app: ["Two-step verification", "Enter the 6-digit code from your authenticator app"],
+    passkey: ["Two-step verification", "Use a passkey: Windows Hello, your phone's fingerprint or face, or a security key"],
+    recovery: ["Use a recovery code", "Enter one of the codes you saved when you turned on two-step verification"],
+    help: ["Ask for help", "An administrator can reset two-step verification once they've confirmed it's you"],
+    helpSent: ["Request sent", "Your administrator has been told"],
+  }[mode];
+
+  const links = (
+    <div className="lp-links">
+      {mode !== "passkey" && canPasskey && (
+        <button type="button" className="lp-link" onClick={() => go("passkey")}>
+          <Fingerprint size={14} /> Use a passkey or security key
+        </button>
+      )}
+      {mode !== "app" && methods.app && (
+        <button type="button" className="lp-link" onClick={() => go("app")}>
+          Use a code from the app
+        </button>
+      )}
+      {mode !== "recovery" && (
+        <button type="button" className="lp-link" onClick={() => go("recovery")}>
+          Lost your phone? Use a recovery code
+        </button>
+      )}
+      {mode !== "help" && (
+        <button type="button" className="lp-link" onClick={() => go("help")}>
+          Can't use any of these? Ask an administrator
+        </button>
+      )}
+      <button type="button" className="lp-link" onClick={() => onBack()}>
+        Back
+      </button>
+    </div>
+  );
+
+  return (
+    <form
+      className="lp-card"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (mode === "passkey") return signInWithPasskey();
+        if (mode === "help")
+          return attempt(async () => {
+            await api("/login/mfa/help", "POST", { ticket, message: note });
+            setBusy(false);
+            setMode("helpSent");
+          });
+        attempt(async () => {
+          await api("/login/mfa", "POST", { ticket, code });
+          if (mode === "recovery") {
+            try {
+              sessionStorage.setItem(RECOVERY_SIGNIN, "1");
+            } catch {
+              // Only a reminder; fine without it.
+            }
+          }
+          onSignedIn();
+        });
+      }}
+    >
+      <div className="lp-card-head">
+        <span className="lp-card-icon">{mode === "passkey" ? <Fingerprint size={20} /> : mode.startsWith("help") ? <LifeBuoy size={20} /> : <ShieldCheck size={20} />}</span>
+        <div>
+          <h2>{head[0]}</h2>
+          <p>{head[1]}</p>
+        </div>
+      </div>
+
+      {(mode === "app" || mode === "recovery") && (
+        <label className="lp-field">
+          <span>{mode === "recovery" ? "Recovery code" : "Code"}</span>
+          <span className="lp-input">
+            <KeyRound size={17} />
+            <input
+              key={mode}
+              autoFocus
+              required
+              autoComplete="one-time-code"
+              inputMode={mode === "recovery" ? "text" : "numeric"}
+              maxLength={mode === "recovery" ? 12 : 7}
+              value={code}
+              onChange={(e) => setCode(mode === "recovery" ? e.target.value : e.target.value.replace(/[^\d ]/g, ""))}
+              placeholder={mode === "recovery" ? "xxxx-xxxx" : "123 456"}
+            />
+          </span>
+        </label>
+      )}
+      {mode === "recovery" && <p className="lp-help">Each code works once. After signing in, move two-step verification to your new phone in Settings.</p>}
+
+      {mode === "help" && (
+        <>
+          <label className="lp-field">
+            <span>What happened? (optional)</span>
+            <span className="lp-input">
+              <textarea
+                rows={3}
+                maxLength={300}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="e.g. My phone was stolen and I can't find my recovery codes"
+              />
+            </span>
+          </label>
+          <p className="lp-help">They'll confirm it's really you, for example by phone or in person, before resetting anything. Nobody from OmniTrack will ever ask for your password.</p>
+        </>
+      )}
+
+      {mode === "helpSent" && (
+        <p className="lp-help lp-help-strong">
+          Once an administrator has reset it, sign in with your password and set up two-step verification again: on a new phone, or with a passkey. Found a recovery code in the meantime? You can still use it.
+        </p>
+      )}
+
+      {error && (
+        <p className="lp-error" role="alert">
+          {error}
+        </p>
+      )}
+      {mode !== "helpSent" && (
+        <button type="submit" className="lp-submit" disabled={busy}>
+          {mode === "passkey" ? (
+            busy ? "Waiting for your device…" : <><Fingerprint size={18} /> Use passkey</>
+          ) : mode === "help" ? (
+            busy ? "Sending…" : "Send request"
+          ) : busy ? (
+            "Checking…"
+          ) : (
+            <>Verify <ArrowRight size={18} /></>
+          )}
+        </button>
+      )}
+      {links}
+    </form>
   );
 }

@@ -68,8 +68,20 @@ export function RecoveryCodes({ codes, username }: { codes: string[]; username: 
  * Turning on two-step verification: scan a QR code, confirm one code, keep the recovery codes.
  * `onDone` runs after the codes have been acknowledged.
  */
-export default function MfaSetup({ username, onDone, onCancel }: { username: string; onDone: () => void; onCancel?: () => void }) {
-  const [setup, setSetup] = useState<{ secret: string; uri: string } | null>(null);
+export default function MfaSetup({
+  username,
+  onDone,
+  onCancel,
+  initial,
+  confirmLabel = "Turn on",
+}: {
+  username: string;
+  onDone: (codes?: string[]) => void;
+  onCancel?: () => void;
+  initial?: { secret: string; uri: string }; // already started (moving to a new phone)
+  confirmLabel?: string;
+}) {
+  const [setup, setSetup] = useState<{ secret: string; uri: string } | null>(initial ?? null);
   const [code, setCode] = useState("");
   const [codes, setCodes] = useState<string[] | null>(null);
   const [saved, setSaved] = useState(false);
@@ -101,7 +113,7 @@ export default function MfaSetup({ username, onDone, onCancel }: { username: str
         <label className="mfa-check">
           <input type="checkbox" checked={saved} onChange={(e) => setSaved(e.target.checked)} /> I've saved my recovery codes somewhere safe
         </label>
-        <button type="button" className="btn btn-navy" disabled={!saved} onClick={onDone}>
+        <button type="button" className="btn btn-navy" disabled={!saved} onClick={() => onDone()}>
           Done
         </button>
       </div>
@@ -135,8 +147,10 @@ export default function MfaSetup({ username, onDone, onCancel }: { username: str
       onSubmit={(e) => {
         e.preventDefault();
         run(async () => {
-          const r = await api<{ recoveryCodes: string[] }>("/me/mfa/enable", "POST", { code });
-          setCodes(r.recoveryCodes);
+          const r = await api<{ recoveryCodes?: string[] }>("/me/mfa/enable", "POST", { code });
+          // Adding the app alongside a passkey keeps the existing recovery codes.
+          if (r.recoveryCodes?.length && !initial) setCodes(r.recoveryCodes);
+          else onDone(r.recoveryCodes);
         });
       }}
     >
@@ -173,7 +187,7 @@ export default function MfaSetup({ username, onDone, onCancel }: { username: str
       {error && <p className="form-error">{error}</p>}
       <div className="page-actions">
         <button type="submit" className="btn btn-navy" disabled={busy || code.replace(/\s/g, "").length !== 6}>
-          {busy ? "Checking…" : "Turn on"}
+          {busy ? "Checking…" : confirmLabel}
         </button>
         {onCancel && (
           <button type="button" className="btn btn-ghost" onClick={onCancel}>

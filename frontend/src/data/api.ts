@@ -32,6 +32,28 @@ export async function uploadDocument(systemId: string, file: File): Promise<void
   if (!res.ok) throw new ApiError(res.status, payload.error ?? `Upload failed (${res.status})`, payload.code);
 }
 
+export interface Passkey {
+  id: string;
+  name: string;
+  createdAt: string;
+  lastUsedAt?: string;
+}
+
+export interface TwoStep {
+  app: boolean; // an authenticator app is linked
+  passkeys: Passkey[];
+}
+
+/** "I've lost every way to verify", raised at sign-in after the right password. */
+export interface MfaHelpRequest {
+  id: string;
+  userId: string;
+  name: string;
+  message: string;
+  createdAt: string;
+  ip?: string;
+}
+
 export interface AppData {
   me: User;
   prefs: Prefs;
@@ -46,6 +68,8 @@ export interface AppData {
   limits: Limits;
   mfaPolicy: MfaPolicy;
   recoveryCodesLeft: number; // your unused two-step recovery codes
+  twoStep: TwoStep; // your own second-step methods
+  mfaHelp: MfaHelpRequest[]; // people locked out of two-step verification (administrators only)
   templates: ProjectTemplate[];
 }
 
