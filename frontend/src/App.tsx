@@ -12,6 +12,7 @@ import UpdateModal, { type ProgressUpdate } from "./components/UpdateModal";
 import AddSystemModal from "./components/AddSystemModal";
 import SettingsPage from "./components/SettingsPage";
 import FuturisticBackdrop from "./components/FuturisticBackdrop";
+import DaylightBackdrop from "./components/DaylightBackdrop";
 import ForcePasswordChange from "./components/ForcePasswordChange";
 import ForceMfaSetup from "./components/ForceMfaSetup";
 import ExecutivePage from "./components/ExecutivePage";
@@ -255,7 +256,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
 
   return (
     <div className="shell">
-      {resolveTheme(prefs.theme) === "futuristic" && <FuturisticBackdrop />}
+      {resolveTheme(prefs.theme) === "futuristic" ? <FuturisticBackdrop /> : <DaylightBackdrop />}
       <Sidebar
         me={me}
         view={selectedId ? "project" : view}

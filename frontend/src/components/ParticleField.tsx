@@ -6,10 +6,17 @@ import { reduceMotion } from "../prefs";
  * landing page). Draws one still frame when the visitor prefers reduced motion, and
  * pauses while the tab is hidden.
  */
-export default function ParticleField({ className }: { className?: string }) {
+// Ink per backdrop: glowing light-on-navy for Dark, navy and cyan ink on white for Light.
+const PALETTES = {
+  dark: { link: "27, 169, 225", linkAlpha: 0.16, reach: "242, 169, 0", reachAlpha: 0.3, dot: "rgba(140, 214, 245, 0.75)", accent: "rgba(242, 169, 0, 0.9)" },
+  light: { link: "11, 111, 176", linkAlpha: 0.2, reach: "27, 169, 225", reachAlpha: 0.55, dot: "rgba(11, 111, 176, 0.5)", accent: "rgba(242, 169, 0, 0.85)" },
+};
+
+export default function ParticleField({ className, palette = "dark" }: { className?: string; palette?: keyof typeof PALETTES }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
+    const ink = PALETTES[palette];
     const canvas = ref.current!;
     const ctx = canvas.getContext("2d")!;
     const still = reduceMotion();
@@ -57,7 +64,7 @@ export default function ParticleField({ className }: { className?: string }) {
           const b = points[j];
           const d = Math.hypot(a.x - b.x, a.y - b.y);
           if (d < LINK) {
-            ctx.strokeStyle = `rgba(27, 169, 225, ${0.16 * (1 - d / LINK)})`;
+            ctx.strokeStyle = `rgba(${ink.link}, ${ink.linkAlpha * (1 - d / LINK)})`;
             ctx.lineWidth = 1;
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
@@ -68,13 +75,13 @@ export default function ParticleField({ className }: { className?: string }) {
         // Points near the pointer reach out to it.
         const dm = Math.hypot(a.x - mouse.x, a.y - mouse.y);
         if (dm < LINK * 1.4) {
-          ctx.strokeStyle = `rgba(242, 169, 0, ${0.3 * (1 - dm / (LINK * 1.4))})`;
+          ctx.strokeStyle = `rgba(${ink.reach}, ${ink.reachAlpha * (1 - dm / (LINK * 1.4))})`;
           ctx.beginPath();
           ctx.moveTo(a.x, a.y);
           ctx.lineTo(mouse.x, mouse.y);
           ctx.stroke();
         }
-        ctx.fillStyle = a.amber ? "rgba(242, 169, 0, 0.9)" : "rgba(140, 214, 245, 0.75)";
+        ctx.fillStyle = a.amber ? ink.accent : ink.dot;
         ctx.beginPath();
         ctx.arc(a.x, a.y, a.r, 0, Math.PI * 2);
         ctx.fill();
@@ -113,7 +120,7 @@ export default function ParticleField({ className }: { className?: string }) {
       document.removeEventListener("pointerleave", onLeave);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, []);
+  }, [palette]);
 
   return <canvas ref={ref} className={className} aria-hidden="true" />;
 }
