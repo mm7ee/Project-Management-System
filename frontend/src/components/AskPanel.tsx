@@ -140,7 +140,7 @@ export default function AskPanel({ open, onClose, systems, users, features, onOp
 
   if (!open) return null;
   return (
-    <div className="backdrop drawer-backdrop no-print" onClick={onClose}>
+    <div className="backdrop drawer-backdrop ask-backdrop no-print" onClick={onClose}>
       <aside className="drawer ask" role="dialog" aria-label="Ask OmniTrack" onClick={(e) => e.stopPropagation()}>
         <header className="ask-head">
           <span className="ask-badge">

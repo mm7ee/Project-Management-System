@@ -1659,3 +1659,26 @@ a.nav-item { text-decoration: none; }
 @media (prefers-reduced-motion: reduce) { .dl-backdrop * { animation: none !important; } }
 :root[data-motion="reduced"] .dl-backdrop * { animation: none !important; }
 @media print { .dl-backdrop, .fx-backdrop { display: none; } }
+
+/* Ask OmniTrack as frosted glass: the page and the backdrop's web stay visible behind it. */
+.ask-backdrop { background: rgba(7, 26, 61, 0.12); }
+.drawer.ask {
+  background: rgba(255, 255, 255, 0.55);
+  backdrop-filter: blur(16px) saturate(170%); -webkit-backdrop-filter: blur(16px) saturate(170%);
+  border-left: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: -18px 0 50px rgba(5, 59, 122, 0.14);
+}
+.drawer.ask .ask-head { border-bottom-color: rgba(5, 59, 122, 0.1); }
+.drawer.ask :is(.ask-examples button, .ask-a) { background: rgba(255, 255, 255, 0.5); border-color: rgba(5, 59, 122, 0.1); }
+.drawer.ask .ask-examples button:hover { background: rgba(223, 243, 251, 0.75); }
+.drawer.ask .ask-form { background: rgba(255, 255, 255, 0.6); }
+.drawer.ask .ask-error { background: rgba(252, 242, 242, 0.8); }
+:root[data-theme="futuristic"] .drawer.ask {
+  background: rgba(6, 20, 48, 0.5);
+  border-left: 1px solid rgba(143, 220, 251, 0.2);
+  box-shadow: -18px 0 60px rgba(0, 0, 0, 0.4), 0 0 40px rgba(27, 169, 225, 0.1);
+}
+:root[data-theme="futuristic"] .drawer.ask :is(.ask-examples button, .ask-a) { background: rgba(255, 255, 255, 0.06); border-color: rgba(143, 220, 251, 0.16); }
+:root[data-theme="futuristic"] .drawer.ask .ask-examples button:hover { background: rgba(27, 169, 225, 0.18); }
+:root[data-theme="futuristic"] .drawer.ask .ask-form { background: rgba(255, 255, 255, 0.05); }
+:root[data-theme="futuristic"] .drawer.ask .ask-head { border-bottom-color: rgba(143, 220, 251, 0.14); }
