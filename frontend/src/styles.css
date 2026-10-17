@@ -1682,3 +1682,42 @@ a.nav-item { text-decoration: none; }
 :root[data-theme="futuristic"] .drawer.ask .ask-examples button:hover { background: rgba(27, 169, 225, 0.18); }
 :root[data-theme="futuristic"] .drawer.ask .ask-form { background: rgba(255, 255, 255, 0.05); }
 :root[data-theme="futuristic"] .drawer.ask .ask-head { border-bottom-color: rgba(143, 220, 251, 0.14); }
+
+/* ---------- Every pop-up is frosted glass ----------
+   Modals, drawers, drop-down menus, chart tooltips and the update banner let the page and the
+   moving backdrop show through. Inside them, panels and cards (which use --card / --canvas)
+   turn translucent too; text fields keep their own fill so typing stays easy to read. */
+.backdrop, .sidebar-scrim { background: rgba(7, 26, 61, 0.14); }
+.modal, .drawer {
+  --card: rgba(255, 255, 255, 0.45);
+  --canvas: rgba(240, 246, 252, 0.5);
+  background: rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(16px) saturate(170%); -webkit-backdrop-filter: blur(16px) saturate(170%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 24px 60px rgba(5, 59, 122, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+.drawer { border-width: 0 0 0 1px; }
+.dev-menu {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(14px) saturate(170%); -webkit-backdrop-filter: blur(14px) saturate(170%);
+  border-color: rgba(255, 255, 255, 0.75);
+}
+.viz-tip {
+  background: rgba(11, 30, 66, 0.72);
+  backdrop-filter: blur(10px) saturate(160%); -webkit-backdrop-filter: blur(10px) saturate(160%);
+  border: 1px solid rgba(143, 220, 251, 0.18);
+}
+.update-banner {
+  background: rgba(7, 26, 61, 0.72);
+  backdrop-filter: blur(12px) saturate(160%); -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid rgba(143, 220, 251, 0.2);
+}
+:root[data-theme="futuristic"] :is(.modal, .drawer) {
+  --card: rgba(255, 255, 255, 0.05);
+  --canvas: rgba(255, 255, 255, 0.04);
+  background: rgba(6, 20, 48, 0.55);
+  border: 1px solid rgba(143, 220, 251, 0.2);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45), 0 0 40px rgba(27, 169, 225, 0.12);
+}
+:root[data-theme="futuristic"] .drawer { border-width: 0 0 0 1px; }
+:root[data-theme="futuristic"] .dev-menu { background: rgba(6, 20, 48, 0.72); border-color: rgba(143, 220, 251, 0.2); }
