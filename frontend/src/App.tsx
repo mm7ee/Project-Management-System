@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertOctagon, FileText, Menu, Plus, Search } from "lucide-react";
+import { AlertOctagon, FileText, History, Menu, Plus, Search, Settings } from "lucide-react";
 import { getSchedule, type System } from "./data/systems";
 import { api, useAppData, type AppData } from "./data/api";
 import { isAssigned, type Permission, type Prefs } from "./data/roles";
@@ -375,6 +375,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             </div>
           )
         ) : view === "settings" ? (
+          <>
+          {can("audit_log") && <SettingsTabs active="settings" onChange={setView} />}
           <SettingsPage
             me={me}
             prefs={prefs}
@@ -386,6 +388,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             onProfileSaved={reload}
             onSignedOut={reload}
           />
+          </>
         ) : view === "pcns" ? (
           <ConceptNotesPage
             systems={systems}
@@ -410,7 +413,10 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             onNew={() => setFeatureEdit({ feature: null })}
           />
         ) : view === "activity" && can("audit_log") ? (
-          <ActivityPage users={users} systems={systems} now={now} />
+          <>
+            <SettingsTabs active="activity" onChange={setView} />
+            <ActivityPage users={users} systems={systems} now={now} />
+          </>
         ) : view === "users" && can("manage_users") ? (
           <UsersPage
             me={me}
@@ -565,6 +571,20 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           onClose={() => setPosting(null)}
         />
       )}
+    </div>
+  );
+}
+
+/** Tabs at the top of Settings: your own settings, and the activity log for those allowed to see it. */
+function SettingsTabs({ active, onChange }: { active: "settings" | "activity"; onChange: (v: View) => void }) {
+  return (
+    <div className="view-toggle settings-tabs no-print" role="tablist" aria-label="Settings">
+      <button role="tab" aria-selected={active === "settings"} className={active === "settings" ? "on" : ""} onClick={() => onChange("settings")}>
+        <Settings size={15} /> My settings
+      </button>
+      <button role="tab" aria-selected={active === "activity"} className={active === "activity" ? "on" : ""} onClick={() => onChange("activity")}>
+        <History size={15} /> Activity log
+      </button>
     </div>
   );
 }

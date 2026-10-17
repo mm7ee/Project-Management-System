@@ -1453,3 +1453,4 @@ a.nav-item { text-decoration: none; }
   .d-top { grid-template-columns: minmax(0, 1fr) 320px; }
 }
 @media (max-width: 700px) { .d-toolbar-actions { margin-left: 0; } }
+.settings-tabs { align-self: flex-start; margin-bottom: 16px; }

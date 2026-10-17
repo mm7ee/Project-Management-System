@@ -1,4 +1,4 @@
-import { FileBarChart, FileText, FolderKanban, History, LayoutDashboard, ListChecks, MonitorSmartphone, Moon, Orbit, Plus, Settings, Sun, Users, X } from "lucide-react";
+import { FileBarChart, FileText, FolderKanban, LayoutDashboard, ListChecks, MonitorSmartphone, Moon, Orbit, Plus, Settings, Sun, Users, X } from "lucide-react";
 import { initials, type Status } from "../data/systems";
 import { ROLE_LABEL, type Prefs, type User } from "../data/roles";
 import { COMPANY_URL } from "../brand";
@@ -93,7 +93,7 @@ export default function Sidebar(p: Props) {
               </span>
             </button>
           )}
-          {(p.canUsers || p.canActivity) && <div className="nav-section">Administration</div>}
+          {p.canUsers && <div className="nav-section">Administration</div>}
           {p.canUsers && (
             <button className={`nav-item ${p.view === "users" ? "active" : ""}`} onClick={go(() => p.onView("users"))}>
               <span>
@@ -101,14 +101,8 @@ export default function Sidebar(p: Props) {
               </span>
             </button>
           )}
-          {p.canActivity && (
-            <button className={`nav-item ${p.view === "activity" ? "active" : ""}`} onClick={go(() => p.onView("activity"))}>
-              <span>
-                <History size={16} className="nav-icon" /> Activity log
-              </span>
-            </button>
-          )}
-          <button className={`nav-item ${p.view === "settings" ? "active" : ""}`} onClick={go(() => p.onView("settings"))}>
+          {/* The activity log is a tab inside Settings. */}
+          <button className={`nav-item ${p.view === "settings" || p.view === "activity" ? "active" : ""}`} onClick={go(() => p.onView("settings"))}>
             <span>
               <Settings size={16} className="nav-icon" /> Settings
             </span>
