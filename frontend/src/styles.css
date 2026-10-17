@@ -1614,8 +1614,8 @@ a.nav-item { text-decoration: none; }
 /* Frosted glass, so the backdrop shows through while text stays crisp. */
 :root[data-theme="light"] :is(.card, .stat, .d-card, .d-kpi, .viz-card, .set-card, .table-wrap) {
   /* Light enough to watch the web move behind, with a touch of blur to keep text crisp. */
-  background-color: rgba(255, 255, 255, 0.58);
-  backdrop-filter: blur(2.5px) saturate(150%); -webkit-backdrop-filter: blur(2.5px) saturate(150%);
+  background-color: rgba(255, 255, 255, 0.34);
+  backdrop-filter: blur(1.5px) saturate(150%); -webkit-backdrop-filter: blur(1.5px) saturate(150%);
   border-color: rgba(255, 255, 255, 0.75);
   box-shadow: 0 8px 28px rgba(5, 59, 122, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
@@ -1721,3 +1721,7 @@ a.nav-item { text-decoration: none; }
 }
 :root[data-theme="futuristic"] .drawer { border-width: 0 0 0 1px; }
 :root[data-theme="futuristic"] .dev-menu { background: rgba(6, 20, 48, 0.72); border-color: rgba(143, 220, 251, 0.2); }
+
+/* Light theme: anything inside the page that paints with --card / --canvas (panel bodies, the
+   range strip, table stripes) goes see-through too. Pop-ups set their own values. */
+:root[data-theme="light"] .main { --card: rgba(255, 255, 255, 0.34); --canvas: rgba(255, 255, 255, 0.3); }
