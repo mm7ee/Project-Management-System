@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "dev:api": "npm run build && npx --yes wrangler@4 d1 migrations apply DB --local && npx --yes wrangler@4 dev --port 8787",
     "deploy": "npm run build && npx --yes wrangler@4 deploy",
-    "db:migrate": "npx --yes wrangler@4 d1 migrations apply DB --remote"
+    "db:migrate": "npx --yes wrangler@4 d1 migrations apply DB --remote",
+    "demo:seed": "node scripts/demo-data.mjs seed > demo-data.sql && npx --yes wrangler@4 d1 execute DB --remote --file demo-data.sql -y",
+    "demo:remove": "node scripts/demo-data.mjs remove > demo-data.sql && npx --yes wrangler@4 d1 execute DB --remote --file demo-data.sql -y"
   },
   "dependencies": {
     "lucide-react": "0.460.0",
