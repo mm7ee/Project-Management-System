@@ -96,7 +96,7 @@ export interface ActivityEntry {
 
 /** Personal display preferences, saved to the account so they follow the user. */
 export interface Prefs {
-  theme: "light" | "dark" | "futuristic" | "system";
+  theme: "light" | "futuristic" | "system"; // "futuristic" is shown as "Dark"
   motion: "full" | "reduced";
   density: "comfortable" | "compact";
   start: string; // page to open on sign-in: "DASHBOARD", or a Projects tab (a Filter key)
@@ -106,7 +106,7 @@ export interface Prefs {
 export const DEFAULT_PREFS: Prefs = { theme: "light", motion: "full", density: "comfortable", start: "DASHBOARD", projectsView: "grid" };
 
 const PREF_CHOICES: { [K in keyof Prefs]: readonly string[] | null } = {
-  theme: ["light", "dark", "futuristic", "system"],
+  theme: ["light", "futuristic", "system"],
   motion: ["full", "reduced"],
   density: ["comfortable", "compact"],
   start: null, // checked against the known sections by the caller
@@ -118,7 +118,8 @@ export function cleanPrefs(raw: unknown, startKeys: readonly string[]): Prefs {
   const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const out = { ...DEFAULT_PREFS };
   for (const k of Object.keys(PREF_CHOICES) as (keyof Prefs)[]) {
-    const v = r[k];
+    // The old plain dark theme was retired; its users move to the one now called Dark.
+    const v = k === "theme" && r[k] === "dark" ? "futuristic" : r[k];
     const allowed = PREF_CHOICES[k] ?? startKeys;
     if (typeof v === "string" && allowed.includes(v)) (out as Record<string, string>)[k] = v;
   }

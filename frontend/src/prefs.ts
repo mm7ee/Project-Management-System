@@ -7,17 +7,19 @@ const THEME_CACHE = "omnitrack:theme";
 const root = () => document.documentElement;
 const darkQuery = () => window.matchMedia("(prefers-color-scheme: dark)");
 
-type Resolved = "light" | "dark" | "futuristic";
+type Resolved = "light" | "futuristic";
 
-function resolveTheme(theme: Prefs["theme"]): Resolved {
-  return theme === "system" ? (darkQuery().matches ? "dark" : "light") : theme;
+/** The theme actually painted: "Match device" picks Dark (the futuristic look) or Light. */
+export function resolveTheme(theme: Prefs["theme"]): Resolved {
+  return theme === "system" ? (darkQuery().matches ? "futuristic" : "light") : theme;
 }
 
 /** Run once at start-up, before React renders. */
 export function applyCachedTheme() {
   try {
     const t = localStorage.getItem(THEME_CACHE);
-    if (t === "dark" || t === "light" || t === "futuristic") root().dataset.theme = t;
+    if (t === "light" || t === "futuristic") root().dataset.theme = t;
+    else if (t === "dark") root().dataset.theme = "futuristic"; // cached from the retired dark theme
   } catch {
     // Storage unavailable: start in light.
   }

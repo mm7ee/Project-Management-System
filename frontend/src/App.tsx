@@ -3,7 +3,7 @@ import { AlertOctagon, FileText, History, Menu, Plus, Search, Settings, Users } 
 import { getSchedule, type System } from "./data/systems";
 import { api, useAppData, type AppData } from "./data/api";
 import { isAssigned, type Permission, type Prefs } from "./data/roles";
-import { useApplyPrefs } from "./prefs";
+import { resolveTheme, useApplyPrefs } from "./prefs";
 import { useNow } from "./time";
 import Sidebar, { type Filter, type View } from "./components/Sidebar";
 import SystemCard from "./components/SystemCard";
@@ -253,7 +253,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
 
   return (
     <div className="shell">
-      {prefs.theme === "futuristic" && <FuturisticBackdrop />}
+      {resolveTheme(prefs.theme) === "futuristic" && <FuturisticBackdrop />}
       <Sidebar
         me={me}
         view={selectedId ? "project" : view}

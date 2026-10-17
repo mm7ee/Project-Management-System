@@ -6,7 +6,6 @@ import {
   LogOut,
   MonitorSmartphone,
   Moon,
-  Orbit,
   Palette,
   ShieldCheck,
   Smartphone,
@@ -175,7 +174,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
           <div className="set-row">
             <div>
               <b>Theme</b>
-              <span>Dark is easier on the eyes; Futuristic brings the landing page's look to the dashboard.</span>
+              <span>Dark is easier on the eyes and brings the landing page's look to the dashboard. Device follows your computer or phone.</span>
             </div>
             <Choice
               label="Theme"
@@ -183,8 +182,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
               onChange={(v) => setPref("theme", v)}
               options={[
                 { value: "light", label: "Light", icon: <Sun size={15} /> },
-                { value: "dark", label: "Dark", icon: <Moon size={15} /> },
-                { value: "futuristic", label: "Futuristic", icon: <Orbit size={15} /> },
+                { value: "futuristic", label: "Dark", icon: <Moon size={15} /> },
                 { value: "system", label: "Device", icon: <MonitorSmartphone size={15} /> },
               ]}
             />
