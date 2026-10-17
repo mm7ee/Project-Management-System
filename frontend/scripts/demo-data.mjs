@@ -225,9 +225,12 @@ const REQUESTS = [
 const active = systems.filter((s) => s.status !== "IDEA");
 const reqCount = 64;
 for (let i = 0; i < reqCount; i++) {
-  const sys = active[i % active.length];
   const [title, kind, description] = REQUESTS[(i * 7) % REQUESTS.length];
   const createdDays = Math.round(395 - (i / reqCount) * 390 + between(-6, 6));
+  // A request goes to a project that had started by then; recent ones favour work in flight.
+  const started = active.filter((s) => Date.parse(s.startedAt) <= NOW - createdDays * DAY);
+  const inFlight = started.filter((s) => !["LIVE", "COMPLETED"].includes(s.status));
+  const sys = pick(createdDays < 60 && inFlight.length && rand() < 0.7 ? inFlight : started.length ? started : active);
   const age = createdDays;
   let status;
   if (age > 120) status = pick(["COMPLETED", "COMPLETED", "COMPLETED", "COMPLETED", "CANCELLED"]);
@@ -331,5 +334,56 @@ systems.forEach((s, i) => {
     `INSERT INTO requests (id, system_id, requested_by, message, created_at) VALUES (${q(`demo-rq-${i + 1}`)}, ${q(sys)}, ${q(P.Vimbai)}, ${q(message)}, ${q(ago(days, 9))});`,
   );
 });
+
+// ---------- the real team on demo projects ----------
+// Existing OmniTrack developers join demo projects, lead some, and take demo requests. Each
+// statement only applies if that account exists, and everything hangs off demo- rows, so
+// "remove" clears it too. Two projects each keeps them under the project limit.
+const TEAM = [
+  ["ashell", ["demo-client-sla-reporting-hub", "demo-customer-feedback-kiosk"], "demo-customer-feedback-kiosk"],
+  ["collins", ["demo-training-academy-lms-integration", "demo-fleet-transport-booking"], "demo-fleet-transport-booking"],
+  ["remedy", ["demo-recruitment-onboarding-portal", "demo-document-e-signature"], "demo-document-e-signature"],
+  ["donald", ["demo-whatsapp-customer-channel", "demo-shift-swap-mobile-app"], null],
+  ["kundai", ["demo-sales-commission-calculator", "demo-procurement-requests"], null],
+];
+const exists = (id) => `EXISTS (SELECT 1 FROM users WHERE id = ${q(id)})`;
+for (const [user, projects, leads] of TEAM) {
+  for (const sys of projects) {
+    out.push(`INSERT OR IGNORE INTO assignments (user_id, system_id) SELECT ${q(user)}, ${q(sys)} WHERE ${exists(user)};`);
+  }
+  // Three requests of their own: one in progress, one at another stage, one delivered.
+  const mine = [
+    ["IN_PROGRESS", "HIGH", 12, -9, null, "Back end done; working on the screens."],
+    [pick(["NOT_STARTED", "TESTING", "ON_HOLD"]), pick(["CRITICAL", "MEDIUM"]), 6, -20, null, null],
+    ["COMPLETED", "MEDIUM", 40, 12, 15, null],
+  ];
+  mine.forEach(([status, priority, createdDays, dueDays, doneDays, notes], k) => {
+    const sys = projects[k % projects.length];
+    const [title, kind, description] = REQUESTS[(user.length * 5 + k * 4) % REQUESTS.length];
+    out.push(
+      `INSERT INTO features (id, system_id, title, description, kind, client, status, priority, assignee, notes, due_at, created_by, created_at, updated_at, completed_at) SELECT ${[
+        q(`demo-fr-${user}-${k + 1}`),
+        q(sys),
+        q(title),
+        q(description),
+        q(kind),
+        q(CLIENTS[(user.length + k) % CLIENTS.length]),
+        q(status),
+        q(priority),
+        q(user),
+        q(status === "ON_HOLD" ? "Waiting for the client to confirm the requirements." : notes),
+        q(dateAgo(dueDays)),
+        q(pick([P.Vimbai, P.Simbarashe])),
+        q(ago(createdDays, 10)),
+        q(ago(doneDays ?? between(0, 3), 15)),
+        q(doneDays ? ago(doneDays, 15) : null),
+      ].join(", ")} WHERE ${exists(user)};`,
+    );
+  });
+  if (leads)
+    out.push(
+      `UPDATE systems SET data = json_set(data, '$.lead', ${q(user)}, '$.updatedBy', ${q(user[0].toUpperCase())}) WHERE id = ${q(leads)} AND ${exists(user)};`,
+    );
+}
 
 process.stdout.write(out.join("\n") + "\n");
