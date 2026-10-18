@@ -22,8 +22,6 @@ interface Props {
   onView: (v: View) => void;
   onClose: () => void;
   onAdd: () => void;
-  canLogFeature: boolean;
-  onLogFeature: () => void;
   onAccount: () => void;
 }
 
@@ -107,11 +105,7 @@ export default function Sidebar(p: Props) {
             </button>
           )
         )}
-        {p.canLogFeature && (
-          <button className={`add-btn ${p.canAdd || p.canPropose ? "stacked" : ""}`} onClick={go(p.onLogFeature)}>
-            <ListChecks size={17} strokeWidth={2.5} /> Log feature request
-          </button>
-        )}
+        {/* Feature requests are logged from the Feature requests page. */}
 
         <button className={`profile ${p.view === "settings" ? "on" : ""}`} onClick={go(p.onAccount)} aria-label="Your settings">
           <span className="profile-avatar">{initials(p.me.name)}</span>
