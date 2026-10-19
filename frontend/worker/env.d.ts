@@ -25,7 +25,8 @@ interface Fetcher {
 
 /** Workers AI: runs a model on Cloudflare's network. */
 interface Ai {
-  run(model: string, input: Record<string, unknown>): Promise<{ response?: string } & Record<string, unknown>>;
+  // A { response } object, or a ReadableStream of server-sent events when called with stream: true.
+  run(model: string, input: Record<string, unknown>): Promise<unknown>;
 }
 
 interface Env {

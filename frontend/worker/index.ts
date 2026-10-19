@@ -30,7 +30,7 @@ import { buildShowcase } from "../src/data/showcase";
 import { PASSWORD_HISTORY, passwordProblem } from "../src/data/password";
 import type { ProjectTemplate } from "../src/data/templates";
 import { cleanPcn, pcnStatus, type Signatory } from "../src/data/pcn";
-import { MAX_QUESTION, askModel, buildSnapshot, type AskPerson, type AskTurn } from "./ask";
+import { MAX_QUESTION, askStream, buildSnapshot, buildWorkFocus, type AskMode, type AskPerson, type AskTurn } from "./ask";
 import { newChallenge, readClientData, verifyAssertion, verifyRegistration } from "./webauthn";
 import {
   DEFAULT_ROLE_PERMISSIONS,
@@ -987,20 +987,51 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       .filter((h) => h && typeof h.q === "string" && typeof h.a === "string")
       .slice(-2);
 
-    const [systems, people, assignments, features, blockers, limits] = await Promise.all([
+    const [systems, people, assignments, features, blockers, limits, updateAsks] = await Promise.all([
       db.prepare("SELECT data FROM systems ORDER BY sort, rowid").all<{ data: string }>(),
       db.prepare("SELECT id, name, username, role FROM users ORDER BY name").all<AskPerson>(),
       db.prepare("SELECT user_id, system_id FROM assignments").all<{ user_id: string; system_id: string }>(),
       db.prepare("SELECT * FROM features ORDER BY created_at DESC").all<FeatureRow>(),
       db.prepare("SELECT * FROM blockers ORDER BY raised_at DESC").all<Record<string, string | null>>(),
       workloadLimits(db),
+      db.prepare("SELECT system_id, requested_by, message, created_at FROM requests ORDER BY created_at DESC").all<Record<string, string>>(),
     ]);
-    const snapshot = buildSnapshot({
+    // Developers get a personal work assistant; everyone else the team view.
+    const mode: AskMode = me.role === "developer" && !can("manage_features") ? "developer" : "team";
+    const allSystems = systems.results.map((r) => JSON.parse(r.data) as System);
+    const visibleFeatures = mineOnly(features.results).map(toFeature);
+    const blockerList = blockers.results.map(
+      (r): Blocker => ({
+        id: r.id!,
+        systemId: r.system_id!,
+        text: r.text!,
+        raisedBy: r.raised_by!,
+        raisedAt: r.raised_at!,
+        ...(r.resolved_at ? { resolvedAt: r.resolved_at } : {}),
+        ...(r.resolution ? { resolution: r.resolution } : {}),
+      }),
+    );
+    const focus =
+      mode === "developer"
+        ? buildWorkFocus({
+            now: t,
+            me: { id: me.id, name: me.name, username: me.username, role: me.role },
+            systems: allSystems,
+            people: people.results,
+            assignments: assignments.results,
+            features: visibleFeatures,
+            blockers: blockerList,
+            updateRequests: updateAsks.results.map((r) => ({ systemId: r.system_id, requestedBy: r.requested_by, message: r.message, createdAt: r.created_at })),
+            limits,
+          })
+        : "";
+    const snapshot = focus + buildSnapshot({
       now: t,
-      systems: systems.results.map((r) => JSON.parse(r.data) as System),
+      systems: allSystems,
       people: people.results,
       assignments: assignments.results,
-      features: mineOnly(features.results).map(toFeature),
+      features: visibleFeatures,
+      brief: mode === "developer",
       blockers: blockers.results.map(
         (r): Blocker => ({
           id: r.id!,
@@ -1015,7 +1046,8 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       limits,
     });
     try {
-      return json({ answer: await askModel(env.AI, snapshot, question, history) });
+      const stream = await askStream(env.AI, snapshot, question, history, mode);
+      return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
     } catch (e) {
       console.error("ask failed", e);
       throw new HttpError(502, "The assistant didn't respond. Try again in a moment.");

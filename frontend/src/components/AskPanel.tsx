@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ArrowUp, RotateCcw, Sparkles, X } from "lucide-react";
-import { api, ApiError } from "../data/api";
+import { ArrowUp, Check, Copy, RotateCcw, Sparkles, X } from "lucide-react";
+import { ApiError } from "../data/api";
+import { isLate, isOpen } from "../data/features";
 import type { System } from "../data/systems";
 import type { Feature } from "../data/features";
 import type { User } from "../data/roles";
@@ -17,7 +18,34 @@ interface Props {
   systems: System[];
   users: User[];
   features: Feature[];
+  me: User;
+  developer: boolean; // a developer's personal work assistant rather than the team view
   onOpenProject: (id: string) => void;
+}
+
+const PRIORITY_ORDER = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
+
+/** Copies an answer; "Draft:" sections are copied on their own when there is one. */
+function CopyAnswer({ text }: { text: string }) {
+  const [done, setDone] = useState(false);
+  const draft = text.split(/^\s*\**Draft:?\**\s*$/im)[1]?.trim();
+  return (
+    <button
+      type="button"
+      className="ask-copy"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText((draft || text).replace(/\*\*/g, ""));
+          setDone(true);
+          setTimeout(() => setDone(false), 1800);
+        } catch {
+          setDone(false);
+        }
+      }}
+    >
+      {done ? <Check size={13} /> : <Copy size={13} />} {done ? "Copied" : draft ? "Copy draft" : "Copy"}
+    </button>
+  );
 }
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -26,7 +54,7 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
  * Ask OmniTrack: plain-English questions answered by the server from the live data.
  * The conversation stays while the page is open; follow-ups carry the last two turns.
  */
-export default function AskPanel({ open, onClose, systems, users, features, onOpenProject }: Props) {
+export default function AskPanel({ open, onClose, systems, users, features, me, developer, onOpenProject }: Props) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -48,6 +76,24 @@ export default function AskPanel({ open, onClose, systems, users, features, onOp
 
   // Starter questions use real names from the data, so they always have an answer.
   const examples = useMemo(() => {
+    if (developer) {
+      // Built from this developer's own projects and requests.
+      const now = Date.now();
+      const mine = features.filter((f) => f.assignee === me.id && isOpen(f));
+      const top = [...mine].sort(
+        (a, b) => Number(isLate(b, now)) - Number(isLate(a, now)) || PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority],
+      )[0];
+      const project =
+        systems.find((s) => me.projectIds?.includes(s.id) && !s.finishedAt) ?? systems.find((s) => me.projectIds?.includes(s.id));
+      return [
+        "What should I work on today?",
+        project ? `Draft a progress update for ${project.name}` : "Draft a progress update for my project",
+        top ? `Break down "${top.title}" into tasks and acceptance criteria` : "Which of my requests are due soonest?",
+        top ? `How should I approach "${top.title}" technically?` : "What's due for me in the next two weeks?",
+        "Write a message to my manager about my blockers and what I need",
+        "Which of my requests are overdue or at risk?",
+      ];
+    }
     const dev = users.find((u) => u.role === "developer" && u.projectIds?.length) ?? users.find((u) => u.role === "developer");
     const client = features.find((f) => f.client)?.client;
     return [
@@ -58,7 +104,7 @@ export default function AskPanel({ open, onClose, systems, users, features, onOp
       "Which critical or high-priority requests haven't started?",
       "What's due in the next 30 days?",
     ];
-  }, [users, features]);
+  }, [users, features, systems, me, developer]);
 
   const ask = async (question: string) => {
     const q = question.trim();
@@ -70,9 +116,47 @@ export default function AskPanel({ open, onClose, systems, users, features, onOp
       .map((t) => ({ q: t.q, a: t.a! }));
     setTurns((t) => [...t, { q }]);
     setBusy(true);
+    // The answer streams in (server-sent events), so it shows as it's written.
+    const show = (a: string) => setTurns((t) => t.map((x, i) => (i === t.length - 1 ? { ...x, a } : x)));
     try {
-      const { answer } = await api<{ answer: string }>("/ask", "POST", { question: q, history });
-      setTurns((t) => t.map((x, i) => (i === t.length - 1 ? { ...x, a: answer } : x)));
+      const res = await fetch("/api/ask", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ question: q, history }),
+      });
+      if (!res.ok || !res.body) {
+        const payload = await res.json().catch(() => ({}));
+        throw new ApiError(res.status, payload.error ?? "The assistant didn't respond. Try again in a moment.", payload.code);
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let answer = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() ?? "";
+        for (const ev of events) {
+          const data = ev.replace(/^data:\s*/m, "").trim();
+          if (!data || data === "[DONE]") continue;
+          try {
+            const piece = JSON.parse(data).response;
+            if (typeof piece === "string") answer += piece;
+          } catch {
+            // A partial or non-JSON line: skip it.
+          }
+        }
+        // The model very occasionally loops on one character; stop it rather than show it.
+        if (/([^\s\-=_*#`.])\1{29,}/.test(answer)) {
+          await reader.cancel().catch(() => undefined);
+          throw new Error("The assistant got stuck on that one. Ask again, perhaps in different words.");
+        }
+        if (answer) show(answer);
+      }
+      show(answer.trim() || "Sorry, I couldn't put an answer together. Try asking another way.");
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : "Couldn't reach OmniTrack. Check your connection.";
       setTurns((t) => t.map((x, i) => (i === t.length - 1 ? { ...x, error: msg } : x)));
@@ -110,31 +194,65 @@ export default function AskPanel({ open, onClose, systems, users, features, onOp
   const inline = (text: string) =>
     text.split(/\*\*(.+?)\*\*/g).map((part, i) => (i % 2 ? <b key={i}>{linkify(part)}</b> : <span key={i}>{linkify(part)}</span>));
 
-  // A light reading of the model's markdown: paragraphs and "-" / "*" / "1." lists.
+  // A light reading of the model's markdown: paragraphs, "-" and "1." lists, ``` code blocks
+  // and headings (shown as bold lines).
   const render = (answer: string) => {
     const blocks: ReactNode[] = [];
     let list: string[] = [];
+    let ordered = false;
+    let code: string[] | null = null;
     const flush = () => {
-      if (list.length)
-        blocks.push(
-          <ul key={blocks.length}>
-            {list.map((l, i) => (
-              <li key={i}>{inline(l)}</li>
-            ))}
-          </ul>,
-        );
+      if (list.length) {
+        const items = list.map((l, i) => <li key={i}>{inline(l)}</li>);
+        blocks.push(ordered ? <ol key={blocks.length}>{items}</ol> : <ul key={blocks.length}>{items}</ul>);
+      }
       list = [];
     };
     for (const raw of answer.split("\n")) {
+      if (raw.trim().startsWith("```")) {
+        if (code) {
+          blocks.push(
+            <pre key={blocks.length} className="ask-code">
+              <code>{code.join("\n")}</code>
+            </pre>,
+          );
+          code = null;
+        } else {
+          flush();
+          code = [];
+        }
+        continue;
+      }
+      if (code) {
+        code.push(raw);
+        continue;
+      }
       const line = raw.trim();
-      const item = line.match(/^(?:[-*•]|\d+[.)])\s+(.*)$/);
-      if (item) list.push(item[1]);
-      else {
+      const bullet = line.match(/^[-*•]\s+(.*)$/);
+      const numbered = line.match(/^\d+[.)]\s+(.*)$/);
+      if (bullet || numbered) {
+        if (list.length && ordered !== !!numbered) flush();
+        ordered = !!numbered;
+        list.push((bullet ?? numbered)![1]);
+      } else {
         flush();
-        if (line) blocks.push(<p key={blocks.length}>{inline(line.replace(/^#+\s*/, ""))}</p>);
+        if (/^#+\s/.test(line))
+          blocks.push(
+            <p key={blocks.length} className="ask-h">
+              {inline(line.replace(/^#+\s*/, ""))}
+            </p>,
+          );
+        else if (line) blocks.push(<p key={blocks.length}>{inline(line)}</p>);
       }
     }
     flush();
+    // An unfinished code block while the answer is still streaming in.
+    if (code)
+      blocks.push(
+        <pre key={blocks.length} className="ask-code">
+          <code>{(code as string[]).join("\n")}</code>
+        </pre>,
+      );
     return blocks;
   };
 
@@ -148,7 +266,11 @@ export default function AskPanel({ open, onClose, systems, users, features, onOp
           </span>
           <div>
             <h2>Ask OmniTrack</h2>
-            <p>Plain-English answers from the live project data.</p>
+            <p>
+              {developer
+                ? "Your work assistant: priorities, drafts, task breakdowns and tech help."
+                : "Plain-English answers from the live project data."}
+            </p>
           </div>
           {turns.length > 0 && (
             <button
@@ -168,7 +290,11 @@ export default function AskPanel({ open, onClose, systems, users, features, onOp
         <div className="ask-body">
           {turns.length === 0 && (
             <div className="ask-empty">
-              <p>Ask about projects, people, clients, feature requests, blockers or deadlines. Try:</p>
+              <p>
+                {developer
+                  ? "Plan your day, draft updates and messages, break requests into tasks, or get technical help with your work. Try:"
+                  : "Ask about projects, people, clients, feature requests, blockers or deadlines. Try:"}
+              </p>
               <div className="ask-examples">
                 {examples.map((e) => (
                   <button key={e} onClick={() => ask(e)}>
@@ -181,7 +307,12 @@ export default function AskPanel({ open, onClose, systems, users, features, onOp
           {turns.map((t, i) => (
             <div key={i} className="ask-turn">
               <div className="ask-q">{t.q}</div>
-              {t.a && <div className="ask-a">{render(t.a)}</div>}
+              {t.a && (
+                <div className="ask-a">
+                  {render(t.a)}
+                  {(!busy || i < turns.length - 1) && <CopyAnswer text={t.a} />}
+                </div>
+              )}
               {t.error && <div className="ask-a ask-error">{t.error}</div>}
               {!t.a && !t.error && (
                 <div className="ask-a ask-thinking" aria-live="polite">

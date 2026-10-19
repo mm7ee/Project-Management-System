@@ -337,6 +337,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           systems={systems}
           users={users}
           features={features}
+          me={me}
+          developer={me.role === "developer" && !can("manage_features")}
           onOpenProject={openProject}
         />
 

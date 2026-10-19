@@ -1781,3 +1781,18 @@ a.nav-item { text-decoration: none; }
   0% { background: color-mix(in srgb, var(--hl) 45%, transparent); box-shadow: inset 8px 0 0 var(--hl); }
   100% { background: color-mix(in srgb, var(--hl) 10%, transparent); box-shadow: inset 4px 0 0 var(--hl); }
 }
+
+/* Ask OmniTrack: code, headings, numbered lists and copying answers. */
+.ask-a ol { margin: 6px 0 0; padding-left: 22px; display: flex; flex-direction: column; gap: 4px; }
+.ask-a .ask-h { font-weight: 700; color: var(--heading); margin-top: 10px; }
+.ask-code {
+  margin: 8px 0; padding: 10px 12px; border-radius: 8px; overflow-x: auto; font-size: 12.5px; line-height: 1.5;
+  background: rgba(7, 26, 61, 0.88); color: #e8f1fb; font-family: "Cascadia Code", Consolas, "SFMono-Regular", monospace;
+}
+.ask-a ol + p, .ask-a p + ol, .ask-a .ask-code + p { margin-top: 8px; }
+.ask-copy {
+  display: inline-flex; align-items: center; gap: 5px; margin-top: 10px; padding: 4px 10px; border-radius: 99px;
+  border: 1px solid var(--border); background: transparent; color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.ask-copy:hover { color: var(--heading); border-color: var(--cyan); }
+.ask-head { padding-right: 108px; }
