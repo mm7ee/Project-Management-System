@@ -507,6 +507,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
         ) : view === "features" ? (
           <FeaturesPage
             features={features}
+            workspaces={data.workspaces}
             systems={systems}
             users={users}
             me={me}
