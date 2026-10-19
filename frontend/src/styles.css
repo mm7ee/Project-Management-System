@@ -1764,3 +1764,20 @@ a.nav-item { text-decoration: none; }
   background: var(--tint-cyan); color: var(--cyan-ink); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer;
 }
 :root .stat-btn.on, :root[data-theme] .stat-btn.on { background-color: color-mix(in srgb, var(--cyan) 16%, transparent); border-color: var(--cyan); }
+
+/* Feature rows highlighted by a clicked figure card, in that card's colour. */
+.feature-table tr.hl { --hl: var(--cyan); background: color-mix(in srgb, var(--hl) 10%, transparent); box-shadow: inset 4px 0 0 var(--hl); }
+.feature-table tr.hl-navy { --hl: var(--cyan); }
+.feature-table tr.hl-red { --hl: var(--red); }
+.feature-table tr.hl-amber { --hl: var(--amber); }
+.feature-table tr.hl-green { --hl: var(--green); }
+.feature-table tr.hl:hover { background: color-mix(in srgb, var(--hl) 18%, transparent); }
+.feature-table td.hl-cell > * { outline: 2px solid var(--hl); outline-offset: 3px; border-radius: 99px; }
+@media (prefers-reduced-motion: no-preference) {
+  .feature-table tr.hl { animation: hl-flash 1.4s ease-out backwards; animation-delay: calc(var(--i, 0) * 45ms); }
+}
+:root[data-motion="reduced"] .feature-table tr.hl { animation: none; }
+@keyframes hl-flash {
+  0% { background: color-mix(in srgb, var(--hl) 45%, transparent); box-shadow: inset 8px 0 0 var(--hl); }
+  100% { background: color-mix(in srgb, var(--hl) 10%, transparent); box-shadow: inset 4px 0 0 var(--hl); }
+}

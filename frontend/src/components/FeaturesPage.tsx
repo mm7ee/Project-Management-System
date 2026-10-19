@@ -32,6 +32,8 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
   // Set by clicking a figure card: narrows the list to exactly what that card counts.
   const [focus, setFocus] = useState<Focus>("");
   const listRef = useRef<HTMLDivElement>(null);
+  // The card last clicked, and a counter so clicking again replays the highlight.
+  const [picked, setPicked] = useState<{ label: string; n: number } | null>(null);
 
   const scoped = who === "mine" ? features.filter((f) => f.assignee === me.id) : features;
   const visible = useMemo(() => {
@@ -62,6 +64,7 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
   ];
   const activeCard = stats.find((c) => c.focus === focus && c.state === state && !priority && !project && !query);
   const showCard = (c: (typeof stats)[number]) => {
+    setPicked((p) => ({ label: c.label, n: (p?.n ?? 0) + 1 }));
     setFocus(c.focus);
     setState(c.state);
     setPriority("");
@@ -69,6 +72,12 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
     setQuery("");
     requestAnimationFrame(() => listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
+  // Rows light up in the clicked card's colour while its view is showing.
+  const lit = picked && activeCard?.label === picked.label ? activeCard : null;
+  const litCell = (cell: "priority" | "status" | "date") =>
+    lit && ((cell === "priority" && lit.focus === "urgent") || (cell === "date" && lit.focus === "late") || (cell === "status" && lit.focus === "completed"))
+      ? "hl-cell"
+      : "";
   const systemName = (id: string) => systems.find((s) => s.id === id)?.name ?? "—";
   const userName = (id?: string) => users.find((u) => u.id === id)?.name;
 
@@ -168,10 +177,14 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
               </tr>
             </thead>
             <tbody>
-              {visible.map((f) => {
+              {visible.map((f, i) => {
                 const late = isLate(f, now);
                 return (
-                  <tr key={f.id} className="clickable" tabIndex={0} onClick={() => onOpen(f)} onKeyDown={(e) => e.key === "Enter" && onOpen(f)}>
+                  <tr
+                    key={lit ? `${f.id}-${picked!.n}` : f.id}
+                    className={`clickable ${lit ? `hl hl-${lit.tone}` : ""}`}
+                    style={lit ? { ["--i" as string]: Math.min(i, 12) } : undefined}
+                    tabIndex={0} onClick={() => onOpen(f)} onKeyDown={(e) => e.key === "Enter" && onOpen(f)}>
                     <td>
                       <span className="feature-cell">
                         <b>{f.title}</b>
@@ -187,14 +200,14 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
                       </span>
                     </td>
                     <td>{systemName(f.systemId)}</td>
-                    <td>
+                    <td className={litCell("priority")}>
                       <PriorityBadge priority={f.priority} />
                     </td>
-                    <td>
+                    <td className={litCell("status")}>
                       <FeatureStatusPill status={f.status} />
                     </td>
                     <td>{userName(f.assignee) ?? <i className="muted">Unassigned</i>}</td>
-                    <td className={late ? "text-red strong" : ""}>
+                    <td className={`${late ? "text-red strong" : ""} ${litCell("date")}`}>
                       {f.completedAt ? (
                         <>Delivered {formatDate(f.completedAt)}</>
                       ) : f.dueAt ? (
