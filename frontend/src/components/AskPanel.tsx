@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ArrowUp, Check, Copy, RotateCcw, Sparkles, X } from "lucide-react";
-import { ApiError } from "../data/api";
+import { ApiError, shareToken } from "../data/api";
 import { isLate, isOpen } from "../data/features";
 import type { System } from "../data/systems";
 import type { Feature } from "../data/features";
@@ -122,7 +122,7 @@ export default function AskPanel({ open, onClose, systems, users, features, me, 
       const res = await fetch("/api/ask", {
         method: "POST",
         credentials: "same-origin",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...(shareToken ? { "x-share-token": shareToken } : {}) },
         body: JSON.stringify({ question: q, history }),
       });
       if (!res.ok || !res.body) {

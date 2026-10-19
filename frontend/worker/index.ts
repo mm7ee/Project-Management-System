@@ -666,7 +666,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
 
   // Everything below needs a signed-in user.
   // A view-only share link stands in for a signed-in user: read-only, and only while the link
-  // is valid. It may load the data and project history, nothing else.
+  // is valid. It may load the data and project history, and ask Ask OmniTrack; nothing else.
   const shareToken = req.headers.get("x-share-token");
   const guest = shareToken
     ? await db
@@ -675,7 +675,9 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
         .first<ShareLinkRow>()
     : null;
   if (shareToken && !guest) throw new HttpError(401, "This view-only link has expired or been turned off.", "share_invalid");
-  if (guest && !(method === "GET" && (path === "/api/data" || /^\/api\/systems\/[a-z0-9-]+\/history$/.test(path)))) {
+  const guestAllowed =
+    (method === "GET" && (path === "/api/data" || /^\/api\/systems\/[a-z0-9-]+\/history$/.test(path))) || (method === "POST" && path === "/api/ask");
+  if (guest && !guestAllowed) {
     throw new HttpError(403, "This link is view-only");
   }
   const me = guest ? guestUser(guest) : await currentUser(req, db);

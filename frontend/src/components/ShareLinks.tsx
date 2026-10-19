@@ -54,7 +54,7 @@ export default function ShareLinks() {
         <div>
           <h3>View-only links</h3>
           <p>
-            Let managers or leadership browse OmniTrack without an account: the dashboard, projects, feature requests, Concept Notes and reports, read-only.
+            Let managers or leadership browse OmniTrack without an account: the dashboard, projects, feature requests, Concept Notes, reports and Ask OmniTrack, read-only.
             Anyone with the link can see it until it expires, so share it only with the people it's for. Contact details are hidden and documents can't be
             downloaded.
           </p>

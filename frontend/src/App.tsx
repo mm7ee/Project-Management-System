@@ -369,11 +369,9 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
               )}
             </>
           )}
-          {!data.viewOnly && (
-            <button className="ask-btn" onClick={() => setAsking(true)} title="Ask a question about projects, people and deadlines">
-              <Sparkles size={17} /> <span>Ask OmniTrack</span>
-            </button>
-          )}
+          <button className="ask-btn" onClick={() => setAsking(true)} title="Ask a question about projects, people and deadlines">
+            <Sparkles size={17} /> <span>Ask OmniTrack</span>
+          </button>
         </header>
         {data.viewOnly && (
           <div className="view-only-banner no-print" role="status">
