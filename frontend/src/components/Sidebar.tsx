@@ -87,13 +87,11 @@ export default function Sidebar(p: Props) {
             </button>
           )}
           {/* Users & roles and the activity log are tabs inside Settings. */}
-          {!p.viewOnly && (
-            <button className={`nav-item ${p.view === "settings" || p.view === "activity" || p.view === "users" ? "active" : ""}`} onClick={go(() => p.onView("settings"))}>
-              <span>
-                <Settings size={16} className="nav-icon" /> Settings
-              </span>
-            </button>
-          )}
+          <button className={`nav-item ${p.view === "settings" || p.view === "activity" || p.view === "users" ? "active" : ""}`} onClick={go(() => p.onView("settings"))}>
+            <span>
+              <Settings size={16} className="nav-icon" /> Settings
+            </span>
+          </button>
         </nav>
 
         {p.canAdd ? (
@@ -111,7 +109,7 @@ export default function Sidebar(p: Props) {
         {/* Feature requests are logged from the Feature requests page. */}
 
         {p.viewOnly ? (
-          <div className="profile static" title="Opened through a view-only link">
+          <button className={`profile ${p.view === "settings" ? "on" : ""}`} onClick={go(p.onAccount)} title="Opened through a view-only link: display settings">
             <span className="profile-avatar">
               <Eye size={16} />
             </span>
@@ -119,7 +117,7 @@ export default function Sidebar(p: Props) {
               <span className="profile-name">{p.viewOnly.label}</span>
               <span className="role-tag">View only</span>
             </span>
-          </div>
+          </button>
         ) : (
           <button className={`profile ${p.view === "settings" ? "on" : ""}`} onClick={go(p.onAccount)} aria-label="Your settings">
             <span className="profile-avatar">{initials(p.me.name)}</span>

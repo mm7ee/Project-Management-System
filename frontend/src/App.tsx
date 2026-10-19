@@ -41,6 +41,9 @@ import WorkspaceBar from "./components/WorkspaceBar";
 // /executive is a public showcase for leadership: totals only, no sign-in, linked from nowhere.
 const isExecutive = () => /^\/executive\/?$/.test(window.location.pathname);
 
+/** Where a view-only link keeps its display settings (this browser only). */
+const VIEW_PREFS = "omnitrack:view-prefs";
+
 const projectInHash = () => window.location.hash.match(/^#\/projects\/([a-z0-9-]+)(\/pcn)?$/)?.[1] ?? null;
 // #/projects/<id>/pcn shows that project's Concept Note as a printable document.
 const pcnInHash = () => /^#\/projects\/[a-z0-9-]+\/pcn$/.test(window.location.hash);
@@ -83,13 +86,27 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   const can = (p: Permission) => data.permissions.includes(p);
 
   // Preferences apply instantly and save in the background.
-  const [prefs, setPrefs] = useState<Prefs>(data.prefs);
+  // A view-only link has no account: its display choices are kept in this browser instead.
+  const [prefs, setPrefs] = useState<Prefs>(() => {
+    if (!data.viewOnly) return data.prefs;
+    try {
+      return { ...data.prefs, ...JSON.parse(localStorage.getItem(VIEW_PREFS) ?? "{}") };
+    } catch {
+      return data.prefs;
+    }
+  });
   useApplyPrefs(prefs);
   const savePrefs = async (p: Prefs) => {
     const before = prefs;
     setPrefs(p);
-    // A view-only link has no account: choices like grid/list stay on this page.
-    if (data.viewOnly) return;
+    if (data.viewOnly) {
+      try {
+        localStorage.setItem(VIEW_PREFS, JSON.stringify(p));
+      } catch {
+        // Not saved; it still applies for now.
+      }
+      return;
+    }
     try {
       setPrefs(await api<Prefs>("/me/prefs", "PUT", p));
     } catch (e) {
@@ -102,9 +119,9 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   const myProjects = systems.filter(isMine);
 
   // Sign-in opens the Dashboard, unless someone chose a Projects tab to start on.
-  const [view, setView] = useState<View>(() => (data.prefs.start === "DASHBOARD" ? "dashboard" : "projects"));
+  const [view, setView] = useState<View>(() => (prefs.start === "DASHBOARD" ? "dashboard" : "projects"));
   const [filter, setFilter] = useState<Filter>(() =>
-    data.prefs.start === "DASHBOARD" || (data.prefs.start === "MINE" && !myProjects.length) ? "ALL" : (data.prefs.start as Filter),
+    prefs.start === "DASHBOARD" || (prefs.start === "MINE" && !myProjects.length) ? "ALL" : (prefs.start as Filter),
   );
   const showTab = (f: Filter) => {
     setFilter(f);
@@ -469,6 +486,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             mfaRequired={data.mfaPolicy.roles.includes(me.role)}
             recoveryCodesLeft={data.recoveryCodesLeft}
             twoStep={data.twoStep}
+            viewOnly={data.viewOnly}
             onPrefs={savePrefs}
             onProfileSaved={reload}
             onSignedOut={reload}

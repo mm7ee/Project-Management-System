@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
   Check,
+  Eye,
   Fingerprint,
   KeyRound,
   LayoutDashboard,
@@ -35,6 +36,7 @@ interface Props {
   projects: System[]; // assigned to or led by this user
   mfaRequired: boolean; // an administrator requires two-step verification for this role
   twoStep: TwoStep; // your own second-step methods
+  viewOnly?: { label: string }; // a view-only link: display settings only
   recoveryCodesLeft: number;
   onPrefs: (p: Prefs) => Promise<void>;
   onProfileSaved: () => Promise<void>;
@@ -86,7 +88,7 @@ function Choice<T extends string>({
 }
 
 
-export default function SettingsPage({ me, prefs, permissions, projects, mfaRequired, recoveryCodesLeft, twoStep, onPrefs, onProfileSaved, onSignedOut }: Props) {
+export default function SettingsPage({ me, prefs, permissions, projects, mfaRequired, recoveryCodesLeft, twoStep, viewOnly, onPrefs, onProfileSaved, onSignedOut }: Props) {
   const [saved, setSaved] = useState(false);
   const [email, setEmail] = useState(me.email ?? "");
   const [phone, setPhone] = useState(me.phone ?? "");
@@ -126,7 +128,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
       <header className="page-head">
         <div>
           <h2>Settings</h2>
-          <p>Preferences are saved to your account, so they follow you to any device.</p>
+          <p>{viewOnly ? "Display settings for this view-only link, saved in this browser only." : "Preferences are saved to your account, so they follow you to any device."}</p>
         </div>
         <span className={`saved-tick ${saved ? "show" : ""}`} aria-live="polite">
           {saved && (
@@ -138,6 +140,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
       </header>
 
       <div className="set-grid">
+        {!viewOnly && (
         <Section icon={<UserRound size={18} />} title="Profile" sub="Your contact details power the Email, Teams, WhatsApp and Call buttons when you lead a project.">
           <div className="set-profile">
             <span className="avatar xl">{initials(me.name)}</span>
@@ -178,6 +181,8 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
             </button>
           </form>
         </Section>
+
+        )}
 
         <Section icon={<Palette size={18} />} title="Appearance">
           <div className="set-row">
@@ -232,7 +237,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
           <div className="set-row">
             <div>
               <b>Start section</b>
-              <span>What the dashboard opens on after you sign in.</span>
+              <span>{viewOnly ? "What OmniTrack opens on when you open this link." : "What the dashboard opens on after you sign in."}</span>
             </div>
             <select className="set-select" value={prefs.start} onChange={(e) => setPref("start", e.target.value)} aria-label="Start section">
               {startOptions.map((o) => (
@@ -243,6 +248,9 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
             </select>
           </div>
         </Section>
+
+        {!viewOnly && (
+          <>
 
         <Section
           icon={<KeyRound size={18} />}
@@ -339,6 +347,26 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
           </div>
           <p className="set-note">Use “all devices” if you signed in on a shared or lost computer.</p>
         </Section>
+          </>
+        )}
+        {viewOnly && (
+          <Section icon={<Eye size={18} />} title="About this link" sub="You're browsing OmniTrack through a view-only link.">
+            <ul className="perm-list plain">
+              <li className="perm-item">
+                <Check size={14} /> See the dashboard, projects, feature requests, Concept Notes and reports, live
+              </li>
+              <li className="perm-item">
+                <Check size={14} /> Ask OmniTrack questions about the work
+              </li>
+              <li className="perm-item">
+                <Check size={14} /> Change how OmniTrack looks here (saved in this browser only)
+              </li>
+            </ul>
+            <p className="set-note">
+              Nothing can be changed through this link ({viewOnly.label}). To update projects, ask your administrator for an account.
+            </p>
+          </Section>
+        )}
       </div>
     </div>
   );
