@@ -30,6 +30,7 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
   const [state, setState] = useState<State>("open");
   const [priority, setPriority] = useState("");
   const [project, setProject] = useState("");
+  const [workspace, setWorkspace] = useState(""); // "" = every workspace
   // A project's workspace (an unknown or missing one counts in the first, as elsewhere).
   const wsOf = (systemId: string) => {
     const w = systems.find((s) => s.id === systemId)?.workspace;
@@ -42,14 +43,15 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
   // The card last clicked, and a counter so clicking again replays the highlight.
   const [picked, setPicked] = useState<{ label: string; n: number } | null>(null);
 
-  const scoped = who === "mine" ? features.filter((f) => f.assignee === me.id) : features;
+  // The chosen workspace narrows everything on the page, figure cards included.
+  const inWorkspace = (f: Feature) => !workspace || wsOf(f.systemId) === workspace;
+  const scoped = (who === "mine" ? features.filter((f) => f.assignee === me.id) : features).filter(inWorkspace);
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return scoped
       .filter((f) => (state === "open" ? isOpen(f) : state === "done" ? !isOpen(f) : true))
       .filter((f) => !priority || f.priority === priority)
-      // The project filter is a single project, or a whole workspace ("ws:HR").
-      .filter((f) => !project || (project.startsWith("ws:") ? wsOf(f.systemId) === project.slice(3) : f.systemId === project))
+      .filter((f) => !project || f.systemId === project)
       .filter((f) => !q || [f.title, f.description, f.client, f.notes ?? ""].some((t) => t.toLowerCase().includes(q)))
       .filter((f) =>
         focus === "urgent"
@@ -61,7 +63,7 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
               : true,
       )
       .sort((a, b) => Number(!isOpen(a)) - Number(!isOpen(b)) || byUrgency(a, b));
-  }, [scoped, state, priority, project, query, focus, now, systems, workspaces]);
+  }, [scoped, state, priority, project, query, focus, now, systems, workspaces, workspace]);
 
   const open = scoped.filter(isOpen);
   const stats: { value: number; label: string; tone: string; focus: Focus; state: State }[] = [
@@ -165,33 +167,37 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
             </option>
           ))}
         </select>
+        <select
+          value={workspace}
+          onChange={(e) => {
+            setWorkspace(e.target.value);
+            setProject("");
+          }}
+          aria-label="Workspace"
+        >
+          <option value="">All workspaces</option>
+          {workspaces.map((w) => (
+            <option key={w} value={w}>
+              {w} · {features.filter((f) => wsOf(f.systemId) === w).length}
+            </option>
+          ))}
+        </select>
         <select value={project} onChange={(e) => setProject(e.target.value)} aria-label="Project">
-          <option value="">All projects · {features.length}</option>
-          {/* Grouped by workspace; projects with open requests first, then by name. */}
-          {workspaces.map((w) => {
-            const inWs = systems
-              .filter((s) => wsOf(s.id) === w)
-              .map((s) => {
-                const mine = features.filter((f) => f.systemId === s.id);
-                return { s, total: mine.length, open: mine.filter(isOpen).length };
-              })
-              .filter((x) => x.total)
-              .sort((a, b) => Number(b.open > 0) - Number(a.open > 0) || a.s.name.localeCompare(b.s.name));
-            if (!inWs.length) return null;
-            const total = inWs.reduce((n, x) => n + x.total, 0);
-            return (
-              <optgroup key={w} label={`${w} workspace`}>
-                <option value={`ws:${w}`}>
-                  Everything in {w} · {total}
-                </option>
-                {inWs.map(({ s, total: n, open }) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({open ? `${open} open of ${n}` : `${n} closed`})
-                  </option>
-                ))}
-              </optgroup>
-            );
-          })}
+          <option value="">{workspace ? `All ${workspace} projects` : "All projects"}</option>
+          {/* Projects in the chosen workspace that have requests: busiest first, then by name. */}
+          {systems
+            .filter((s) => !workspace || wsOf(s.id) === workspace)
+            .map((s) => {
+              const mine = features.filter((f) => f.systemId === s.id);
+              return { s, total: mine.length, open: mine.filter(isOpen).length };
+            })
+            .filter((x) => x.total)
+            .sort((a, b) => Number(b.open > 0) - Number(a.open > 0) || a.s.name.localeCompare(b.s.name))
+            .map(({ s, total, open }) => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({open ? `${open} open of ${total}` : `${total} closed`})
+              </option>
+            ))}
         </select>
         <label className="search sm">
           <Search size={16} />
