@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { CalendarClock, Plus, Search, StickyNote } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { CalendarClock, Plus, Search, StickyNote, X } from "lucide-react";
 import type { System } from "../data/systems";
 import type { User } from "../data/roles";
 import { KIND_META, PRIORITIES, PRIORITY_META, byUrgency, isLate, isOpen, type Feature } from "../data/features";
@@ -20,6 +20,7 @@ interface Props {
 
 type Who = "mine" | "all";
 type State = "open" | "done" | "all";
+type Focus = "" | "urgent" | "late" | "completed";
 
 export default function FeaturesPage({ features, systems, users, me, now, canManage, onOpen, onNew }: Props) {
   const mineCount = features.filter((f) => f.assignee === me.id).length;
@@ -28,6 +29,9 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
   const [priority, setPriority] = useState("");
   const [project, setProject] = useState("");
   const [query, setQuery] = useState("");
+  // Set by clicking a figure card: narrows the list to exactly what that card counts.
+  const [focus, setFocus] = useState<Focus>("");
+  const listRef = useRef<HTMLDivElement>(null);
 
   const scoped = who === "mine" ? features.filter((f) => f.assignee === me.id) : features;
   const visible = useMemo(() => {
@@ -37,16 +41,34 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
       .filter((f) => !priority || f.priority === priority)
       .filter((f) => !project || f.systemId === project)
       .filter((f) => !q || [f.title, f.description, f.client, f.notes ?? ""].some((t) => t.toLowerCase().includes(q)))
+      .filter((f) =>
+        focus === "urgent"
+          ? f.priority === "CRITICAL" || f.priority === "HIGH"
+          : focus === "late"
+            ? isLate(f, now)
+            : focus === "completed"
+              ? f.status === "COMPLETED"
+              : true,
+      )
       .sort((a, b) => Number(!isOpen(a)) - Number(!isOpen(b)) || byUrgency(a, b));
-  }, [scoped, state, priority, project, query]);
+  }, [scoped, state, priority, project, query, focus, now]);
 
   const open = scoped.filter(isOpen);
-  const stats = [
-    { value: open.length, label: "Open requests", tone: "navy" },
-    { value: open.filter((f) => f.priority === "CRITICAL" || f.priority === "HIGH").length, label: "Critical / high", tone: "red" },
-    { value: open.filter((f) => isLate(f, now)).length, label: "Past delivery date", tone: "amber" },
-    { value: scoped.filter((f) => f.status === "COMPLETED").length, label: "Completed", tone: "green" },
+  const stats: { value: number; label: string; tone: string; focus: Focus; state: State }[] = [
+    { value: open.length, label: "Open requests", tone: "navy", focus: "", state: "open" },
+    { value: open.filter((f) => f.priority === "CRITICAL" || f.priority === "HIGH").length, label: "Critical / high", tone: "red", focus: "urgent", state: "open" },
+    { value: open.filter((f) => isLate(f, now)).length, label: "Past delivery date", tone: "amber", focus: "late", state: "open" },
+    { value: scoped.filter((f) => f.status === "COMPLETED").length, label: "Completed", tone: "green", focus: "completed", state: "done" },
   ];
+  const activeCard = stats.find((c) => c.focus === focus && c.state === state && !priority && !project && !query);
+  const showCard = (c: (typeof stats)[number]) => {
+    setFocus(c.focus);
+    setState(c.state);
+    setPriority("");
+    setProject("");
+    setQuery("");
+    requestAnimationFrame(() => listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  };
   const systemName = (id: string) => systems.find((s) => s.id === id)?.name ?? "—";
   const userName = (id?: string) => users.find((u) => u.id === id)?.name;
 
@@ -65,17 +87,23 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
       </header>
 
       <section className="stats">
-        {stats.map(({ value, label, tone }) => (
-          <div className="stat" key={label}>
-            <span className={`stat-value text-${tone}`}>
-              <CountUp value={value} />
+        {stats.map((c) => (
+          <button
+            className={`stat stat-btn ${activeCard === c ? "on" : ""}`}
+            key={c.label}
+            aria-pressed={activeCard === c}
+            title={`Show ${c.label.toLowerCase()}`}
+            onClick={() => showCard(c)}
+          >
+            <span className={`stat-value text-${c.tone}`}>
+              <CountUp value={c.value} />
             </span>
-            <span className="stat-label">{label}</span>
-          </div>
+            <span className="stat-label">{c.label}</span>
+          </button>
         ))}
       </section>
 
-      <div className="viz-filters" role="group" aria-label="Filter feature requests">
+      <div ref={listRef} className="viz-filters" role="group" aria-label="Filter feature requests">
         <div className="seg" role="radiogroup" aria-label="Whose requests">
           <button role="radio" aria-checked={who === "mine"} className={who === "mine" ? "on" : ""} onClick={() => setWho("mine")}>
             Assigned to me · {mineCount}
@@ -119,6 +147,11 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
           <Search size={16} />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search requests…" aria-label="Search requests" />
         </label>
+        {focus && (
+          <button className="filter-chip" onClick={() => setFocus("")} title="Clear this filter">
+            Showing: {stats.find((c) => c.focus === focus)?.label.toLowerCase()} <X size={14} />
+          </button>
+        )}
       </div>
 
       {visible.length ? (
