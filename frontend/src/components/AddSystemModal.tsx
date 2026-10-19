@@ -34,7 +34,7 @@ export default function AddSystemModal({ workspaces, initialWorkspace = "", user
   const [deleting, setDeleting] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [workspace, setWorkspace] = useState(workspaces.includes(initialWorkspace) ? initialWorkspace : "");
+  const [workspace, setWorkspace] = useState(workspaces.includes(initialWorkspace) ? initialWorkspace : (workspaces[0] ?? ""));
   const [url, setUrl] = useState("");
   const [lead, setLead] = useState("");
   const [developers, setDevelopers] = useState<string[]>([]);
@@ -273,7 +273,6 @@ export default function AddSystemModal({ workspaces, initialWorkspace = "", user
         <label className="field">
           <span>Workspace</span>
           <select value={workspace} onChange={(e) => setWorkspace(e.target.value)}>
-            <option value="">No workspace</option>
             {workspaces.map((w) => (
               <option key={w} value={w}>
                 {w}

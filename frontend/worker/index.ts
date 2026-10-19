@@ -683,7 +683,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   };
 
   // Edit the workspace list. Each entry may say what it was called before ("was"), so a rename
-  // moves its projects along; projects in a removed workspace are left without one.
+  // moves its projects along; projects in a removed workspace move to the first one.
   if (path === "/api/settings/workspaces" && method === "PUT") {
     need("manage_systems");
     const b = await body<{ workspaces?: { name?: string; was?: string }[] }>(req);
@@ -694,6 +694,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     const names = entries.map((w) => w.name);
     if (new Set(names.map((n) => n.toLowerCase())).size !== names.length) throw new HttpError(400, "Two workspaces have the same name");
     if (names.length > 30) throw new HttpError(400, "Up to 30 workspaces");
+    if (!names.length) throw new HttpError(400, "Keep at least one workspace");
     const before = await workspaceList(db);
     const renames = new Map(entries.filter((w) => w.was && w.was !== w.name && before.includes(w.was)).map((w) => [w.was!, w.name]));
     const rows = await db.prepare("SELECT id, data FROM systems").all<{ id: string; data: string }>();
@@ -704,11 +705,9 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     ];
     for (const r of rows.results) {
       const sys = JSON.parse(r.data) as System;
-      if (!sys.workspace) continue;
-      const to = renames.get(sys.workspace) ?? (names.includes(sys.workspace) ? sys.workspace : undefined);
+      const to = (sys.workspace && (renames.get(sys.workspace) ?? (names.includes(sys.workspace) ? sys.workspace : undefined))) || names[0];
       if (to === sys.workspace) continue;
-      if (to) sys.workspace = to;
-      else delete sys.workspace;
+      sys.workspace = to;
       stmts.push(db.prepare("UPDATE systems SET data = ? WHERE id = ?").bind(JSON.stringify(sys), r.id));
     }
     await db.batch(stmts);
@@ -1263,7 +1262,8 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       ...(b.health ? { health: b.health === "Maintenance" ? "Maintenance" : "Stable" } : {}),
       ...(b.lead ? { lead: text(b.lead, "Lead") } : {}),
       ...(b.template ? { template: text(b.template, "Template")!.slice(0, 100) } : {}),
-      ...(b.workspace ? { workspace: await checkWorkspace(b.workspace) } : {}),
+      // Every project belongs to a workspace: the first on the list unless one is chosen.
+      workspace: b.workspace ? await checkWorkspace(b.workspace) : (await workspaceList(db))[0],
       ...(pcn ? { pcn, pcnBy: me.id } : {}),
       updatedAt: now,
       updatedBy: initials(me.name),
@@ -1381,11 +1381,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       if (b.url !== undefined) next.url = text(b.url, "URL") ?? "";
       if (b.startedAt !== undefined) next.startedAt = text(b.startedAt, "Start date", true)!;
       if (b.dueAt !== undefined) next.dueAt = text(b.dueAt, "Due date");
-      if (b.workspace !== undefined) {
-        const ws = b.workspace ? await checkWorkspace(b.workspace) : "";
-        if (ws) next.workspace = ws;
-        else delete next.workspace;
-      }
+      if (b.workspace !== undefined) next.workspace = await checkWorkspace(b.workspace);
       if (b.lead !== undefined) {
         const lead = text(b.lead, "Lead");
         if (lead && !(await db.prepare("SELECT 1 FROM users WHERE id = ?").bind(lead).first())) throw new HttpError(400, "Unknown lead");

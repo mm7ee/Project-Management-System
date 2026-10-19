@@ -1,12 +1,9 @@
 import { useEffect, useState } from "react";
 import { Layers, Pencil, Plus, Trash2, X } from "lucide-react";
 
-/** "" = every workspace; NO_WORKSPACE = projects not given one yet. */
-export const NO_WORKSPACE = "__none";
-
 interface Props {
   workspaces: string[];
-  counts: Record<string, number>; // projects per workspace name, plus NO_WORKSPACE, plus "" (all)
+  counts: Record<string, number>; // projects per workspace name, plus "" (all)
   value: string;
   onChange: (v: string) => void;
   canEdit: boolean;
@@ -28,7 +25,6 @@ export default function WorkspaceBar({ workspaces, counts, value, onChange, canE
       </span>
       {chip("", "All")}
       {workspaces.map((w) => chip(w, w))}
-      {counts[NO_WORKSPACE] > 0 && chip(NO_WORKSPACE, "No workspace")}
       {canEdit && (
         <button className="ws-edit" onClick={() => setEditing(true)} title="Add, rename or remove workspaces">
           <Pencil size={13} /> Edit
@@ -105,7 +101,7 @@ function WorkspaceEditor({
         </button>
         {removed.some((w) => counts[w]) && (
           <p className="form-warn">
-            Projects in {removed.filter((w) => counts[w]).join(", ")} will be left without a workspace.
+            Projects in {removed.filter((w) => counts[w]).join(", ")} will move to {rows.find((r) => r.name.trim())?.name.trim() ?? "the first workspace"}.
           </p>
         )}
         {error && <p className="form-error">{error}</p>}

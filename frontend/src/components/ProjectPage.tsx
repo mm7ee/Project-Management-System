@@ -307,11 +307,10 @@ export default function ProjectPage(p: Props) {
                 {p.canManage ? (
                   <select
                     className="facts-select"
-                    value={system.workspace ?? ""}
+                    value={system.workspace && p.workspaces.includes(system.workspace) ? system.workspace : p.workspaces[0]}
                     aria-label="Workspace"
                     onChange={(e) => p.onChangeWorkspace(system.id, e.target.value).catch(() => undefined)}
                   >
-                    <option value="">No workspace</option>
                     {p.workspaces.map((w) => (
                       <option key={w} value={w}>
                         {w}
@@ -319,7 +318,7 @@ export default function ProjectPage(p: Props) {
                     ))}
                   </select>
                 ) : (
-                  system.workspace ?? <span className="muted">None</span>
+                  (system.workspace && p.workspaces.includes(system.workspace) ? system.workspace : p.workspaces[0])
                 )}
               </dd>
               <dt>Team</dt>

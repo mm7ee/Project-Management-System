@@ -33,7 +33,7 @@ import ProjectsPage from "./components/ProjectsPage";
 import { awaitingSignature, type SignoffStatus } from "./data/pcn";
 import type { User } from "./data/roles";
 import AskPanel from "./components/AskPanel";
-import WorkspaceBar, { NO_WORKSPACE } from "./components/WorkspaceBar";
+import WorkspaceBar from "./components/WorkspaceBar";
 
 // A project page has its own address (#/projects/<id>), so it can be bookmarked, opened in a
 // new tab and left with the browser's back button.
@@ -173,17 +173,13 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   const mayContribute = (s: System) => can("edit_any") || can("manage_systems") || s.lead === me.id || !!me.projectIds?.includes(s.id);
 
   // Projects in the chosen workspace (all of them when none is chosen, or it no longer exists).
-  const wsActive = workspace === NO_WORKSPACE || data.workspaces.includes(workspace) ? workspace : "";
-  const wsSystems = useMemo(
-    () => (wsActive ? systems.filter((s) => (wsActive === NO_WORKSPACE ? !s.workspace || !data.workspaces.includes(s.workspace) : s.workspace === wsActive)) : systems),
-    [systems, wsActive, data.workspaces],
-  );
+  // Every project sits in a workspace; one without a known workspace counts in the first.
+  const wsOf = (s: System) => (s.workspace && data.workspaces.includes(s.workspace) ? s.workspace : data.workspaces[0]);
+  const wsActive = data.workspaces.includes(workspace) ? workspace : "";
+  const wsSystems = useMemo(() => (wsActive ? systems.filter((s) => wsOf(s) === wsActive) : systems), [systems, wsActive, data.workspaces]);
   const wsCounts = useMemo(() => {
-    const c: Record<string, number> = { "": systems.length, [NO_WORKSPACE]: 0 };
-    for (const s of systems) {
-      const w = s.workspace && data.workspaces.includes(s.workspace) ? s.workspace : NO_WORKSPACE;
-      c[w] = (c[w] ?? 0) + 1;
-    }
+    const c: Record<string, number> = { "": systems.length };
+    for (const s of systems) c[wsOf(s)] = (c[wsOf(s)] ?? 0) + 1;
     return c;
   }, [systems, data.workspaces]);
 
