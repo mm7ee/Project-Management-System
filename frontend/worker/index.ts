@@ -658,6 +658,10 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   const matrix = await roleMatrix(db);
   const perms = permissionsFor(me.role, matrix);
   const can = (p: Permission) => perms.includes(p);
+  // Developers (without manage_features) see only the feature requests assigned to them or
+  // logged by them: everywhere, including Ask OmniTrack and project history.
+  const ownFeaturesOnly = me.role === "developer" && !can("manage_features");
+  const mineOnly = (rows: FeatureRow[]) => (ownFeaturesOnly ? rows.filter((f) => f.assignee === me.id || f.created_by === me.id) : rows);
   const need = (p: Permission) => {
     if (!can(p)) throw new HttpError(403, "You don't have permission to do that");
   };
@@ -916,7 +920,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
           createdAt: r.created_at,
         }),
       ),
-      features: features.results.map(toFeature),
+      features: mineOnly(features.results).map(toFeature),
       documents: documents.results.map(
         (d): ProjectDocument => ({
           id: String(d.id),
@@ -996,7 +1000,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       systems: systems.results.map((r) => JSON.parse(r.data) as System),
       people: people.results,
       assignments: assignments.results,
-      features: features.results.map(toFeature),
+      features: mineOnly(features.results).map(toFeature),
       blockers: blockers.results.map(
         (r): Blocker => ({
           id: r.id!,
@@ -1501,7 +1505,9 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       .bind(historyMatch[1])
       .all<{ id: number; at: string; user_id: string | null; actor: string; action: string; target: string; detail: string }>();
     return json(
-      rows.results.map((r) => ({
+      rows.results
+        .filter((r) => !ownFeaturesOnly || !r.action.startsWith("feature_") || r.user_id === me.id)
+        .map((r) => ({
         id: r.id,
         at: r.at,
         userId: r.user_id,
@@ -1586,7 +1592,8 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
 
   // ----- feature requests -----
   // Anyone with manage_features logs, edits and assigns them; the assigned developer keeps
-  // the status and their notes current.
+  // the status and their notes current. With log_features (developers), people log requests
+  // assigned to themselves or no one, and edit the details of the ones they logged.
   const checkAssignee = async (v: unknown): Promise<string | null> => {
     const id = text(v, "Developer");
     if (!id) return null;
@@ -1597,8 +1604,9 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   };
 
   if (path === "/api/features" && method === "POST") {
-    need("manage_features");
+    if (!can("manage_features") && !can("log_features")) throw new HttpError(403, "You don't have permission to do that");
     const b = await body<Partial<Feature>>(req);
+    if (!can("manage_features") && b.assignee && b.assignee !== me.id) throw new HttpError(403, "You can assign a request to yourself only. A manager assigns others.");
     const system = await getSystem(db, String(b.systemId ?? ""));
     const status = oneOf(b.status ?? "NOT_STARTED", FEATURE_STATUSES, "status");
     const f: FeatureRow = {
@@ -1641,10 +1649,17 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     if (!row) throw new HttpError(404, "Feature request not found");
     const b = await body<Partial<Feature>>(req);
     const manager = can("manage_features");
+    const logger = !manager && can("log_features") && row.created_by === me.id;
     const developerFields = ["status", "notes"] as const;
     const otherFields = ["title", "description", "kind", "client", "priority", "assignee", "dueAt", "systemId"] as const;
-    if (!manager) {
-      if (row.assignee !== me.id) throw new HttpError(403, "Only the assigned developer or a manager can update this request");
+    if (logger) {
+      // Whoever logged it edits its details, but assigns only themselves.
+      if (b.assignee && b.assignee !== me.id && b.assignee !== row.assignee) throw new HttpError(403, "You can assign a request to yourself only. A manager assigns others.");
+      if (b.assignee !== undefined && row.assignee && row.assignee !== me.id && (b.assignee || null) !== row.assignee) {
+        throw new HttpError(403, "A manager assigned this request; ask them to change the developer.");
+      }
+    } else if (!manager) {
+      if (row.assignee !== me.id) throw new HttpError(403, "Only the assigned developer, whoever logged it, or a manager can update this request");
       if (otherFields.some((k) => b[k] !== undefined)) throw new HttpError(403, "You can update the status and your notes only");
     }
     const next: FeatureRow = { ...row };

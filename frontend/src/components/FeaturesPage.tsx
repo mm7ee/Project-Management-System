@@ -14,6 +14,7 @@ interface Props {
   me: User;
   now: number;
   canManage: boolean;
+  ownOnly?: boolean; // a developer: the server sends only requests assigned to or logged by them
   onOpen: (f: Feature) => void;
   onNew: () => void;
 }
@@ -22,9 +23,9 @@ type Who = "mine" | "all";
 type State = "open" | "done" | "all";
 type Focus = "" | "urgent" | "late" | "completed";
 
-export default function FeaturesPage({ features, systems, users, me, now, canManage, onOpen, onNew }: Props) {
+export default function FeaturesPage({ features, systems, users, me, now, canManage, ownOnly = false, onOpen, onNew }: Props) {
   const mineCount = features.filter((f) => f.assignee === me.id).length;
-  const [who, setWho] = useState<Who>(mineCount ? "mine" : "all");
+  const [who, setWho] = useState<Who>(mineCount && !ownOnly ? "mine" : "all");
   const [state, setState] = useState<State>("open");
   const [priority, setPriority] = useState("");
   const [project, setProject] = useState("");
@@ -58,7 +59,13 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
   const open = scoped.filter(isOpen);
   const stats: { value: number; label: string; tone: string; focus: Focus; state: State }[] = [
     { value: open.length, label: "Open requests", tone: "navy", focus: "", state: "open" },
-    { value: open.filter((f) => f.priority === "CRITICAL" || f.priority === "HIGH").length, label: "Critical / high", tone: "red", focus: "urgent", state: "open" },
+    {
+      value: open.filter((f) => f.priority === "CRITICAL" || f.priority === "HIGH").length,
+      label: "Critical / high",
+      tone: "red",
+      focus: "urgent",
+      state: "open",
+    },
     { value: open.filter((f) => isLate(f, now)).length, label: "Past delivery date", tone: "amber", focus: "late", state: "open" },
     { value: scoped.filter((f) => f.status === "COMPLETED").length, label: "Completed", tone: "green", focus: "completed", state: "done" },
   ];
@@ -75,7 +82,10 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
   // Rows light up in the clicked card's colour while its view is showing.
   const lit = picked && activeCard?.label === picked.label ? activeCard : null;
   const litCell = (cell: "priority" | "status" | "date") =>
-    lit && ((cell === "priority" && lit.focus === "urgent") || (cell === "date" && lit.focus === "late") || (cell === "status" && lit.focus === "completed"))
+    lit &&
+    ((cell === "priority" && lit.focus === "urgent") ||
+      (cell === "date" && lit.focus === "late") ||
+      (cell === "status" && lit.focus === "completed"))
       ? "hl-cell"
       : "";
   const systemName = (id: string) => systems.find((s) => s.id === id)?.name ?? "—";
@@ -86,7 +96,11 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
       <header className="page-head">
         <div>
           <h2>Feature requests</h2>
-          <p>Modules, changes and fixes clients ask for, on projects in progress or already delivered.</p>
+          <p>
+            {ownOnly
+              ? "Requests assigned to you, and any you logged yourself."
+              : "Modules, changes and fixes clients ask for, on projects in progress or already delivered."}
+          </p>
         </div>
         {canManage && (
           <button className="btn btn-amber" onClick={onNew} disabled={!systems.length}>
@@ -113,14 +127,16 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
       </section>
 
       <div ref={listRef} className="viz-filters" role="group" aria-label="Filter feature requests">
-        <div className="seg" role="radiogroup" aria-label="Whose requests">
-          <button role="radio" aria-checked={who === "mine"} className={who === "mine" ? "on" : ""} onClick={() => setWho("mine")}>
-            Assigned to me · {mineCount}
-          </button>
-          <button role="radio" aria-checked={who === "all"} className={who === "all" ? "on" : ""} onClick={() => setWho("all")}>
-            All · {features.length}
-          </button>
-        </div>
+        {!ownOnly && (
+          <div className="seg" role="radiogroup" aria-label="Whose requests">
+            <button role="radio" aria-checked={who === "mine"} className={who === "mine" ? "on" : ""} onClick={() => setWho("mine")}>
+              Assigned to me · {mineCount}
+            </button>
+            <button role="radio" aria-checked={who === "all"} className={who === "all" ? "on" : ""} onClick={() => setWho("all")}>
+              All · {features.length}
+            </button>
+          </div>
+        )}
         <div className="seg" role="radiogroup" aria-label="Status">
           {(
             [
@@ -184,7 +200,10 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
                     key={lit ? `${f.id}-${picked!.n}` : f.id}
                     className={`clickable ${lit ? `hl hl-${lit.tone}` : ""}`}
                     style={lit ? { ["--i" as string]: Math.min(i, 12) } : undefined}
-                    tabIndex={0} onClick={() => onOpen(f)} onKeyDown={(e) => e.key === "Enter" && onOpen(f)}>
+                    tabIndex={0}
+                    onClick={() => onOpen(f)}
+                    onKeyDown={(e) => e.key === "Enter" && onOpen(f)}
+                  >
                     <td>
                       <span className="feature-cell">
                         <b>{f.title}</b>
@@ -226,7 +245,7 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
         </div>
       ) : (
         <div className="empty">
-          {who === "mine" && !mineCount
+          {(who === "mine" || ownOnly) && !features.length
             ? "No feature requests are assigned to you yet."
             : features.length
               ? "No requests match these filters."

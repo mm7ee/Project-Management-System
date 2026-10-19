@@ -362,7 +362,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
               suggestions={suggestDevelopers(users, systems, features, limits, now, selected.id)}
               canRequest={can("request_updates")}
               canContribute={mayContribute(selected)}
-              canLogFeatures={can("manage_features")}
+              canLogFeatures={can("manage_features") || can("log_features")}
               onBack={closeProject}
               onUpdate={() => setPosting({ initialId: selected.id })}
               onChangeLead={async (id, lead) => {
@@ -435,7 +435,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             users={users}
             me={me}
             now={now}
-            canManage={can("manage_features")}
+            canManage={can("manage_features") || can("log_features")}
+            ownOnly={me.role === "developer" && !can("manage_features")}
             onOpen={(feature) => setFeatureEdit({ feature })}
             onNew={() => setFeatureEdit({ feature: null })}
           />
@@ -535,6 +536,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           now={now}
           overloaded={overloaded}
           canManage={can("manage_features")}
+          canLog={can("log_features")}
           onClose={() => setFeatureEdit(null)}
           onSave={async (draft) => {
             const id = featureEdit.feature?.id;

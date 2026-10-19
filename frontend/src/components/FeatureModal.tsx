@@ -26,6 +26,7 @@ interface Props {
   users: User[];
   me: User;
   canManage: boolean; // may edit everything; otherwise only the assignee's status and notes
+  canLog?: boolean; // may log requests (assigned to themselves or no one) and edit the ones they logged
   overloaded: (u: User) => string[]; // why a developer is overloaded; empty when they're not
   now: number;
   onSave: (draft: Partial<FeatureDraft>) => Promise<void>;
@@ -48,7 +49,7 @@ function Step({ n, title, sub, children }: { n: number; title: string; sub?: str
   );
 }
 
-export default function FeatureModal({ feature, initialSystemId, systems, users, me, canManage, overloaded, now, onSave, onDelete, onClose }: Props) {
+export default function FeatureModal({ feature, initialSystemId, systems, users, me, canManage, canLog = false, overloaded, now, onSave, onDelete, onClose }: Props) {
   const [f, setF] = useState<FeatureDraft>(() => ({
     systemId: feature?.systemId ?? initialSystemId ?? systems[0]?.id ?? "",
     title: feature?.title ?? "",
@@ -67,7 +68,9 @@ export default function FeatureModal({ feature, initialSystemId, systems, users,
   const set = <K extends keyof FeatureDraft>(k: K, v: FeatureDraft[K]) => setF((x) => ({ ...x, [k]: v }));
 
   const isAssignee = !!feature && feature.assignee === me.id;
-  const full = canManage; // edits every step
+  // Logging without managing: a new request, or one you logged yourself.
+  const logger = !canManage && canLog && (!feature || feature.createdBy === me.id);
+  const full = canManage || logger; // edits every step
   const mayEdit = full || isAssignee; // the assignee edits the status and notes
   const name = (id?: string) => users.find((u) => u.id === id)?.name;
   const system = systems.find((s) => s.id === f.systemId);
@@ -211,6 +214,13 @@ export default function FeatureModal({ feature, initialSystemId, systems, users,
               <span>Assigned developer</span>
               <select value={f.assignee} onChange={(e) => set("assignee", e.target.value)}>
                 <option value="">Not assigned yet</option>
+                {logger ? (
+                  <>
+                    {me.role === "developer" && <option value={me.id}>Me ({me.name})</option>}
+                    {f.assignee && f.assignee !== me.id && <option value={f.assignee}>{name(f.assignee)}</option>}
+                  </>
+                ) : (
+                  <>
                 {onProject.length > 0 && (
                   <optgroup label={`On ${system?.name ?? "this project"}`}>
                     {onProject.map((d) => (
@@ -231,7 +241,10 @@ export default function FeatureModal({ feature, initialSystemId, systems, users,
                     ))}
                   </optgroup>
                 )}
+                  </>
+                )}
               </select>
+              {logger && <span className="field-hint">A manager can assign it to someone else.</span>}
               {(() => {
                 const dev = developers.find((d) => d.id === f.assignee);
                 const reasons = dev ? overloaded(dev) : [];
@@ -285,7 +298,7 @@ export default function FeatureModal({ feature, initialSystemId, systems, users,
           </div>
         ) : (
           <div className="modal-actions">
-            {feature && full && (
+            {feature && canManage && (
               <button type="button" className="delete-link inline" onClick={() => setConfirming(true)}>
                 <Trash2 size={15} /> Delete
               </button>

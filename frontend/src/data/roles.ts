@@ -11,6 +11,7 @@ export type Permission =
   | "assign_developers" // add and remove developers on a project, e.g. to rebalance workload
   | "request_updates" // ask a project's developers for an update
   | "propose_projects" // propose a new project with a Project Concept Note (starts as an Idea)
+  | "log_features" // log feature requests (assigned to yourself or no one) and edit the ones you logged
   | "manage_features" // log client feature requests, set their priority and assign developers
   | "reports" // generate and download reports
   | "manage_users" // create users, assign roles/projects, change permissions
@@ -34,6 +35,7 @@ export const PERMISSIONS: { key: Permission; label: string }[] = [
   { key: "assign_developers", label: "Add and remove developers on projects" },
   { key: "request_updates", label: "Request updates" },
   { key: "propose_projects", label: "Propose new projects with a Concept Note" },
+  { key: "log_features", label: "Log feature requests" },
   { key: "manage_features", label: "Log and assign feature requests" },
   { key: "reports", label: "Generate reports" },
   { key: "manage_users", label: "Manage users, roles and permissions" },
@@ -47,7 +49,7 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissions = {
   manager: ["request_updates", "propose_projects", "manage_features", "assign_developers", "reports"],
   team_lead: ["manage_systems", "assign_developers", "request_updates", "propose_projects", "manage_features", "reports"],
   assistant: ["request_updates", "propose_projects", "reports"],
-  developer: ["edit_assigned", "propose_projects"],
+  developer: ["edit_assigned", "propose_projects", "log_features"],
   viewer: [],
 };
 
