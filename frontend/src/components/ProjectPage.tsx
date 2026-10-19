@@ -58,6 +58,8 @@ interface Props {
   onUpdate: () => void;
   onDelete: (id: string) => Promise<void>;
   onChangeLead: (id: string, lead: string) => Promise<void>;
+  workspaces: string[];
+  onChangeWorkspace: (id: string, workspace: string) => Promise<void>;
   onChangeDevelopers: (id: string, developers: string[]) => Promise<void>;
   onRequest: (id: string, message: string) => Promise<void>;
   onDismiss: (requestId: string) => Promise<void>;
@@ -300,6 +302,26 @@ export default function ProjectPage(p: Props) {
               </div>
             </div>
             <dl className="facts">
+              <dt>Workspace</dt>
+              <dd>
+                {p.canManage ? (
+                  <select
+                    className="facts-select"
+                    value={system.workspace ?? ""}
+                    aria-label="Workspace"
+                    onChange={(e) => p.onChangeWorkspace(system.id, e.target.value).catch(() => undefined)}
+                  >
+                    <option value="">No workspace</option>
+                    {p.workspaces.map((w) => (
+                      <option key={w} value={w}>
+                        {w}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  system.workspace ?? <span className="muted">None</span>
+                )}
+              </dd>
               <dt>Team</dt>
               <dd>{system.owner}</dd>
               {system.template && (

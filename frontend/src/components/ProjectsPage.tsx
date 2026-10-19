@@ -65,9 +65,10 @@ interface Props {
   card: (s: System, index: number) => ReactNode;
   onOpen: (id: string) => void;
   banners?: ReactNode;
+  workspaceBar?: ReactNode;
 }
 
-export default function ProjectsPage({ counts, filter, onFilter, mode, onMode, sections, now, info, card, onOpen, banners }: Props) {
+export default function ProjectsPage({ counts, filter, onFilter, mode, onMode, sections, now, info, card, onOpen, banners, workspaceBar }: Props) {
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "name", dir: 1 });
   const total = sections.reduce((n, s) => n + s.items.length, 0);
   const title =
@@ -89,6 +90,7 @@ export default function ProjectsPage({ counts, filter, onFilter, mode, onMode, s
   return (
     <div className="projects-page">
       {banners}
+      {workspaceBar}
 
       <nav className="stage-track" aria-label="Project stages">
         <button className={`stage-all ${filter === "ALL" ? "on" : ""}`} aria-pressed={filter === "ALL"} onClick={() => onFilter("ALL")}>

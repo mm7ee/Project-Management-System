@@ -125,6 +125,37 @@ const PROJECTS = [
   ["Predictive Staffing Model", "IDEA", "Machine-learning forecast of call volumes from campaigns, weather and holidays.", "Tatenda", [], 0, 0, 0, { pcn: "DRAFT" }],
 ];
 
+// Which part of the business each demo project serves (the Projects page's workspace filter).
+const WORKSPACE = {
+  "Contact Centre CRM": "Sales & Clients",
+  "Agent Scorecard Dashboard": "Operations",
+  "IVR Call Routing Manager": "Operations",
+  "Payroll Self-Service Portal": "HR",
+  "Client Billing & Invoicing": "Finance",
+  "Workforce Scheduler": "Operations",
+  "Quality Assurance Call Review": "Operations",
+  "Knowledge Base Portal": "Operations",
+  "Visitor Management System": "IT",
+  "Asset Register": "IT",
+  "Staff Pulse Survey": "HR",
+  "Leave Planner": "HR",
+  "WhatsApp Customer Channel": "Sales & Clients",
+  "Recruitment & Onboarding Portal": "HR",
+  "Sales Commission Calculator": "Finance",
+  "Client SLA Reporting Hub": "Sales & Clients",
+  "Training Academy LMS Integration": "HR",
+  "Speech Analytics Pilot": "Projects",
+  "Fleet & Transport Booking": "Operations",
+  "Procurement Requests": "Finance",
+  "Customer Feedback Kiosk": "Sales & Clients",
+  "Shift Swap Mobile App": "Operations",
+  "Document E-Signature": "IT",
+  "Debt Collections Workbench": "Finance",
+  "AI Chat Assistant": "Projects",
+  "Agent Wellness Tracker": "HR",
+  "Predictive Staffing Model": "Projects",
+};
+
 const systems = [];
 PROJECTS.forEach(([name, status, description, leadKey, devKeys, startedDays, length, progress, x], i) => {
   const id = `demo-${slug(name)}`;
@@ -137,6 +168,7 @@ PROJECTS.forEach(([name, status, description, leadKey, devKeys, startedDays, len
     url: "",
     status,
     owner: "Systems Team",
+    ...(WORKSPACE[name] ? { workspace: WORKSPACE[name] } : {}),
     lead,
     engagement: x.engagement ?? (status === "COMPLETED" ? between(60, 300) : 0),
     progress,

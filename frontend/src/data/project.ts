@@ -37,6 +37,9 @@ export interface Limits {
 
 export const DEFAULT_LIMITS: Limits = { projects: 3, features: 5, stallDays: 14 };
 
+/** Workspaces group projects by the part of the business they serve. Administrators edit the list. */
+export const DEFAULT_WORKSPACES = ["Projects", "HR", "Finance", "Operations", "Sales & Clients", "IT"];
+
 export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
 
 const DAY = 86_400_000;

@@ -159,7 +159,7 @@ export function buildSnapshot(input: {
 
   lines.push(
     "",
-    "PROJECTS (name | status | progress | schedule | lead | developers | team | clients (from feature requests) | started | due | finished/delivered | last progress update | stalled | open blockers | concept note)",
+    "PROJECTS (name | status | progress | schedule | lead | developers | workspace | clients (from feature requests) | started | due | finished/delivered | last progress update | stalled | open blockers | concept note)",
   );
   for (const s of systems) {
     const open = blockers.filter((b) => b.systemId === s.id && !b.resolvedAt);
@@ -173,7 +173,7 @@ export function buildSnapshot(input: {
         SCHEDULE_META[getSchedule(s, now)]?.label ?? "",
         s.lead ? (nameOf.get(s.lead) ?? "unknown") : "none",
         (devsOf.get(s.id) ?? []).join(", ") || "none",
-        clean(s.owner, 60) || "none",
+        clean(s.workspace, 40) || "no workspace",
         [...(clientsOf.get(s.id) ?? [])].join(", ") || "none",
         day(s.startedAt) || "-",
         s.finishedAt ? day(s.dueAt) || "-" : dueIn(s.dueAt, now),

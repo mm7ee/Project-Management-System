@@ -1796,3 +1796,27 @@ a.nav-item { text-decoration: none; }
 }
 .ask-copy:hover { color: var(--heading); border-color: var(--cyan); }
 .ask-head { padding-right: 108px; }
+
+/* ---------- Workspaces ---------- */
+.ws-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
+.ws-label { display: inline-flex; align-items: center; gap: 6px; margin-right: 4px; font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.ws-chip {
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px; border-radius: 99px; border: 1px solid var(--border);
+  background: var(--card); color: var(--heading); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; transition: border-color .15s, background .15s, transform .15s;
+}
+.ws-chip b { min-width: 20px; padding: 1px 7px; border-radius: 99px; background: var(--track); font-size: 12px; text-align: center; }
+.ws-chip:hover { border-color: var(--cyan); transform: translateY(-1px); }
+.ws-chip.on { background: var(--navy); border-color: var(--navy); color: #fff; box-shadow: 0 6px 16px color-mix(in srgb, var(--navy) 30%, transparent); }
+.ws-chip.on b { background: rgba(255, 255, 255, 0.2); color: #fff; }
+.ws-chip.empty:not(.on) { color: var(--faint); }
+:root[data-theme="futuristic"] .ws-chip.on { background: var(--cyan); border-color: var(--cyan); }
+.ws-edit { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border: 0; border-radius: 99px; background: none; color: var(--cyan-ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.ws-edit:hover { background: var(--tint-cyan); }
+.ws-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ws-list li { display: flex; align-items: center; gap: 10px; }
+.ws-list input { flex: 1; min-width: 0; padding: 9px 12px; border: 2px solid var(--input-line); border-radius: 10px; background: var(--input-bg); color: var(--text); font: inherit; }
+.ws-list small { flex: none; font-size: 12.5px; color: var(--faint); }
+.ws-list .icon-btn { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border: 0; border-radius: 8px; background: none; color: var(--red); cursor: pointer; }
+.ws-list .icon-btn:hover { background: var(--tint-red); }
+.ws-add { align-self: flex-start; }
+.facts-select { padding: 4px 8px; border: 1px solid var(--input-line); border-radius: 8px; background: var(--input-bg); color: var(--text); font: inherit; font-size: 14px; font-weight: 600; }

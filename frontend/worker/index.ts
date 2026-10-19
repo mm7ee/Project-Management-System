@@ -25,7 +25,7 @@ import {
   type FeatureStatus,
   type Priority,
 } from "../src/data/features";
-import { DEFAULT_LIMITS, MAX_DOCUMENT_BYTES, formatBytes, type Blocker, type Limits, type ProjectDocument } from "../src/data/project";
+import { DEFAULT_LIMITS, DEFAULT_WORKSPACES, MAX_DOCUMENT_BYTES, formatBytes, type Blocker, type Limits, type ProjectDocument } from "../src/data/project";
 import { buildShowcase } from "../src/data/showcase";
 import { PASSWORD_HISTORY, passwordProblem } from "../src/data/password";
 import type { ProjectTemplate } from "../src/data/templates";
@@ -275,6 +275,12 @@ async function startSession(db: D1Database, req: Request, row: UserRow, detail: 
   await audit(db, req, row, "login", null, { ...detail, ...(row.must_change_password ? { temporaryPassword: true } : {}) });
   await db.prepare("DELETE FROM activity WHERE at < ?").bind(new Date(Date.now() - AUDIT_DAYS * 86_400_000).toISOString()).run();
   return json({ ok: true }, 200, { "set-cookie": sessionCookie(token, req, SESSION_DAYS * 86_400) });
+}
+
+/** The workspace list (settings key "workspaces"), or the defaults until someone edits it. */
+async function workspaceList(db: D1Database): Promise<string[]> {
+  const row = await db.prepare("SELECT value FROM settings WHERE key = 'workspaces'").first<{ value: string }>();
+  return row ? (JSON.parse(row.value) as string[]) : DEFAULT_WORKSPACES;
 }
 
 async function workloadLimits(db: D1Database): Promise<Limits> {
@@ -667,6 +673,49 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   };
   const now = new Date().toISOString();
 
+  // A project's workspace must be one on the list.
+  const checkWorkspace = async (v: unknown): Promise<string> => {
+    const name = String(v ?? "").trim();
+    const list = await workspaceList(db);
+    const match = list.find((w) => w.toLowerCase() === name.toLowerCase());
+    if (!match) throw new HttpError(400, `Unknown workspace "${name.slice(0, 40)}"`);
+    return match;
+  };
+
+  // Edit the workspace list. Each entry may say what it was called before ("was"), so a rename
+  // moves its projects along; projects in a removed workspace are left without one.
+  if (path === "/api/settings/workspaces" && method === "PUT") {
+    need("manage_systems");
+    const b = await body<{ workspaces?: { name?: string; was?: string }[] }>(req);
+    if (!Array.isArray(b.workspaces)) throw new HttpError(400, "Send the list of workspaces");
+    const entries = b.workspaces
+      .map((w) => ({ name: String(w?.name ?? "").trim().slice(0, 40), was: w?.was ? String(w.was) : undefined }))
+      .filter((w) => w.name);
+    const names = entries.map((w) => w.name);
+    if (new Set(names.map((n) => n.toLowerCase())).size !== names.length) throw new HttpError(400, "Two workspaces have the same name");
+    if (names.length > 30) throw new HttpError(400, "Up to 30 workspaces");
+    const before = await workspaceList(db);
+    const renames = new Map(entries.filter((w) => w.was && w.was !== w.name && before.includes(w.was)).map((w) => [w.was!, w.name]));
+    const rows = await db.prepare("SELECT id, data FROM systems").all<{ id: string; data: string }>();
+    const stmts = [
+      db
+        .prepare("INSERT INTO settings (key, value) VALUES ('workspaces', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+        .bind(JSON.stringify(names)),
+    ];
+    for (const r of rows.results) {
+      const sys = JSON.parse(r.data) as System;
+      if (!sys.workspace) continue;
+      const to = renames.get(sys.workspace) ?? (names.includes(sys.workspace) ? sys.workspace : undefined);
+      if (to === sys.workspace) continue;
+      if (to) sys.workspace = to;
+      else delete sys.workspace;
+      stmts.push(db.prepare("UPDATE systems SET data = ? WHERE id = ?").bind(JSON.stringify(sys), r.id));
+    }
+    await db.batch(stmts);
+    await audit(db, req, me, "workspaces_updated", null, { from: before, to: names, ...(renames.size ? { renamed: Object.fromEntries(renames) } : {}) });
+    return json({ workspaces: names });
+  }
+
   // ----- two-step verification: your own -----
   if (path === "/api/me/mfa/setup" && method === "POST") {
     if (me.mfa_secret) throw new HttpError(400, "Two-step verification is already on");
@@ -946,6 +995,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
         }),
       ),
       limits,
+      workspaces: await workspaceList(db),
       mfaPolicy: policy,
       templates: templates.results.map(toTemplate),
       recoveryCodesLeft: (await db.prepare("SELECT COUNT(*) AS n FROM mfa_recovery WHERE user_id = ? AND used_at IS NULL").bind(me.id).first<{ n: number }>())!.n,
@@ -1213,6 +1263,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       ...(b.health ? { health: b.health === "Maintenance" ? "Maintenance" : "Stable" } : {}),
       ...(b.lead ? { lead: text(b.lead, "Lead") } : {}),
       ...(b.template ? { template: text(b.template, "Template")!.slice(0, 100) } : {}),
+      ...(b.workspace ? { workspace: await checkWorkspace(b.workspace) } : {}),
       ...(pcn ? { pcn, pcnBy: me.id } : {}),
       updatedAt: now,
       updatedBy: initials(me.name),
@@ -1322,7 +1373,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       next.updatedBy = initials(me.name);
     }
 
-    const detailFields = ["name", "description", "url", "lead", "dueAt", "startedAt"] as const;
+    const detailFields = ["name", "description", "url", "lead", "dueAt", "startedAt", "workspace"] as const;
     if (detailFields.some((f) => b[f] !== undefined)) {
       need("manage_systems");
       if (b.name !== undefined) next.name = text(b.name, "Name", true)!;
@@ -1330,6 +1381,11 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       if (b.url !== undefined) next.url = text(b.url, "URL") ?? "";
       if (b.startedAt !== undefined) next.startedAt = text(b.startedAt, "Start date", true)!;
       if (b.dueAt !== undefined) next.dueAt = text(b.dueAt, "Due date");
+      if (b.workspace !== undefined) {
+        const ws = b.workspace ? await checkWorkspace(b.workspace) : "";
+        if (ws) next.workspace = ws;
+        else delete next.workspace;
+      }
       if (b.lead !== undefined) {
         const lead = text(b.lead, "Lead");
         if (lead && !(await db.prepare("SELECT 1 FROM users WHERE id = ?").bind(lead).first())) throw new HttpError(400, "Unknown lead");
@@ -1363,6 +1419,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
         name: next.name,
         fields: changed,
         ...(changed.includes("lead") ? { lead: { from: current.lead ?? null, to: next.lead ?? null } } : {}),
+        ...(changed.includes("workspace") ? { workspace: { from: current.workspace ?? null, to: next.workspace ?? null } } : {}),
       });
     }
     return json(next);

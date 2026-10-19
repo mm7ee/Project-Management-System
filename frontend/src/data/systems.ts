@@ -18,6 +18,7 @@ export interface System {
   maintenanceNote?: string; // what is being updated, while health is "Maintenance"
   maintenanceSince?: string; // ISO time it went into maintenance
   owner: string; // owning team
+  workspace?: string; // the part of the business it serves ("HR", "Finance"…), from the workspace list
   lead?: string; // project lead: a Person id from people.ts
   engagement: number; // visits in the last 30 days
   progress: number; // 0–100

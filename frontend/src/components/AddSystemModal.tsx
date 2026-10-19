@@ -8,6 +8,8 @@ import { emptyPcn, pcnMissing, type Pcn } from "../data/pcn";
 import { PcnForm } from "./Pcn";
 
 interface Props {
+  workspaces: string[];
+  initialWorkspace?: string; // the workspace the Projects page is showing
   users: User[];
   systems: System[];
   limit: number; // most projects a developer may have
@@ -22,7 +24,7 @@ interface Props {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function AddSystemModal({ users, systems, limit, templates, me, proposeOnly = false, error, onSave, onDeleteTemplate, onClose }: Props) {
+export default function AddSystemModal({ workspaces, initialWorkspace = "", users, systems, limit, templates, me, proposeOnly = false, error, onSave, onDeleteTemplate, onClose }: Props) {
   // First choose how to start: a Concept Note, blank, or a template that prefills the form.
   const [step, setStep] = useState<"start" | "form" | "pcn">(proposeOnly ? "pcn" : "start");
   // The PCN goes to the Managers for sign-off by default.
@@ -32,6 +34,7 @@ export default function AddSystemModal({ users, systems, limit, templates, me, p
   const [deleting, setDeleting] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [workspace, setWorkspace] = useState(workspaces.includes(initialWorkspace) ? initialWorkspace : "");
   const [url, setUrl] = useState("");
   const [lead, setLead] = useState("");
   const [developers, setDevelopers] = useState<string[]>([]);
@@ -232,6 +235,7 @@ export default function AddSystemModal({ users, systems, limit, templates, me, p
             name: name.trim(),
             description: description.trim(),
             url: url.trim(),
+            ...(workspace ? { workspace } : {}),
             ...(lead ? { lead } : {}),
             developers,
             ...(template ? { template: template.name } : {}),
@@ -264,6 +268,18 @@ export default function AddSystemModal({ users, systems, limit, templates, me, p
         <label className="field">
           <span>Name</span>
           <input required autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Leave Planner" />
+        </label>
+
+        <label className="field">
+          <span>Workspace</span>
+          <select value={workspace} onChange={(e) => setWorkspace(e.target.value)}>
+            <option value="">No workspace</option>
+            {workspaces.map((w) => (
+              <option key={w} value={w}>
+                {w}
+              </option>
+            ))}
+          </select>
         </label>
 
         <label className="field">

@@ -66,6 +66,7 @@ export interface AppData {
   documents: ProjectDocument[];
   blockers: Blocker[];
   limits: Limits;
+  workspaces: string[]; // the workspace list projects are grouped by
   mfaPolicy: MfaPolicy;
   recoveryCodesLeft: number; // your unused two-step recovery codes
   twoStep: TwoStep; // your own second-step methods

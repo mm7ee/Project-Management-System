@@ -33,6 +33,7 @@ import ProjectsPage from "./components/ProjectsPage";
 import { awaitingSignature, type SignoffStatus } from "./data/pcn";
 import type { User } from "./data/roles";
 import AskPanel from "./components/AskPanel";
+import WorkspaceBar, { NO_WORKSPACE } from "./components/WorkspaceBar";
 
 // A project page has its own address (#/projects/<id>), so it can be bookmarked, opened in a
 // new tab and left with the browser's back button.
@@ -101,6 +102,22 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   };
   const [query, setQuery] = useState("");
   const [asking, setAsking] = useState(false);
+  // The workspace the Projects page shows, remembered on this device.
+  const [workspace, setWorkspaceState] = useState(() => {
+    try {
+      return localStorage.getItem("omnitrack:workspace") ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const setWorkspace = (v: string) => {
+    setWorkspaceState(v);
+    try {
+      localStorage.setItem("omnitrack:workspace", v);
+    } catch {
+      // Only a convenience.
+    }
+  };
   const [selectedId, setSelectedId] = useState<string | null>(projectInHash);
   const [showPcn, setShowPcn] = useState(pcnInHash);
   useEffect(() => {
@@ -155,11 +172,26 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   const [rebalancing, setRebalancing] = useState(false);
   const mayContribute = (s: System) => can("edit_any") || can("manage_systems") || s.lead === me.id || !!me.projectIds?.includes(s.id);
 
-  const counts = useMemo(() => {
+  // Projects in the chosen workspace (all of them when none is chosen, or it no longer exists).
+  const wsActive = workspace === NO_WORKSPACE || data.workspaces.includes(workspace) ? workspace : "";
+  const wsSystems = useMemo(
+    () => (wsActive ? systems.filter((s) => (wsActive === NO_WORKSPACE ? !s.workspace || !data.workspaces.includes(s.workspace) : s.workspace === wsActive)) : systems),
+    [systems, wsActive, data.workspaces],
+  );
+  const wsCounts = useMemo(() => {
+    const c: Record<string, number> = { "": systems.length, [NO_WORKSPACE]: 0 };
+    for (const s of systems) {
+      const w = s.workspace && data.workspaces.includes(s.workspace) ? s.workspace : NO_WORKSPACE;
+      c[w] = (c[w] ?? 0) + 1;
+    }
+    return c;
+  }, [systems, data.workspaces]);
+
+  const countIn = (list: System[]) => {
     const c: Record<Filter, number> = {
-      ALL: systems.length, LIVE: 0, COMPLETED: 0, WIP: 0, TESTING: 0, TO_DEPLOY: 0, UPCOMING: 0, IDEA: 0, OVERDUE: 0, REQUESTED: 0, MAINTENANCE: 0, MINE: 0, BLOCKED: 0,
+      ALL: list.length, LIVE: 0, COMPLETED: 0, WIP: 0, TESTING: 0, TO_DEPLOY: 0, UPCOMING: 0, IDEA: 0, OVERDUE: 0, REQUESTED: 0, MAINTENANCE: 0, MINE: 0, BLOCKED: 0,
     };
-    systems.forEach((s) => {
+    list.forEach((s) => {
       c[s.status]++;
       if (getSchedule(s, now) === "OVERDUE") c.OVERDUE++;
       if (requests.some((r) => r.systemId === s.id)) c.REQUESTED++;
@@ -168,11 +200,14 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
       if (isBlocked(s)) c.BLOCKED++;
     });
     return c;
-  }, [systems, requests, blockers, limits, now, me]);
+  };
+  const counts = useMemo(() => countIn(systems), [systems, requests, blockers, limits, now, me]);
+  // The Projects page counts only the chosen workspace.
+  const pageCounts = useMemo(() => countIn(wsSystems), [wsSystems, requests, blockers, limits, now, me]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return systems
+    return wsSystems
       .filter((s) =>
         filter === "ALL"
           ? true
@@ -191,7 +226,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
       .filter((s) => !q || s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q))
       // Your own projects come first.
       .sort((a, b) => Number(isMine(b)) - Number(isMine(a)));
-  }, [systems, requests, blockers, limits, filter, query, now, me]);
+  }, [wsSystems, requests, blockers, limits, filter, query, now, me]);
 
   // On "All projects", the ones assigned to you get their own section above the rest.
   const sections =
@@ -367,6 +402,11 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
               canLogFeatures={can("manage_features") || can("log_features")}
               onBack={closeProject}
               onUpdate={() => setPosting({ initialId: selected.id })}
+              workspaces={data.workspaces}
+              onChangeWorkspace={async (id, ws) => {
+                await api(`/systems/${id}`, "PATCH", { workspace: ws });
+                await reload();
+              }}
               onChangeLead={async (id, lead) => {
                 await api(`/systems/${id}`, "PATCH", { lead });
                 await reload();
@@ -492,7 +532,20 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           </>
         ) : (
           <ProjectsPage
-            counts={counts}
+            counts={pageCounts}
+            workspaceBar={
+              <WorkspaceBar
+                workspaces={data.workspaces}
+                counts={wsCounts}
+                value={wsActive}
+                onChange={setWorkspace}
+                canEdit={can("manage_systems")}
+                onSave={async (list) => {
+                  await api("/settings/workspaces", "PUT", { workspaces: list });
+                  await reload();
+                }}
+              />
+            }
             filter={filter}
             onFilter={setFilter}
             mode={prefs.projectsView}
@@ -555,6 +608,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
       )}
       {adding && (
         <AddSystemModal
+          workspaces={data.workspaces}
+          initialWorkspace={wsActive}
           users={users}
           systems={systems}
           limit={limits.projects}
