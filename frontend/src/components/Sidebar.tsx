@@ -1,4 +1,4 @@
-import { FileBarChart, FileText, FolderKanban, LayoutDashboard, ListChecks, Plus, Settings, X } from "lucide-react";
+import { Eye, FileBarChart, FileText, FolderKanban, LayoutDashboard, ListChecks, Plus, Settings, X } from "lucide-react";
 import { initials, type Status } from "../data/systems";
 import { ROLE_LABEL, type User } from "../data/roles";
 import { COMPANY_URL } from "../brand";
@@ -23,6 +23,7 @@ interface Props {
   onClose: () => void;
   onAdd: () => void;
   onAccount: () => void;
+  viewOnly?: { label: string }; // opened through a view-only link: no settings, no account
 }
 
 export default function Sidebar(p: Props) {
@@ -86,11 +87,13 @@ export default function Sidebar(p: Props) {
             </button>
           )}
           {/* Users & roles and the activity log are tabs inside Settings. */}
-          <button className={`nav-item ${p.view === "settings" || p.view === "activity" || p.view === "users" ? "active" : ""}`} onClick={go(() => p.onView("settings"))}>
-            <span>
-              <Settings size={16} className="nav-icon" /> Settings
-            </span>
-          </button>
+          {!p.viewOnly && (
+            <button className={`nav-item ${p.view === "settings" || p.view === "activity" || p.view === "users" ? "active" : ""}`} onClick={go(() => p.onView("settings"))}>
+              <span>
+                <Settings size={16} className="nav-icon" /> Settings
+              </span>
+            </button>
+          )}
         </nav>
 
         {p.canAdd ? (
@@ -107,13 +110,25 @@ export default function Sidebar(p: Props) {
         )}
         {/* Feature requests are logged from the Feature requests page. */}
 
-        <button className={`profile ${p.view === "settings" ? "on" : ""}`} onClick={go(p.onAccount)} aria-label="Your settings">
-          <span className="profile-avatar">{initials(p.me.name)}</span>
-          <span className="profile-text">
-            <span className="profile-name">{p.me.name}</span>
-            <span className="role-tag">{ROLE_LABEL[p.me.role]}</span>
-          </span>
-        </button>
+        {p.viewOnly ? (
+          <div className="profile static" title="Opened through a view-only link">
+            <span className="profile-avatar">
+              <Eye size={16} />
+            </span>
+            <span className="profile-text">
+              <span className="profile-name">{p.viewOnly.label}</span>
+              <span className="role-tag">View only</span>
+            </span>
+          </div>
+        ) : (
+          <button className={`profile ${p.view === "settings" ? "on" : ""}`} onClick={go(p.onAccount)} aria-label="Your settings">
+            <span className="profile-avatar">{initials(p.me.name)}</span>
+            <span className="profile-text">
+              <span className="profile-name">{p.me.name}</span>
+              <span className="role-tag">{ROLE_LABEL[p.me.role]}</span>
+            </span>
+          </button>
+        )}
       </aside>
     </>
   );

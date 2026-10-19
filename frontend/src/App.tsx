@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertOctagon, FileText, History, LifeBuoy, Menu, Plus, Search, Settings, Sparkles, Users } from "lucide-react";
+import { AlertOctagon, Eye, FileText, History, LifeBuoy, Menu, Plus, Search, Settings, Sparkles, Users } from "lucide-react";
 import { getSchedule, type System } from "./data/systems";
 import { api, useAppData, type AppData } from "./data/api";
 import { isAssigned, type Permission, type Prefs } from "./data/roles";
 import { resolveTheme, useApplyPrefs } from "./prefs";
+import { shareToken } from "./data/api";
 import { useNow } from "./time";
 import Sidebar, { type Filter, type View } from "./components/Sidebar";
 import SystemCard from "./components/SystemCard";
@@ -50,11 +51,18 @@ export default function App() {
 }
 
 function Tracker() {
-  const { data, mustChange, changeFor, mfaSetup, loading, reload } = useAppData();
+  const { data, mustChange, changeFor, mfaSetup, shareError, loading, reload } = useAppData();
   return (
     <>
       {loading ? (
         <div className="splash">Loading…</div>
+      ) : shareToken && !data ? (
+        // A view-only link never falls through to the sign-in screen.
+        <div className="share-ended">
+          <Eye size={28} />
+          <h1>This link no longer works</h1>
+          <p>{shareError ?? "This view-only link has expired or been turned off."} Ask whoever sent it for a new one.</p>
+        </div>
       ) : data ? (
         <Dashboard data={data} reload={reload} />
       ) : mustChange ? (
@@ -80,6 +88,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   const savePrefs = async (p: Prefs) => {
     const before = prefs;
     setPrefs(p);
+    // A view-only link has no account: choices like grid/list stay on this page.
+    if (data.viewOnly) return;
     try {
       setPrefs(await api<Prefs>("/me/prefs", "PUT", p));
     } catch (e) {
@@ -332,6 +342,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           setView("settings");
           if (selectedId) closeProject();
         }}
+        viewOnly={data.viewOnly}
       />
 
       <main className="main">
@@ -358,10 +369,21 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
               )}
             </>
           )}
-          <button className="ask-btn" onClick={() => setAsking(true)} title="Ask a question about projects, people and deadlines">
-            <Sparkles size={17} /> <span>Ask OmniTrack</span>
-          </button>
+          {!data.viewOnly && (
+            <button className="ask-btn" onClick={() => setAsking(true)} title="Ask a question about projects, people and deadlines">
+              <Sparkles size={17} /> <span>Ask OmniTrack</span>
+            </button>
+          )}
         </header>
+        {data.viewOnly && (
+          <div className="view-only-banner no-print" role="status">
+            <Eye size={17} />
+            <span>
+              <b>View only</b> · {data.viewOnly.label}. You're seeing OmniTrack live; nothing here can be changed. Link expires{" "}
+              {new Date(data.viewOnly.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}.
+            </span>
+          </div>
+        )}
         <AskPanel
           open={asking}
           onClose={() => setAsking(false)}

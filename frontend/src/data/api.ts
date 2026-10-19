@@ -11,11 +11,17 @@ export class ApiError extends Error {
   }
 }
 
+/** The secret of a view-only share link, when the page was opened at /view/<secret>. */
+export const shareToken: string | null = typeof window !== "undefined" ? (window.location.pathname.match(/^\/view\/([A-Za-z0-9_-]{20,})\/?$/)?.[1] ?? null) : null;
+
 export async function api<T = unknown>(path: string, method = "GET", data?: unknown): Promise<T> {
   const res = await fetch(`/api${path}`, {
     method,
     credentials: "same-origin",
-    headers: data !== undefined ? { "content-type": "application/json" } : undefined,
+    headers: {
+      ...(data !== undefined ? { "content-type": "application/json" } : {}),
+      ...(shareToken ? { "x-share-token": shareToken } : {}),
+    },
     body: data !== undefined ? JSON.stringify(data) : undefined,
   });
   const payload = await res.json().catch(() => ({}));
@@ -72,6 +78,7 @@ export interface AppData {
   twoStep: TwoStep; // your own second-step methods
   mfaHelp: MfaHelpRequest[]; // people locked out of two-step verification (administrators only)
   templates: ProjectTemplate[];
+  viewOnly?: { label: string; expiresAt: string }; // opened through a view-only share link
 }
 
 /**
@@ -85,6 +92,7 @@ export function useAppData() {
   const [mustChange, setMustChange] = useState<string | null>(null);
   const [changeFor, setChangeFor] = useState<{ username?: string; name?: string } | undefined>(); // whose password it is
   const [mfaSetup, setMfaSetup] = useState<string | null>(null);
+  const [shareError, setShareError] = useState<string | null>(null); // a view-only link that no longer works
   const [loading, setLoading] = useState(true);
 
   const reload = useCallback(async () => {
@@ -95,7 +103,10 @@ export function useAppData() {
     } catch (e) {
       setMustChange(null);
       setMfaSetup(null);
-      if (e instanceof ApiError && e.status === 401) {
+      if (e instanceof ApiError && e.code === "share_invalid") {
+        setData(null);
+        setShareError(e.message);
+      } else if (e instanceof ApiError && e.status === 401) {
         setData(null);
       } else if (e instanceof ApiError && e.code === "password_change_required") {
         setData(null);
@@ -114,5 +125,5 @@ export function useAppData() {
     reload();
   }, [reload]);
 
-  return { data, mustChange, changeFor, mfaSetup, loading, reload };
+  return { data, mustChange, changeFor, mfaSetup, shareError, loading, reload };
 }

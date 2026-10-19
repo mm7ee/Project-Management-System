@@ -129,6 +129,36 @@ const toFeature = (r: FeatureRow): Feature => ({
   ...(r.completed_at ? { completedAt: r.completed_at } : {}),
 });
 
+interface ShareLinkRow {
+  id: string;
+  token_hash: string;
+  label: string;
+  created_by: string;
+  created_at: string;
+  expires_at: string;
+  revoked_at: string | null;
+  last_used_at: string | null;
+  views: number;
+}
+
+/** Who a view-only link browses as: no account, no password, read-only. */
+const guestUser = (l: ShareLinkRow): UserRow => ({
+  id: `share-${l.id}`,
+  username: "view-only",
+  name: "View-only link",
+  title: l.label,
+  email: null,
+  phone: null,
+  role: "viewer",
+  password_hash: "",
+  prefs: "{}",
+  must_change_password: 0,
+  mfa_secret: null,
+  mfa_pending: null,
+  mfa_last_step: 0,
+  mfa_enabled_at: null,
+});
+
 interface TemplateRow {
   id: string;
   name: string;
@@ -635,8 +665,24 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   }
 
   // Everything below needs a signed-in user.
-  const me = await currentUser(req, db);
+  // A view-only share link stands in for a signed-in user: read-only, and only while the link
+  // is valid. It may load the data and project history, nothing else.
+  const shareToken = req.headers.get("x-share-token");
+  const guest = shareToken
+    ? await db
+        .prepare("SELECT * FROM share_links WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?")
+        .bind(await tokenHash(shareToken), new Date().toISOString())
+        .first<ShareLinkRow>()
+    : null;
+  if (shareToken && !guest) throw new HttpError(401, "This view-only link has expired or been turned off.", "share_invalid");
+  if (guest && !(method === "GET" && (path === "/api/data" || /^\/api\/systems\/[a-z0-9-]+\/history$/.test(path)))) {
+    throw new HttpError(403, "This link is view-only");
+  }
+  const me = guest ? guestUser(guest) : await currentUser(req, db);
   if (!me) throw new HttpError(401, "Not signed in");
+  if (guest && path === "/api/data") {
+    await db.prepare("UPDATE share_links SET views = views + 1, last_used_at = ? WHERE id = ?").bind(new Date().toISOString(), guest.id).run();
+  }
 
   // After an admin reset, the only things a user may do are choose a new password or sign out.
   if (me.must_change_password && !["/api/me/password", "/api/logout", "/api/logout-all"].includes(path)) {
@@ -657,12 +703,13 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   // Setting up either method (app or passkey) is allowed before the rest of the app.
   const mfaSetupPaths = ["/api/me/mfa/setup", "/api/me/mfa/enable", "/api/me/passkeys/options", "/api/me/passkeys", "/api/logout", "/api/logout-all"];
   if (me.must_change_password) mfaSetupPaths.push("/api/me/password");
-  if (policy.roles.includes(me.role) && !mfaSetupPaths.includes(path) && !(await hasMfa(db, me))) {
+  if (!guest && policy.roles.includes(me.role) && !mfaSetupPaths.includes(path) && !(await hasMfa(db, me))) {
     throw new HttpError(403, `Hi ${me.name}, your organisation requires two-step verification. Set it up to continue.`, "mfa_setup_required");
   }
 
   const matrix = await roleMatrix(db);
-  const perms = permissionsFor(me.role, matrix);
+  // A view-only link sees everything, including Reports, and can change nothing.
+  const perms: Permission[] = guest ? ["reports"] : permissionsFor(me.role, matrix);
   const can = (p: Permission) => perms.includes(p);
   // Developers (without manage_features) see only the feature requests assigned to them or
   // logged by them: everywhere, including Ask OmniTrack and project history.
@@ -681,6 +728,55 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     if (!match) throw new HttpError(400, `Unknown workspace "${name.slice(0, 40)}"`);
     return match;
   };
+
+  // ----- view-only share links (administrators) -----
+  if (path === "/api/share-links" && method === "GET") {
+    need("manage_users");
+    const rows = await db
+      .prepare(
+        "SELECT l.*, u.name AS by_name FROM share_links l LEFT JOIN users u ON u.id = l.created_by ORDER BY l.revoked_at IS NOT NULL, l.created_at DESC LIMIT 50",
+      )
+      .all<ShareLinkRow & { by_name: string | null }>();
+    return json(
+      rows.results.map((r) => ({
+        id: r.id,
+        label: r.label,
+        createdBy: r.by_name ?? "someone",
+        createdAt: r.created_at,
+        expiresAt: r.expires_at,
+        ...(r.revoked_at ? { revokedAt: r.revoked_at } : {}),
+        ...(r.last_used_at ? { lastUsedAt: r.last_used_at } : {}),
+        views: r.views,
+      })),
+    );
+  }
+
+  if (path === "/api/share-links" && method === "POST") {
+    need("manage_users");
+    const b = await body<{ label?: string; days?: number }>(req);
+    const label = text(b.label, "Who it's for", true)!.slice(0, 80);
+    const days = [1, 7, 30, 90].includes(Number(b.days)) ? Number(b.days) : 7;
+    const token = newToken();
+    const id = newToken().slice(0, 12);
+    const expires = new Date(Date.now() + days * 86_400_000).toISOString();
+    await db
+      .prepare("INSERT INTO share_links (id, token_hash, label, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .bind(id, await tokenHash(token), label, me.id, now, expires)
+      .run();
+    await audit(db, req, me, "share_link_created", null, { label, days });
+    // The secret is shown once; only its hash is kept.
+    return json({ id, url: `${new URL(req.url).origin}/view/${token}`, expiresAt: expires }, 201);
+  }
+
+  const shareMatch = path.match(/^\/api\/share-links\/([A-Za-z0-9_-]+)$/);
+  if (shareMatch && method === "DELETE") {
+    need("manage_users");
+    const row = await db.prepare("SELECT label FROM share_links WHERE id = ? AND revoked_at IS NULL").bind(shareMatch[1]).first<{ label: string }>();
+    if (!row) throw new HttpError(404, "Link not found");
+    await db.prepare("UPDATE share_links SET revoked_at = ? WHERE id = ?").bind(now, shareMatch[1]).run();
+    await audit(db, req, me, "share_link_revoked", null, { label: row.label });
+    return json({ ok: true });
+  }
 
   // Edit the workspace list. Each entry may say what it was called before ("was"), so a rename
   // moves its projects along; projects in a removed workspace move to the first one.
@@ -947,6 +1043,10 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
         const keysOf = new Map(keyed.results.map((k) => [k.user_id, k.n]));
         const list = users.results.map((u) => {
           const user = toUser(u, projectsByUser.get(u.id));
+          if (guest) {
+            delete user.email;
+            delete user.phone;
+          }
           const keys = keysOf.get(u.id) ?? 0;
           if (keys) user.mfaEnabled = true;
           if (can("manage_users") && user.mfaEnabled) user.mfaMethods = [...(u.mfa_secret ? ["app" as const] : []), ...(keys ? ["passkey" as const] : [])];
@@ -995,6 +1095,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       ),
       limits,
       workspaces: await workspaceList(db),
+      ...(guest ? { viewOnly: { label: guest.label, expiresAt: guest.expires_at } } : {}),
       mfaPolicy: policy,
       templates: templates.results.map(toTemplate),
       recoveryCodesLeft: (await db.prepare("SELECT COUNT(*) AS n FROM mfa_recovery WHERE user_id = ? AND used_at IS NULL").bind(me.id).first<{ n: number }>())!.n,

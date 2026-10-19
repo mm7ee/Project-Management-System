@@ -15,6 +15,7 @@ import {
 } from "../data/roles";
 import type { Limits, Workload } from "../data/project";
 import PasswordRules, { generatePassword } from "./PasswordRules";
+import ShareLinks from "./ShareLinks";
 import { PASSWORD_MIN, passwordProblem } from "../data/password";
 
 interface Props {
@@ -282,6 +283,8 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaP
       </div>
 
       <MfaPolicyEditor me={me} policy={mfaPolicy} users={users} onSave={(p) => run(() => api("/settings/mfa", "PUT", p))} />
+
+      <ShareLinks />
 
       <LimitsEditor limits={limits} onSave={(l) => run(() => api("/settings/limits", "PUT", l))} />
 
