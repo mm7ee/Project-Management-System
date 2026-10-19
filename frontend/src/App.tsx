@@ -394,7 +394,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           <div className="view-only-banner no-print" role="status">
             <Eye size={17} />
             <span>
-              <b>View only</b> · {data.viewOnly.label}. You're seeing OmniTrack live; nothing here can be changed. Link expires{" "}
+              <b>View only</b> · {data.viewOnly.label}. You're seeing OmniTrack live and can request updates on any project; nothing else can be changed. Link expires{" "}
               {new Date(data.viewOnly.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}.
             </span>
           </div>

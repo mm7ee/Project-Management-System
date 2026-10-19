@@ -359,11 +359,14 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
                 <Check size={14} /> Ask OmniTrack questions about the work
               </li>
               <li className="perm-item">
+                <Check size={14} /> Request updates on projects (open a project, then Request update)
+              </li>
+              <li className="perm-item">
                 <Check size={14} /> Change how OmniTrack looks here (saved in this browser only)
               </li>
             </ul>
             <p className="set-note">
-              Nothing can be changed through this link ({viewOnly.label}). To update projects, ask your administrator for an account.
+              Apart from requesting updates, nothing can be changed through this link ({viewOnly.label}). To update projects, ask your administrator for an account.
             </p>
           </Section>
         )}

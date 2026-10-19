@@ -145,7 +145,7 @@ interface ShareLinkRow {
 const guestUser = (l: ShareLinkRow): UserRow => ({
   id: `share-${l.id}`,
   username: "view-only",
-  name: "View-only link",
+  name: `${l.label} (view-only link)`,
   title: l.label,
   email: null,
   phone: null,
@@ -666,7 +666,8 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
 
   // Everything below needs a signed-in user.
   // A view-only share link stands in for a signed-in user: read-only, and only while the link
-  // is valid. It may load the data and project history, and ask Ask OmniTrack; nothing else.
+  // is valid. It may load the data and project history, ask Ask OmniTrack, and request updates
+  // (or withdraw its own requests); nothing else.
   const shareToken = req.headers.get("x-share-token");
   const guest = shareToken
     ? await db
@@ -676,7 +677,9 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     : null;
   if (shareToken && !guest) throw new HttpError(401, "This view-only link has expired or been turned off.", "share_invalid");
   const guestAllowed =
-    (method === "GET" && (path === "/api/data" || /^\/api\/systems\/[a-z0-9-]+\/history$/.test(path))) || (method === "POST" && path === "/api/ask");
+    (method === "GET" && (path === "/api/data" || /^\/api\/systems\/[a-z0-9-]+\/history$/.test(path))) ||
+    (method === "POST" && (path === "/api/ask" || path === "/api/requests")) ||
+    (method === "DELETE" && /^\/api\/requests\/[a-f0-9]+$/.test(path));
   if (guest && !guestAllowed) {
     throw new HttpError(403, "This link is view-only");
   }
@@ -710,8 +713,8 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   }
 
   const matrix = await roleMatrix(db);
-  // A view-only link sees everything, including Reports, and can change nothing.
-  const perms: Permission[] = guest ? ["reports"] : permissionsFor(me.role, matrix);
+  // A view-only link sees everything, including Reports, and may request updates; it changes nothing else.
+  const perms: Permission[] = guest ? ["reports", "request_updates"] : permissionsFor(me.role, matrix);
   const can = (p: Permission) => perms.includes(p);
   // Developers (without manage_features) see only the feature requests assigned to them or
   // logged by them: everywhere, including Ask OmniTrack and project history.
@@ -1061,15 +1064,25 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
         const byUser = new Map(last.results.map((r) => [r.user_id, r.at]));
         return list.map((u) => (byUser.has(u.id) ? { ...u, lastLogin: byUser.get(u.id) } : u));
       })(),
-      requests: requests.results.map(
-        (r): UpdateRequest => ({
-          id: r.id,
-          systemId: r.system_id,
-          requestedBy: r.requested_by,
-          message: r.message,
-          createdAt: r.created_at,
-        }),
-      ),
+      requests: await (async () => {
+        // Requests made through a view-only link carry the link's name, as there's no user.
+        const linkIds = [...new Set(requests.results.map((r) => r.requested_by).filter((id) => id.startsWith("share-")))];
+        const labels = new Map<string, string>();
+        for (const id of linkIds) {
+          const l = await db.prepare("SELECT label FROM share_links WHERE id = ?").bind(id.slice(6)).first<{ label: string }>();
+          labels.set(id, `${l?.label ?? "A"} (view-only link)`);
+        }
+        return requests.results.map(
+          (r): UpdateRequest => ({
+            id: r.id,
+            systemId: r.system_id,
+            requestedBy: r.requested_by,
+            ...(labels.has(r.requested_by) ? { requestedByName: labels.get(r.requested_by) } : {}),
+            message: r.message,
+            createdAt: r.created_at,
+          }),
+        );
+      })(),
       features: mineOnly(features.results).map(toFeature),
       documents: documents.results.map(
         (d): ProjectDocument => ({
@@ -1544,6 +1557,14 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   // ----- update requests -----
   if (path === "/api/requests" && method === "POST") {
     need("request_updates");
+    if (guest) {
+      // A link is shared by several people: up to 10 requests an hour, so it can't be used to spam the team.
+      const recent = await db
+        .prepare("SELECT COUNT(*) AS n FROM requests WHERE requested_by = ? AND created_at > ?")
+        .bind(me.id, new Date(Date.now() - 3_600_000).toISOString())
+        .first<{ n: number }>();
+      if ((recent?.n ?? 0) >= 10) throw new HttpError(429, "This link has made 10 update requests in the last hour. Try again later.");
+    }
     const b = await body<{ systemId?: string; message?: string }>(req);
     const system = await getSystem(db, String(b.systemId ?? ""));
     const id = newToken().slice(0, 16);

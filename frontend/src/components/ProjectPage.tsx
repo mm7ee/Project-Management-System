@@ -449,7 +449,7 @@ export default function ProjectPage(p: Props) {
                   <BellRing size={16} />
                   <div>
                     <b>
-                      {nameOf(r.requestedBy)} requested an update · {timeAgo(r.createdAt, now)}
+                      {r.requestedByName ?? nameOf(r.requestedBy)} requested an update · {timeAgo(r.createdAt, now)}
                     </b>
                     {r.message && <p>“{r.message}”</p>}
                   </div>

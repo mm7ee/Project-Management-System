@@ -134,7 +134,8 @@ export const START_KEYS = ["DASHBOARD", "ALL", "MINE", "BLOCKED", "LIVE", "WIP",
 export interface UpdateRequest {
   id: string;
   systemId: string;
-  requestedBy: string; // user id
+  requestedBy: string; // user id (or "share-…" for a view-only link)
+  requestedByName?: string; // set for requests made through a view-only link
   message: string;
   createdAt: string;
 }
