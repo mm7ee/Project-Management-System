@@ -1621,8 +1621,9 @@ a.nav-item { text-decoration: none; }
 }
 /* Navy glass sidebar with its own glowing web inside. */
 :root[data-theme="light"] .sidebar {
-  background: linear-gradient(180deg, rgba(7, 32, 74, 0.8) 0%, rgba(4, 22, 54, 0.86) 100%);
-  backdrop-filter: blur(4px) saturate(140%); -webkit-backdrop-filter: blur(4px) saturate(140%);
+  /* Deep navy-blue glass: opaque enough that the pastel clouds behind don't tint it green. */
+  background: linear-gradient(180deg, rgba(9, 34, 92, 0.9) 0%, rgba(5, 20, 62, 0.94) 100%);
+  backdrop-filter: blur(4px) saturate(110%); -webkit-backdrop-filter: blur(4px) saturate(110%);
   border-right: 1px solid rgba(255, 255, 255, 0.12);
 }
 .sidebar-web { display: none; }
