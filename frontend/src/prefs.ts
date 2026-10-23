@@ -41,6 +41,7 @@ export function useApplyPrefs(prefs: Prefs | null) {
     apply();
     root().dataset.motion = prefs.motion;
     root().dataset.density = prefs.density;
+    root().dataset.glass = prefs.glass;
     if (prefs.theme !== "system") return;
     const q = darkQuery();
     q.addEventListener("change", apply);

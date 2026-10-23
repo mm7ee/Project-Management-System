@@ -88,6 +88,8 @@ function Choice<T extends string>({
 }
 
 
+const GLASS_LABEL: Record<Prefs["glass"], string> = { "1": "Clear", "2": "Light glass", "3": "Frosted", "4": "Heavy frost", "5": "Opaque" };
+
 export default function SettingsPage({ me, prefs, permissions, projects, mfaRequired, recoveryCodesLeft, twoStep, viewOnly, onPrefs, onProfileSaved, onSignedOut }: Props) {
   const [saved, setSaved] = useState(false);
   const [email, setEmail] = useState(me.email ?? "");
@@ -230,6 +232,29 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
                 { value: "compact", label: "Compact" },
               ]}
             />
+          </div>
+          <div className="set-row">
+            <div>
+              <b>Pop-up transparency</b>
+              <span>How much of the page shows through windows that open: forms, the Ask OmniTrack panel, menus and tooltips.</span>
+            </div>
+            <div className="glass-pick">
+              <input
+                type="range"
+                min={1}
+                max={5}
+                step={1}
+                value={Number(prefs.glass)}
+                onChange={(e) => setPref("glass", e.target.value as Prefs["glass"])}
+                aria-label="Pop-up transparency"
+                aria-valuetext={GLASS_LABEL[prefs.glass]}
+              />
+              <div className="glass-ends">
+                <span>See-through</span>
+                <b>{GLASS_LABEL[prefs.glass]}</b>
+                <span>Solid</span>
+              </div>
+            </div>
           </div>
         </Section>
 
