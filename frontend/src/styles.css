@@ -1604,12 +1604,6 @@ a.nav-item { text-decoration: none; }
 
 .dl-particles { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -2; }
 
-/* Every so often a beam of light sweeps across. */
-.dl-beam {
-  position: absolute; top: -20%; bottom: -20%; left: -30%; width: 22%; z-index: -1; opacity: 0;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.75) 45%, rgba(159, 220, 246, 0.35) 55%, transparent);
-  transform: skewX(-18deg);
-}
 
 /* Frosted glass, so the backdrop shows through while text stays crisp. */
 :root[data-theme="light"] :is(.card, .stat, .d-card, .d-kpi, .viz-card, .set-card, .table-wrap) {
@@ -1645,7 +1639,6 @@ a.nav-item { text-decoration: none; }
   .dl-rings i { animation: dl-ring 9s cubic-bezier(.2, .6, .3, 1) infinite; }
   .dl-rings i:nth-child(2) { animation-delay: 3s; }
   .dl-rings i:nth-child(3) { animation-delay: 6s; }
-  .dl-beam { animation: dl-beam 14s ease-in-out infinite; animation-delay: 4s; }
   :root[data-theme="light"] :is(.topbar h1, .page-head h2, .d-pagehead h2, .projects-head h2) { animation: dl-shine 10s ease-in-out infinite; }
 }
 @keyframes dl-float {
@@ -1655,7 +1648,6 @@ a.nav-item { text-decoration: none; }
 }
 @keyframes dl-pan { to { background-position: 280px 280px; } }
 @keyframes dl-ring { 0% { transform: scale(0.25); opacity: 0.9; } 100% { transform: scale(1.6); opacity: 0; } }
-@keyframes dl-beam { 0%, 70% { left: -30%; opacity: 0; } 74% { opacity: 1; } 96% { opacity: 1; } 100% { left: 120%; opacity: 0; } }
 @keyframes dl-shine { 0%, 100% { background-position: 100% 0; } 50% { background-position: 0 0; } }
 @media (prefers-reduced-motion: reduce) { .dl-backdrop * { animation: none !important; } }
 :root[data-motion="reduced"] .dl-backdrop * { animation: none !important; }
