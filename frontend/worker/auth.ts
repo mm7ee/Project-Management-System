@@ -121,7 +121,7 @@ export async function verifyTotp(secret: string, code: string, now = Date.now())
 
 /** otpauth:// link the QR code encodes. */
 export const totpUri = (secret: string, account: string) =>
-  `otpauth://totp/${encodeURIComponent(`OmniTrack:${account}`)}?secret=${secret}&issuer=OmniTrack&algorithm=SHA1&digits=6&period=${TOTP_STEP}`;
+  `otpauth://totp/${encodeURIComponent(`OmniPulse:${account}`)}?secret=${secret}&issuer=OmniPulse&algorithm=SHA1&digits=6&period=${TOTP_STEP}`;
 
 /** Ten single-use recovery codes like "k7mq-2xpd", for when the phone is lost. */
 export function newRecoveryCodes(): string[] {

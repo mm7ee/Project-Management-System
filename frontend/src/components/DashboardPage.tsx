@@ -222,7 +222,7 @@ export default function DashboardPage({ systems, users, features, blockers, docu
         <header className="d-pagehead">
           <h2>Dashboard</h2>
           <nav aria-label="Breadcrumb" className="d-crumbs">
-            OmniTrack <ChevronRight size={14} /> <b>Dashboard</b>
+            OmniPulse <ChevronRight size={14} /> <b>Dashboard</b>
           </nav>
         </header>
 

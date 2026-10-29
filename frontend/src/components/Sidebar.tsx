@@ -44,7 +44,7 @@ export default function Sidebar(p: Props) {
           <a href={COMPANY_URL} target="_blank" rel="noopener noreferrer" className="logo-link" title="Omni Contact website">
             <img src="/omni-logo-white.png" alt="Omni Contact" />
           </a>
-          <span>OmniTrack</span>
+          <span>OmniPulse</span>
         </div>
 
         <nav className="nav">

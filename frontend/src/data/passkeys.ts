@@ -17,7 +17,7 @@ function explain(e: unknown): Error {
   const name = e instanceof DOMException ? e.name : "";
   if (name === "NotAllowedError" || name === "AbortError") return new Error("Cancelled, or the device didn't respond. Try again.");
   if (name === "InvalidStateError") return new Error("That passkey is already on your account.");
-  if (name === "SecurityError") return new Error("Passkeys only work on the OmniTrack website address.");
+  if (name === "SecurityError") return new Error("Passkeys only work on the OmniPulse website address.");
   return e instanceof Error ? e : new Error("The passkey didn't work");
 }
 
@@ -35,7 +35,7 @@ export async function createPasskey(o: RegisterOptions) {
     cred = (await navigator.credentials.create({
       publicKey: {
         challenge: fromB64url(o.challenge),
-        rp: { id: o.rpId, name: "OmniTrack" },
+        rp: { id: o.rpId, name: "OmniPulse" },
         user: { id: new TextEncoder().encode(o.user.id), name: o.user.name, displayName: o.user.displayName },
         pubKeyCredParams: [
           { type: "public-key", alg: -7 },

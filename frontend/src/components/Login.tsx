@@ -64,7 +64,7 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
       <main className="lp-main">
         <section className="lp-hero">
           <span className="lp-eyebrow lp-in" style={{ animationDelay: "0.05s" }}>
-            <span className="lp-dot" /> OmniTrack
+            <span className="lp-dot" /> OmniPulse
           </span>
           <h1 className="lp-in" style={{ animationDelay: "0.15s" }}>
             Track every system
@@ -147,7 +147,7 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
               </span>
               <div>
                 <h2>Welcome back</h2>
-                <p>Sign in to OmniTrack</p>
+                <p>Sign in to OmniPulse</p>
               </div>
             </div>
 
@@ -188,7 +188,7 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
               {busy ? "Signing in…" : "Sign in"} {!busy && <ArrowRight size={18} />}
             </button>
             <p className="lp-help">
-              Need an account? Ask your OmniTrack administrator. Never share your password, including with the IT helpdesk.
+              Need an account? Ask your OmniPulse administrator. Never share your password, including with the IT helpdesk.
             </p>
           </form>
           )}
@@ -356,7 +356,7 @@ function SecondStep({ ticket, methods, onSignedIn, onBack }: { ticket: string; m
               />
             </span>
           </label>
-          <p className="lp-help">They'll confirm it's really you, for example by phone or in person, before resetting anything. Nobody from OmniTrack will ever ask for your password.</p>
+          <p className="lp-help">They'll confirm it's really you, for example by phone or in person, before resetting anything. Nobody from OmniPulse will ever ask for your password.</p>
         </>
       )}
 

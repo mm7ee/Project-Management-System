@@ -295,7 +295,7 @@ export default function ActivityPage({ users, systems, now }: Props) {
     const blob = new Blob([[header.join(","), ...lines].join("\r\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `omnitrack-activity-${new Date(now).toISOString().slice(0, 10)}.csv`;
+    a.download = `omnipulse-activity-${new Date(now).toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   };

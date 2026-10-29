@@ -55,7 +55,7 @@ function checkClient(clientDataB64: string, type: string, challenge: string, ori
 async function importKey(spki: Uint8Array, alg: number): Promise<CryptoKey> {
   if (alg === ES256) return crypto.subtle.importKey("spki", spki, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
   if (alg === RS256) return crypto.subtle.importKey("spki", spki, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
-  throw new Error("This passkey uses a type of key OmniTrack doesn't support");
+  throw new Error("This passkey uses a type of key OmniPulse doesn't support");
 }
 
 /** WebAuthn ECDSA signatures are DER; Web Crypto wants the raw r‖s pair. */

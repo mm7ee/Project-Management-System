@@ -43,7 +43,7 @@ export default function UpdateBanner() {
   if (!stale) return null;
   return (
     <div className="update-banner" role="status">
-      <span>OmniTrack has been updated.</span>
+      <span>OmniPulse has been updated.</span>
       <button onClick={() => window.location.reload()}>
         <RefreshCw size={15} /> Reload
       </button>

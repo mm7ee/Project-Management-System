@@ -34,7 +34,7 @@ function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) 
 
 /** Shows freshly issued recovery codes once, with copy and download. */
 export function RecoveryCodes({ codes, username }: { codes: string[]; username: string }) {
-  const text = `OmniTrack recovery codes for ${username}\nEach code works once. Keep them somewhere safe.\n\n${codes.join("\n")}\n`;
+  const text = `OmniPulse recovery codes for ${username}\nEach code works once. Keep them somewhere safe.\n\n${codes.join("\n")}\n`;
   return (
     <div className="mfa-codes">
       <ol>
@@ -52,7 +52,7 @@ export function RecoveryCodes({ codes, username }: { codes: string[]; username: 
           onClick={() => {
             const a = document.createElement("a");
             a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
-            a.download = `omnitrack-recovery-codes-${username}.txt`;
+            a.download = `omnipulse-recovery-codes-${username}.txt`;
             a.click();
             URL.revokeObjectURL(a.href);
           }}

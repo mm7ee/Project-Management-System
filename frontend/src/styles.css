@@ -1,4 +1,4 @@
-/* Visual spec: the OmniTrack "Projects Department Tracker" mock-up.
+/* Visual spec: the OmniPulse "Projects Department Tracker" mock-up.
    Navy sidebar, pale blue-grey canvas, white cards, cyan/green/amber/red accents. */
 :root {
   --navy-900: #071a3d; /* sidebar */
@@ -1499,7 +1499,7 @@ a.nav-item { text-decoration: none; }
 @keyframes grow-y { from { transform: scaleY(0); } }
 @keyframes grow-x { from { transform: scaleX(0); } }
 
-/* ---------- Ask OmniTrack ---------- */
+/* ---------- Ask OmniPulse ---------- */
 .ask-btn {
   position: relative; display: inline-flex; align-items: center; gap: 7px; flex: none; padding: 9px 16px; border: 0; border-radius: 99px;
   font: inherit; font-size: 14.5px; font-weight: 700; color: #fff; cursor: pointer; overflow: hidden;
@@ -1661,7 +1661,7 @@ a.nav-item { text-decoration: none; }
 :root[data-motion="reduced"] .dl-backdrop * { animation: none !important; }
 @media print { .dl-backdrop, .fx-backdrop { display: none; } }
 
-/* Ask OmniTrack as frosted glass: the page and the backdrop's web stay visible behind it. */
+/* Ask OmniPulse as frosted glass: the page and the backdrop's web stay visible behind it. */
 .ask-backdrop { background: rgba(7, 26, 61, 0.12); }
 .drawer.ask {
   background: rgba(255, 255, 255, var(--pop-a));
@@ -1783,7 +1783,7 @@ a.nav-item { text-decoration: none; }
   100% { background: color-mix(in srgb, var(--hl) 10%, transparent); box-shadow: inset 4px 0 0 var(--hl); }
 }
 
-/* Ask OmniTrack: code, headings, numbered lists and copying answers. */
+/* Ask OmniPulse: code, headings, numbered lists and copying answers. */
 .ask-a ol { margin: 6px 0 0; padding-left: 22px; display: flex; flex-direction: column; gap: 4px; }
 .ask-a .ask-h { font-weight: 700; color: var(--heading); margin-top: 10px; }
 .ask-code {

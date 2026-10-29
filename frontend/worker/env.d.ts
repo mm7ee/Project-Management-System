@@ -32,6 +32,6 @@ interface Ai {
 interface Env {
   DB: D1Database;
   ASSETS: Fetcher;
-  AI?: Ai; // Workers AI binding, for Ask OmniTrack
+  AI?: Ai; // Workers AI binding, for Ask OmniPulse
   MFA_KEY?: string; // encrypts two-step verification secrets; a Worker secret (.dev.vars locally)
 }
