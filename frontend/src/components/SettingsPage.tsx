@@ -337,7 +337,11 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
           </ul>
         </Section>
 
-        <Section icon={<LogOut size={18} />} title="Sign out">
+        <Section
+          icon={<MonitorSmartphone size={18} />}
+          title="Sessions"
+          sub="You're signed in on this device. Sign out of all devices if you used a shared or lost computer."
+        >
           <div className="set-actions">
             <button
               className="btn btn-ghost"
@@ -370,7 +374,6 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
               </button>
             )}
           </div>
-          <p className="set-note">Use “all devices” if you signed in on a shared or lost computer.</p>
         </Section>
           </>
         )}
