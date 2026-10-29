@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import PulseMark from "./PulseMark";
 import {
   AlertOctagon,
   ArrowRight,
@@ -49,7 +50,9 @@ export default function ExecutivePage() {
           <a href={COMPANY_URL} target="_blank" rel="noopener noreferrer" className="exec-logo" title="Omni Contact website">
             <img src="/omni-logo.png" alt="Omni Contact" />
           </a>
-          <span className="exec-who">OmniPulse</span>
+          <span className="exec-who">
+            <PulseMark tone="dark" />
+          </span>
           <div className="page-actions">
             <button className="btn btn-ghost sm" onClick={() => window.print()}>
               <Printer size={15} /> Print / PDF

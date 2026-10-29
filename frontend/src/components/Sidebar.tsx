@@ -3,6 +3,7 @@ import { initials, type Status } from "../data/systems";
 import { ROLE_LABEL, type User } from "../data/roles";
 import { COMPANY_URL } from "../brand";
 import ParticleField from "./ParticleField";
+import PulseMark from "./PulseMark";
 
 export type Filter = "ALL" | Status | "OVERDUE" | "REQUESTED" | "MAINTENANCE" | "MINE" | "BLOCKED";
 export type View = "dashboard" | "projects" | "project" | "features" | "pcns" | "reports" | "users" | "activity" | "settings";
@@ -44,7 +45,8 @@ export default function Sidebar(p: Props) {
           <a href={COMPANY_URL} target="_blank" rel="noopener noreferrer" className="logo-link" title="Omni Contact website">
             <img src="/omni-logo-white.png" alt="Omni Contact" />
           </a>
-          <span>OmniPulse</span>
+          {/* Reads as "Omni Pulse" with the logo, rather than repeating "Omni". */}
+          <PulseMark />
         </div>
 
         <nav className="nav">
