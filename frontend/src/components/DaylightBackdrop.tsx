@@ -1,8 +1,7 @@
 import ParticleField from "./ParticleField";
-import PulseMonitor from "./PulseMonitor";
 
 /**
- * The Light theme's moving backdrop: pastel aurora clouds, ECG paper, the monitor trace, signal
+ * The Light theme's moving backdrop: pastel aurora clouds, ECG paper, signal
  * rings and the particle network in navy ink.
  * Fixed behind the app; cards turn to frosted glass so it shows through.
  */
@@ -16,7 +15,6 @@ export default function DaylightBackdrop() {
         <span />
       </div>
       <div className="dl-paper" />
-      <PulseMonitor className="app-monitor" tone="light" />
       <div className="dl-rings">
         <i />
         <i />

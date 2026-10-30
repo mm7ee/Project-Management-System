@@ -18,15 +18,10 @@ const BEAT_SECONDS = 1.3; // matches the headline's beat in landing.css
  * A heart-monitor trace across the whole width: a bright head sweeps left to right and the line
  * fades away behind it. Draws one still trace when motion is reduced; pauses while the tab is hidden.
  */
-export default function PulseMonitor({ className, tone = "dark" }: { className?: string; tone?: "dark" | "light" }) {
+export default function PulseMonitor({ className }: { className?: string }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    // Glowing light on navy, or cyan and navy ink on a pale page.
-    const ink =
-      tone === "dark"
-        ? { glow: "27, 169, 225", glowAlpha: 0.22, line: "143, 220, 251", lineAlpha: 0.9, halo: "rgba(143, 220, 251, 0.22)", head: "#ffffff" }
-        : { glow: "27, 169, 225", glowAlpha: 0.16, line: "11, 111, 176", lineAlpha: 0.75, halo: "rgba(27, 169, 225, 0.2)", head: "#0b6fb0" };
     const canvas = ref.current!;
     const ctx = canvas.getContext("2d")!;
     const still = reduceMotion();
@@ -53,20 +48,20 @@ export default function PulseMonitor({ className, tone = "dark" }: { className?:
           ctx.beginPath();
           ctx.moveTo(x, yAt(x));
           ctx.lineTo(x + STEP, yAt(x + STEP));
-          ctx.strokeStyle = `rgba(${ink.glow}, ${alpha * ink.glowAlpha})`;
+          ctx.strokeStyle = `rgba(27, 169, 225, ${alpha * 0.22})`;
           ctx.lineWidth = 7;
           ctx.stroke();
-          ctx.strokeStyle = `rgba(${ink.line}, ${alpha * ink.lineAlpha})`;
+          ctx.strokeStyle = `rgba(143, 220, 251, ${alpha * 0.9})`;
           ctx.lineWidth = 1.8;
           ctx.stroke();
         }
         if (!still) {
           const y = yAt(head);
-          ctx.fillStyle = ink.halo;
+          ctx.fillStyle = "rgba(143, 220, 251, 0.22)";
           ctx.beginPath();
           ctx.arc(head, y, 11, 0, Math.PI * 2);
           ctx.fill();
-          ctx.fillStyle = ink.head;
+          ctx.fillStyle = "#ffffff";
           ctx.beginPath();
           ctx.arc(head, y, 3, 0, Math.PI * 2);
           ctx.fill();
@@ -98,7 +93,7 @@ export default function PulseMonitor({ className, tone = "dark" }: { className?:
       watch.disconnect();
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [tone]);
+  }, []);
 
   return <canvas ref={ref} className={className} aria-hidden="true" />;
 }
