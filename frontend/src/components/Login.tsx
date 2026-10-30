@@ -1,30 +1,39 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ArrowRight, BellRing, FileBarChart, Fingerprint, KeyRound, LifeBuoy, LockKeyhole, Radio, ShieldCheck, UserRound } from "lucide-react";
 import { ApiError, api } from "../data/api";
 import { passkeysSupported, signWithPasskey } from "../data/passkeys";
 import { COMPANY_URL } from "../brand";
-import ParticleField from "./ParticleField";
+import PulseMark from "./PulseMark";
+import PulseMonitor from "./PulseMonitor";
 import "./landing.css";
 
-const STAGES = ["Idea", "Build", "Deploy", "Live"];
-const WORDS = ["idea", "build", "testing", "deploy"];
+// The lifecycle as one heartbeat trace: each beat is stronger as a project comes to life.
+const STAGES = [
+  { label: "Idea", height: 10 },
+  { label: "Build", height: 16 },
+  { label: "Test", height: 22 },
+  { label: "Deploy", height: 28 },
+  { label: "Live", height: 36 },
+];
+const TRACE_W = 520;
+const TRACE_MID = 44;
+const SLOT = TRACE_W / STAGES.length;
+const TRACE =
+  STAGES.reduce((d, { height }, i) => {
+    const x = SLOT * i + SLOT / 2;
+    return `${d} H${x - 16} L${x - 8} ${TRACE_MID + height * 0.2} L${x} ${TRACE_MID - height} L${x + 8} ${TRACE_MID + height * 0.45} L${x + 16} ${TRACE_MID}`;
+  }, `M0 ${TRACE_MID}`) + ` H${TRACE_W}`;
+const TRACE_SECONDS = 5; // keep in step with lp-trace-run and lp-stage-lit in landing.css
+const TRACE_DASH = 0.16;
+/** How far through its loop the travelling signal reaches stage i (0–1). */
+const stagePhase = (i: number) => (((i + 0.5) / STAGES.length - TRACE_DASH) / (1 + TRACE_DASH) + 1) % 1;
+
 const FEATURES = [
   { icon: Radio, label: "Live progress" },
   { icon: ShieldCheck, label: "Role-based access" },
   { icon: BellRing, label: "Update requests" },
   { icon: FileBarChart, label: "Instant reports" },
 ];
-
-/** Cycles through WORDS for the headline. */
-function useRotatingWord(ms = 2200) {
-  const [i, setI] = useState(0);
-  useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const id = setInterval(() => setI((n) => (n + 1) % WORDS.length), ms);
-    return () => clearInterval(id);
-  }, [ms]);
-  return i;
-}
 
 export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
   const [username, setUsername] = useState("");
@@ -34,7 +43,6 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
   // Set once the password checked out for an account with two-step verification.
   const [ticket, setTicket] = useState<string | null>(null);
   const [methods, setMethods] = useState<Methods>({ app: true, passkey: false });
-  const word = useRotatingWord();
 
   const backToPassword = (message = "") => {
     setTicket(null);
@@ -49,13 +57,16 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
         <span />
         <span />
       </div>
-      <div className="lp-floor" aria-hidden="true" />
-      <ParticleField className="lp-particles" />
+      <div className="lp-paper" aria-hidden="true" />
+      <PulseMonitor className="lp-monitor" />
 
       <header className="lp-top">
-        <a href={COMPANY_URL} target="_blank" rel="noopener noreferrer" className="logo-link" title="Omni Contact website">
-          <img src="/omni-logo-white.png" alt="Omni Contact" />
-        </a>
+        <span className="lp-brand">
+          <a href={COMPANY_URL} target="_blank" rel="noopener noreferrer" className="logo-link" title="Omni Contact website">
+            <img src="/omni-logo-white.png" alt="Omni Contact" />
+          </a>
+          <PulseMark />
+        </span>
         <span className="lp-status">
           <i /> Systems team · Projects Tracker
         </span>
@@ -63,36 +74,27 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
 
       <main className="lp-main">
         <section className="lp-hero">
-          <span className="lp-eyebrow lp-in" style={{ animationDelay: "0.05s" }}>
-            <span className="lp-dot" /> Pulse
-          </span>
-          <h1 className="lp-in" style={{ animationDelay: "0.15s" }}>
-            Track every system
+          <h1 className="lp-in" style={{ animationDelay: "0.1s" }}>
+            Every project
             <br />
-            from{" "}
-            <span className="lp-rotator" aria-live="polite">
-              <span key={word} className="lp-word">
-                {WORDS[word]}
-              </span>
-            </span>
-            <br />
-            to <span className="lp-grad">live.</span>
+            has a <span className="lp-beat">pulse.</span>
           </h1>
-          <p className="lp-lede lp-in" style={{ animationDelay: "0.25s" }}>
-            One place for the Omni Contact systems team to follow progress, reach project leads, request updates and
-            report on every build.
+          <p className="lp-lede lp-in" style={{ animationDelay: "0.2s" }}>
+            The live heartbeat of the Omni Contact systems team. Follow every build from idea to live, catch what's stalling before it flatlines, and report on all of it in one click.
           </p>
 
-          <div className="lp-pipeline lp-in" style={{ animationDelay: "0.35s" }} aria-label="Idea, build, deploy, live">
-            <div className="lp-track">
-              <span className="lp-pulse" />
-            </div>
-            {STAGES.map((s, i) => (
-              <div key={s} className="lp-stage" style={{ ["--i" as string]: i }}>
-                <span className="lp-node" />
-                <span className="lp-stage-label">{s}</span>
-              </div>
-            ))}
+          <div className="lp-vitals lp-in" style={{ animationDelay: "0.3s" }} role="img" aria-label="Idea, build, test, deploy, live">
+            <svg viewBox={`0 0 ${TRACE_W} 62`} aria-hidden="true">
+              <path className="lp-trace-base" d={TRACE} pathLength={1} />
+              <path className="lp-trace-run" d={TRACE} pathLength={1} />
+            </svg>
+            <ol>
+              {STAGES.map((st, i) => (
+                <li key={st.label} style={{ animationDelay: `${(stagePhase(i) - 1) * TRACE_SECONDS}s` }}>
+                  {st.label}
+                </li>
+              ))}
+            </ol>
           </div>
 
           <ul className="lp-features lp-in" style={{ animationDelay: "0.45s" }}>
@@ -105,16 +107,11 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
         </section>
 
         <section className="lp-panel lp-in" style={{ animationDelay: "0.3s" }}>
-          <div className="lp-orbits" aria-hidden="true">
-            <span className="lp-orbit o1">
-              <i />
-            </span>
-            <span className="lp-orbit o2">
-              <i />
-            </span>
-            <span className="lp-orbit o3">
-              <i />
-            </span>
+          {/* Rings ripple out from behind the card, like a heartbeat. */}
+          <div className="lp-ripples" aria-hidden="true">
+            <i />
+            <i />
+            <i />
           </div>
 
           {ticket ? (
