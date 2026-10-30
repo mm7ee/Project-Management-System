@@ -4,7 +4,6 @@ import { ApiError, api } from "../data/api";
 import { passkeysSupported, signWithPasskey } from "../data/passkeys";
 import { COMPANY_URL } from "../brand";
 import PulseMark from "./PulseMark";
-import PulseMonitor from "./PulseMonitor";
 import "./landing.css";
 
 // The lifecycle as one heartbeat trace: each beat is stronger as a project comes to life.
@@ -58,7 +57,6 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
         <span />
       </div>
       <div className="lp-paper" aria-hidden="true" />
-      <PulseMonitor className="lp-monitor" />
 
       <header className="lp-top">
         <span className="lp-brand">
