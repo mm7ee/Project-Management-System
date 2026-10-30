@@ -1929,10 +1929,9 @@ a.nav-item { text-decoration: none; }
 .brand .pulse-word { font-size: 22px; }
 .brand .pulse-line { width: 52px; height: 14px; }
 
-/* Ask Pulse beats: a lub-dub on the button, with a ring rippling out on each beat. */
+/* Ask Pulse beats while you hover over it (or tab to it): a lub-dub, with a ring rippling out on each beat. */
 @media (prefers-reduced-motion: no-preference) {
-  .ask-btn { animation: ask-lub 1.3s ease-in-out infinite; }
-  .ask-btn:hover, .ask-btn:focus-visible { animation-play-state: paused; }
+  .ask-btn:hover, .ask-btn:focus-visible { animation: ask-lub 1.3s ease-in-out infinite; }
 }
 @keyframes ask-lub {
   0%, 42%, 100% { transform: scale(1); box-shadow: 0 6px 18px color-mix(in srgb, var(--violet) 30%, transparent), 0 0 0 0 color-mix(in srgb, var(--cyan) 55%, transparent); }
