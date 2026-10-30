@@ -45,7 +45,7 @@ export default function Sidebar(p: Props) {
           <a href={COMPANY_URL} target="_blank" rel="noopener noreferrer" className="logo-link" title="Omni Contact website">
             <img src="/omni-logo-white.png" alt="Omni Contact" />
           </a>
-          {/* Reads as "Omni Pulse" with the logo, rather than repeating "Omni". */}
+          {/* The system's name, beside the company logo. */}
           <PulseMark />
         </div>
 

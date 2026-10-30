@@ -27,7 +27,7 @@ import { StageBar } from "./reports/Charts";
 import { COMPANY_URL } from "../brand";
 
 /**
- * The public showcase at /executive: how OmniPulse works and how the portfolio is doing, for
+ * The public showcase at /executive: how Pulse works and how the portfolio is doing, for
  * leadership. No sign-in, so it shows totals only; no names of systems, people or blockers.
  * Nothing in the tracker links here; the address is shared directly.
  */
@@ -64,10 +64,10 @@ export default function ExecutivePage() {
         </header>
 
         <section className="exec-hero">
-          <span className="exec-eyebrow">OmniPulse · Executive overview</span>
+          <span className="exec-eyebrow">Pulse · Executive overview</span>
           <h1>How the systems team tracks every build</h1>
           <p>
-            OmniPulse is where the Omni Contact systems team plans, builds and runs every internal system. Below is how it works,
+            Pulse is where the Omni Contact systems team plans, builds and runs every internal system. Below is how it works,
             and how the portfolio stands right now.
             {data && ` Live figures as of ${new Date(data.generatedAt).toLocaleString("en-GB", { dateStyle: "long", timeStyle: "short" })}.`}
           </p>
@@ -84,7 +84,7 @@ export default function ExecutivePage() {
         <HowItWorks stallDays={data?.stallDays ?? 14} />
 
         <footer className="exec-foot">
-          © {year} Omni Contact · OmniPulse. Figures are live totals; individual systems and people are visible to staff only.
+          © {year} Omni Contact · Pulse. Figures are live totals; individual systems and people are visible to staff only.
         </footer>
       </div>
     </TooltipLayer>
@@ -181,7 +181,7 @@ function HowItWorks({ stallDays }: { stallDays: number }) {
   const stages = ["Idea", "Upcoming", "In progress", "Testing", "To deploy", "Live"];
   return (
     <section className="viz-card exec-how">
-      <h3>How OmniPulse works</h3>
+      <h3>How Pulse works</h3>
       <p className="viz-sub">The systems team's single place to plan, build and run every internal system.</p>
 
       <div className="exec-flow" aria-label="Lifecycle of a system">

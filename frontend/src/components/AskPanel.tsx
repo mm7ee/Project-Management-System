@@ -51,7 +51,7 @@ function CopyAnswer({ text }: { text: string }) {
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /**
- * Ask OmniPulse: plain-English questions answered by the server from the live data.
+ * Ask Pulse: plain-English questions answered by the server from the live data.
  * The conversation stays while the page is open; follow-ups carry the last two turns.
  */
 export default function AskPanel({ open, onClose, systems, users, features, me, developer, onOpenProject }: Props) {
@@ -158,7 +158,7 @@ export default function AskPanel({ open, onClose, systems, users, features, me, 
       }
       show(answer.trim() || "Sorry, I couldn't put an answer together. Try asking another way.");
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : "Couldn't reach OmniPulse. Check your connection.";
+      const msg = e instanceof ApiError ? e.message : "Couldn't reach Pulse. Check your connection.";
       setTurns((t) => t.map((x, i) => (i === t.length - 1 ? { ...x, error: msg } : x)));
     } finally {
       setBusy(false);
@@ -259,13 +259,13 @@ export default function AskPanel({ open, onClose, systems, users, features, me, 
   if (!open) return null;
   return (
     <div className="backdrop drawer-backdrop ask-backdrop no-print" onClick={onClose}>
-      <aside className="drawer ask" role="dialog" aria-label="Ask OmniPulse" onClick={(e) => e.stopPropagation()}>
+      <aside className="drawer ask" role="dialog" aria-label="Ask Pulse" onClick={(e) => e.stopPropagation()}>
         <header className="ask-head">
           <span className="ask-badge">
             <Sparkles size={18} />
           </span>
           <div>
-            <h2>Ask OmniPulse</h2>
+            <h2>Ask Pulse</h2>
             <p>
               {developer
                 ? "Your work assistant: priorities, drafts, task breakdowns and tech help."

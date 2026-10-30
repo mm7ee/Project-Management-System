@@ -17,7 +17,7 @@ export const PILLARS = [
 export type SignoffStatus = "PENDING" | "APPROVED" | "DECLINED";
 
 export interface Signatory {
-  userId?: string; // an OmniPulse account: they sign in the app. Unset for someone without one.
+  userId?: string; // a Pulse account: they sign in the app. Unset for someone without one.
   name: string;
   primary: boolean; // the primary signatory
   remarks: string;

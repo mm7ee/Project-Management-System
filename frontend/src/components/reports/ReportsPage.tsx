@@ -168,7 +168,7 @@ export default function ReportsPage({ systems, users, requests, features, blocke
   const scopeText = `${SCOPES.find((s) => s.key === scope)!.label}${lead ? ` · lead: ${userName(lead)}` : ""}`;
 
   const copyBrief = async () => {
-    const text = [`OmniPulse brief (${generated}, ${scopeText})`, ...brief.lines.map((l) => `• ${l.text}`)].join("\n");
+    const text = [`Pulse brief (${generated}, ${scopeText})`, ...brief.lines.map((l) => `• ${l.text}`)].join("\n");
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -203,7 +203,7 @@ export default function ReportsPage({ systems, users, requests, features, blocke
     const blob = new Blob([[header.join(","), ...lines].join("\r\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `omnipulse-report-${new Date(now).toISOString().slice(0, 10)}.csv`;
+    a.download = `pulse-report-${new Date(now).toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -233,7 +233,7 @@ export default function ReportsPage({ systems, users, requests, features, blocke
     const blob = new Blob([[header.join(","), ...lines].join("\r\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `omnipulse-feature-requests-${new Date(now).toISOString().slice(0, 10)}.csv`;
+    a.download = `pulse-feature-requests-${new Date(now).toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   };
@@ -249,7 +249,7 @@ export default function ReportsPage({ systems, users, requests, features, blocke
             </p>
           </div>
           <nav aria-label="Breadcrumb" className="d-crumbs">
-            OmniPulse <ChevronRight size={14} /> <b>Reports</b>
+            Pulse <ChevronRight size={14} /> <b>Reports</b>
           </nav>
         </header>
 

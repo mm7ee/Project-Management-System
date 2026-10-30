@@ -1,4 +1,4 @@
-// OmniPulse Worker: serves the built app (ASSETS) and the JSON API under /api.
+// Pulse Worker: serves the built app (ASSETS) and the JSON API under /api.
 // Every permission check happens here; the UI only hides what a user can't do.
 
 import {
@@ -48,7 +48,7 @@ import {
 } from "../src/data/roles";
 
 const COOKIE = "omni_session";
-/** Ask OmniPulse: questions per person per window, kept per Worker instance (a guard, not a quota). */
+/** Ask Pulse: questions per person per window, kept per Worker instance (a guard, not a quota). */
 const ASK_LIMIT = 20;
 const ASK_WINDOW_MS = 10 * 60_000;
 const askLog = new Map<string, number[]>();
@@ -666,7 +666,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
 
   // Everything below needs a signed-in user.
   // A view-only share link stands in for a signed-in user: read-only, and only while the link
-  // is valid. It may load the data and project history, ask Ask OmniPulse, and request updates
+  // is valid. It may load the data and project history, ask Ask Pulse, and request updates
   // (or withdraw its own requests); nothing else.
   const shareToken = req.headers.get("x-share-token");
   const guest = shareToken
@@ -717,7 +717,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   const perms: Permission[] = guest ? ["reports", "request_updates"] : permissionsFor(me.role, matrix);
   const can = (p: Permission) => perms.includes(p);
   // Developers (without manage_features) see only the feature requests assigned to them or
-  // logged by them: everywhere, including Ask OmniPulse and project history.
+  // logged by them: everywhere, including Ask Pulse and project history.
   const ownFeaturesOnly = me.role === "developer" && !can("manage_features");
   const mineOnly = (rows: FeatureRow[]) => (ownFeaturesOnly ? rows.filter((f) => f.assignee === me.id || f.created_by === me.id) : rows);
   const need = (p: Permission) => {
@@ -1137,9 +1137,9 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     });
   }
 
-  // Ask OmniPulse: a plain-English question answered from the data every signed-in user can see.
+  // Ask Pulse: a plain-English question answered from the data every signed-in user can see.
   if (path === "/api/ask" && method === "POST") {
-    if (!env.AI) throw new HttpError(503, "Ask OmniPulse isn't switched on for this server");
+    if (!env.AI) throw new HttpError(503, "Ask Pulse isn't switched on for this server");
     const b = await body<{ question?: string; history?: AskTurn[] }>(req);
     const question = String(b.question ?? "").trim();
     if (!question) throw new HttpError(400, "Type a question");

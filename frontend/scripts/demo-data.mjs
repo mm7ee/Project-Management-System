@@ -56,7 +56,7 @@ const slug = (s) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 
-const out = ["-- OmniPulse demo data. Remove with scripts/demo-data.mjs remove.", REMOVE];
+const out = ["-- Pulse demo data. Remove with scripts/demo-data.mjs remove.", REMOVE];
 
 // ---------- people ----------
 const PEOPLE = [
@@ -216,7 +216,7 @@ PROJECTS.forEach(([name, status, description, leadKey, devKeys, startedDays, len
       date: dateAgo(x.pcn === "DRAFT" ? 5 : x.pcn === "PENDING" ? 9 : 35),
       type: x.pcn === "DRAFT" ? "Process improvement" : "New system",
       background: `${description} Today this is handled manually with spreadsheets and email, which is slow and hard to report on.`,
-      concept: `Build ${name} as an OmniPulse-managed system owned by the Systems Team, rolled out to one campaign first.`,
+      concept: `Build ${name} as an Pulse-managed system owned by the Systems Team, rolled out to one campaign first.`,
       mechanics: "Discovery workshops with operations, a two-week prototype, pilot on one campaign, then full rollout.",
       objectives: "Reduce manual effort by 40%, give managers live reporting, and improve client satisfaction scores.",
       mainPillar: x.pcn === "DRAFT" ? "Innovation" : "Customer",
@@ -368,7 +368,7 @@ systems.forEach((s, i) => {
 });
 
 // ---------- the real team on demo projects ----------
-// Existing OmniPulse developers join demo projects, lead some, and take demo requests. Each
+// Existing Pulse developers join demo projects, lead some, and take demo requests. Each
 // statement only applies if that account exists, and everything hangs off demo- rows, so
 // "remove" clears it too. Two projects each keeps them under the project limit.
 const TEAM = [

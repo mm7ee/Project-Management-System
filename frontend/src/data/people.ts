@@ -7,7 +7,7 @@ import type { User } from "./roles";
 export type ContactKind = "email" | "teams" | "whatsapp" | "call";
 
 export function contactLinks(p: User, about: string): { kind: ContactKind; label: string; href: string }[] {
-  const subject = `OmniPulse: ${about}`;
+  const subject = `Pulse: ${about}`;
   const links: { kind: ContactKind; label: string; href: string }[] = [];
   if (p.email) {
     links.push({ kind: "email", label: "Email", href: `mailto:${p.email}?subject=${encodeURIComponent(subject)}` });

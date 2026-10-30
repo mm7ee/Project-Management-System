@@ -63,7 +63,7 @@ export default function ForcePasswordChange({ message, who, onDone }: Props) {
           </div>
           <p className="lp-note">
             {policyChange
-              ? "OmniPulse now follows the Omni Contact password policy (ISO 27001 A.5.17). Choose a new password to continue."
+              ? "Pulse now follows the Omni Contact password policy (ISO 27001 A.5.17). Choose a new password to continue."
               : "You signed in with a password issued by an administrator. Choose your own to continue; the temporary one stops working."}{" "}
             Never share it with anyone, including the IT helpdesk.
           </p>

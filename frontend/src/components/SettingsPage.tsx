@@ -236,7 +236,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
           <div className="set-row">
             <div>
               <b>Pop-up transparency</b>
-              <span>How much of the page shows through windows that open: forms, the Ask OmniPulse panel, menus and tooltips.</span>
+              <span>How much of the page shows through windows that open: forms, the Ask Pulse panel, menus and tooltips.</span>
             </div>
             <div className="glass-pick">
               <input
@@ -262,7 +262,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
           <div className="set-row">
             <div>
               <b>Start section</b>
-              <span>{viewOnly ? "What OmniPulse opens on when you open this link." : "What the dashboard opens on after you sign in."}</span>
+              <span>{viewOnly ? "What Pulse opens on when you open this link." : "What the dashboard opens on after you sign in."}</span>
             </div>
             <select className="set-select" value={prefs.start} onChange={(e) => setPref("start", e.target.value)} aria-label="Start section">
               {startOptions.map((o) => (
@@ -280,7 +280,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
         <Section
           icon={<KeyRound size={18} />}
           title="Password"
-          sub="Never share your password with anyone, including the IT helpdesk. OmniPulse staff will never ask for it."
+          sub="Never share your password with anyone, including the IT helpdesk. Pulse staff will never ask for it."
         >
           <form
             className="set-form"
@@ -378,19 +378,19 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
           </>
         )}
         {viewOnly && (
-          <Section icon={<Eye size={18} />} title="About this link" sub="You're browsing OmniPulse through a view-only link.">
+          <Section icon={<Eye size={18} />} title="About this link" sub="You're browsing Pulse through a view-only link.">
             <ul className="perm-list plain">
               <li className="perm-item">
                 <Check size={14} /> See the dashboard, projects, feature requests, Concept Notes and reports, live
               </li>
               <li className="perm-item">
-                <Check size={14} /> Ask OmniPulse questions about the work
+                <Check size={14} /> Ask Pulse questions about the work
               </li>
               <li className="perm-item">
                 <Check size={14} /> Request updates on projects (open a project, then Request update)
               </li>
               <li className="perm-item">
-                <Check size={14} /> Change how OmniPulse looks here (saved in this browser only)
+                <Check size={14} /> Change how Pulse looks here (saved in this browser only)
               </li>
             </ul>
             <p className="set-note">

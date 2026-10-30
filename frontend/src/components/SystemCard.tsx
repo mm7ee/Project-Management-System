@@ -166,7 +166,7 @@ export default function SystemCard({ system, now, lead, developers, requests, mi
           {lead?.email && (
             <a
               className="icon-link"
-              href={`mailto:${lead.email}?subject=${encodeURIComponent(`OmniPulse: ${system.name}`)}`}
+              href={`mailto:${lead.email}?subject=${encodeURIComponent(`Pulse: ${system.name}`)}`}
               title={`Email ${lead.name}`}
               aria-label={`Email ${lead.name}`}
             >

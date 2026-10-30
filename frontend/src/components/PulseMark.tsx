@@ -1,6 +1,6 @@
 /**
- * The "Pulse" half of the OmniPulse name, set beside the Omni Contact logo so the two read as
- * one name without repeating "Omni": a heartbeat line that keeps beating over the word.
+ * The system's name, set beside the Omni Contact logo: a heartbeat line that keeps beating
+ * over the word "Pulse".
  */
 export default function PulseMark({ tone = "light" }: { tone?: "light" | "dark" }) {
   return (
