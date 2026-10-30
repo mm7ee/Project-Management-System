@@ -1,8 +1,9 @@
 import ParticleField from "./ParticleField";
+import PulseMonitor from "./PulseMonitor";
 import "./landing.css";
 
 /**
- * The landing page's backdrop (aurora glow, moving grid floor, particle network), fixed
+ * The sign-in page's backdrop (aurora glow, ECG paper, the monitor trace, particle network), fixed
  * behind the whole app for the Futuristic theme.
  */
 export default function FuturisticBackdrop() {
@@ -13,7 +14,8 @@ export default function FuturisticBackdrop() {
         <span />
         <span />
       </div>
-      <div className="lp-floor" />
+      <div className="lp-paper" />
+      <PulseMonitor className="app-monitor" />
       <ParticleField className="lp-particles" />
     </div>
   );

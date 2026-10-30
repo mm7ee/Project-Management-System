@@ -25,18 +25,6 @@
 .lp-aurora span:nth-child(2) { width: 38vw; height: 38vw; right: -10vw; top: 18vh; background: #053b7a; animation-duration: 28s; }
 .lp-aurora span:nth-child(3) { width: 26vw; height: 26vw; left: 38vw; bottom: -12vw; background: #f2a900; opacity: 0.22; animation-duration: 18s; }
 
-.lp-floor {
-  position: absolute; left: -50%; right: -50%; bottom: -10%; height: 55%; z-index: -2;
-  background-image:
-    linear-gradient(rgba(27, 169, 225, 0.22) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(27, 169, 225, 0.22) 1px, transparent 1px);
-  background-size: 60px 60px;
-  transform: perspective(500px) rotateX(62deg);
-  transform-origin: center top;
-  mask-image: linear-gradient(to bottom, transparent, #000 35%, #000 70%, transparent);
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 35%, #000 70%, transparent);
-  animation: lp-floor 6s linear infinite;
-}
 
 /* ---------- Top bar ---------- */
 .lp-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 22px clamp(16px, 4vw, 56px); }
@@ -149,7 +137,6 @@
 /* ---------- Keyframes ---------- */
 @keyframes lp-in { from { opacity: 0; transform: translateY(18px); } }
 @keyframes lp-drift { to { transform: translate(6vw, 4vh) scale(1.12); } }
-@keyframes lp-floor { to { background-position: 0 60px, 0 0; } }
 @keyframes lp-ping { 70%, 100% { box-shadow: 0 0 0 8px rgba(46, 230, 166, 0); } }
 @keyframes lp-angle { to { --angle: 360deg; } }
 @keyframes lp-shine { 0%, 60% { left: -60%; } 100% { left: 130%; } }

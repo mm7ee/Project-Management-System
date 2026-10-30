@@ -1589,14 +1589,6 @@ a.nav-item { text-decoration: none; }
 .dl-aurora span:nth-child(3) { width: 30vw; height: 30vw; left: 30vw; bottom: -12vw; background: #ffe2a3; opacity: .45; animation-duration: 22s; animation-delay: -4s; }
 .dl-aurora span:nth-child(4) { width: 24vw; height: 24vw; right: 18vw; bottom: 4vh; background: #a8ecd6; opacity: .38; animation-duration: 29s; animation-delay: -15s; }
 
-/* A fine dot grid that pans diagonally, fading out towards the edges. */
-.dl-dots {
-  position: absolute; inset: -60px; z-index: -3;
-  background-image: radial-gradient(rgba(5, 59, 122, 0.2) 1.3px, transparent 1.7px);
-  background-size: 28px 28px;
-  mask-image: radial-gradient(ellipse 75% 70% at 55% 40%, #000 30%, transparent 80%);
-  -webkit-mask-image: radial-gradient(ellipse 75% 70% at 55% 40%, #000 30%, transparent 80%);
-}
 
 /* Soft rings ripple out from one corner, like a signal going out. */
 .dl-rings { position: absolute; right: -140px; top: -140px; width: 520px; height: 520px; z-index: -3; }
@@ -1635,7 +1627,6 @@ a.nav-item { text-decoration: none; }
 :root[data-theme="light"] .progress-fill { background-image: linear-gradient(90deg, #1ba9e1, #5cc8f0); }
 
 @media (prefers-reduced-motion: no-preference) {
-  .dl-dots { animation: dl-pan 40s linear infinite; }
   .dl-rings i { animation: dl-ring 9s cubic-bezier(.2, .6, .3, 1) infinite; }
   .dl-rings i:nth-child(2) { animation-delay: 3s; }
   .dl-rings i:nth-child(3) { animation-delay: 6s; }
@@ -1646,7 +1637,6 @@ a.nav-item { text-decoration: none; }
   50% { transform: translate(6vw, 4vh) scale(1.12); }
   100% { transform: translate(-4vw, 8vh) scale(0.94); }
 }
-@keyframes dl-pan { to { background-position: 280px 280px; } }
 @keyframes dl-ring { 0% { transform: scale(0.25); opacity: 0.9; } 100% { transform: scale(1.6); opacity: 0; } }
 @keyframes dl-shine { 0%, 100% { background-position: 100% 0; } 50% { background-position: 0 0; } }
 @media (prefers-reduced-motion: reduce) { .dl-backdrop * { animation: none !important; } }
@@ -1879,3 +1869,64 @@ a.nav-item { text-decoration: none; }
 :root[data-motion="reduced"] .pulse-beat { animation: none; stroke-dasharray: none; }
 @media (prefers-reduced-motion: reduce) { .pulse-beat { stroke-dasharray: none; } }
 @keyframes pulse-run { 0% { stroke-dashoffset: 1.28; } 70%, 100% { stroke-dashoffset: 0; } }
+
+/* ---------- The pulse, inside the app ---------- */
+/* ECG paper behind the Light theme; the Dark theme shares the sign-in page's. */
+.dl-paper {
+  position: absolute; inset: 0; z-index: -3;
+  background-image:
+    linear-gradient(rgba(5, 59, 122, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(5, 59, 122, 0.1) 1px, transparent 1px),
+    linear-gradient(rgba(5, 59, 122, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(5, 59, 122, 0.04) 1px, transparent 1px);
+  background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+  mask-image: radial-gradient(ellipse 85% 80% at 55% 50%, #000 30%, transparent 90%);
+  -webkit-mask-image: radial-gradient(ellipse 85% 80% at 55% 50%, #000 30%, transparent 90%);
+}
+/* The heart-monitor trace along the foot of the screen, softer here than on the sign-in page. */
+.app-monitor { position: absolute; left: 0; right: 0; bottom: 18px; width: 100%; height: 170px; z-index: -1; opacity: 0.6; pointer-events: none; }
+
+/* The top bar: a greeting, and the portfolio's vital sign. */
+.topbar { flex-wrap: wrap; }
+.topbar h1 { flex: 0 1 auto; font-size: 23px; }
+.topbar .vital { margin-right: auto; }
+.topbar .search { width: 220px; }
+.vital {
+  --vital: var(--st-live);
+  display: inline-flex; align-items: center; gap: 9px; flex: none; padding: 5px 13px 5px 10px; border-radius: 99px;
+  border: 1px solid color-mix(in srgb, var(--vital) 45%, transparent);
+  background: color-mix(in srgb, var(--vital) 10%, transparent);
+  font: inherit; color: var(--heading); cursor: pointer; transition: transform .15s, background .15s;
+}
+.vital:hover, .vital:focus-visible { transform: translateY(-1px); background: color-mix(in srgb, var(--vital) 18%, transparent); outline: 0; }
+.vital-elevated { --vital: var(--amber); }
+.vital-critical { --vital: var(--red); }
+.vital-line { width: 44px; height: 17px; flex: none; overflow: visible; }
+.vital-line path { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; }
+.vital-base { stroke: color-mix(in srgb, var(--vital) 30%, transparent); }
+.vital-beat { stroke: var(--vital); stroke-dasharray: 0.34 1; stroke-dashoffset: 0; }
+.vital-text { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15; }
+.vital-text b { font-size: 13px; color: var(--vital); }
+.vital-text small { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+:root[data-theme="light"] .vital-elevated .vital-text b { color: var(--orange-ink); }
+:root[data-theme="light"] .vital-critical .vital-text b { color: var(--red-ink); }
+:root[data-theme="light"] .vital-steady .vital-text b { color: var(--green-ink); }
+@media (prefers-reduced-motion: no-preference) {
+  /* The heart rate follows the state: calm, quicker, racing. */
+  .vital-beat { stroke-dashoffset: 1.34; animation: vital-run 2.2s linear infinite; }
+  .vital-elevated .vital-beat { animation-duration: 1.5s; }
+  .vital-critical .vital-beat { animation-duration: 0.85s; }
+  .splash .pulse-mark { animation: splash-beat 1.3s ease-in-out infinite; }
+}
+:root[data-motion="reduced"] .vital-beat { animation: none; stroke-dasharray: none; }
+@keyframes vital-run { to { stroke-dashoffset: 0; } }
+@keyframes splash-beat { 0%, 42%, 100% { transform: scale(1); } 12% { transform: scale(1.06); } 24% { transform: scale(1); } 32% { transform: scale(1.03); } }
+.splash .pulse-word { font-size: 34px; }
+.splash .pulse-line { width: 84px; height: 22px; }
+@media print { .vital { display: none; } }
+
+/* The sidebar is narrow: logo and wordmark sized to fit beside each other. */
+.brand { gap: 8px; }
+.brand img { height: 42px; }
+.brand .pulse-word { font-size: 22px; }
+.brand .pulse-line { width: 52px; height: 14px; }

@@ -34,12 +34,20 @@ import ProjectsPage from "./components/ProjectsPage";
 import { awaitingSignature, type SignoffStatus } from "./data/pcn";
 import { mfaRequiredFor, type User } from "./data/roles";
 import AskPanel from "./components/AskPanel";
+import PulseMark from "./components/PulseMark";
+import VitalSign from "./components/VitalSign";
 import WorkspaceBar from "./components/WorkspaceBar";
 
 // A project page has its own address (#/projects/<id>), so it can be bookmarked, opened in a
 // new tab and left with the browser's back button.
 // /executive is a public showcase for leadership: totals only, no sign-in, linked from nowhere.
 const isExecutive = () => /^\/executive\/?$/.test(window.location.pathname);
+
+/** "Good morning" and so on, by the visitor's own clock. */
+const greeting = () => {
+  const hour = new Date().getHours();
+  return hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+};
 
 /** Where a view-only link keeps its display settings (this browser only). */
 const VIEW_PREFS = "omnitrack:view-prefs";
@@ -58,7 +66,9 @@ function Tracker() {
   return (
     <>
       {loading ? (
-        <div className="splash">Loading…</div>
+        <div className="splash" role="status" aria-label="Loading">
+          <PulseMark tone="dark" />
+        </div>
       ) : shareToken && !data ? (
         // A view-only link never falls through to the sign-in screen.
         <div className="share-ended">
@@ -185,6 +195,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   const requestsFor = (id: string) => requests.filter((r) => r.systemId === id);
   const openBlockersFor = (id: string) => blockers.filter((b) => b.systemId === id && !b.resolvedAt);
   const isBlocked = (s: System) => openBlockersFor(s.id).length > 0 || stalledDays(s, now, limits) !== null;
+  // Needing attention, the same way the Dashboard counts it: blocked, stalled, overdue or at risk.
+  const attention = systems.filter((s) => isBlocked(s) || ["OVERDUE", "AT_RISK"].includes(getSchedule(s, now)));
   // Why a developer has too much on; empty when they don't.
   const overloaded = (u: User) => (u.role === "developer" ? workloadOf(u, systems, features, limits, now).reasons : []);
   // Admins and managers can add and remove developers, and are told when someone has too much on.
@@ -330,7 +342,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
 
   return (
     <div className="shell">
-      {resolveTheme(prefs.theme) === "futuristic" ? <FuturisticBackdrop /> : <DaylightBackdrop />}
+      {/* Keyed on the motion setting: the canvases decide once whether to animate. */}
+      {resolveTheme(prefs.theme) === "futuristic" ? <FuturisticBackdrop key={prefs.motion} /> : <DaylightBackdrop key={prefs.motion} />}
       <Sidebar
         me={me}
         view={selectedId ? "project" : view}
@@ -367,7 +380,16 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           <button className="menu-btn" onClick={() => setMenuOpen(true)} aria-label="Open menu">
             <Menu size={20} />
           </button>
-          <h1>Projects Tracker</h1>
+          <h1>{data.viewOnly ? "Welcome" : `${greeting()}, ${me.name.split(" ")[0]}`}</h1>
+          <VitalSign
+            attention={attention.length}
+            total={systems.length}
+            onClick={() => {
+              setFilter(attention.some(isBlocked) ? "BLOCKED" : attention.some((s) => getSchedule(s, now) === "OVERDUE") ? "OVERDUE" : "ALL");
+              setView("projects");
+              if (selectedId) closeProject();
+            }}
+          />
           {(view === "projects" || view === "dashboard") && !selectedId && (
             <>
               <label className="search">

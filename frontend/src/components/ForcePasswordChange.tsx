@@ -31,7 +31,7 @@ export default function ForcePasswordChange({ message, who, onDone }: Props) {
         <span />
         <span />
       </div>
-      <div className="lp-floor" aria-hidden="true" />
+      <div className="lp-paper" aria-hidden="true" />
       <ParticleField className="lp-particles" />
 
       <main className="lp-main lp-single">
