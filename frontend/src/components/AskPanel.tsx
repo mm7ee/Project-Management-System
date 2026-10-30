@@ -143,8 +143,10 @@ export default function AskPanel({ open, onClose, systems, users, features, me, 
           const data = ev.replace(/^data:\s*/m, "").trim();
           if (!data || data === "[DONE]") continue;
           try {
-            const piece = JSON.parse(data).response;
-            if (typeof piece === "string") answer += piece;
+            // Number-only pieces can arrive in `response` as JSON numbers, so don't filter by type.
+            const event = JSON.parse(data);
+            const piece = event.choices?.[0]?.delta?.content ?? event.response;
+            if (piece !== undefined && piece !== null) answer += String(piece);
           } catch {
             // A partial or non-JSON line: skip it.
           }

@@ -1,4 +1,5 @@
-// Cloudflare deployment: one Worker serves the Vite build (assets) and the /api backend,
+// Pulse's app Worker, reached through the "pulse" Worker (gateway/). Keep this name: the MFA_KEY secret
+// lives here and can't be read back to move it. One Worker serves the Vite build (assets) and the /api backend,
 // backed by the D1 database. Deploy with `npm run deploy`; apply schema changes with
 // `npm run db:migrate` (remote D1) before deploying code that depends on them.
 {
@@ -11,7 +12,7 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"]
   },
-  // Workers AI, for Ask OmniTrack. Calls are billed to the account (a generous free daily allowance).
+  // Workers AI, for Ask Pulse. Calls are billed to the account (a generous free daily allowance).
   "ai": { "binding": "AI" },
   "d1_databases": [
     {

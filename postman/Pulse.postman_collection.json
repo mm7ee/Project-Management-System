@@ -1,6 +1,6 @@
 {
   "info": {
-    "name": "OmniTrack API",
+    "name": "Pulse API",
     "description": "\"Public\" is read-only and safe against the live site. \"Authenticated\" creates and deletes data and expects the local QA accounts (qa-admin, qa-viewer, qa-dev): run it against the local server only.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },

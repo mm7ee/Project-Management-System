@@ -1,0 +1,9 @@
+// The "pulse" Worker: Pulse's web address, in front of the app Worker. It rarely changes, so GitHub
+// Actions doesn't deploy it. From frontend/: npx wrangler@4 deploy --config gateway/wrangler.jsonc
+{
+  "name": "pulse",
+  "main": "index.js",
+  "compatibility_date": "2026-10-06",
+  "workers_dev": true,
+  "services": [{ "binding": "APP", "service": "omni-tracker" }]
+}
