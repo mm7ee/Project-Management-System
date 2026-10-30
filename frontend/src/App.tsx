@@ -32,7 +32,7 @@ import ConceptNotesPage from "./components/ConceptNotesPage";
 import DashboardPage from "./components/DashboardPage";
 import ProjectsPage from "./components/ProjectsPage";
 import { awaitingSignature, type SignoffStatus } from "./data/pcn";
-import type { User } from "./data/roles";
+import { mfaRequiredFor, type User } from "./data/roles";
 import AskPanel from "./components/AskPanel";
 import WorkspaceBar from "./components/WorkspaceBar";
 
@@ -483,7 +483,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             prefs={prefs}
             permissions={data.permissions}
             projects={myProjects}
-            mfaRequired={data.mfaPolicy.roles.includes(me.role)}
+            mfaRequired={mfaRequiredFor(me, data.mfaPolicy)}
             recoveryCodesLeft={data.recoveryCodesLeft}
             twoStep={data.twoStep}
             viewOnly={data.viewOnly}

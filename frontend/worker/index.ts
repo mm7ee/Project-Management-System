@@ -39,6 +39,7 @@ import {
   type MfaPolicy,
   START_KEYS,
   cleanPrefs,
+  mfaRequiredFor,
   permissionsFor,
   type Permission,
   type Role,
@@ -708,7 +709,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   // Setting up either method (app or passkey) is allowed before the rest of the app.
   const mfaSetupPaths = ["/api/me/mfa/setup", "/api/me/mfa/enable", "/api/me/passkeys/options", "/api/me/passkeys", "/api/logout", "/api/logout-all"];
   if (me.must_change_password) mfaSetupPaths.push("/api/me/password");
-  if (!guest && policy.roles.includes(me.role) && !mfaSetupPaths.includes(path) && !(await hasMfa(db, me))) {
+  if (!guest && mfaRequiredFor(me, policy) && !mfaSetupPaths.includes(path) && !(await hasMfa(db, me))) {
     throw new HttpError(403, `Hi ${me.name}, your organisation requires two-step verification. Set it up to continue.`, "mfa_setup_required");
   }
 
@@ -954,7 +955,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
 
   if (path === "/api/me/mfa/disable" && method === "POST") {
     if (!(await hasMfa(db, me))) throw new HttpError(400, "Two-step verification is already off");
-    if (policy.roles.includes(me.role)) throw new HttpError(400, `Two-step verification is required for ${ROLE_LABEL[me.role]} accounts`);
+    if (mfaRequiredFor(me, policy)) throw new HttpError(400, `Two-step verification is required for ${ROLE_LABEL[me.role]} accounts`);
     const b = await body<{ password?: string; code?: string }>(req);
     if (!(await verifyPassword(String(b.password ?? ""), me.password_hash))) throw new HttpError(400, "Password is wrong");
     if (!(await checkSecondFactor(db, env, me, String(b.code ?? "")))) throw new HttpError(400, "That code didn't work");
@@ -1009,7 +1010,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     if (!Array.isArray(b.roles)) throw new HttpError(400, "Roles must be a list");
     const next: MfaPolicy = { roles: ROLES.filter((r) => (b.roles as unknown[]).includes(r)) };
     // Requiring it for your own role before you have it would lock you into the setup screen.
-    if (next.roles.includes(me.role) && !(await hasMfa(db, me))) {
+    if (mfaRequiredFor(me, next) && !(await hasMfa(db, me))) {
       throw new HttpError(400, `Turn on two-step verification for yourself first (Settings), then require it for ${ROLE_LABEL[me.role]}s`);
     }
     await db

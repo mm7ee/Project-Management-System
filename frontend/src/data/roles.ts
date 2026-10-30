@@ -53,6 +53,14 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissions = {
   viewer: [],
 };
 
+/** The one account two-step verification is never required for: the default administrator. */
+export const MFA_EXEMPT_USER = "admin";
+
+/** Whether the policy requires two-step for this account: its role is listed and it isn't exempt. */
+export function mfaRequiredFor(user: { id: string; role: Role }, policy: { roles: Role[] }): boolean {
+  return policy.roles.includes(user.role) && !(user.id === MFA_EXEMPT_USER && user.role === "admin");
+}
+
 /** Admins always keep every permission, so nobody can lock the system out of user management. */
 export function permissionsFor(role: Role, matrix: RolePermissions): Permission[] {
   return role === "admin" ? PERMISSIONS.map((p) => p.key) : matrix[role] ?? [];

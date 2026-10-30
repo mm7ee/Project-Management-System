@@ -7,6 +7,8 @@ import {
   PERMISSIONS,
   ROLES,
   ROLE_LABEL,
+  MFA_EXEMPT_USER,
+  mfaRequiredFor,
   type Permission,
   type MfaPolicy,
   type Role,
@@ -158,7 +160,7 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaP
                       {u.mfaMethods?.includes("passkey") && <Fingerprint size={11} aria-label="passkey" />}
                     </span>
                   ) : (
-                    mfaPolicy.roles.includes(u.role) && <span className="flag flag-request">2-step required, not set up</span>
+                    mfaRequiredFor(u, mfaPolicy) && <span className="flag flag-request">2-step required, not set up</span>
                   )}
                 </td>
                 <td>{u.role === "developer" ? projectNames(u.projectIds) || <i className="muted">Not assigned</i> : "—"}</td>
@@ -317,7 +319,7 @@ function MfaPolicyEditor({ me, policy, users, onSave }: { me: User; policy: MfaP
   const [saved, setSaved] = useState(false);
   useEffect(() => setDraft(policy.roles), [policy]);
   const dirty = [...draft].sort().join() !== [...policy.roles].sort().join();
-  const pending = (r: Role) => users.filter((u) => u.role === r && !u.mfaEnabled).length;
+  const pending = (r: Role) => users.filter((u) => u.role === r && !u.mfaEnabled && u.id !== MFA_EXEMPT_USER).length;
   return (
     <section className="matrix-section">
       <header className="page-head">
@@ -332,6 +334,7 @@ function MfaPolicyEditor({ me, policy, users, onSave }: { me: User; policy: MfaP
           {saved && !dirty ? "Saved" : "Save"}
         </button>
       </header>
+      <p className="set-note">The default admin account is the one exception: two-step verification is optional for it.</p>
       <div className="set-card mfa-policy">
         {ROLES.map((r) => (
           <label key={r} className="mfa-check">
@@ -339,14 +342,14 @@ function MfaPolicyEditor({ me, policy, users, onSave }: { me: User; policy: MfaP
               type="checkbox"
               checked={draft.includes(r)}
               // Requiring it for your own role before you have it would lock you out of this page.
-              disabled={r === me.role && !me.mfaEnabled && !draft.includes(r)}
+              disabled={r === me.role && !me.mfaEnabled && me.id !== MFA_EXEMPT_USER && !draft.includes(r)}
               onChange={() => {
                 setSaved(false);
                 setDraft((d) => (d.includes(r) ? d.filter((x) => x !== r) : [...d, r]));
               }}
             />
             Require for {ROLE_LABEL[r]}s
-            {r === me.role && !me.mfaEnabled && <em className="muted"> · turn it on for yourself in Settings first</em>}
+            {r === me.role && !me.mfaEnabled && me.id !== MFA_EXEMPT_USER && <em className="muted"> · turn it on for yourself in Settings first</em>}
             <small>
               {users.filter((u) => u.role === r).length - pending(r)} of {users.filter((u) => u.role === r).length} set up
             </small>
