@@ -1928,3 +1928,16 @@ a.nav-item { text-decoration: none; }
 .brand img { height: 42px; }
 .brand .pulse-word { font-size: 22px; }
 .brand .pulse-line { width: 52px; height: 14px; }
+
+/* Ask Pulse beats: a lub-dub on the button, with a ring rippling out on each beat. */
+@media (prefers-reduced-motion: no-preference) {
+  .ask-btn { animation: ask-lub 1.3s ease-in-out infinite; }
+  .ask-btn:hover, .ask-btn:focus-visible { animation-play-state: paused; }
+}
+@keyframes ask-lub {
+  0%, 42%, 100% { transform: scale(1); box-shadow: 0 6px 18px color-mix(in srgb, var(--violet) 30%, transparent), 0 0 0 0 color-mix(in srgb, var(--cyan) 55%, transparent); }
+  12% { transform: scale(1.06); }
+  24% { transform: scale(1); }
+  32% { transform: scale(1.03); }
+  60% { box-shadow: 0 6px 18px color-mix(in srgb, var(--violet) 30%, transparent), 0 0 0 11px color-mix(in srgb, var(--cyan) 0%, transparent); }
+}
