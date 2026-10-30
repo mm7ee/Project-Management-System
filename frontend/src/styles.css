@@ -1483,12 +1483,6 @@ a.nav-item { text-decoration: none; }
   .viz-svg .viz-hit rect:not([fill="transparent"]) { transform-box: fill-box; transform-origin: 0 50%; animation: grow-x 1s cubic-bezier(.2, .8, .2, 1) backwards; animation-delay: 150ms; }
   .viz-svg .viz-hit:nth-of-type(2n) rect:not([fill="transparent"]) { animation-delay: 230ms; }
   .viz-svg .viz-hit:nth-of-type(3n) rect:not([fill="transparent"]) { animation-delay: 310ms; }
-  /* Figure cards: a light passes across now and then. */
-  .d-kpi::after {
-    content: ""; position: absolute; top: 0; bottom: 0; left: -40%; width: 30%; pointer-events: none;
-    background: linear-gradient(100deg, transparent, color-mix(in srgb, var(--cyan) 10%, transparent), transparent);
-    animation: sweep 7s ease-in-out infinite; animation-delay: calc(var(--i, 0) * 400ms + 2s);
-  }
   .d-kpi { animation: rise .55s cubic-bezier(.2, .8, .2, 1) backwards; animation-delay: calc(var(--i, 0) * 70ms); }
   .d-kpi:hover .d-kpi-icon { animation: pop-in .35s cubic-bezier(.2, .8, .2, 1.4); }
 }
