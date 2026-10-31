@@ -1,9 +1,10 @@
 // Pulse's service worker. Pulse is live data, so nothing is cached except a page to show when the
 // phone has no connection; every request still goes to the network, and new releases arrive as usual.
-const CACHE = "pulse-offline-1";
+// The host serves offline.html at /offline; a browser refuses a redirected page here, so use that address.
+const CACHE = "pulse-offline-2";
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.add("/offline.html")).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.add("/offline")).then(() => self.skipWaiting()));
 });
 
 self.addEventListener("activate", (event) => {
@@ -17,6 +18,6 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.mode === "navigate") {
-    event.respondWith(fetch(event.request).catch(() => caches.match("/offline.html")));
+    event.respondWith(fetch(event.request).catch(() => caches.match("/offline")));
   }
 });
