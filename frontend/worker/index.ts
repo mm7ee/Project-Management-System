@@ -21,17 +21,18 @@ import {
   FEATURE_STATUSES,
   PRIORITIES,
   type Feature,
-  type FeatureKind,
-  type FeatureStatus,
-  type Priority,
 } from "../src/data/features";
 import { DEFAULT_LIMITS, DEFAULT_WORKSPACES, MAX_DOCUMENT_BYTES, formatBytes, type Blocker, type Limits, type ProjectDocument } from "../src/data/project";
 import { buildShowcase } from "../src/data/showcase";
 import { PASSWORD_HISTORY, passwordProblem } from "../src/data/password";
 import type { ProjectTemplate } from "../src/data/templates";
-import { cleanPcn, pcnStatus, type Signatory } from "../src/data/pcn";
+import { awaitingSignature, cleanPcn, pcnStatus, type Pcn, type Signatory } from "../src/data/pcn";
 import { MAX_QUESTION, askStream, buildSnapshot, buildWorkFocus, type AskMode, type AskPerson, type AskTurn } from "./ask";
 import { newChallenge, readClientData, verifyAssertion, verifyRegistration } from "./webauthn";
+import { noteFailure, postToTeams, raise, readDelivery, sendEmail, emailFor, type Alert, type ChannelPost, type Delivery } from "./notify";
+import { runBriefing, runDailyDigests } from "./digest";
+import { toFeature, type FeatureRow } from "./rows";
+import type { AppNotification, DeliveryStatus, Digest, NotificationKind } from "../src/data/notifications";
 import {
   DEFAULT_ROLE_PERMISSIONS,
   ROLES,
@@ -49,6 +50,8 @@ import {
 } from "../src/data/roles";
 
 const COOKIE = "omni_session";
+/** Mondays at 08:00 Harare time. Must match the entry in wrangler.jsonc. */
+const BRIEFING_CRON = "0 6 * * MON";
 /** Ask Pulse: questions per person per window, kept per Worker instance (a guard, not a quota). */
 const ASK_LIMIT = 20;
 const ASK_WINDOW_MS = 10 * 60_000;
@@ -92,42 +95,6 @@ const toUser = (r: UserRow, projectIds: string[] = []): User => ({
   ...(projectIds.length ? { projectIds } : {}),
   ...(r.must_change_password ? { mustChangePassword: true } : {}),
   ...(r.mfa_secret ? { mfaEnabled: true } : {}),
-});
-
-interface FeatureRow {
-  id: string;
-  system_id: string;
-  title: string;
-  description: string;
-  kind: FeatureKind;
-  client: string;
-  status: FeatureStatus;
-  priority: Priority;
-  assignee: string | null;
-  notes: string | null;
-  due_at: string | null;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-  completed_at: string | null;
-}
-
-const toFeature = (r: FeatureRow): Feature => ({
-  id: r.id,
-  systemId: r.system_id,
-  title: r.title,
-  description: r.description,
-  kind: r.kind,
-  client: r.client,
-  status: r.status,
-  priority: r.priority,
-  createdBy: r.created_by,
-  createdAt: r.created_at,
-  updatedAt: r.updated_at,
-  ...(r.assignee ? { assignee: r.assignee } : {}),
-  ...(r.notes ? { notes: r.notes } : {}),
-  ...(r.due_at ? { dueAt: r.due_at } : {}),
-  ...(r.completed_at ? { completedAt: r.completed_at } : {}),
 });
 
 interface ShareLinkRow {
@@ -463,14 +430,72 @@ const ACTIVITY_KINDS: Record<string, string[]> = {
   systems: ["system_created", "system_progress", "system_updated", "system_developers", "system_deleted", "request_created", "request_dismissed", "template_created", "template_deleted", "pcn_updated", "pcn_signed"],
   features: ["feature_created", "feature_updated", "feature_deleted"],
   project: ["document_added", "document_removed", "blocker_raised", "blocker_resolved", "blocker_reopened", "blocker_deleted"],
-  admin: ["user_created", "user_updated", "user_password_reset", "user_deleted", "roles_updated", "limits_updated", "mfa_reset", "mfa_policy_updated"],
+  admin: ["user_created", "user_updated", "user_password_reset", "user_deleted", "roles_updated", "limits_updated", "mfa_reset", "mfa_policy_updated", "delivery_updated", "digest_sent"],
 };
+
+// ---------- email and Teams settings ----------
+
+const TEAMS_HOSTS = [".logic.azure.com", ".powerplatform.com", ".powerautomate.com"];
+
+function checkTeamsWebhook(v: string): string {
+  let url: URL;
+  try {
+    url = new URL(v.trim());
+  } catch {
+    throw new HttpError(400, "That Teams address doesn't look right");
+  }
+  if (url.protocol !== "https:" || !TEAMS_HOSTS.some((h) => url.hostname.endsWith(h))) {
+    throw new HttpError(400, "Use the webhook address from a Teams Workflow: it starts with https:// and ends in logic.azure.com or powerplatform.com");
+  }
+  return url.toString();
+}
+
+async function deliveryStatus(db: D1Database): Promise<DeliveryStatus> {
+  const [delivery, failure, demo] = await Promise.all([
+    readDelivery(db),
+    db.prepare("SELECT value FROM settings WHERE key = 'delivery_error'").first<{ value: string }>(),
+    db.prepare("SELECT COUNT(*) AS n FROM systems WHERE id LIKE 'demo-%'").first<{ n: number }>(),
+  ]);
+  return {
+    email: { configured: !!delivery.resendKey, from: delivery.from ?? "" },
+    teams: { configured: !!delivery.teams },
+    briefingEmails: delivery.briefingEmails ?? [],
+    ...(failure ? { lastError: JSON.parse(failure.value) } : {}),
+    demoProjects: demo?.n ?? 0,
+  };
+}
+
+/** The installable app's description. A view-only link installs as that link, not the sign-in page. */
+function manifest(start: string | null): Response {
+  const view = start && /^\/view\/[A-Za-z0-9_-]{20,}\/?$/.test(start) ? start : null;
+  return new Response(
+    JSON.stringify({
+      id: view ?? "/",
+      name: "Pulse",
+      short_name: "Pulse",
+      description: "Omni Contact's project tracker",
+      start_url: view ?? "/",
+      scope: "/",
+      display: "standalone",
+      background_color: "#071a3d",
+      theme_color: "#071a3d",
+      icons: [
+        { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
+        { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
+        { src: "/icon-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+      ],
+    }),
+    { headers: { "content-type": "application/manifest+json", "cache-control": view ? "no-store" : "public, max-age=3600" } },
+  );
+}
 
 // ---------- the API ----------
 
-async function api(req: Request, env: Env, path: string): Promise<Response> {
+async function api(req: Request, env: Env, path: string, ctx: ExecutionContext): Promise<Response> {
   const db = env.DB;
   const method = req.method;
+
+  if (path === "/api/manifest" && method === "GET") return manifest(new URL(req.url).searchParams.get("start"));
 
   if (path === "/api/login" && method === "POST") {
     const { username, password } = await body<{ username?: string; password?: string }>(req);
@@ -678,7 +703,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     : null;
   if (shareToken && !guest) throw new HttpError(401, "This view-only link has expired or been turned off.", "share_invalid");
   const guestAllowed =
-    (method === "GET" && (path === "/api/data" || /^\/api\/systems\/[a-z0-9-]+\/history$/.test(path))) ||
+    (method === "GET" && (path === "/api/data" || path === "/api/notifications" || /^\/api\/systems\/[a-z0-9-]+\/history$/.test(path))) ||
     (method === "POST" && (path === "/api/ask" || path === "/api/requests")) ||
     (method === "DELETE" && /^\/api\/requests\/[a-f0-9]+$/.test(path));
   if (guest && !guestAllowed) {
@@ -725,6 +750,29 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     if (!can(p)) throw new HttpError(403, "You don't have permission to do that");
   };
   const now = new Date().toISOString();
+
+  // Tell people what needs them, without holding up the request or failing it. Your own actions
+  // don't notify you.
+  const alert = (alerts: Alert[], channel?: ChannelPost) => {
+    const others = alerts.filter((a) => a.userId !== me.id);
+    if (others.length) ctx.waitUntil(raise(env, others, channel).catch((e) => noteFailure(db, "Notification", e)));
+  };
+  const nameOfUser = async (id: string) => (await db.prepare("SELECT name FROM users WHERE id = ?").bind(id).first<{ name: string }>())?.name ?? "Someone";
+  /** Each signatory with an account hears once per project that a Concept Note needs them. */
+  const askToSign = (system: { id: string; name: string }, pcn: Pcn) =>
+    alert(
+      pcn.signatories
+        .filter((s) => s.userId && awaitingSignature(pcn, s.userId))
+        .map((s) => ({
+          userId: s.userId!,
+          kind: "signature" as const,
+          title: `Your signature is needed on "${pcn.title}"`,
+          body: `${me.name} sent you this Concept Note to approve or decline.`,
+          link: "view:pcns",
+          dedupe: `signature:${system.id}`,
+        })),
+      { title: `Concept Note "${pcn.title}" needs signatures`, body: `Waiting for ${pcn.signatories.filter((s) => s.status === "PENDING").map((s) => s.name).join(", ")}.` },
+    );
 
   // A project's workspace must be one on the list.
   const checkWorkspace = async (v: unknown): Promise<string> => {
@@ -782,6 +830,129 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     await db.prepare("UPDATE share_links SET revoked_at = ? WHERE id = ?").bind(now, shareMatch[1]).run();
     await audit(db, req, me, "share_link_revoked", null, { label: row.label });
     return json({ ok: true });
+  }
+
+  // ----- notifications -----
+  if (path === "/api/notifications" && method === "GET") {
+    // A view-only link has no inbox of its own: it reads the latest Monday Briefing.
+    if (guest) {
+      const saved = await db.prepare("SELECT value FROM settings WHERE key = 'latest_briefing'").first<{ value: string }>();
+      const digest = saved ? (JSON.parse(saved.value) as Digest) : null;
+      const items: AppNotification[] = digest ? [{ id: "latest-briefing", kind: "monday_briefing", title: digest.title, body: digest.summary, digest, createdAt: digest.writtenAt ?? now }] : [];
+      return json({ items, unread: 0 });
+    }
+    const [rows, unread] = await Promise.all([
+      db
+        .prepare("SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 40")
+        .bind(me.id)
+        .all<{ id: string; kind: NotificationKind; title: string; body: string; link: string | null; digest: string | null; created_at: string; read_at: string | null }>(),
+      db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE user_id = ? AND read_at IS NULL").bind(me.id).first<{ n: number }>(),
+    ]);
+    return json({
+      items: rows.results.map(
+        (r): AppNotification => ({
+          id: r.id,
+          kind: r.kind,
+          title: r.title,
+          body: r.body,
+          createdAt: r.created_at,
+          ...(r.link ? { link: r.link } : {}),
+          ...(r.digest ? { digest: JSON.parse(r.digest) } : {}),
+          ...(r.read_at ? { readAt: r.read_at } : {}),
+        }),
+      ),
+      unread: unread?.n ?? 0,
+    });
+  }
+
+  if (path === "/api/notifications/read" && method === "POST") {
+    const b = await body<{ id?: string }>(req);
+    if (b.id) await db.prepare("UPDATE notifications SET read_at = ? WHERE id = ? AND user_id = ? AND read_at IS NULL").bind(now, String(b.id), me.id).run();
+    else await db.prepare("UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL").bind(now, me.id).run();
+    return json({ ok: true });
+  }
+
+  // ----- email and Teams delivery (administrators) -----
+  if (path === "/api/settings/delivery" && method === "GET") {
+    need("manage_users");
+    return json(await deliveryStatus(db));
+  }
+
+  if (path === "/api/settings/delivery" && method === "PUT") {
+    need("manage_users");
+    const b = await body<{ resendKey?: string | null; from?: string; teamsWebhook?: string | null; briefingEmails?: string }>(req);
+    const next: Delivery = await readDelivery(db);
+    const changed: string[] = [];
+    if (b.resendKey === null) {
+      delete next.resendKey;
+      changed.push("email disconnected");
+    } else if (b.resendKey) {
+      const key = String(b.resendKey).trim();
+      if (key.length < 10 || key.length > 200 || /\s/.test(key)) throw new HttpError(400, "That API key doesn't look right");
+      next.resendKey = await sealSecret(key, mfaKey(env));
+      changed.push("email key");
+    }
+    if (b.from !== undefined && b.from.trim() !== (next.from ?? "")) {
+      const from = b.from.trim();
+      if (from && !/^([^<>]{1,60}<)?[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+>?$/.test(from)) throw new HttpError(400, 'Send from: an address, or a name and address like "Pulse <pulse@omnicontact.biz>"');
+      next.from = from;
+      changed.push("send-from address");
+    }
+    if (b.teamsWebhook === null) {
+      delete next.teams;
+      changed.push("Teams disconnected");
+    } else if (b.teamsWebhook) {
+      next.teams = await sealSecret(checkTeamsWebhook(String(b.teamsWebhook)), mfaKey(env));
+      changed.push("Teams webhook");
+    }
+    if (b.briefingEmails !== undefined) {
+      const list = [...new Set(String(b.briefingEmails).split(/[,;\s]+/).map((e) => e.trim().toLowerCase()).filter(Boolean))];
+      const bad = list.find((e) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e));
+      if (bad) throw new HttpError(400, `"${bad.slice(0, 60)}" doesn't look like an email address`);
+      if (list.length > 20) throw new HttpError(400, "Up to 20 extra Monday Briefing addresses");
+      if (list.join() !== (next.briefingEmails ?? []).join()) changed.push("extra briefing addresses");
+      next.briefingEmails = list;
+    }
+    await db
+      .prepare("INSERT INTO settings (key, value) VALUES ('delivery', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+      .bind(JSON.stringify(next))
+      .run();
+    // The log says what changed, never the key or the webhook address.
+    if (changed.length) await audit(db, req, me, "delivery_updated", null, { changed });
+    return json(await deliveryStatus(db));
+  }
+
+  if (path === "/api/settings/delivery/test" && method === "POST") {
+    need("manage_users");
+    const delivery = await readDelivery(db);
+    const outcome = async (connected: boolean, send: () => Promise<void>, success: string) => {
+      if (!connected) return "not connected.";
+      try {
+        await send();
+        return success;
+      } catch (e) {
+        return e instanceof Error ? `${e.message}.` : "failed.";
+      }
+    };
+    const mail = emailFor(env, "Test message", "Email from Pulse is working.");
+    const email = await outcome(
+      !!(delivery.resendKey && delivery.from && me.email),
+      () => sendEmail(env, delivery, me.email!, mail.subject, mail.html, mail.text),
+      `sent to ${me.email}.`,
+    );
+    const teams = await outcome(!!delivery.teams, () => postToTeams(env, delivery, { title: "Test message from Pulse", body: `Sent by ${me.name}.` }), "posted.");
+    // A working connection clears the old failure notice.
+    if (!/refused|fail/i.test(email + teams)) await db.prepare("DELETE FROM settings WHERE key = 'delivery_error'").run();
+    return json({ email, teams });
+  }
+
+  if (path === "/api/digests/run" && method === "POST") {
+    need("manage_users");
+    const b = await body<{ kind?: string }>(req);
+    if (b.kind !== "daily" && b.kind !== "briefing") throw new HttpError(400, "Choose the daily digests or the Monday Briefing");
+    const result = b.kind === "daily" ? await runDailyDigests(env) : await runBriefing(env);
+    await audit(db, req, me, "digest_sent", null, { kind: b.kind, ...result });
+    return json(result);
   }
 
   // Edit the workspace list. Each entry may say what it was called before ("was"), so a rename
@@ -1316,6 +1487,13 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       ...removed.map((id) => db.prepare("DELETE FROM assignments WHERE user_id = ? AND system_id = ?").bind(id, systemId)),
     ];
     if (stmts.length) await db.batch(stmts);
+    if (added.length) {
+      const system = await getSystem(db, systemId);
+      alert(
+        added.map((id) => ({ userId: id, kind: "assigned" as const, title: `You were assigned to ${system.name}`, body: `${me.name} added you to this project.`, link: `#/projects/${system.id}` })),
+        { title: `${added.map((id) => byId.get(id)!.name).join(", ")} assigned to ${system.name}`, body: `By ${me.name}.`, link: `#/projects/${system.id}` },
+      );
+    }
     return {
       added: added.map((id) => ({ name: byId.get(id)!.name })),
       removed: removed.map((id) => byId.get(id)?.name ?? id),
@@ -1395,6 +1573,8 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       ...(pcn ? { pcn: true } : {}),
     });
     if (b.developers?.length) await audit(db, req, me, "system_developers", id, { name, ...(await setDevelopers(id, b.developers)) });
+    if (system.lead) alert([{ userId: system.lead, kind: "assigned", title: `You now lead ${name}`, body: `${me.name} made you the lead on this new project.`, link: `#/projects/${id}` }]);
+    if (pcn) askToSign(system, pcn);
     return json(system, 201);
   }
 
@@ -1526,7 +1706,14 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
         ...(next.maintenanceNote && next.maintenanceNote !== current.maintenanceNote ? { note: next.maintenanceNote } : {}),
       });
     }
+    if (pcnChange) askToSign(next, next.pcn!);
     const changed = detailFields.filter((f) => b[f] !== undefined && b[f] !== current[f]);
+    if (changed.includes("lead") && next.lead) {
+      alert(
+        [{ userId: next.lead, kind: "assigned", title: `You now lead ${next.name}`, body: `${me.name} made you the lead on this project.`, link: `#/projects/${id}` }],
+        { title: `${await nameOfUser(next.lead)} now leads ${next.name}`, body: `By ${me.name}.`, link: `#/projects/${id}` },
+      );
+    }
     if (changed.length) {
       await audit(db, req, me, "system_updated", id, {
         name: next.name,
@@ -1573,7 +1760,20 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       .prepare("INSERT INTO requests (id, system_id, requested_by, message, created_at) VALUES (?, ?, ?, ?, ?)")
       .bind(id, system.id, me.id, text(b.message, "Message") ?? "", now)
       .run();
-    await audit(db, req, me, "request_created", system.id, { name: system.name, message: text(b.message, "Message") ?? "" });
+    const asked = text(b.message, "Message") ?? "";
+    await audit(db, req, me, "request_created", system.id, { name: system.name, message: asked });
+    // Everyone working on the project hears: its developers and its lead.
+    const team = (await db.prepare("SELECT user_id FROM assignments WHERE system_id = ?").bind(system.id).all<{ user_id: string }>()).results.map((r) => r.user_id);
+    alert(
+      [...new Set([...team, ...(system.lead ? [system.lead] : [])])].map((userId) => ({
+        userId,
+        kind: "update_requested" as const,
+        title: `${me.name} asked for an update on ${system.name}`,
+        body: asked,
+        link: `#/projects/${system.id}`,
+      })),
+      { title: `${me.name} asked for an update on ${system.name}`, body: asked, link: `#/projects/${system.id}` },
+    );
     return json({ ok: true }, 201);
   }
 
@@ -1850,6 +2050,12 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       ...(f.client ? { client: f.client } : {}),
       ...(f.assignee ? { assignee: f.assignee } : {}),
     });
+    if (f.assignee) {
+      alert(
+        [{ userId: f.assignee, kind: "assigned", title: `New request assigned to you: ${f.title}`, body: `${system.name}, ${f.priority.toLowerCase()} priority. From ${me.name}.`, link: "view:features" }],
+        { title: `${await nameOfUser(f.assignee)} was assigned "${f.title}"`, body: `${system.name}, ${f.priority.toLowerCase()} priority. From ${me.name}.`, link: `#/projects/${system.id}` },
+      );
+    }
     return json(toFeature(f), 201);
   }
 
@@ -1917,6 +2123,13 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       ...(changed.includes("priority") ? { priority: { from: row.priority, to: next.priority } } : {}),
       ...(changed.includes("assignee") ? { assignee: { from: row.assignee, to: next.assignee } } : {}),
     });
+    if (changed.includes("assignee") && next.assignee) {
+      const project = sys ? (JSON.parse(sys.data) as System).name : next.system_id;
+      alert(
+        [{ userId: next.assignee, kind: "assigned", title: `Request assigned to you: ${next.title}`, body: `${project}, ${next.priority.toLowerCase()} priority. From ${me.name}.`, link: "view:features" }],
+        { title: `${await nameOfUser(next.assignee)} was assigned "${next.title}"`, body: `${project}, ${next.priority.toLowerCase()} priority. From ${me.name}.`, link: `#/projects/${next.system_id}` },
+      );
+    }
     return json(toFeature(next));
   }
 
@@ -1944,6 +2157,18 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     for (const id of ids) await getSystem(db, id);
     return ids;
   };
+  /** "You were assigned to X", for projects given through the Users page. */
+  const projectAlerts = async (userId: string, projectIds: string[]): Promise<Alert[]> =>
+    Promise.all(
+      projectIds.map(async (p) => ({
+        userId,
+        kind: "assigned" as const,
+        title: `You were assigned to ${(await getSystem(db, p)).name}`,
+        body: `${me.name} added you to this project.`,
+        link: `#/projects/${p}`,
+      })),
+    );
+
   if (path === "/api/users" && method === "POST") {
     need("manage_users");
     const b = await body<Partial<User> & { password?: string }>(req);
@@ -1974,6 +2199,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       .run();
     if (projectIds.length) {
       await db.batch(projectIds.map((p) => db.prepare("INSERT INTO assignments (user_id, system_id) VALUES (?, ?)").bind(id, p)));
+      alert(await projectAlerts(id, projectIds));
     }
     await audit(db, req, me, "user_created", id, { name: text(b.name, "Name", true), username, role });
     return json({ ok: true, id }, 201);
@@ -2047,6 +2273,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
         ...added.map((p) => db.prepare("INSERT OR IGNORE INTO assignments (user_id, system_id) VALUES (?, ?)").bind(row.id, p)),
         ...removed.map((p) => db.prepare("DELETE FROM assignments WHERE user_id = ? AND system_id = ?").bind(row.id, p)),
       ]);
+      if (added.length) alert(await projectAlerts(row.id, added));
     }
     // Feature requests can only be assigned to developers.
     if (role !== "developer" && row.role === "developer") {
@@ -2083,6 +2310,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       db.prepare("DELETE FROM mfa_challenges WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM requests WHERE requested_by = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM assignments WHERE user_id = ?").bind(userMatch[1]),
+      db.prepare("DELETE FROM notifications WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("UPDATE features SET assignee = NULL WHERE assignee = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM users WHERE id = ?").bind(userMatch[1]),
     ]);
@@ -2180,15 +2408,21 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
 }
 
 export default {
-  async fetch(req: Request, env: Env): Promise<Response> {
+  async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const path = new URL(req.url).pathname;
     if (!path.startsWith("/api/")) return env.ASSETS.fetch(req);
     try {
-      return await api(req, env, path);
+      return await api(req, env, path, ctx);
     } catch (e) {
       if (e instanceof HttpError) return json({ error: e.message, ...(e.code ? { code: e.code } : {}), ...(e.extra ?? {}) }, e.status);
       console.error(e);
       return json({ error: "Something went wrong" }, 500);
     }
+  },
+
+  // The schedule is in wrangler.jsonc: daily digests on weekdays, the Monday Briefing on Mondays.
+  async scheduled(event: { cron: string }, env: Env) {
+    const briefing = event.cron === BRIEFING_CRON;
+    await (briefing ? runBriefing(env) : runDailyDigests(env)).catch((e) => noteFailure(env.DB, briefing ? "Monday Briefing" : "Daily digest", e));
   },
 };

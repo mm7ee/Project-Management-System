@@ -37,6 +37,7 @@ import AskPanel from "./components/AskPanel";
 import PulseMark from "./components/PulseMark";
 import VitalSign from "./components/VitalSign";
 import WorkspaceBar from "./components/WorkspaceBar";
+import NotificationBell from "./components/NotificationBell";
 
 // A project page has its own address (#/projects/<id>), so it can be bookmarked, opened in a
 // new tab and left with the browser's back button.
@@ -408,6 +409,15 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
               )}
             </>
           )}
+          <NotificationBell
+            viewOnly={!!data.viewOnly}
+            onFollow={(link) => {
+              if (link.startsWith("view:")) {
+                setView(link.slice(5) as View);
+                if (selectedId) closeProject();
+              } else window.location.hash = link.slice(1);
+            }}
+          />
           <button className="ask-btn" onClick={() => setAsking(true)} title="Ask a question about projects, people and deadlines">
             <Sparkles size={17} /> <span>Ask Pulse</span>
           </button>

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import {
   Check,
   Eye,
@@ -28,6 +28,8 @@ import PasswordRules from "./PasswordRules";
 import { PASSWORD_MIN, passwordProblem } from "../data/password";
 import { initials, type System } from "../data/systems";
 import { PERMISSIONS, ROLE_LABEL, type Permission, type Prefs, type User } from "../data/roles";
+import { Choice, Section } from "./SettingsParts";
+import { DeliverySection, InstallSection, NotificationPrefs } from "./NotificationSettings";
 
 interface Props {
   me: User;
@@ -42,51 +44,6 @@ interface Props {
   onProfileSaved: () => Promise<void>;
   onSignedOut: () => void;
 }
-
-function Section({ icon, title, sub, children }: { icon: ReactNode; title: string; sub?: string; children: ReactNode }) {
-  return (
-    <section className="set-card">
-      <header className="set-head">
-        <span className="set-icon">{icon}</span>
-        <div>
-          <h3>{title}</h3>
-          {sub && <p>{sub}</p>}
-        </div>
-      </header>
-      {children}
-    </section>
-  );
-}
-
-function Choice<T extends string>({
-  value,
-  options,
-  onChange,
-  label,
-}: {
-  value: T;
-  options: { value: T; label: string; icon?: ReactNode }[];
-  onChange: (v: T) => void;
-  label: string;
-}) {
-  return (
-    <div className="choice" role="radiogroup" aria-label={label}>
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          role="radio"
-          aria-checked={value === o.value}
-          className={value === o.value ? "on" : ""}
-          onClick={() => onChange(o.value)}
-        >
-          {o.icon} {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 
 const GLASS_LABEL: Record<Prefs["glass"], string> = { "1": "Clear", "2": "Light glass", "3": "Frosted", "4": "Heavy frost", "5": "Opaque" };
 
@@ -274,8 +231,14 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
           </div>
         </Section>
 
+        <InstallSection />
+
         {!viewOnly && (
           <>
+
+        <NotificationPrefs prefs={prefs} hasEmail={!!me.email} setPref={setPref} />
+
+        {permissions.includes("manage_users") && <DeliverySection />}
 
         <Section
           icon={<KeyRound size={18} />}

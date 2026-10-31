@@ -34,4 +34,9 @@ interface Env {
   ASSETS: Fetcher;
   AI?: Ai; // Workers AI binding, for Ask Pulse
   MFA_KEY?: string; // encrypts two-step verification secrets; a Worker secret (.dev.vars locally)
+  PUBLIC_URL?: string; // Pulse's address, for links in emails and Teams posts
+}
+
+interface ExecutionContext {
+  waitUntil(promise: Promise<unknown>): void;
 }

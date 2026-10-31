@@ -113,9 +113,11 @@ export interface Prefs {
   start: string; // page to open on sign-in: "DASHBOARD", or a Projects tab (a Filter key)
   projectsView: "grid" | "list"; // how the Projects page lays out projects
   glass: "1" | "2" | "3" | "4" | "5"; // pop-up transparency: 1 see-through … 5 solid
+  emailAlerts: "on" | "off"; // email "you were assigned" and the like, once email is connected
+  emailSummaries: "on" | "off"; // email the daily digest and Monday Briefing
 }
 
-export const DEFAULT_PREFS: Prefs = { theme: "light", motion: "full", density: "comfortable", start: "DASHBOARD", projectsView: "grid", glass: "2" };
+export const DEFAULT_PREFS: Prefs = { theme: "light", motion: "full", density: "comfortable", start: "DASHBOARD", projectsView: "grid", glass: "2", emailAlerts: "on", emailSummaries: "on" };
 
 const PREF_CHOICES: { [K in keyof Prefs]: readonly string[] | null } = {
   theme: ["light", "futuristic", "system"],
@@ -124,6 +126,8 @@ const PREF_CHOICES: { [K in keyof Prefs]: readonly string[] | null } = {
   start: null, // checked against the known sections by the caller
   projectsView: ["grid", "list"],
   glass: ["1", "2", "3", "4", "5"],
+  emailAlerts: ["on", "off"],
+  emailSummaries: ["on", "off"],
 };
 
 /** Keeps only known keys with allowed values; anything else falls back to the default. */

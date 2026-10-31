@@ -3,13 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/favicon.png" />
-    <link rel="apple-touch-icon" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" id="app-manifest" href="/api/manifest" />
+    <meta name="theme-color" content="#071a3d" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Pulse" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pulse</title>
     <script>
       // The old web address moves people to the new one, keeping view-only links and project pages.
       if (location.hostname.indexOf("omni-tracker.") === 0) {
         location.replace("https://pulse." + location.hostname.slice(13) + location.pathname + location.search + location.hash);
+      }
+      // A view-only link added to a home screen should reopen that link, not the sign-in page.
+      if (location.pathname.indexOf("/view/") === 0) {
+        document.getElementById("app-manifest").href = "/api/manifest?start=" + encodeURIComponent(location.pathname);
       }
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />

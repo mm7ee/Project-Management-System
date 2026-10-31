@@ -14,6 +14,11 @@
   },
   // Workers AI, for Ask Pulse. Calls are billed to the account (a generous free daily allowance).
   "ai": { "binding": "AI" },
+  // Pulse's address, for links in emails and Teams posts. Update it if the address ever changes.
+  "vars": { "PUBLIC_URL": "https://pulse.utsa--wanza--ortfolio.workers.dev" },
+  // In UTC; Harare is two hours ahead. Daily digests at 07:00 on weekdays, the Monday Briefing at 08:00.
+  // BRIEFING_CRON in worker/index.ts must match the Monday entry.
+  "triggers": { "crons": ["0 5 * * MON-FRI", "0 6 * * MON"] },
   "d1_databases": [
     {
       "binding": "DB",

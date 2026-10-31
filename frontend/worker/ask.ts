@@ -37,19 +37,20 @@ export interface AskUpdateRequest {
 const DAY = 86_400_000;
 const MONTH = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 /** Dates as the answers should read them: "30 Oct 2026". */
-const day = (iso?: string | null) => {
+export const day = (iso?: string | null) => {
   const d = iso ? new Date(iso) : null;
   return d && !Number.isNaN(d.getTime()) ? `${d.getUTCDate()} ${MONTH[d.getUTCMonth()]} ${d.getUTCFullYear()}` : "";
 };
 /** "due 30 Oct 2026 (in 13 days)" style distance, so the model never does date arithmetic. */
-const dueIn = (iso: string | undefined | null, now: number) => {
+export const dueIn = (iso: string | undefined | null, now: number) => {
   if (!iso) return "-";
   const days = Math.round((Date.parse(iso.slice(0, 10)) - Date.parse(new Date(now).toISOString().slice(0, 10))) / DAY);
-  const when = days === 0 ? "today" : days > 0 ? `in ${days} days` : `${-days} days ago`;
+  const count = Math.abs(days) === 1 ? "1 day" : `${Math.abs(days)} days`;
+  const when = days === 0 ? "today" : days > 0 ? `in ${count}` : `${count} ago`;
   return `${day(iso)} (${when})`;
 };
 /** Field values are typed by users: keep them on one line, short, and free of the separator. */
-const clean = (v: unknown, max = 160) =>
+export const clean = (v: unknown, max = 160) =>
   String(v ?? "")
     .replace(/\s+/g, " ")
     .replace(/\|/g, "/")
@@ -228,6 +229,20 @@ const daysUntil = (iso: string | undefined | null, now: number) =>
   iso ? Math.round((Date.parse(iso.slice(0, 10)) - Date.parse(new Date(now).toISOString().slice(0, 10))) / DAY) : null;
 const daysSince = (iso: string | undefined | null, now: number) => (iso ? Math.floor((now - Date.parse(iso)) / DAY) : null);
 
+/** Suggested working order: overdue first, then by priority, then soonest due, then oldest. */
+export function rankFeatures(list: Feature[], now: number): Feature[] {
+  return [...list].sort((a, b) => {
+    const la = (daysUntil(a.dueAt, now) ?? 99) < 0 ? 0 : 1;
+    const lb = (daysUntil(b.dueAt, now) ?? 99) < 0 ? 0 : 1;
+    return (
+      la - lb ||
+      PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
+      (daysUntil(a.dueAt, now) ?? 999) - (daysUntil(b.dueAt, now) ?? 999) ||
+      a.createdAt.localeCompare(b.createdAt)
+    );
+  });
+}
+
 /**
  * The developer's own work, worked out in advance so the model reads rather than calculates:
  * their projects, their open requests in a suggested order, update requests waiting on them,
@@ -256,17 +271,7 @@ export function buildWorkFocus(input: {
   const myUnassigned = features.filter((f) => !f.assignee && f.createdBy === me.id && isOpen(f));
   const assignedProjects = assignments.filter((a) => a.user_id === me.id).length;
 
-  // Suggested order: overdue first, then by priority, then soonest due, then oldest.
-  const ranked = [...myOpen].sort((a, b) => {
-    const la = (daysUntil(a.dueAt, now) ?? 99) < 0 ? 0 : 1;
-    const lb = (daysUntil(b.dueAt, now) ?? 99) < 0 ? 0 : 1;
-    return (
-      la - lb ||
-      PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
-      (daysUntil(a.dueAt, now) ?? 999) - (daysUntil(b.dueAt, now) ?? 999) ||
-      a.createdAt.localeCompare(b.createdAt)
-    );
-  });
+  const ranked = rankFeatures(myOpen, now);
 
   const lines: string[] = [];
   lines.push(`=== YOUR WORK: you are ${clean(me.name)}, a developer (username ${me.username}) ===`);
