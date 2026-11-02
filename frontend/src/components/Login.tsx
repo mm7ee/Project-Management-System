@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ArrowRight, BellRing, FileBarChart, Fingerprint, KeyRound, LifeBuoy, LockKeyhole, Radio, ShieldCheck, UserRound } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowRight, BellRing, FileBarChart, Fingerprint, KeyRound, LifeBuoy, LockKeyhole, Radio, ShieldCheck, Sparkles, UserRound } from "lucide-react";
 import { ApiError, api } from "../data/api";
 import { passkeysSupported, signWithPasskey } from "../data/passkeys";
 import { COMPANY_URL } from "../brand";
@@ -33,6 +33,34 @@ const FEATURES = [
   { icon: BellRing, label: "Update requests" },
   { icon: FileBarChart, label: "Instant reports" },
 ];
+
+// Real questions Ask Pulse answers from the live data.
+const AI_QUESTIONS = [
+  "Which projects are blocked or stalled, and why?",
+  "What's due in the next 30 days?",
+  "Who has the most projects right now?",
+];
+
+function PulseAI() {
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const timer = setInterval(() => setShown((i) => (i + 1) % AI_QUESTIONS.length), 4000);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <div className="lp-ai lp-in" style={{ animationDelay: "0.55s" }}>
+      <span className="lp-ai-icon" aria-hidden="true">
+        <Sparkles size={18} />
+      </span>
+      <div>
+        <strong>Pulse AI</strong>
+        <p>Ask Pulse in plain English, answered from the live data.</p>
+        <q key={shown}>{AI_QUESTIONS[shown]}</q>
+      </div>
+    </div>
+  );
+}
 
 export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
   const [username, setUsername] = useState("");
@@ -78,7 +106,7 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
             has a <span className="lp-beat">pulse.</span>
           </h1>
           <p className="lp-lede lp-in" style={{ animationDelay: "0.2s" }}>
-            The live heartbeat of the Omni Contact systems team. Follow every build from idea to live, catch what's stalling before it flatlines, and report on all of it in one click.
+            The live heartbeat of Omni Contact's projects. Follow every build from idea to live, catch what's stalling before it flatlines, and report on all of it in one click.
           </p>
 
           <div className="lp-vitals lp-in" style={{ animationDelay: "0.3s" }} role="img" aria-label="Idea, build, test, deploy, live">
@@ -102,6 +130,8 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
               </li>
             ))}
           </ul>
+
+          <PulseAI />
         </section>
 
         <section className="lp-panel lp-in" style={{ animationDelay: "0.3s" }}>
