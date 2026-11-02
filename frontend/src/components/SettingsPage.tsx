@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  Archive,
   Check,
   Eye,
   Fingerprint,
@@ -30,6 +31,7 @@ import { initials, type System } from "../data/systems";
 import { PERMISSIONS, ROLE_LABEL, type Permission, type Prefs, type User } from "../data/roles";
 import { Choice, Section } from "./SettingsParts";
 import { DeliverySection, InstallSection, NotificationPrefs } from "./NotificationSettings";
+import { RETENTION } from "../data/retention";
 
 interface Props {
   me: User;
@@ -337,6 +339,17 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
               </button>
             )}
           </div>
+        </Section>
+
+        <Section icon={<Archive size={18} />} title="Data retention" sub="How long Pulse keeps each kind of record. Anything older is deleted automatically.">
+          <dl className="retention-list">
+            {RETENTION.map((r) => (
+              <div key={r.what}>
+                <dt>{r.what}</dt>
+                <dd>{r.kept}</dd>
+              </div>
+            ))}
+          </dl>
         </Section>
           </>
         )}

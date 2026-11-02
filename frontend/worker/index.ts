@@ -25,6 +25,8 @@ import {
 import { DEFAULT_LIMITS, DEFAULT_WORKSPACES, MAX_DOCUMENT_BYTES, formatBytes, type Blocker, type Limits, type ProjectDocument } from "../src/data/project";
 import { buildShowcase } from "../src/data/showcase";
 import { PASSWORD_HISTORY, passwordProblem } from "../src/data/password";
+import { SESSION_DAYS } from "../src/data/retention";
+import { purgeExpired } from "./retention";
 import type { ProjectTemplate } from "../src/data/templates";
 import { awaitingSignature, cleanPcn, pcnStatus, type Pcn, type Signatory } from "../src/data/pcn";
 import { MAX_QUESTION, askStream, buildSnapshot, buildWorkFocus, type AskMode, type AskPerson, type AskTurn } from "./ask";
@@ -56,7 +58,6 @@ const BRIEFING_CRON = "0 6 * * MON";
 const ASK_LIMIT = 20;
 const ASK_WINDOW_MS = 10 * 60_000;
 const askLog = new Map<string, number[]>();
-const SESSION_DAYS = 7;
 
 class HttpError extends Error {
   constructor(public status: number, message: string, public code?: string, public extra?: Record<string, unknown>) {
@@ -269,9 +270,7 @@ async function startSession(db: D1Database, req: Request, row: UserRow, detail: 
     .prepare("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)")
     .bind(await tokenHash(token), row.id, Date.now() + SESSION_DAYS * 86_400_000)
     .run();
-  await db.prepare("DELETE FROM sessions WHERE expires_at < ?").bind(Date.now()).run();
   await audit(db, req, row, "login", null, { ...detail, ...(row.must_change_password ? { temporaryPassword: true } : {}) });
-  await db.prepare("DELETE FROM activity WHERE at < ?").bind(new Date(Date.now() - AUDIT_DAYS * 86_400_000).toISOString()).run();
   return json({ ok: true }, 200, { "set-cookie": sessionCookie(token, req, SESSION_DAYS * 86_400) });
 }
 
@@ -392,8 +391,6 @@ const text = (v: unknown, field: string, required = false): string | undefined =
 };
 
 // ---------- audit trail ----------
-
-const AUDIT_DAYS = 365;
 
 /** Appends one entry to the activity log. Never fails the request it describes. */
 async function audit(
@@ -2308,6 +2305,9 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       db.prepare("DELETE FROM mfa_recovery WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM password_history WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM mfa_challenges WHERE user_id = ?").bind(userMatch[1]),
+      db.prepare("DELETE FROM webauthn_challenges WHERE user_id = ?").bind(userMatch[1]),
+      db.prepare("DELETE FROM passkeys WHERE user_id = ?").bind(userMatch[1]),
+      db.prepare("DELETE FROM mfa_help_requests WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM requests WHERE requested_by = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM assignments WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM notifications WHERE user_id = ?").bind(userMatch[1]),
@@ -2421,8 +2421,10 @@ export default {
   },
 
   // The schedule is in wrangler.jsonc: daily digests on weekdays, the Monday Briefing on Mondays.
+  // The weekday run also clears out what the retention policy no longer keeps.
   async scheduled(event: { cron: string }, env: Env) {
     const briefing = event.cron === BRIEFING_CRON;
+    if (!briefing) await purgeExpired(env.DB).catch((e) => console.error("Retention clean-up failed", e));
     await (briefing ? runBriefing(env) : runDailyDigests(env)).catch((e) => noteFailure(env.DB, briefing ? "Monday Briefing" : "Daily digest", e));
   },
 };

@@ -173,7 +173,6 @@ export async function runDailyDigests(env: Env, now = Date.now()): Promise<{ cre
   const db = env.DB;
   const w = await loadWork(db, now);
   const date = localDate(now);
-  await db.prepare("DELETE FROM notifications WHERE created_at < ?").bind(new Date(now - 90 * DAY).toISOString()).run();
   const total = { created: 0, emailed: 0 };
   for (const me of w.people.filter((p) => p.role === "developer")) {
     const dedupe = `daily:${date}`;
