@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { CalendarClock, Plus, Search, StickyNote, X } from "lucide-react";
 import type { System } from "../data/systems";
 import type { User } from "../data/roles";
-import { KIND_META, PRIORITIES, PRIORITY_META, byUrgency, isLate, isOpen, type Feature } from "../data/features";
+import { FEATURE_KINDS, KIND_META, PRIORITIES, PRIORITY_META, byUrgency, isLate, isOpen, type Feature, type FeatureKind } from "../data/features";
 import { formatDate } from "../time";
 import CountUp from "./CountUp";
 import { FeatureStatusPill, PriorityBadge } from "./FeatureModal";
@@ -23,6 +23,16 @@ interface Props {
 type Who = "mine" | "all";
 type State = "open" | "done" | "all";
 type Focus = "" | "urgent" | "late" | "completed";
+/** What the search box looks in. */
+type SearchIn = "all" | "feature" | "project" | "client" | "developer";
+const SEARCH_IN: { key: SearchIn; label: string; hint: string }[] = [
+  { key: "all", label: "Search everything", hint: "Search features, projects, clients, developers…" },
+  { key: "feature", label: "By feature", hint: "Search by feature name or details…" },
+  { key: "project", label: "By project", hint: "Search by project name…" },
+  { key: "client", label: "By client", hint: "Search by client…" },
+  { key: "developer", label: "By developer", hint: "Search by developer…" },
+];
+const UNASSIGNED = "__none";
 
 export default function FeaturesPage({ features, systems, users, me, now, canManage, ownOnly = false, workspaces, onOpen, onNew }: Props) {
   const mineCount = features.filter((f) => f.assignee === me.id).length;
@@ -37,6 +47,9 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
     return w && workspaces.includes(w) ? w : workspaces[0];
   };
   const [query, setQuery] = useState("");
+  const [searchIn, setSearchIn] = useState<SearchIn>("all");
+  const [kind, setKind] = useState<FeatureKind | "">("");
+  const [developer, setDeveloper] = useState(""); // a user id, UNASSIGNED, or "" for anyone
   // Set by clicking a figure card: narrows the list to exactly what that card counts.
   const [focus, setFocus] = useState<Focus>("");
   const listRef = useRef<HTMLDivElement>(null);
@@ -47,12 +60,31 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
   const inWorkspace = (f: Feature) => !workspace || wsOf(f.systemId) === workspace;
   const scoped = (who === "mine" ? features.filter((f) => f.assignee === me.id) : features).filter(inWorkspace);
   const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const projectOf = (f: Feature) => systems.find((s) => s.id === f.systemId)?.name ?? "";
+    const developerOf = (f: Feature) => users.find((u) => u.id === f.assignee)?.name ?? "";
+    const fields = (f: Feature) =>
+      searchIn === "feature"
+        ? [f.title, f.description, f.notes ?? ""]
+        : searchIn === "project"
+          ? [projectOf(f)]
+          : searchIn === "client"
+            ? [f.client]
+            : searchIn === "developer"
+              ? [developerOf(f)]
+              : [f.title, f.description, f.client, f.notes ?? "", projectOf(f), developerOf(f), KIND_META[f.kind]];
+    // Every word must appear somewhere in the chosen fields, so "lms export" finds an export request on the LMS.
+    const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
     return scoped
       .filter((f) => (state === "open" ? isOpen(f) : state === "done" ? !isOpen(f) : true))
       .filter((f) => !priority || f.priority === priority)
       .filter((f) => !project || f.systemId === project)
-      .filter((f) => !q || [f.title, f.description, f.client, f.notes ?? ""].some((t) => t.toLowerCase().includes(q)))
+      .filter((f) => !kind || f.kind === kind)
+      .filter((f) => !developer || (developer === UNASSIGNED ? !f.assignee : f.assignee === developer))
+      .filter((f) => {
+        if (!words.length) return true;
+        const text = fields(f).join(" ").toLowerCase();
+        return words.every((w) => text.includes(w));
+      })
       .filter((f) =>
         focus === "urgent"
           ? f.priority === "CRITICAL" || f.priority === "HIGH"
@@ -63,7 +95,7 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
               : true,
       )
       .sort((a, b) => Number(!isOpen(a)) - Number(!isOpen(b)) || byUrgency(a, b));
-  }, [scoped, state, priority, project, query, focus, now, systems, workspaces, workspace]);
+  }, [scoped, state, priority, project, kind, developer, query, searchIn, focus, now, systems, users, workspaces, workspace]);
 
   const open = scoped.filter(isOpen);
   const stats: { value: number; label: string; tone: string; focus: Focus; state: State }[] = [
@@ -78,13 +110,15 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
     { value: open.filter((f) => isLate(f, now)).length, label: "Past delivery date", tone: "amber", focus: "late", state: "open" },
     { value: scoped.filter((f) => f.status === "COMPLETED").length, label: "Completed", tone: "green", focus: "completed", state: "done" },
   ];
-  const activeCard = stats.find((c) => c.focus === focus && c.state === state && !priority && !project && !query);
+  const activeCard = stats.find((c) => c.focus === focus && c.state === state && !priority && !project && !kind && !developer && !query);
   const showCard = (c: (typeof stats)[number]) => {
     setPicked((p) => ({ label: c.label, n: (p?.n ?? 0) + 1 }));
     setFocus(c.focus);
     setState(c.state);
     setPriority("");
     setProject("");
+    setKind("");
+    setDeveloper("");
     setQuery("");
     requestAnimationFrame(() => listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
@@ -97,6 +131,21 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
       (cell === "status" && lit.focus === "completed"))
       ? "hl-cell"
       : "";
+  // Anything narrowing the list beyond the default view, so it can all be cleared at once.
+  const filtered = !!(priority || project || kind || developer || workspace || query || focus || state !== "open");
+  const clearAll = () => {
+    setPriority("");
+    setProject("");
+    setKind("");
+    setDeveloper("");
+    setWorkspace("");
+    setQuery("");
+    setFocus("");
+    setState("open");
+  };
+  // Developers who have requests, for the developer filter.
+  const developers = users.filter((u) => scoped.some((f) => f.assignee === u.id)).sort((a, b) => a.name.localeCompare(b.name));
+  const searchHint = SEARCH_IN.find((o) => o.key === searchIn)!.hint;
   const systemName = (id: string) => systems.find((s) => s.id === id)?.name ?? "—";
   const userName = (id?: string) => users.find((u) => u.id === id)?.name;
 
@@ -135,7 +184,24 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
         ))}
       </section>
 
-      <div ref={listRef} className="viz-filters" role="group" aria-label="Filter feature requests">
+      <div ref={listRef} className="feature-search" role="search">
+        <select value={searchIn} onChange={(e) => setSearchIn(e.target.value as SearchIn)} aria-label="Search in">
+          {SEARCH_IN.map((o) => (
+            <option key={o.key} value={o.key}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <Search size={17} />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={searchHint} aria-label="Search feature requests" />
+        {query && (
+          <button className="feature-search-clear" onClick={() => setQuery("")} aria-label="Clear search" title="Clear search">
+            <X size={15} />
+          </button>
+        )}
+      </div>
+
+      <div className="viz-filters" role="group" aria-label="Filter feature requests">
         {!ownOnly && (
           <div className="seg" role="radiogroup" aria-label="Whose requests">
             <button role="radio" aria-checked={who === "mine"} className={who === "mine" ? "on" : ""} onClick={() => setWho("mine")}>
@@ -159,7 +225,7 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
             </button>
           ))}
         </div>
-        <select value={priority} onChange={(e) => setPriority(e.target.value)} aria-label="Priority">
+        <select className={priority ? "set" : ""} value={priority} onChange={(e) => setPriority(e.target.value)} aria-label="Priority">
           <option value="">Any priority</option>
           {PRIORITIES.map((p) => (
             <option key={p} value={p}>
@@ -167,7 +233,27 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
             </option>
           ))}
         </select>
+        <select className={kind ? "set" : ""} value={kind} onChange={(e) => setKind(e.target.value as FeatureKind | "")} aria-label="Type of request">
+          <option value="">Any type</option>
+          {FEATURE_KINDS.map((k) => (
+            <option key={k} value={k}>
+              {KIND_META[k]}
+            </option>
+          ))}
+        </select>
+        {!ownOnly && (
+          <select className={developer ? "set" : ""} value={developer} onChange={(e) => setDeveloper(e.target.value)} aria-label="Developer">
+            <option value="">Any developer</option>
+            <option value={UNASSIGNED}>Unassigned</option>
+            {developers.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+        )}
         <select
+          className={workspace ? "set" : ""}
           value={workspace}
           onChange={(e) => {
             setWorkspace(e.target.value);
@@ -182,7 +268,7 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
             </option>
           ))}
         </select>
-        <select value={project} onChange={(e) => setProject(e.target.value)} aria-label="Project">
+        <select className={project ? "set" : ""} value={project} onChange={(e) => setProject(e.target.value)} aria-label="Project">
           <option value="">{workspace ? `All ${workspace} projects` : "All projects"}</option>
           {/* Projects in the chosen workspace that have requests: busiest first, then by name. */}
           {systems
@@ -199,16 +285,23 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
               </option>
             ))}
         </select>
-        <label className="search sm">
-          <Search size={16} />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search requests…" aria-label="Search requests" />
-        </label>
         {focus && (
           <button className="filter-chip" onClick={() => setFocus("")} title="Clear this filter">
             Showing: {stats.find((c) => c.focus === focus)?.label.toLowerCase()} <X size={14} />
           </button>
         )}
       </div>
+
+      <p className="feature-results" aria-live="polite">
+        <span>
+          Showing <b>{visible.length}</b> of {scoped.length} request{scoped.length === 1 ? "" : "s"}
+        </span>
+        {filtered && (
+          <button className="link-btn" onClick={clearAll}>
+            Clear all filters
+          </button>
+        )}
+      </p>
 
       {visible.length ? (
         <div className="table-wrap">
