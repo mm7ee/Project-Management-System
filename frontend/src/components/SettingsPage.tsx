@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Archive,
+  Bell,
   Check,
   Eye,
   Fingerprint,
@@ -19,6 +20,7 @@ import {
   Sparkles,
   Sun,
   UserRound,
+  type LucideIcon,
 } from "lucide-react";
 import { api, type Passkey, type TwoStep } from "../data/api";
 import { createPasskey, passkeysSupported, type RegisterOptions } from "../data/passkeys";
@@ -48,6 +50,16 @@ interface Props {
   signOutJump?: number; // bumped by the profile card in the sidebar: scroll to the Sessions card
 }
 
+type SettingsPageKey = "profile" | "appearance" | "notifications" | "security" | "phone" | "link";
+interface SettingsPageInfo {
+  key: SettingsPageKey;
+  label: string;
+  sub: string;
+  icon: LucideIcon;
+  alert?: string; // something here needs the person's attention
+}
+const PAGE_STORE = "pulse.settingsPage"; // the page last opened, per browser
+
 const GLASS_LABEL: Record<Prefs["glass"], string> = { "1": "Clear", "2": "Light glass", "3": "Frosted", "4": "Heavy frost", "5": "Opaque" };
 
 export default function SettingsPage({ me, prefs, permissions, projects, mfaRequired, recoveryCodesLeft, twoStep, viewOnly, onPrefs, onProfileSaved, onSignedOut, signOutJump = 0 }: Props) {
@@ -62,12 +74,68 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
   const [confirmAll, setConfirmAll] = useState(false);
   const [flash, setFlash] = useState(false);
 
+  const pages: SettingsPageInfo[] = viewOnly
+    ? [
+        { key: "appearance", label: "Appearance", sub: "Theme, animations and start page", icon: Palette },
+        { key: "phone", label: "Phone app", sub: "Add Pulse to your home screen", icon: Smartphone },
+        { key: "link", label: "About this link", sub: "What this link can do", icon: Eye },
+      ]
+    : [
+        { key: "profile", label: "Profile", sub: "Contact details and your access", icon: UserRound },
+        { key: "appearance", label: "Appearance", sub: "Theme, animations and start page", icon: Palette },
+        {
+          key: "notifications",
+          label: "Notifications",
+          sub: permissions.includes("manage_users") ? "Your emails, and email and Teams delivery" : "What's emailed to you",
+          icon: Bell,
+        },
+        {
+          key: "security",
+          label: "Security & privacy",
+          sub: "Password, two-step, sign-ins, data kept",
+          icon: ShieldCheck,
+          // (When two-step is required but missing, Pulse shows its setup screen instead of Settings.)
+          alert: twoStep.app && recoveryCodesLeft < 3 ? "You're running low on recovery codes" : undefined,
+        },
+        { key: "phone", label: "Phone app", sub: "Add Pulse to your home screen", icon: Smartphone },
+      ];
+  const [page, setPage] = useState<SettingsPageKey>(() => {
+    try {
+      return (localStorage.getItem(PAGE_STORE) as SettingsPageKey | null) ?? "profile";
+    } catch {
+      return "profile";
+    }
+  });
+  const shown = pages.some((p) => p.key === page) ? page : pages[0].key;
+  const go = (key: SettingsPageKey) => {
+    setPage(key);
+    try {
+      localStorage.setItem(PAGE_STORE, key);
+    } catch {
+      // Remembering the page is only a convenience.
+    }
+  };
+
+  // On a phone the menu scrolls sideways: keep the open page's button in view.
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const nav = navRef.current;
+    const on = nav?.querySelector<HTMLElement>("button.on");
+    if (!nav || !on || nav.scrollWidth <= nav.clientWidth) return;
+    nav.scrollLeft = on.offsetLeft - (nav.clientWidth - on.offsetWidth) / 2;
+  }, [shown]);
+
+  // "Sign out" in the sidebar's profile card opens Security & privacy and points at Sessions.
   useEffect(() => {
     if (!signOutJump) return;
-    document.getElementById("settings-sessions")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setPage("security");
+    const scroll = setTimeout(() => document.getElementById("settings-sessions")?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
     setFlash(true);
     const id = setTimeout(() => setFlash(false), 1600);
-    return () => clearTimeout(id);
+    return () => {
+      clearTimeout(scroll);
+      clearTimeout(id);
+    };
   }, [signOutJump]);
 
   useEffect(() => {
@@ -110,282 +178,304 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
         </span>
       </header>
 
-      <div className="set-grid">
-        {!viewOnly && (
-        <Section icon={<UserRound size={18} />} title="Profile" sub="Your contact details power the Email, Teams, WhatsApp and Call buttons when you lead a project.">
-          <div className="set-profile">
-            <span className="avatar xl">{initials(me.name)}</span>
-            <div>
-              <b>{me.name}</b>
-              <span>
-                {ROLE_LABEL[me.role]} · {me.username}
+      <div className="set-layout">
+        <nav className="set-nav" aria-label="Settings pages" ref={navRef}>
+          {pages.map(({ key, label, sub, icon: Icon, alert }) => (
+            <button key={key} className={shown === key ? "on" : ""} aria-current={shown === key ? "page" : undefined} onClick={() => go(key)}>
+              <span className="set-nav-icon">
+                <Icon size={17} />
               </span>
-              {projects.length > 0 && <span>Assigned to: {projects.map((s) => s.name).join(", ")}</span>}
-            </div>
-          </div>
-          <form
-            className="set-form"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                await api("/me", "PATCH", { email, phone });
-                await onProfileSaved();
-                setProfileMsg({ ok: true, text: "Contact details saved." });
-              } catch (err) {
-                setProfileMsg({ ok: false, text: err instanceof Error ? err.message : "Couldn't save" });
-              }
-            }}
-          >
-            <div className="field-row">
-              <label className="field">
-                <span>Work email</span>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name.surname@omnicontact.biz" />
-              </label>
-              <label className="field">
-                <span>Phone (adds WhatsApp + Call)</span>
-                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+263 77 123 4567" />
-              </label>
-            </div>
-            {profileMsg && <p className={profileMsg.ok ? "form-ok" : "form-error"}>{profileMsg.text}</p>}
-            <button type="submit" className="btn btn-navy">
-              Save contact details
+              <span className="set-nav-text">
+                <b>{label}</b>
+                <small>{sub}</small>
+              </span>
+              {alert && <i className="set-nav-dot" title={alert} aria-label={alert} />}
             </button>
-          </form>
-        </Section>
+          ))}
+        </nav>
 
-        )}
-
-        <Section icon={<Palette size={18} />} title="Appearance">
-          <div className="set-row">
-            <div>
-              <b>Theme</b>
-              <span>Dark is easier on the eyes and brings the landing page's look to the dashboard. Device follows your computer or phone.</span>
-            </div>
-            <Choice
-              label="Theme"
-              value={prefs.theme}
-              onChange={(v) => setPref("theme", v)}
-              options={[
-                { value: "light", label: "Light", icon: <Sun size={15} /> },
-                { value: "futuristic", label: "Dark", icon: <Moon size={15} /> },
-                { value: "system", label: "Device", icon: <MonitorSmartphone size={15} /> },
-              ]}
-            />
-          </div>
-          <div className="set-row">
-            <div>
-              <b>Animations</b>
-              <span>Reduced turns off count-ups, shimmer, pulses and slide-ins.</span>
-            </div>
-            <Choice
-              label="Animations"
-              value={prefs.motion}
-              onChange={(v) => setPref("motion", v)}
-              options={[
-                { value: "full", label: "Full", icon: <Sparkles size={15} /> },
-                { value: "reduced", label: "Reduced" },
-              ]}
-            />
-          </div>
-          <div className="set-row">
-            <div>
-              <b>Card density</b>
-              <span>Compact fits more projects on screen.</span>
-            </div>
-            <Choice
-              label="Card density"
-              value={prefs.density}
-              onChange={(v) => setPref("density", v)}
-              options={[
-                { value: "comfortable", label: "Comfortable" },
-                { value: "compact", label: "Compact" },
-              ]}
-            />
-          </div>
-          <div className="set-row">
-            <div>
-              <b>Pop-up transparency</b>
-              <span>How much of the page shows through windows that open: forms, the Ask Pulse panel, menus and tooltips.</span>
-            </div>
-            <div className="glass-pick">
-              <input
-                type="range"
-                min={1}
-                max={5}
-                step={1}
-                value={Number(prefs.glass)}
-                onChange={(e) => setPref("glass", e.target.value as Prefs["glass"])}
-                aria-label="Pop-up transparency"
-                aria-valuetext={GLASS_LABEL[prefs.glass]}
-              />
-              <div className="glass-ends">
-                <span>See-through</span>
-                <b>{GLASS_LABEL[prefs.glass]}</b>
-                <span>Solid</span>
-              </div>
-            </div>
-          </div>
-        </Section>
-
-        <Section icon={<LayoutDashboard size={18} />} title="Dashboard">
-          <div className="set-row">
-            <div>
-              <b>Start section</b>
-              <span>{viewOnly ? "What Pulse opens on when you open this link." : "What the dashboard opens on after you sign in."}</span>
-            </div>
-            <select className="set-select" value={prefs.start} onChange={(e) => setPref("start", e.target.value)} aria-label="Start section">
-              {startOptions.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </Section>
-
-        <InstallSection />
-
-        {!viewOnly && (
-          <>
-
-        <NotificationPrefs prefs={prefs} hasEmail={!!me.email} setPref={setPref} />
-
-        {permissions.includes("manage_users") && <DeliverySection />}
-
-        <Section
-          icon={<KeyRound size={18} />}
-          title="Password"
-          sub="Never share your password with anyone, including the IT helpdesk. Pulse staff will never ask for it."
-        >
-          <form
-            className="set-form"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              if (next !== confirm) return setPwMsg({ ok: false, text: "The new passwords don't match." });
-              if (passwordProblem(next, me)) return setPwMsg({ ok: false, text: passwordProblem(next, me)! });
-              try {
-                await api("/me/password", "POST", { current, next });
-                setPwMsg({ ok: true, text: "Password changed." });
-                setCurrent("");
-                setNext("");
-                setConfirm("");
-              } catch (err) {
-                setPwMsg({ ok: false, text: err instanceof Error ? err.message : "Couldn't change password" });
-              }
-            }}
-          >
-            <label className="field">
-              <span>Current password</span>
-              <input type="password" autoComplete="current-password" required value={current} onChange={(e) => setCurrent(e.target.value)} />
-            </label>
-            <div className="field-row">
-              <label className="field">
-                <span>New password</span>
-                <input type="password" autoComplete="new-password" required minLength={PASSWORD_MIN} value={next} onChange={(e) => setNext(e.target.value)} />
-              </label>
-              <label className="field">
-                <span>Confirm new password</span>
-                <input type="password" autoComplete="new-password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-              </label>
-            </div>
-            <PasswordRules password={next} confirm={confirm} who={me} showReuse />
-            <p className="set-note">Use a password you don't use for any other system.</p>
-            {pwMsg && <p className={pwMsg.ok ? "form-ok" : "form-error"}>{pwMsg.text}</p>}
-            <button type="submit" className="btn btn-navy" disabled={!!passwordProblem(next, me) || next !== confirm}>
-              Change password
-            </button>
-          </form>
-        </Section>
-
-        <TwoStepSection me={me} required={mfaRequired} recoveryCodesLeft={recoveryCodesLeft} twoStep={twoStep} onChanged={onProfileSaved} />
-
-        <Section icon={<ShieldCheck size={18} />} title="Your access" sub={`What the ${ROLE_LABEL[me.role]} role can do. An administrator manages roles.`}>
-          <ul className="perm-list plain">
-            <li className="perm-item">
-              <Check size={14} /> View all systems and their progress
-            </li>
-            {PERMISSIONS.filter((p) => permissions.includes(p.key)).map((p) => (
-              <li key={p.key} className="perm-item">
-                <Check size={14} /> {p.label}
-              </li>
-            ))}
-          </ul>
-        </Section>
-
-        <Section
-          id="settings-sessions"
-          flash={flash}
-          icon={<MonitorSmartphone size={18} />}
-          title="Sessions"
-          sub="You're signed in on this device. Sign out of all devices if you used a shared or lost computer."
-        >
-          <div className="set-actions">
-            <button
-              className="btn btn-ghost"
-              onClick={async () => {
-                await api("/logout", "POST").catch(() => undefined);
-                onSignedOut();
-              }}
-            >
-              <LogOut size={16} /> Sign out
-            </button>
-            {confirmAll ? (
-              <span className="confirm-inline-row">
-                Sign out on every device, including this one?
-                <button className="btn btn-ghost sm" onClick={() => setConfirmAll(false)}>
-                  Cancel
-                </button>
-                <button
-                  className="btn btn-danger sm"
-                  onClick={async () => {
-                    await api("/logout-all", "POST").catch(() => undefined);
-                    onSignedOut();
+        <div className="set-pages" key={shown}>
+          {shown === "profile" && (
+            <>
+              <Section icon={<UserRound size={18} />} title="Profile" sub="Your contact details power the Email, Teams, WhatsApp and Call buttons when you lead a project.">
+                <div className="set-profile">
+                  <span className="avatar xl">{initials(me.name)}</span>
+                  <div>
+                    <b>{me.name}</b>
+                    <span>
+                      {ROLE_LABEL[me.role]} · {me.username}
+                    </span>
+                    {projects.length > 0 && <span>Assigned to: {projects.map((s) => s.name).join(", ")}</span>}
+                  </div>
+                </div>
+                <form
+                  className="set-form"
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    try {
+                      await api("/me", "PATCH", { email, phone });
+                      await onProfileSaved();
+                      setProfileMsg({ ok: true, text: "Contact details saved." });
+                    } catch (err) {
+                      setProfileMsg({ ok: false, text: err instanceof Error ? err.message : "Couldn't save" });
+                    }
                   }}
                 >
-                  Sign out everywhere
-                </button>
-              </span>
-            ) : (
-              <button className="btn btn-danger" onClick={() => setConfirmAll(true)}>
-                Sign out of all devices
-              </button>
-            )}
-          </div>
-        </Section>
+                  <div className="field-row">
+                    <label className="field">
+                      <span>Work email</span>
+                      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name.surname@omnicontact.biz" />
+                    </label>
+                    <label className="field">
+                      <span>Phone (adds WhatsApp + Call)</span>
+                      <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+263 77 123 4567" />
+                    </label>
+                  </div>
+                  {profileMsg && <p className={profileMsg.ok ? "form-ok" : "form-error"}>{profileMsg.text}</p>}
+                  <button type="submit" className="btn btn-navy">
+                    Save contact details
+                  </button>
+                </form>
+              </Section>
+              <Section icon={<ShieldCheck size={18} />} title="Your access" sub={`What the ${ROLE_LABEL[me.role]} role can do. An administrator manages roles.`}>
+                <ul className="perm-list plain">
+                  <li className="perm-item">
+                    <Check size={14} /> View all systems and their progress
+                  </li>
+                  {PERMISSIONS.filter((p) => permissions.includes(p.key)).map((p) => (
+                    <li key={p.key} className="perm-item">
+                      <Check size={14} /> {p.label}
+                    </li>
+                  ))}
+                </ul>
+              </Section>
+            </>
+          )}
 
-        <Section icon={<Archive size={18} />} title="Data retention" sub="How long Pulse keeps each kind of record. Anything older is deleted automatically.">
-          <dl className="retention-list">
-            {RETENTION.map((r) => (
-              <div key={r.what}>
-                <dt>{r.what}</dt>
-                <dd>{r.kept}</dd>
-              </div>
-            ))}
-          </dl>
-        </Section>
-          </>
-        )}
-        {viewOnly && (
-          <Section icon={<Eye size={18} />} title="About this link" sub="You're browsing Pulse through a view-only link.">
-            <ul className="perm-list plain">
-              <li className="perm-item">
-                <Check size={14} /> See the dashboard, projects, feature requests, Concept Notes and reports, live
-              </li>
-              <li className="perm-item">
-                <Check size={14} /> Ask Pulse questions about the work
-              </li>
-              <li className="perm-item">
-                <Check size={14} /> Request updates on projects (open a project, then Request update)
-              </li>
-              <li className="perm-item">
-                <Check size={14} /> Change how Pulse looks here (saved in this browser only)
-              </li>
-            </ul>
-            <p className="set-note">
-              Apart from requesting updates, nothing can be changed through this link ({viewOnly.label}). To update projects, ask your administrator for an account.
-            </p>
-          </Section>
-        )}
+          {shown === "appearance" && (
+            <>
+              <Section icon={<Palette size={18} />} title="Appearance">
+                <div className="set-row">
+                  <div>
+                    <b>Theme</b>
+                    <span>Dark is easier on the eyes and brings the landing page's look to the dashboard. Device follows your computer or phone.</span>
+                  </div>
+                  <Choice
+                    label="Theme"
+                    value={prefs.theme}
+                    onChange={(v) => setPref("theme", v)}
+                    options={[
+                      { value: "light", label: "Light", icon: <Sun size={15} /> },
+                      { value: "futuristic", label: "Dark", icon: <Moon size={15} /> },
+                      { value: "system", label: "Device", icon: <MonitorSmartphone size={15} /> },
+                    ]}
+                  />
+                </div>
+                <div className="set-row">
+                  <div>
+                    <b>Animations</b>
+                    <span>Reduced turns off count-ups, shimmer, pulses and slide-ins.</span>
+                  </div>
+                  <Choice
+                    label="Animations"
+                    value={prefs.motion}
+                    onChange={(v) => setPref("motion", v)}
+                    options={[
+                      { value: "full", label: "Full", icon: <Sparkles size={15} /> },
+                      { value: "reduced", label: "Reduced" },
+                    ]}
+                  />
+                </div>
+                <div className="set-row">
+                  <div>
+                    <b>Card density</b>
+                    <span>Compact fits more projects on screen.</span>
+                  </div>
+                  <Choice
+                    label="Card density"
+                    value={prefs.density}
+                    onChange={(v) => setPref("density", v)}
+                    options={[
+                      { value: "comfortable", label: "Comfortable" },
+                      { value: "compact", label: "Compact" },
+                    ]}
+                  />
+                </div>
+                <div className="set-row">
+                  <div>
+                    <b>Pop-up transparency</b>
+                    <span>How much of the page shows through windows that open: forms, the Ask Pulse panel, menus and tooltips.</span>
+                  </div>
+                  <div className="glass-pick">
+                    <input
+                      type="range"
+                      min={1}
+                      max={5}
+                      step={1}
+                      value={Number(prefs.glass)}
+                      onChange={(e) => setPref("glass", e.target.value as Prefs["glass"])}
+                      aria-label="Pop-up transparency"
+                      aria-valuetext={GLASS_LABEL[prefs.glass]}
+                    />
+                    <div className="glass-ends">
+                      <span>See-through</span>
+                      <b>{GLASS_LABEL[prefs.glass]}</b>
+                      <span>Solid</span>
+                    </div>
+                  </div>
+                </div>
+              </Section>
+              <Section icon={<LayoutDashboard size={18} />} title="Dashboard">
+                <div className="set-row">
+                  <div>
+                    <b>Start section</b>
+                    <span>{viewOnly ? "What Pulse opens on when you open this link." : "What the dashboard opens on after you sign in."}</span>
+                  </div>
+                  <select className="set-select" value={prefs.start} onChange={(e) => setPref("start", e.target.value)} aria-label="Start section">
+                    {startOptions.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </Section>
+            </>
+          )}
+
+          {shown === "notifications" && (
+            <>
+              <NotificationPrefs prefs={prefs} hasEmail={!!me.email} setPref={setPref} />
+              {permissions.includes("manage_users") && <DeliverySection />}
+            </>
+          )}
+
+          {shown === "security" && (
+            <>
+              <Section
+                icon={<KeyRound size={18} />}
+                title="Password"
+                sub="Never share your password with anyone, including the IT helpdesk. Pulse staff will never ask for it."
+              >
+                <form
+                  className="set-form"
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (next !== confirm) return setPwMsg({ ok: false, text: "The new passwords don't match." });
+                    if (passwordProblem(next, me)) return setPwMsg({ ok: false, text: passwordProblem(next, me)! });
+                    try {
+                      await api("/me/password", "POST", { current, next });
+                      setPwMsg({ ok: true, text: "Password changed." });
+                      setCurrent("");
+                      setNext("");
+                      setConfirm("");
+                    } catch (err) {
+                      setPwMsg({ ok: false, text: err instanceof Error ? err.message : "Couldn't change password" });
+                    }
+                  }}
+                >
+                  <label className="field">
+                    <span>Current password</span>
+                    <input type="password" autoComplete="current-password" required value={current} onChange={(e) => setCurrent(e.target.value)} />
+                  </label>
+                  <div className="field-row">
+                    <label className="field">
+                      <span>New password</span>
+                      <input type="password" autoComplete="new-password" required minLength={PASSWORD_MIN} value={next} onChange={(e) => setNext(e.target.value)} />
+                    </label>
+                    <label className="field">
+                      <span>Confirm new password</span>
+                      <input type="password" autoComplete="new-password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+                    </label>
+                  </div>
+                  <PasswordRules password={next} confirm={confirm} who={me} showReuse />
+                  <p className="set-note">Use a password you don't use for any other system.</p>
+                  {pwMsg && <p className={pwMsg.ok ? "form-ok" : "form-error"}>{pwMsg.text}</p>}
+                  <button type="submit" className="btn btn-navy" disabled={!!passwordProblem(next, me) || next !== confirm}>
+                    Change password
+                  </button>
+                </form>
+              </Section>
+              <TwoStepSection me={me} required={mfaRequired} recoveryCodesLeft={recoveryCodesLeft} twoStep={twoStep} onChanged={onProfileSaved} />
+
+              <Section
+                id="settings-sessions"
+                flash={flash}
+                icon={<MonitorSmartphone size={18} />}
+                title="Sessions"
+                sub="You're signed in on this device. Sign out of all devices if you used a shared or lost computer."
+              >
+                <div className="set-actions">
+                  <button
+                    className="btn btn-ghost"
+                    onClick={async () => {
+                      await api("/logout", "POST").catch(() => undefined);
+                      onSignedOut();
+                    }}
+                  >
+                    <LogOut size={16} /> Sign out
+                  </button>
+                  {confirmAll ? (
+                    <span className="confirm-inline-row">
+                      Sign out on every device, including this one?
+                      <button className="btn btn-ghost sm" onClick={() => setConfirmAll(false)}>
+                        Cancel
+                      </button>
+                      <button
+                        className="btn btn-danger sm"
+                        onClick={async () => {
+                          await api("/logout-all", "POST").catch(() => undefined);
+                          onSignedOut();
+                        }}
+                      >
+                        Sign out everywhere
+                      </button>
+                    </span>
+                  ) : (
+                    <button className="btn btn-danger" onClick={() => setConfirmAll(true)}>
+                      Sign out of all devices
+                    </button>
+                  )}
+                </div>
+              </Section>
+
+              <Section icon={<Archive size={18} />} title="Data retention" sub="How long Pulse keeps each kind of record. Anything older is deleted automatically.">
+                <dl className="retention-list">
+                  {RETENTION.map((r) => (
+                    <div key={r.what}>
+                      <dt>{r.what}</dt>
+                      <dd>{r.kept}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </Section>
+            </>
+          )}
+
+          {shown === "phone" && <InstallSection />}
+
+          {shown === "link" && viewOnly && (
+            <Section icon={<Eye size={18} />} title="About this link" sub="You're browsing Pulse through a view-only link.">
+              <ul className="perm-list plain">
+                <li className="perm-item">
+                  <Check size={14} /> See the dashboard, projects, feature requests, Concept Notes and reports, live
+                </li>
+                <li className="perm-item">
+                  <Check size={14} /> Ask Pulse questions about the work
+                </li>
+                <li className="perm-item">
+                  <Check size={14} /> Request updates on projects (open a project, then Request update)
+                </li>
+                <li className="perm-item">
+                  <Check size={14} /> Change how Pulse looks here (saved in this browser only)
+                </li>
+              </ul>
+              <p className="set-note">
+                Apart from requesting updates, nothing can be changed through this link ({viewOnly.label}). To update projects, ask your administrator for an account.
+              </p>
+            </Section>
+          )}
+        </div>
       </div>
     </div>
   );
