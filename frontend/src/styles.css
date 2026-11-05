@@ -1868,37 +1868,35 @@ a.nav-item { text-decoration: none; }
 .install-qr svg { display: block; width: 100%; height: auto; }
 
 /* ---------- Pop-ups open full screen ----------
-   The larger pop-ups cover the page (not the sidebar), with their content centred in a readable width,
-   parts laid side by side and a single scroll (no lists scrolling inside the pop-up). Phones
-   and narrow windows keep one column. */
+   The larger pop-ups take over the page area (not the sidebar), use its full width, lay their
+   parts side by side and keep a single scroll (no lists scrolling inside the pop-up). The page
+   behind is hidden, so the drifting web shows around the form. Phones keep one column. */
 .modal-wide, .feature-modal, .start-modal, .pcn-modal, .rebalance {
   position: fixed; inset: 0; width: auto; height: 100%; max-height: none; overflow-y: auto;
-  border-radius: 0; padding: 32px max(24px, calc((100% - 1100px) / 2)) 40px;
-}
-/* Beside the sidebar, which stays in view and isn't dimmed (it collapses into a menu below 861px). */
-@media (min-width: 861px) {
-  :is(.modal-wide, .feature-modal, .start-modal, .pcn-modal, .rebalance) { left: 210px; }
-  .modal-backdrop:has(> :is(.modal-wide, .feature-modal, .start-modal, .pcn-modal, .rebalance)) { background: transparent; }
-}
-/* Full screen, so solid like a page: nothing from behind shows through. */
-.modal-wide, .feature-modal, .start-modal, .pcn-modal, .rebalance {
-  --card: #ffffff; --canvas: #f7f9fd; background: #ffffff; border: 0; box-shadow: none;
+  border-radius: 0; padding: 28px clamp(20px, 3vw, 48px) 32px;
+  --card: #ffffff; --canvas: #f7f9fd; background: transparent; border: 0; box-shadow: none;
   backdrop-filter: none; -webkit-backdrop-filter: none;
 }
 :root[data-theme="futuristic"] :is(.modal-wide, .feature-modal, .start-modal, .pcn-modal, .rebalance) {
-  --card: #191d48; --canvas: #0f1233; background: #13163a; border: 0; box-shadow: none;
+  --card: #191d48; --canvas: #0f1233; background: transparent; border: 0; box-shadow: none;
   backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+.modal-backdrop:has(> :is(.modal-wide, .feature-modal, .start-modal, .pcn-modal, .rebalance)) { background: transparent; }
+body:has(.modal-backdrop > :is(.modal-wide, .feature-modal, .start-modal, .pcn-modal, .rebalance)) .main { visibility: hidden; }
+.main .modal-backdrop { visibility: visible; } /* a pop-up opened from inside the page stays shown */
+/* Beside the sidebar, which stays in view (it collapses into a menu below 861px). */
+@media (min-width: 861px) {
+  :is(.modal-wide, .feature-modal, .start-modal, .pcn-modal, .rebalance) { left: 210px; }
 }
 /* The close button stays at the top right while a long form scrolls. */
 .modal-wide .close-btn { position: sticky; top: 0; z-index: 1; flex: none; align-self: flex-end; justify-self: end; margin-bottom: -48px; }
 .start-templates { max-height: none; overflow: visible; }
 @media (min-width: 900px) {
   /* Log or edit a feature request: the request on the left, the rest on the right. */
-  .feature-modal { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); column-gap: 32px; align-content: start; }
+  .feature-modal { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); column-gap: 32px; align-content: start; grid-auto-flow: row dense; }
   .feature-modal > * { grid-column: 1 / -1; }
   .feature-modal > .step { grid-column: 2; }
   .feature-modal > .step:first-of-type { grid-column: 1; grid-row: span 4; align-self: start; }
-  .feature-modal { grid-auto-flow: row dense; }
   /* Add a system: templates two by two. */
   .start-templates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   /* Rebalance: one card per developer, side by side. */
@@ -1906,4 +1904,12 @@ a.nav-item { text-decoration: none; }
   .rebalance > * { grid-column: 1 / -1; }
   .rebalance > .rebalance-dev { grid-column: auto; align-self: start; }
   .rebalance > .rebalance-dev:only-of-type { grid-column: 1 / -1; }
+}
+@media (min-width: 1280px) {
+  /* Wide screens: three columns, so the whole form fits without scrolling. */
+  .feature-modal { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr); }
+  .feature-modal > .step:first-of-type { grid-row: span 2; }
+  .feature-modal > .step:nth-of-type(2), .feature-modal > .step:nth-of-type(3) { grid-column: 2; }
+  .feature-modal > .step:nth-of-type(4), .feature-modal > .step:nth-of-type(5) { grid-column: 3; }
+  .start-templates { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
