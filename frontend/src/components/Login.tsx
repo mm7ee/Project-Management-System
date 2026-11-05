@@ -79,6 +79,12 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
 
   return (
     <div className="landing">
+      <div className="lp-aurora" aria-hidden="true">
+        <span />
+        <span />
+        <span />
+      </div>
+      <div className="lp-paper" aria-hidden="true" />
 
       <header className="lp-top">
         <span className="lp-brand">
@@ -129,6 +135,13 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
         </section>
 
         <section className="lp-panel lp-in" style={{ animationDelay: "0.3s" }}>
+          {/* Rings ripple out from behind the card, like a heartbeat. */}
+          <div className="lp-ripples" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </div>
+
           {ticket ? (
             <SecondStep ticket={ticket} methods={methods} onSignedIn={onSignedIn} onBack={backToPassword} />
           ) : (
