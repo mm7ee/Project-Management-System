@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Archive,
   Bell,
@@ -32,7 +32,7 @@ import { PASSWORD_MIN, passwordProblem } from "../data/password";
 import { initials, type System } from "../data/systems";
 import { PERMISSIONS, ROLE_LABEL, type Permission, type Prefs, type User } from "../data/roles";
 import { Choice, Section } from "./SettingsParts";
-import { DeliverySection, InstallSection, NotificationPrefs } from "./NotificationSettings";
+import { InstallSection, NotificationPrefs } from "./NotificationSettings";
 import { RETENTION } from "../data/retention";
 
 interface Props {
@@ -48,13 +48,21 @@ interface Props {
   onProfileSaved: () => Promise<void>;
   onSignedOut: () => void;
   signOutJump?: number; // bumped by the profile card in the sidebar: scroll to the Sessions card
+  adminPages?: AdminPage[]; // the administration pages this person may open
+  openPage?: string; // a page to show, chosen from elsewhere in Pulse
+  onPage?: (key: string) => void; // the person picked a page from the menu
 }
 
-type SettingsPageKey = "profile" | "appearance" | "notifications" | "security" | "phone" | "link";
-interface SettingsPageInfo {
-  key: SettingsPageKey;
+/** A page in the menu's Administration group, drawn by the caller. */
+export interface AdminPage {
+  key: string;
   label: string;
-  sub: string;
+  icon: LucideIcon;
+  content: ReactNode;
+}
+interface SettingsPageInfo {
+  key: string;
+  label: string;
   icon: LucideIcon;
   alert?: string; // something here needs the person's attention
 }
@@ -62,7 +70,23 @@ const PAGE_STORE = "pulse.settingsPage"; // the page last opened, per browser
 
 const GLASS_LABEL: Record<Prefs["glass"], string> = { "1": "See-through", "2": "Frosted", "3": "Heavy frost", "4": "Nearly solid", "5": "Solid" };
 
-export default function SettingsPage({ me, prefs, permissions, projects, mfaRequired, recoveryCodesLeft, twoStep, viewOnly, onPrefs, onProfileSaved, onSignedOut, signOutJump = 0 }: Props) {
+export default function SettingsPage({
+  me,
+  prefs,
+  permissions,
+  projects,
+  mfaRequired,
+  recoveryCodesLeft,
+  twoStep,
+  viewOnly,
+  onPrefs,
+  onProfileSaved,
+  onSignedOut,
+  signOutJump = 0,
+  adminPages = [],
+  openPage,
+  onPage,
+}: Props) {
   const [saved, setSaved] = useState(false);
   const [email, setEmail] = useState(me.email ?? "");
   const [phone, setPhone] = useState(me.phone ?? "");
@@ -76,45 +100,46 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
 
   const pages: SettingsPageInfo[] = viewOnly
     ? [
-        { key: "appearance", label: "Appearance", sub: "Theme, animations and start page", icon: Palette },
-        { key: "phone", label: "Phone app", sub: "Add Pulse to your home screen", icon: Smartphone },
-        { key: "link", label: "About this link", sub: "What this link can do", icon: Eye },
+        { key: "appearance", label: "Appearance", icon: Palette },
+        { key: "phone", label: "Phone app", icon: Smartphone },
+        { key: "link", label: "About this link", icon: Eye },
       ]
     : [
-        { key: "profile", label: "Profile", sub: "Contact details and your access", icon: UserRound },
-        { key: "appearance", label: "Appearance", sub: "Theme, animations and start page", icon: Palette },
-        {
-          key: "notifications",
-          label: "Notifications",
-          sub: permissions.includes("manage_users") ? "Your emails, and email and Teams delivery" : "What's emailed to you",
-          icon: Bell,
-        },
+        { key: "profile", label: "Profile", icon: UserRound },
+        { key: "appearance", label: "Appearance", icon: Palette },
+        { key: "notifications", label: "Notifications", icon: Bell },
         {
           key: "security",
           label: "Security & privacy",
-          sub: "Password, two-step, sign-ins, data kept",
           icon: ShieldCheck,
           // (When two-step is required but missing, Pulse shows its setup screen instead of Settings.)
           alert: twoStep.app && recoveryCodesLeft < 3 ? "You're running low on recovery codes" : undefined,
         },
-        { key: "phone", label: "Phone app", sub: "Add Pulse to your home screen", icon: Smartphone },
+        { key: "phone", label: "Phone app", icon: Smartphone },
       ];
-  const [page, setPage] = useState<SettingsPageKey>(() => {
+  const everyPage = [...pages, ...adminPages];
+  const [page, setPage] = useState<string>(() => {
     try {
-      return (localStorage.getItem(PAGE_STORE) as SettingsPageKey | null) ?? "profile";
+      return openPage ?? localStorage.getItem(PAGE_STORE) ?? "profile";
     } catch {
-      return "profile";
+      return openPage ?? "profile";
     }
   });
-  const shown = pages.some((p) => p.key === page) ? page : pages[0].key;
-  const go = (key: SettingsPageKey) => {
+  const shown = everyPage.some((p) => p.key === page) ? page : pages[0].key;
+  const admin = adminPages.find((p) => p.key === shown);
+  const go = (key: string) => {
     setPage(key);
+    onPage?.(key);
     try {
       localStorage.setItem(PAGE_STORE, key);
     } catch {
       // Remembering the page is only a convenience.
     }
   };
+  // Another part of Pulse asked for a page (e.g. the dashboard's Rebalance banner opens People).
+  useEffect(() => {
+    if (openPage) setPage(openPage);
+  }, [openPage]);
 
   // On a phone the menu scrolls sideways: keep the open page's button in view.
   const navRef = useRef<HTMLElement>(null);
@@ -167,7 +192,13 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
       <header className="page-head">
         <div>
           <h2>Settings</h2>
-          <p>{viewOnly ? "Display settings for this view-only link, saved in this browser only." : "Preferences are saved to your account, so they follow you to any device."}</p>
+          <p>
+            {viewOnly
+              ? "Display settings for this view-only link, saved in this browser only."
+              : adminPages.length
+                ? "Your own preferences follow you to any device. Administration changes Pulse for everyone."
+                : "Preferences are saved to your account, so they follow you to any device."}
+          </p>
         </div>
         <span className={`saved-tick ${saved ? "show" : ""}`} aria-live="polite">
           {saved && (
@@ -180,24 +211,33 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
 
       <div className="set-layout">
         <nav className="set-nav" aria-label="Settings pages" ref={navRef}>
-          {pages.map(({ key, label, sub, icon: Icon, alert }) => (
-            <button key={key} className={shown === key ? "on" : ""} aria-current={shown === key ? "page" : undefined} onClick={() => go(key)}>
-              <span className="set-nav-icon">
-                <Icon size={17} />
-              </span>
-              <span className="set-nav-text">
-                <b>{label}</b>
-                <small>{sub}</small>
-              </span>
-              {alert && <i className="set-nav-dot" title={alert} aria-label={alert} />}
-            </button>
-          ))}
+          {[
+            { group: viewOnly ? "This link" : "Your account", items: pages },
+            { group: "Administration", items: adminPages as SettingsPageInfo[] },
+          ]
+            .filter((g) => g.items.length)
+            .map(({ group, items }) => (
+              <div className="set-nav-group" key={group} role="group" aria-label={group}>
+                <span className="set-nav-label">{group}</span>
+                {items.map(({ key, label, icon: Icon, alert }) => (
+                  <button key={key} className={shown === key ? "on" : ""} aria-current={shown === key ? "page" : undefined} onClick={() => go(key)}>
+                    <span className="set-nav-icon">
+                      <Icon size={17} />
+                    </span>
+                    <b>{label}</b>
+                    {alert && <i className="set-nav-dot" title={alert} aria-label={alert} />}
+                  </button>
+                ))}
+              </div>
+            ))}
         </nav>
 
-        <div className="set-pages" key={shown}>
+        <div className={`set-pages ${admin ? "admin" : ""}`} key={shown}>
+          {admin?.content}
+
           {shown === "profile" && (
             <>
-              <Section icon={<UserRound size={18} />} title="Profile" sub="Your contact details power the Email, Teams, WhatsApp and Call buttons when you lead a project.">
+              <Section icon={<UserRound size={18} />} title="Contact details" sub="Your contact details power the Email, Teams, WhatsApp and Call buttons when you lead a project.">
                 <div className="set-profile">
                   <span className="avatar xl">{initials(me.name)}</span>
                   <div>
@@ -254,7 +294,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
 
           {shown === "appearance" && (
             <>
-              <Section icon={<Palette size={18} />} title="Appearance">
+              <Section icon={<Palette size={18} />} title="Look and feel">
                 <div className="set-row">
                   <div>
                     <b>Theme</b>
@@ -325,7 +365,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
                   </div>
                 </div>
               </Section>
-              <Section icon={<LayoutDashboard size={18} />} title="Dashboard">
+              <Section icon={<LayoutDashboard size={18} />} title="Start page">
                 <div className="set-row">
                   <div>
                     <b>Start section</b>
@@ -343,12 +383,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
             </>
           )}
 
-          {shown === "notifications" && (
-            <>
-              <NotificationPrefs prefs={prefs} hasEmail={!!me.email} setPref={setPref} />
-              {permissions.includes("manage_users") && <DeliverySection />}
-            </>
-          )}
+          {shown === "notifications" && <NotificationPrefs prefs={prefs} hasEmail={!!me.email} setPref={setPref} />}
 
           {shown === "security" && (
             <>
@@ -402,7 +437,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
                 id="settings-sessions"
                 flash={flash}
                 icon={<MonitorSmartphone size={18} />}
-                title="Sessions"
+                title="Signed-in devices"
                 sub="You're signed in on this device. Sign out of all devices if you used a shared or lost computer."
               >
                 <div className="set-actions">

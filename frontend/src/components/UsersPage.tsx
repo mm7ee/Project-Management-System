@@ -30,9 +30,10 @@ interface Props {
   mfaHelp: MfaHelpRequest[]; // people locked out of two-step verification
   workload: (u: User) => Workload;
   onChanged: () => Promise<void>;
+  section: "people" | "twostep" | "links" | "limits" | "roles"; // which part Settings is showing
 }
 
-export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaPolicy, mfaHelp, workload, onChanged }: Props) {
+export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaPolicy, mfaHelp, workload, onChanged, section }: Props) {
   const now = Date.now();
   const [mfaResetting, setMfaResetting] = useState<string | null>(null);
   const [confirmHelp, setConfirmHelp] = useState<string | null>(null);
@@ -60,17 +61,21 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaP
 
   return (
     <div className="page">
+      {section === "people" && (
       <header className="page-head">
         <div>
-          <h2>Users</h2>
+          <h2>People</h2>
           <p>{users.length} people can sign in. Developers can be on up to {limits.projects} projects each.</p>
         </div>
         <button className="btn btn-amber" onClick={() => setEditing("new")}>
           <Plus size={17} strokeWidth={3} /> Add user
         </button>
       </header>
+      )}
       {error && <p className="form-error banner">{error}</p>}
 
+      {section === "people" && (
+      <>
       {mfaHelp.length > 0 && (
         <section className="set-card mfa-requests" aria-label="Two-step verification help requests">
           <header className="set-head">
@@ -283,14 +288,16 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaP
           </tbody>
         </table>
       </div>
+      </>
+      )}
 
-      <MfaPolicyEditor me={me} policy={mfaPolicy} users={users} onSave={(p) => run(() => api("/settings/mfa", "PUT", p))} />
+      {section === "twostep" && <MfaPolicyEditor me={me} policy={mfaPolicy} users={users} onSave={(p) => run(() => api("/settings/mfa", "PUT", p))} />}
 
-      <ShareLinks />
+      {section === "links" && <ShareLinks />}
 
-      <LimitsEditor limits={limits} onSave={(l) => run(() => api("/settings/limits", "PUT", l))} />
+      {section === "limits" && <LimitsEditor limits={limits} onSave={(l) => run(() => api("/settings/limits", "PUT", l))} />}
 
-      <RoleMatrix matrix={roleMatrix} onSave={(m) => run(() => api("/roles", "PUT", m))} />
+      {section === "roles" && <RoleMatrix matrix={roleMatrix} onSave={(m) => run(() => api("/roles", "PUT", m))} />}
 
       {issued && <TempPasswordDialog {...issued} onClose={() => setIssued(null)} />}
 
@@ -324,7 +331,7 @@ function MfaPolicyEditor({ me, policy, users, onSave }: { me: User; policy: MfaP
     <section className="matrix-section">
       <header className="page-head">
         <div>
-          <h2>Two-step verification</h2>
+          <h2>Two-step rules</h2>
           <p>
             Required roles sign in with a password and a code from an authenticator app. Anyone without it set up is asked to set it
             up before they can do anything else; everyone else can turn it on in Settings.

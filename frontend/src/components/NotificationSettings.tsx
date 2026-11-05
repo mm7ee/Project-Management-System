@@ -15,7 +15,7 @@ const ON_OFF = [
 /** Which emails this person gets. The bell always shows everything. */
 export function NotificationPrefs({ prefs, hasEmail, setPref }: { prefs: Prefs; hasEmail: boolean; setPref: <K extends keyof Prefs>(k: K, v: Prefs[K]) => void }) {
   return (
-    <Section icon={<Bell size={18} />} title="Notifications" sub="The bell at the top always shows everything. These choose what's also emailed to you.">
+    <Section icon={<Bell size={18} />} title="Emails to you" sub="The bell at the top always shows everything. These choose what's also emailed to you.">
       <div className="set-row">
         <div>
           <b>Email me alerts</b>
@@ -47,7 +47,7 @@ export function InstallSection() {
   qr.make();
 
   return (
-    <Section icon={<Smartphone size={18} />} title="Pulse on your phone" sub="Add Pulse to your home screen and it opens like an app, without the browser's bars.">
+    <Section icon={<Smartphone size={18} />} title="Install Pulse" sub="Add Pulse to your home screen and it opens like an app, without the browser's bars.">
       {isInstalled() ? (
         <p className="set-note">You're using Pulse from your home screen.</p>
       ) : (

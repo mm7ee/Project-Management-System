@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertOctagon, Eye, FileText, History, LifeBuoy, Menu, Plus, Search, Settings, Sparkles, Users } from "lucide-react";
+import { AlertOctagon, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, Menu, Plus, Search, Send, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { getSchedule, type System } from "./data/systems";
 import { api, useAppData, type AppData } from "./data/api";
 import { isAssigned, type Permission, type Prefs } from "./data/roles";
@@ -13,6 +13,7 @@ import ProjectPage from "./components/ProjectPage";
 import UpdateModal, { type ProgressUpdate } from "./components/UpdateModal";
 import AddSystemModal from "./components/AddSystemModal";
 import SettingsPage from "./components/SettingsPage";
+import { DeliverySection } from "./components/NotificationSettings";
 import ForcePasswordChange from "./components/ForcePasswordChange";
 import ForceMfaSetup from "./components/ForceMfaSetup";
 import ExecutivePage from "./components/ExecutivePage";
@@ -341,6 +342,19 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
     </>
   );
 
+  // Shared by the administration pages that come from the old Users & roles page.
+  const usersPageProps = {
+    me,
+    users,
+    systems,
+    roleMatrix: data.roleMatrix,
+    limits,
+    mfaPolicy: data.mfaPolicy,
+    mfaHelp: data.mfaHelp,
+    workload: (u: User) => workloadOf(u, systems, features, limits, now),
+    onChanged: reload,
+  };
+
   return (
     <div className="shell">
       {/* The drifting web behind the pages. Keyed on motion and theme: the canvas decides once how to draw. */}
@@ -512,9 +526,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
               </button>
             </div>
           )
-        ) : view === "settings" ? (
-          <>
-          {(can("audit_log") || can("manage_users")) && <SettingsTabs active="settings" onChange={setView} canUsers={can("manage_users")} canActivity={can("audit_log")} />}
+        ) : view === "settings" || view === "users" || view === "activity" ? (
           <SettingsPage
             me={me}
             prefs={prefs}
@@ -528,8 +540,22 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             onProfileSaved={reload}
             onSignedOut={reload}
             signOutJump={signOutJump}
+            openPage={view === "users" ? "people" : view === "activity" ? "activity" : undefined}
+            onPage={() => setView("settings")}
+            adminPages={[
+              ...(can("manage_users")
+                ? [
+                    { key: "people", label: "People", icon: Users, content: <UsersPage section="people" {...usersPageProps} /> },
+                    { key: "roles", label: "Roles & permissions", icon: ShieldCheck, content: <UsersPage section="roles" {...usersPageProps} /> },
+                    { key: "twostep", label: "Two-step rules", icon: Fingerprint, content: <UsersPage section="twostep" {...usersPageProps} /> },
+                    { key: "limits", label: "Workload limits", icon: Gauge, content: <UsersPage section="limits" {...usersPageProps} /> },
+                    { key: "links", label: "View-only links", icon: Link2, content: <UsersPage section="links" {...usersPageProps} /> },
+                    { key: "delivery", label: "Email & Teams", icon: Send, content: <DeliverySection /> },
+                  ]
+                : []),
+              ...(can("audit_log") ? [{ key: "activity", label: "Activity log", icon: History, content: <ActivityPage users={users} systems={systems} now={now} /> }] : []),
+            ]}
           />
-          </>
         ) : view === "pcns" ? (
           <ConceptNotesPage
             systems={systems}
@@ -555,26 +581,6 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             onOpen={(feature) => setFeatureEdit({ feature })}
             onNew={() => setFeatureEdit({ feature: null })}
           />
-        ) : view === "activity" && can("audit_log") ? (
-          <>
-            <SettingsTabs active="activity" onChange={setView} canUsers={can("manage_users")} canActivity={can("audit_log")} />
-            <ActivityPage users={users} systems={systems} now={now} />
-          </>
-        ) : view === "users" && can("manage_users") ? (
-          <>
-          <SettingsTabs active="users" onChange={setView} canUsers={can("manage_users")} canActivity={can("audit_log")} />
-          <UsersPage
-            me={me}
-            users={users}
-            systems={systems}
-            roleMatrix={data.roleMatrix}
-            limits={limits}
-            mfaPolicy={data.mfaPolicy}
-            mfaHelp={data.mfaHelp}
-            workload={(u) => workloadOf(u, systems, features, limits, now)}
-            onChanged={reload}
-          />
-          </>
         ) : view === "reports" && can("reports") ? (
           <ReportsPage
             systems={systems}
@@ -734,34 +740,6 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           onClose={() => setPosting(null)}
         />
       )}
-    </div>
-  );
-}
-
-/** Tabs at the top of Settings: your own settings, then the admin pages each person may open. */
-function SettingsTabs({
-  active,
-  onChange,
-  canUsers,
-  canActivity,
-}: {
-  active: "settings" | "users" | "activity";
-  onChange: (v: View) => void;
-  canUsers: boolean;
-  canActivity: boolean;
-}) {
-  const tabs = [
-    { key: "settings" as const, label: "My settings", icon: Settings, show: true },
-    { key: "users" as const, label: "Users & roles", icon: Users, show: canUsers },
-    { key: "activity" as const, label: "Activity log", icon: History, show: canActivity },
-  ].filter((t) => t.show);
-  return (
-    <div className="view-toggle settings-tabs no-print" role="tablist" aria-label="Settings">
-      {tabs.map(({ key, label, icon: Icon }) => (
-        <button key={key} role="tab" aria-selected={active === key} className={active === key ? "on" : ""} onClick={() => onChange(key)}>
-          <Icon size={15} /> {label}
-        </button>
-      ))}
     </div>
   );
 }
