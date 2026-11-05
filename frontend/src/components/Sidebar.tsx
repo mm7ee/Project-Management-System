@@ -2,7 +2,6 @@ import { Eye, FileBarChart, FileText, FolderKanban, LayoutDashboard, ListChecks,
 import { initials, type Status } from "../data/systems";
 import { ROLE_LABEL, type User } from "../data/roles";
 import { COMPANY_URL } from "../brand";
-import ParticleField from "./ParticleField";
 import PulseMark from "./PulseMark";
 
 export type Filter = "ALL" | Status | "OVERDUE" | "REQUESTED" | "MAINTENANCE" | "MINE" | "BLOCKED";
@@ -36,8 +35,6 @@ export default function Sidebar(p: Props) {
     <>
       <div className={`sidebar-scrim ${p.open ? "show" : ""}`} onClick={p.onClose} />
       <aside className={`sidebar ${p.open ? "open" : ""}`}>
-        {/* Shown in the Light theme only (CSS): the backdrop's web, glowing on the navy glass. */}
-        <ParticleField className="sidebar-web" palette="dark" />
         <button className="sidebar-close" onClick={p.onClose} aria-label="Close menu">
           <X size={18} />
         </button>

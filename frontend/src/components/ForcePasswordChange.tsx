@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { ArrowRight, KeyRound, LockKeyhole } from "lucide-react";
 import { api } from "../data/api";
-import ParticleField from "./ParticleField";
 import PasswordRules from "./PasswordRules";
 import { PASSWORD_MIN, passwordProblem } from "../data/password";
 import "./landing.css";
@@ -26,13 +25,6 @@ export default function ForcePasswordChange({ message, who, onDone }: Props) {
 
   return (
     <div className="landing">
-      <div className="lp-aurora" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </div>
-      <div className="lp-paper" aria-hidden="true" />
-      <ParticleField className="lp-particles" />
 
       <main className="lp-main lp-single">
         <form

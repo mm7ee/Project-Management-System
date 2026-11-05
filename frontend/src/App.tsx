@@ -3,7 +3,7 @@ import { AlertOctagon, Eye, FileText, History, LifeBuoy, Menu, Plus, Search, Set
 import { getSchedule, type System } from "./data/systems";
 import { api, useAppData, type AppData } from "./data/api";
 import { isAssigned, type Permission, type Prefs } from "./data/roles";
-import { resolveTheme, useApplyPrefs } from "./prefs";
+import { useApplyPrefs } from "./prefs";
 import { shareToken } from "./data/api";
 import { useNow } from "./time";
 import Sidebar, { type Filter, type View } from "./components/Sidebar";
@@ -12,8 +12,6 @@ import ProjectPage from "./components/ProjectPage";
 import UpdateModal, { type ProgressUpdate } from "./components/UpdateModal";
 import AddSystemModal from "./components/AddSystemModal";
 import SettingsPage from "./components/SettingsPage";
-import FuturisticBackdrop from "./components/FuturisticBackdrop";
-import DaylightBackdrop from "./components/DaylightBackdrop";
 import ForcePasswordChange from "./components/ForcePasswordChange";
 import ForceMfaSetup from "./components/ForceMfaSetup";
 import ExecutivePage from "./components/ExecutivePage";
@@ -344,8 +342,6 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
 
   return (
     <div className="shell">
-      {/* Keyed on the motion setting: the canvases decide once whether to animate. */}
-      {resolveTheme(prefs.theme) === "futuristic" ? <FuturisticBackdrop key={prefs.motion} /> : <DaylightBackdrop key={prefs.motion} />}
       <Sidebar
         me={me}
         view={selectedId ? "project" : view}

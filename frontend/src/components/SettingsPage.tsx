@@ -60,7 +60,7 @@ interface SettingsPageInfo {
 }
 const PAGE_STORE = "pulse.settingsPage"; // the page last opened, per browser
 
-const GLASS_LABEL: Record<Prefs["glass"], string> = { "1": "Clear", "2": "Light glass", "3": "Frosted", "4": "Heavy frost", "5": "Opaque" };
+const GLASS_LABEL: Record<Prefs["glass"], string> = { "1": "See-through", "2": "Frosted", "3": "Heavy frost", "4": "Nearly solid", "5": "Solid" };
 
 export default function SettingsPage({ me, prefs, permissions, projects, mfaRequired, recoveryCodesLeft, twoStep, viewOnly, onPrefs, onProfileSaved, onSignedOut, signOutJump = 0 }: Props) {
   const [saved, setSaved] = useState(false);

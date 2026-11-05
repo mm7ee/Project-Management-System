@@ -56,16 +56,16 @@ function emailHtml(env: Env, title: string, intro: string, digest: Digest | unde
   const sections = (digest?.sections ?? [])
     .map(
       (s) =>
-        `<h3 style="margin:22px 0 6px;font-size:15px;color:#053b7a">${esc(s.title)}</h3>` +
+        `<h3 style="margin:22px 0 6px;font-size:15px;color:#2c3280">${esc(s.title)}</h3>` +
         `<ul style="margin:0;padding-left:20px">${s.items.map((i) => `<li style="margin:4px 0">${esc(i.text)}</li>`).join("")}</ul>`,
     )
     .join("");
   return `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14.5px;line-height:1.5;color:#1c2b45;background:#ffffff;padding:24px;border-radius:12px;max-width:600px">
-<p style="margin:0 0 14px;font-weight:800;font-size:13px;letter-spacing:.08em;color:#1ba9e1">PULSE</p>
-<h2 style="margin:0 0 10px;font-size:20px;color:#071a3d">${esc(title)}</h2>
+<p style="margin:0 0 14px;font-weight:800;font-size:13px;letter-spacing:.08em;color:#ed0000">PULSE</p>
+<h2 style="margin:0 0 10px;font-size:20px;color:#101553">${esc(title)}</h2>
 ${intro ? `<p style="margin:0">${esc(intro)}</p>` : ""}
 ${sections}
-<p style="margin:24px 0"><a href="${esc(fullLink(env, link))}" style="background:#053b7a;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">Open Pulse</a></p>
+<p style="margin:24px 0"><a href="${esc(fullLink(env, link))}" style="background:#2c3280;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">Open Pulse</a></p>
 <p style="margin:0;font-size:12px;color:#6b7a90">Sent by Pulse, Omni Contact's project tracker. You can turn these emails off in Settings.${digest?.aiWritten ? " The opening paragraph is AI-written; the lists come straight from Pulse's data." : ""}</p>
 </div>`;
 }
