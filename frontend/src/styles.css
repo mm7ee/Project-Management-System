@@ -1867,10 +1867,25 @@ a.nav-item { text-decoration: none; }
 .install-qr div { width: 110px; padding: 4px; border-radius: 8px; background: #fff; }
 .install-qr svg { display: block; width: 100%; height: auto; }
 
-/* ---------- Pop-ups open full size ----------
-   The larger pop-ups use most of the window, lay their parts side by side and keep a single
-   scroll (no lists scrolling inside the pop-up). Phones and narrow windows keep one column. */
-.modal-wide, .feature-modal, .start-modal, .pcn-modal, .rebalance { width: min(1040px, 100%); max-height: calc(100vh - 32px); }
+/* ---------- Pop-ups open full screen ----------
+   The larger pop-ups cover the whole window, with their content centred in a readable width,
+   parts laid side by side and a single scroll (no lists scrolling inside the pop-up). Phones
+   and narrow windows keep one column. */
+.modal-wide, .feature-modal, .start-modal, .pcn-modal, .rebalance {
+  position: fixed; inset: 0; width: auto; height: 100%; max-height: none; overflow-y: auto;
+  border-radius: 0; padding: 32px max(24px, calc((100% - 1100px) / 2)) 40px;
+}
+/* Full screen, so solid like a page: nothing from behind shows through. */
+.modal-wide, .feature-modal, .start-modal, .pcn-modal, .rebalance {
+  --card: #ffffff; --canvas: #f7f9fd; background: #ffffff; border: 0; box-shadow: none;
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+:root[data-theme="futuristic"] :is(.modal-wide, .feature-modal, .start-modal, .pcn-modal, .rebalance) {
+  --card: #191d48; --canvas: #0f1233; background: #13163a; border: 0; box-shadow: none;
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+/* The close button stays at the top right while a long form scrolls. */
+.modal-wide .close-btn { position: sticky; top: 0; z-index: 1; flex: none; align-self: flex-end; justify-self: end; margin-bottom: -48px; }
 .start-templates { max-height: none; overflow: visible; }
 @media (min-width: 900px) {
   /* Log or edit a feature request: the request on the left, the rest on the right. */
