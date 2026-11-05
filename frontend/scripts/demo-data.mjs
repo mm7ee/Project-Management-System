@@ -89,8 +89,9 @@ const TEAM = [
 const P = Object.fromEntries([
   ...people.map((p) => [p.name.split(" ")[0], p.id]),
   ...TEAM.map(([id, name]) => [id === "remedy" ? "Remedy" : name.split(" ")[0], id]),
+  ["Waraidzo", "waraidzo"], // the real manager: signs every Concept Note
 ]);
-const nameOf = Object.fromEntries([...people.map((p) => [p.id, p.name]), ...TEAM]);
+const nameOf = Object.fromEntries([...people.map((p) => [p.id, p.name]), ...TEAM, ["waraidzo", "Waraidzo"]]);
 for (const p of people) {
   out.push(
     `INSERT INTO users (id, username, name, title, role, password_hash, prefs) VALUES (${q(p.id)}, ${q(p.username)}, ${q(p.name)}, ${q(p.title)}, ${q(p.role)}, '!demo-account-no-sign-in', '{}');`,
@@ -220,8 +221,8 @@ PROJECTS.forEach(([name, status, description, leadKey, devKeys, startedDays, len
       x.pcn === "DRAFT"
         ? []
         : x.pcn === "APPROVED"
-          ? [sig("Vimbai", true, "APPROVED", 20, "Approved. Start after the festive peak."), sig("Tarisai", false, "APPROVED", 18)]
-          : [sig("Vimbai", true, "PENDING", 0), sig("Tarisai", false, "APPROVED", 4, "Supported: helps with attrition targets.")];
+          ? [sig("Waraidzo", true, "APPROVED", 20, "Approved. Start after the festive peak.")]
+          : [sig("Waraidzo", true, "PENDING", 0)];
     s.pcn = {
       title: name,
       originator: nameOf[lead],
