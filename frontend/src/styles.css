@@ -1868,12 +1868,17 @@ a.nav-item { text-decoration: none; }
 .install-qr svg { display: block; width: 100%; height: auto; }
 
 /* ---------- Pop-ups open full screen ----------
-   The larger pop-ups cover the whole window, with their content centred in a readable width,
+   The larger pop-ups cover the page (not the sidebar), with their content centred in a readable width,
    parts laid side by side and a single scroll (no lists scrolling inside the pop-up). Phones
    and narrow windows keep one column. */
 .modal-wide, .feature-modal, .start-modal, .pcn-modal, .rebalance {
   position: fixed; inset: 0; width: auto; height: 100%; max-height: none; overflow-y: auto;
   border-radius: 0; padding: 32px max(24px, calc((100% - 1100px) / 2)) 40px;
+}
+/* Beside the sidebar, which stays in view and isn't dimmed (it collapses into a menu below 861px). */
+@media (min-width: 861px) {
+  :is(.modal-wide, .feature-modal, .start-modal, .pcn-modal, .rebalance) { left: 210px; }
+  .modal-backdrop:has(> :is(.modal-wide, .feature-modal, .start-modal, .pcn-modal, .rebalance)) { background: transparent; }
 }
 /* Full screen, so solid like a page: nothing from behind shows through. */
 .modal-wide, .feature-modal, .start-modal, .pcn-modal, .rebalance {
