@@ -743,6 +743,14 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
   // logged by them: everywhere, including Ask Pulse and project history.
   const ownFeaturesOnly = me.role === "developer" && !can("manage_features");
   const mineOnly = (rows: FeatureRow[]) => (ownFeaturesOnly ? rows.filter((f) => f.assignee === me.id || f.created_by === me.id) : rows);
+  // Developers (without manage_systems) see only the Concept Notes they wrote or are asked to sign:
+  // anyone else's is left off the project, everywhere it's sent, including Ask Pulse.
+  const ownPcnsOnly = me.role === "developer" && !can("manage_systems");
+  const pcnFor = (s: System): System => {
+    if (!ownPcnsOnly || !s.pcn || s.pcnBy === me.id || s.pcn.signatories.some((g) => g.userId === me.id)) return s;
+    const { pcn: _pcn, pcnBy: _pcnBy, ...rest } = s;
+    return rest;
+  };
   const need = (p: Permission) => {
     if (!can(p)) throw new HttpError(403, "You don't have permission to do that");
   };
@@ -1210,7 +1218,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       prefs: cleanPrefs(JSON.parse(me.prefs || "{}"), START_KEYS),
       permissions: perms,
       roleMatrix: matrix,
-      systems: systems.results.map((r) => JSON.parse(r.data)),
+      systems: systems.results.map((r) => pcnFor(JSON.parse(r.data))),
       users: await (async () => {
         // Two-step is on with an app or a passkey; admins also see which methods.
         const keyed = await db.prepare("SELECT user_id, COUNT(*) AS n FROM passkeys GROUP BY user_id").all<{ user_id: string; n: number }>();
@@ -1332,7 +1340,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     ]);
     // Developers get a personal work assistant; everyone else the team view.
     const mode: AskMode = me.role === "developer" && !can("manage_features") ? "developer" : "team";
-    const allSystems = systems.results.map((r) => JSON.parse(r.data) as System);
+    const allSystems = systems.results.map((r) => pcnFor(JSON.parse(r.data) as System));
     const visibleFeatures = mineOnly(features.results).map(toFeature);
     const blockerList = blockers.results.map(
       (r): Blocker => ({
@@ -1719,7 +1727,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
         ...(changed.includes("workspace") ? { workspace: { from: current.workspace ?? null, to: next.workspace ?? null } } : {}),
       });
     }
-    return json(next);
+    return json(pcnFor(next));
   }
 
   if (sysMatch && method === "DELETE") {
