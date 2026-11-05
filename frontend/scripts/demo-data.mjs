@@ -63,8 +63,8 @@ const out = ["-- Pulse demo data. Remove with scripts/demo-data.mjs remove.", RE
 // ---------- people ----------
 const PEOPLE = [
   ["Vimbai Mutasa", "manager", "Projects Manager"],
-  ["Simbarashe Ndlovu", "team_lead", "Team Leader"],
-  ["Chipo Mhlanga", "assistant", "Projects Assistant"],
+  ["Tarisai Shumba", "team_lead", "Team Leader"],
+  ["Thamani", "assistant", "Projects Assistant"],
   ["Michael Mukwekezeke", "developer", "Developer"],
   ["Vunganayi Hellington", "developer", "Developer"],
 ];
@@ -220,8 +220,8 @@ PROJECTS.forEach(([name, status, description, leadKey, devKeys, startedDays, len
       x.pcn === "DRAFT"
         ? []
         : x.pcn === "APPROVED"
-          ? [sig("Vimbai", true, "APPROVED", 20, "Approved. Start after the festive peak."), sig("Simbarashe", false, "APPROVED", 18)]
-          : [sig("Vimbai", true, "PENDING", 0), sig("Simbarashe", false, "APPROVED", 4, "Supported: helps with attrition targets.")];
+          ? [sig("Vimbai", true, "APPROVED", 20, "Approved. Start after the festive peak."), sig("Tarisai", false, "APPROVED", 18)]
+          : [sig("Vimbai", true, "PENDING", 0), sig("Tarisai", false, "APPROVED", 4, "Supported: helps with attrition targets.")];
     s.pcn = {
       title: name,
       originator: nameOf[lead],
@@ -308,7 +308,7 @@ for (let i = 0; i < reqCount; i++) {
       q(assignee),
       q(notes),
       q(dateAgo(dueDays)),
-      q(pick([P.Vimbai, P.Simbarashe, P.Chipo])),
+      q(pick([P.Vimbai, P.Tarisai, P.Thamani])),
       q(created),
       q(completedDays ? ago(completedDays, 15) : ago(Math.max(0, createdDays - between(1, 10)), 14)),
       q(completedDays ? ago(completedDays, 15) : null),
