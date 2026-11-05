@@ -1866,3 +1866,24 @@ a.nav-item { text-decoration: none; }
 .install-qr { margin: 0; display: grid; gap: 6px; justify-items: center; max-width: 150px; text-align: center; font-size: 12px; color: var(--muted); }
 .install-qr div { width: 110px; padding: 4px; border-radius: 8px; background: #fff; }
 .install-qr svg { display: block; width: 100%; height: auto; }
+
+/* ---------- Pop-ups open full size ----------
+   The larger pop-ups use most of the window, lay their parts side by side and keep a single
+   scroll (no lists scrolling inside the pop-up). Phones and narrow windows keep one column. */
+.modal-wide, .feature-modal, .start-modal, .pcn-modal, .rebalance { width: min(1040px, 100%); max-height: calc(100vh - 32px); }
+.start-templates { max-height: none; overflow: visible; }
+@media (min-width: 900px) {
+  /* Log or edit a feature request: the request on the left, the rest on the right. */
+  .feature-modal { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); column-gap: 32px; align-content: start; }
+  .feature-modal > * { grid-column: 1 / -1; }
+  .feature-modal > .step { grid-column: 2; }
+  .feature-modal > .step:first-of-type { grid-column: 1; grid-row: span 4; align-self: start; }
+  .feature-modal { grid-auto-flow: row dense; }
+  /* Add a system: templates two by two. */
+  .start-templates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Rebalance: one card per developer, side by side. */
+  .rebalance { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); align-content: start; }
+  .rebalance > * { grid-column: 1 / -1; }
+  .rebalance > .rebalance-dev { grid-column: auto; align-self: start; }
+  .rebalance > .rebalance-dev:only-of-type { grid-column: 1 / -1; }
+}
