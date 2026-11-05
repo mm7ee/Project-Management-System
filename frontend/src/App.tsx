@@ -3,7 +3,8 @@ import { AlertOctagon, Eye, FileText, History, LifeBuoy, Menu, Plus, Search, Set
 import { getSchedule, type System } from "./data/systems";
 import { api, useAppData, type AppData } from "./data/api";
 import { isAssigned, type Permission, type Prefs } from "./data/roles";
-import { useApplyPrefs } from "./prefs";
+import { resolveTheme, useApplyPrefs } from "./prefs";
+import ParticleField from "./components/ParticleField";
 import { shareToken } from "./data/api";
 import { useNow } from "./time";
 import Sidebar, { type Filter, type View } from "./components/Sidebar";
@@ -342,6 +343,12 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
 
   return (
     <div className="shell">
+      {/* The drifting web behind the pages. Keyed on motion and theme: the canvas decides once how to draw. */}
+      <ParticleField
+        key={prefs.motion + resolveTheme(prefs.theme)}
+        className="app-web no-print"
+        palette={resolveTheme(prefs.theme) === "futuristic" ? "appDark" : "appLight"}
+      />
       <Sidebar
         me={me}
         view={selectedId ? "project" : view}

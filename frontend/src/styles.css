@@ -126,6 +126,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .sidebar-close, .menu-btn { display: none; }
 .sidebar-scrim { display: none; }
 
+/* The web drifting behind the pages: fixed, faint, under everything. */
+.app-web { position: fixed; inset: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; }
+@media print { .app-web { display: none; } }
+
 /* ---------- Main ---------- */
 .main { min-width: 0; overflow-y: auto; padding: 18px 22px 30px; }
 
