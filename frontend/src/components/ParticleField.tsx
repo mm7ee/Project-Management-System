@@ -13,6 +13,7 @@ const PALETTES = {
   light: { link: "11, 111, 176", linkAlpha: 0.2, reach: "27, 169, 225", reachAlpha: 0.55, dot: "rgba(11, 111, 176, 0.5)", accent: "rgba(242, 169, 0, 0.85)" },
   appLight: { link: "44, 50, 128", linkAlpha: 0.13, reach: "0, 57, 166", reachAlpha: 0.32, dot: "rgba(44, 50, 128, 0.32)", accent: "rgba(237, 0, 0, 0.6)" },
   appDark: { link: "128, 149, 255", linkAlpha: 0.13, reach: "180, 190, 255", reachAlpha: 0.3, dot: "rgba(180, 190, 255, 0.45)", accent: "rgba(255, 59, 59, 0.8)" },
+  sidebar: { link: "150, 168, 255", linkAlpha: 0.26, reach: "180, 190, 255", reachAlpha: 0.4, dot: "rgba(190, 200, 255, 0.65)", accent: "rgba(255, 59, 59, 0.85)" },
 };
 
 export default function ParticleField({ className, palette = "dark" }: { className?: string; palette?: keyof typeof PALETTES }) {

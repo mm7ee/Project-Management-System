@@ -3,6 +3,7 @@ import { initials, type Status } from "../data/systems";
 import { ROLE_LABEL, type User } from "../data/roles";
 import { COMPANY_URL } from "../brand";
 import PulseMark from "./PulseMark";
+import ParticleField from "./ParticleField";
 
 export type Filter = "ALL" | Status | "OVERDUE" | "REQUESTED" | "MAINTENANCE" | "MINE" | "BLOCKED";
 export type View = "dashboard" | "projects" | "project" | "features" | "pcns" | "reports" | "users" | "activity" | "settings";
@@ -35,6 +36,8 @@ export default function Sidebar(p: Props) {
     <>
       <div className={`sidebar-scrim ${p.open ? "show" : ""}`} onClick={p.onClose} />
       <aside className={`sidebar ${p.open ? "open" : ""}`}>
+        {/* The drifting web, inside the menu too: light indigo on the navy. */}
+        <ParticleField className="sidebar-web" palette="sidebar" />
         <button className="sidebar-close" onClick={p.onClose} aria-label="Close menu">
           <X size={18} />
         </button>
