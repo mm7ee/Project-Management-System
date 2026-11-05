@@ -6,8 +6,9 @@
 //   node scripts/demo-data.mjs remove > demo-remove.sql
 // or simply `npm run demo:seed` / `npm run demo:remove` (live database).
 //
-// Demo people cannot sign in (their password field holds no usable hash). Nothing is written to
-// the activity log: that is the security audit trail and only records real events.
+// Demo people cannot sign in (their password field holds no usable hash). The developers are the
+// real DevOps team: their own accounts where they have one, a demo account where they don't.
+// Nothing is written to the activity log: that is the security audit trail and only records real events.
 
 const mode = process.argv[2];
 if (mode !== "seed" && mode !== "remove") {
@@ -21,6 +22,7 @@ DELETE FROM features WHERE id LIKE 'demo-%';
 DELETE FROM blockers WHERE id LIKE 'demo-%';
 DELETE FROM documents WHERE id LIKE 'demo-%';
 DELETE FROM requests WHERE id LIKE 'demo-%';
+DELETE FROM notifications WHERE link LIKE '%demo-%' OR digest LIKE '%demo-%';
 DELETE FROM systems WHERE id LIKE 'demo-%';
 DELETE FROM users WHERE id LIKE 'demo-%';
 `;
@@ -63,22 +65,32 @@ const PEOPLE = [
   ["Vimbai Mutasa", "manager", "Projects Manager"],
   ["Simbarashe Ndlovu", "team_lead", "Team Leader"],
   ["Chipo Mhlanga", "assistant", "Projects Assistant"],
-  ["Farai Moyo", "developer", "Senior Developer"],
-  ["Rudo Chikore", "developer", "Developer"],
-  ["Tatenda Ncube", "developer", "Developer"],
-  ["Nyasha Dube", "developer", "Full-stack Developer"],
-  ["Kudakwashe Sibanda", "developer", "Developer"],
-  ["Chiedza Mlambo", "developer", "Front-end Developer"],
-  ["Tafadzwa Zhou", "developer", "Integrations Developer"],
-  ["Blessing Phiri", "developer", "Developer"],
-  ["Rumbidzai Banda", "developer", "QA Engineer"],
+  ["Michael Mukwekezeke", "developer", "Developer"],
+  ["Vunganayi Hellington", "developer", "Developer"],
 ];
 const people = PEOPLE.map(([name, role, title]) => {
   const first = name.split(" ")[0].toLowerCase();
   return { id: `demo-${first}`, username: `demo.${first}`, name, role, title: `${title} (demo)` };
 });
-const P = Object.fromEntries(people.map((p) => [p.name.split(" ")[0], p.id]));
-const nameOf = Object.fromEntries(people.map((p) => [p.id, p.name]));
+// The DevOps team's existing Pulse accounts (by id), with their full names for Concept Notes.
+const TEAM = [
+  ["anesu", "Anesu Mashonga"],
+  ["ashell", "Ashell Gonese"],
+  ["collins", "Collins Chimbganda"],
+  ["donald", "Donald Gumbo"],
+  ["kundai", "Kundai Muzhona"],
+  ["mcdonald", "Macdonald Chiroro"],
+  ["mutsa", "Mutsa Mwanza"],
+  ["paul", "Paul Tshuma"],
+  ["remedy", "Maguta Remedy"],
+  ["tennyson", "Tennyson Zvaita"],
+  ["tino", "Tinotenda Mukadzambo"],
+];
+const P = Object.fromEntries([
+  ...people.map((p) => [p.name.split(" ")[0], p.id]),
+  ...TEAM.map(([id, name]) => [id === "remedy" ? "Remedy" : name.split(" ")[0], id]),
+]);
+const nameOf = Object.fromEntries([...people.map((p) => [p.id, p.name]), ...TEAM]);
 for (const p of people) {
   out.push(
     `INSERT INTO users (id, username, name, title, role, password_hash, prefs) VALUES (${q(p.id)}, ${q(p.username)}, ${q(p.name)}, ${q(p.title)}, ${q(p.role)}, '!demo-account-no-sign-in', '{}');`,
@@ -90,39 +102,39 @@ for (const p of people) {
 const CLIENTS = ["Zuva Insurance", "Mhepo Mobile", "Kopje Bank", "Savanna Health", "Baobab Retail", "Nyika Power", "Omni Contact (internal)"];
 const PROJECTS = [
   // Live
-  ["Contact Centre CRM", "LIVE", "Single customer view for agents: history, tickets and notes across every channel.", "Farai", ["Farai"], 520, 150, 100, { engagement: 2140 }],
-  ["Agent Scorecard Dashboard", "LIVE", "Daily KPIs per agent: handle time, first-call resolution and QA scores.", "Nyasha", ["Nyasha"], 470, 95, 100, { engagement: 1580 }],
-  ["IVR Call Routing Manager", "LIVE", "Lets supervisors change IVR menus and routing rules without a vendor ticket.", "Tafadzwa", ["Tafadzwa"], 430, 120, 100, { engagement: 640, health: "Maintenance", maintenanceNote: "Adding Shona and Ndebele menu prompts", maintenanceDays: 6 }],
-  ["Payroll Self-Service Portal", "LIVE", "Staff view payslips, tax certificates and update banking details.", "Rudo", ["Rudo"], 400, 110, 100, { engagement: 1910 }],
-  ["Client Billing & Invoicing", "LIVE", "Generates monthly client invoices from billable minutes and SLA credits.", "Farai", ["Farai"], 330, 130, 100, { engagement: 520 }],
-  ["Workforce Scheduler", "LIVE", "Forecasts call volumes and builds agent rosters by skill and shift.", "Tatenda", ["Tatenda"], 300, 120, 100, { engagement: 1230, health: "Maintenance", maintenanceNote: "Re-tuning the forecast for the festive season peak", maintenanceDays: 3 }],
-  ["Quality Assurance Call Review", "LIVE", "Random call sampling, scoring forms and coaching notes for QA analysts.", "Chiedza", ["Chiedza"], 250, 90, 100, { engagement: 870 }],
-  ["Knowledge Base Portal", "LIVE", "Searchable product scripts and FAQs for agents, per client campaign.", "Kudakwashe", ["Kudakwashe"], 190, 75, 100, { engagement: 1460 }],
+  ["Contact Centre CRM", "LIVE", "Single customer view for agents: history, tickets and notes across every channel.", "Anesu", ["Anesu"], 520, 150, 100, { engagement: 2140 }],
+  ["Agent Scorecard Dashboard", "LIVE", "Daily KPIs per agent: handle time, first-call resolution and QA scores.", "Ashell", ["Ashell"], 470, 95, 100, { engagement: 1580 }],
+  ["IVR Call Routing Manager", "LIVE", "Lets supervisors change IVR menus and routing rules without a vendor ticket.", "Collins", ["Collins"], 430, 120, 100, { engagement: 640, health: "Maintenance", maintenanceNote: "Adding Shona and Ndebele menu prompts", maintenanceDays: 6 }],
+  ["Payroll Self-Service Portal", "LIVE", "Staff view payslips, tax certificates and update banking details.", "Remedy", ["Remedy"], 400, 110, 100, { engagement: 1910 }],
+  ["Client Billing & Invoicing", "LIVE", "Generates monthly client invoices from billable minutes and SLA credits.", "Anesu", ["Anesu"], 330, 130, 100, { engagement: 520 }],
+  ["Workforce Scheduler", "LIVE", "Forecasts call volumes and builds agent rosters by skill and shift.", "Tennyson", ["Tennyson"], 300, 120, 100, { engagement: 1230, health: "Maintenance", maintenanceNote: "Re-tuning the forecast for the festive season peak", maintenanceDays: 3 }],
+  ["Quality Assurance Call Review", "LIVE", "Random call sampling, scoring forms and coaching notes for QA analysts.", "Kundai", ["Kundai"], 250, 90, 100, { engagement: 870 }],
+  ["Knowledge Base Portal", "LIVE", "Searchable product scripts and FAQs for agents, per client campaign.", "Michael", ["Michael"], 190, 75, 100, { engagement: 1460 }],
   // Completed
-  ["Visitor Management System", "COMPLETED", "Front-desk visitor sign-in with badges and host notifications.", "Blessing", ["Blessing"], 540, 70, 100, {}],
-  ["Asset Register", "COMPLETED", "Tracks laptops, headsets and desks issued to staff.", "Kudakwashe", ["Kudakwashe"], 360, 60, 100, {}],
-  ["Staff Pulse Survey", "COMPLETED", "Quarterly anonymous engagement survey with trend reports.", "Chiedza", ["Chiedza"], 215, 45, 100, {}],
-  ["Leave Planner", "COMPLETED", "Team leave calendar with cover checks before approval.", "Rudo", ["Rudo"], 150, 55, 100, {}],
+  ["Visitor Management System", "COMPLETED", "Front-desk visitor sign-in with badges and host notifications.", "Paul", ["Paul"], 540, 70, 100, {}],
+  ["Asset Register", "COMPLETED", "Tracks laptops, headsets and desks issued to staff.", "Tinotenda", ["Donald"], 360, 60, 100, {}],
+  ["Staff Pulse Survey", "COMPLETED", "Quarterly anonymous engagement survey with trend reports.", "Kundai", ["Kundai"], 215, 45, 100, {}],
+  ["Leave Planner", "COMPLETED", "Team leave calendar with cover checks before approval.", "Remedy", ["Remedy"], 150, 55, 100, {}],
   // In progress
-  ["WhatsApp Customer Channel", "WIP", "Two-way WhatsApp support for clients' customers, routed into the CRM.", "Tafadzwa", ["Tafadzwa", "Nyasha"], 110, 150, 55, { stalled: 0 }],
-  ["Recruitment & Onboarding Portal", "WIP", "Applicant tracking, assessments and first-week onboarding checklists.", "Rudo", ["Rudo", "Blessing"], 95, 85, 72, { overdue: true }],
-  ["Sales Commission Calculator", "WIP", "Calculates agent commission from sales campaigns and clawbacks.", "Farai", ["Farai", "Kudakwashe"], 80, 120, 35, { stalled: 23 }],
-  ["Client SLA Reporting Hub", "WIP", "Live SLA dashboards each client can log in to see.", "Nyasha", ["Nyasha", "Chiedza"], 70, 110, 48, {}],
-  ["Training Academy LMS Integration", "WIP", "Links the learning platform to rosters so training is booked around shifts.", "Tatenda", ["Tatenda"], 60, 66, 63, { atRisk: true }],
-  ["Speech Analytics Pilot", "WIP", "Transcribes recorded calls and flags compliance phrases and sentiment.", "Tafadzwa", ["Tafadzwa", "Farai"], 45, 140, 22, { stalled: 31 }],
+  ["WhatsApp Customer Channel", "WIP", "Two-way WhatsApp support for clients' customers, routed into the CRM.", "Collins", ["Collins", "Vunganayi"], 110, 150, 55, { stalled: 0 }],
+  ["Recruitment & Onboarding Portal", "WIP", "Applicant tracking, assessments and first-week onboarding checklists.", "Remedy", ["Remedy", "Macdonald"], 95, 85, 72, { overdue: true }],
+  ["Sales Commission Calculator", "WIP", "Calculates agent commission from sales campaigns and clawbacks.", "Anesu", ["Anesu", "Donald"], 80, 120, 35, { stalled: 23 }],
+  ["Client SLA Reporting Hub", "WIP", "Live SLA dashboards each client can log in to see.", "Ashell", ["Ashell", "Kundai"], 70, 110, 48, {}],
+  ["Training Academy LMS Integration", "WIP", "Links the learning platform to rosters so training is booked around shifts.", "Tennyson", ["Tennyson", "Mutsa"], 60, 66, 63, { atRisk: true }],
+  ["Speech Analytics Pilot", "WIP", "Transcribes recorded calls and flags compliance phrases and sentiment.", "Collins", ["Collins", "Anesu"], 45, 140, 22, { stalled: 31 }],
   // Testing
-  ["Fleet & Transport Booking", "TESTING", "Books staff transport for night shifts and tracks routes.", "Kudakwashe", ["Blessing"], 120, 125, 88, {}],
-  ["Procurement Requests", "TESTING", "Purchase requests with budget checks and approvals.", "Blessing", ["Rumbidzai"], 100, 98, 91, { overdue: true }],
-  ["Customer Feedback Kiosk", "TESTING", "Tablet survey at walk-in centres feeding the CSAT dashboard.", "Chiedza", ["Rumbidzai"], 85, 110, 84, {}],
+  ["Fleet & Transport Booking", "TESTING", "Books staff transport for night shifts and tracks routes.", "Donald", ["Paul"], 120, 125, 88, {}],
+  ["Procurement Requests", "TESTING", "Purchase requests with budget checks and approvals.", "Paul", ["Michael"], 100, 98, 91, { overdue: true }],
+  ["Customer Feedback Kiosk", "TESTING", "Tablet survey at walk-in centres feeding the CSAT dashboard.", "Kundai", ["Vunganayi"], 85, 110, 84, {}],
   // To deploy
-  ["Shift Swap Mobile App", "TO_DEPLOY", "Agents swap shifts from their phones; team leaders approve in one tap.", "Tatenda", ["Rumbidzai"], 140, 145, 97, {}],
-  ["Document E-Signature", "TO_DEPLOY", "Contracts and policies signed electronically with an audit trail.", "Rudo", ["Tatenda"], 130, 135, 95, {}],
+  ["Shift Swap Mobile App", "TO_DEPLOY", "Agents swap shifts from their phones; team leaders approve in one tap.", "Tennyson", ["Tinotenda"], 140, 145, 97, {}],
+  ["Document E-Signature", "TO_DEPLOY", "Contracts and policies signed electronically with an audit trail.", "Remedy", ["Macdonald"], 130, 135, 95, {}],
   // Upcoming
-  ["Debt Collections Workbench", "UPCOMING", "Promise-to-pay tracking and dialler lists for collections campaigns.", "Farai", [], -12, 120, 0, { pcn: "APPROVED" }],
-  ["AI Chat Assistant", "UPCOMING", "Website chatbot that answers routine questions and hands over to agents.", "Nyasha", [], -30, 150, 0, { pcn: "APPROVED" }],
+  ["Debt Collections Workbench", "UPCOMING", "Promise-to-pay tracking and dialler lists for collections campaigns.", "Anesu", [], -12, 120, 0, { pcn: "APPROVED" }],
+  ["AI Chat Assistant", "UPCOMING", "Website chatbot that answers routine questions and hands over to agents.", "Mutsa", [], -30, 150, 0, { pcn: "APPROVED" }],
   // Ideas
-  ["Agent Wellness Tracker", "IDEA", "Break reminders and wellbeing check-ins to reduce burnout and attrition.", "Chiedza", [], 0, 0, 0, { pcn: "PENDING" }],
-  ["Predictive Staffing Model", "IDEA", "Machine-learning forecast of call volumes from campaigns, weather and holidays.", "Tatenda", [], 0, 0, 0, { pcn: "DRAFT" }],
+  ["Agent Wellness Tracker", "IDEA", "Break reminders and wellbeing check-ins to reduce burnout and attrition.", "Kundai", [], 0, 0, 0, { pcn: "PENDING" }],
+  ["Predictive Staffing Model", "IDEA", "Machine-learning forecast of call volumes from campaigns, weather and holidays.", "Tennyson", [], 0, 0, 0, { pcn: "DRAFT" }],
 ];
 
 // Which part of the business each demo project serves (the Projects page's workspace filter).
@@ -231,7 +243,7 @@ PROJECTS.forEach(([name, status, description, leadKey, devKeys, startedDays, len
   // Completed projects keep their lead but no longer hold developers' project slots.
   if (status !== "COMPLETED") for (const d of devKeys) out.push(`INSERT OR IGNORE INTO assignments (user_id, system_id) VALUES (${q(P[d])}, ${q(id)});`);
 });
-// Farai ends up on four projects: one over the limit, to show the overload flag and suggestions.
+// Anesu ends up on four projects: one over the limit, to show the overload flag and suggestions.
 
 // ---------- feature requests ----------
 const REQUESTS = [
@@ -270,7 +282,7 @@ for (let i = 0; i < reqCount; i++) {
   else status = pick(["NOT_STARTED", "NOT_STARTED", "IN_PROGRESS", "IN_PROGRESS", "TESTING", "COMPLETED"]);
   const priority = pick(["CRITICAL", "HIGH", "HIGH", "MEDIUM", "MEDIUM", "MEDIUM", "LOW", "LOW"]);
   const devs = PROJECTS.find((p) => `demo-${slug(p[0])}` === sys.id)[4];
-  const assignee = status === "NOT_STARTED" && rand() < 0.4 ? null : P[pick(devs.length ? devs : ["Farai", "Nyasha", "Rudo"])];
+  const assignee = status === "NOT_STARTED" && rand() < 0.4 ? null : P[pick(devs.length ? devs : ["Anesu", "Ashell", "Remedy"])];
   const dueDays = createdDays - between(14, 45); // days ago (negative = in the future)
   const completedDays = status === "COMPLETED" ? Math.max(1, createdDays - between(7, 50)) : null;
   const late = status !== "COMPLETED" && status !== "CANCELLED" && dueDays > 0;
@@ -306,20 +318,20 @@ for (let i = 0; i < reqCount; i++) {
 
 // ---------- blockers ----------
 const BLOCKERS = [
-  ["demo-whatsapp-customer-channel", "Meta business verification still pending for the client's number", "Tafadzwa", 9, null],
-  ["demo-sales-commission-calculator", "Finance hasn't signed off the clawback rules", "Farai", 26, null],
-  ["demo-speech-analytics-pilot", "Waiting on GPU server procurement", "Tafadzwa", 34, null],
-  ["demo-speech-analytics-pilot", "Call recordings for June are missing from the archive", "Farai", 20, null],
-  ["demo-procurement-requests", "UAT testers unavailable until month-end close is done", "Rumbidzai", 7, null],
-  ["demo-recruitment-onboarding-portal", "Psychometric test vendor API keys not issued", "Rudo", 12, null],
-  ["demo-contact-centre-crm", "Telephony vendor API rate limits", "Farai", 410, [395, "Vendor raised our limit to 50 requests/second."]],
-  ["demo-payroll-self-service-portal", "Bank file format changed", "Rudo", 330, [322, "Updated the export to the new format."]],
-  ["demo-workforce-scheduler", "Historical volume data incomplete", "Tatenda", 250, [238, "Rebuilt 12 months of history from the dialler logs."]],
-  ["demo-client-billing-invoicing", "Tax rate change mid-month", "Farai", 230, [226, "Pro-rated the change; finance approved."]],
-  ["demo-knowledge-base-portal", "Content owners not assigned per client", "Kudakwashe", 150, [141, "Operations named an owner for each campaign."]],
-  ["demo-fleet-transport-booking", "GPS trackers not yet installed in two buses", "Kudakwashe", 40, [28, "Installed; routes now live."]],
-  ["demo-shift-swap-mobile-app", "App store review rejected the first build", "Tatenda", 25, [19, "Fixed the privacy notice; approved on resubmission."]],
-  ["demo-client-sla-reporting-hub", "Client firewall blocks the dashboard URL", "Nyasha", 30, [16, "Client IT whitelisted the domain."]],
+  ["demo-whatsapp-customer-channel", "Meta business verification still pending for the client's number", "Collins", 9, null],
+  ["demo-sales-commission-calculator", "Finance hasn't signed off the clawback rules", "Anesu", 26, null],
+  ["demo-speech-analytics-pilot", "Waiting on GPU server procurement", "Collins", 34, null],
+  ["demo-speech-analytics-pilot", "Call recordings for June are missing from the archive", "Anesu", 20, null],
+  ["demo-procurement-requests", "UAT testers unavailable until month-end close is done", "Tinotenda", 7, null],
+  ["demo-recruitment-onboarding-portal", "Psychometric test vendor API keys not issued", "Remedy", 12, null],
+  ["demo-contact-centre-crm", "Telephony vendor API rate limits", "Anesu", 410, [395, "Vendor raised our limit to 50 requests/second."]],
+  ["demo-payroll-self-service-portal", "Bank file format changed", "Remedy", 330, [322, "Updated the export to the new format."]],
+  ["demo-workforce-scheduler", "Historical volume data incomplete", "Tennyson", 250, [238, "Rebuilt 12 months of history from the dialler logs."]],
+  ["demo-client-billing-invoicing", "Tax rate change mid-month", "Anesu", 230, [226, "Pro-rated the change; finance approved."]],
+  ["demo-knowledge-base-portal", "Content owners not assigned per client", "Donald", 150, [141, "Operations named an owner for each campaign."]],
+  ["demo-fleet-transport-booking", "GPS trackers not yet installed in two buses", "Donald", 40, [28, "Installed; routes now live."]],
+  ["demo-shift-swap-mobile-app", "App store review rejected the first build", "Tennyson", 25, [19, "Fixed the privacy notice; approved on resubmission."]],
+  ["demo-client-sla-reporting-hub", "Client firewall blocks the dashboard URL", "Ashell", 30, [16, "Client IT whitelisted the domain."]],
 ];
 BLOCKERS.forEach(([sys, text, by, raised, resolved], i) => {
   out.push(
@@ -366,56 +378,5 @@ systems.forEach((s, i) => {
     `INSERT INTO requests (id, system_id, requested_by, message, created_at) VALUES (${q(`demo-rq-${i + 1}`)}, ${q(sys)}, ${q(P.Vimbai)}, ${q(message)}, ${q(ago(days, 9))});`,
   );
 });
-
-// ---------- the real team on demo projects ----------
-// Existing Pulse developers join demo projects, lead some, and take demo requests. Each
-// statement only applies if that account exists, and everything hangs off demo- rows, so
-// "remove" clears it too. Two projects each keeps them under the project limit.
-const TEAM = [
-  ["ashell", ["demo-client-sla-reporting-hub", "demo-customer-feedback-kiosk"], "demo-customer-feedback-kiosk"],
-  ["collins", ["demo-training-academy-lms-integration", "demo-fleet-transport-booking"], "demo-fleet-transport-booking"],
-  ["remedy", ["demo-recruitment-onboarding-portal", "demo-document-e-signature"], "demo-document-e-signature"],
-  ["donald", ["demo-whatsapp-customer-channel", "demo-shift-swap-mobile-app"], null],
-  ["kundai", ["demo-sales-commission-calculator", "demo-procurement-requests"], null],
-];
-const exists = (id) => `EXISTS (SELECT 1 FROM users WHERE id = ${q(id)})`;
-for (const [user, projects, leads] of TEAM) {
-  for (const sys of projects) {
-    out.push(`INSERT OR IGNORE INTO assignments (user_id, system_id) SELECT ${q(user)}, ${q(sys)} WHERE ${exists(user)};`);
-  }
-  // Three requests of their own: one in progress, one at another stage, one delivered.
-  const mine = [
-    ["IN_PROGRESS", "HIGH", 12, -9, null, "Back end done; working on the screens."],
-    [pick(["NOT_STARTED", "TESTING", "ON_HOLD"]), pick(["CRITICAL", "MEDIUM"]), 6, -20, null, null],
-    ["COMPLETED", "MEDIUM", 40, 12, 15, null],
-  ];
-  mine.forEach(([status, priority, createdDays, dueDays, doneDays, notes], k) => {
-    const sys = projects[k % projects.length];
-    const [title, kind, description] = REQUESTS[(user.length * 5 + k * 4) % REQUESTS.length];
-    out.push(
-      `INSERT INTO features (id, system_id, title, description, kind, client, status, priority, assignee, notes, due_at, created_by, created_at, updated_at, completed_at) SELECT ${[
-        q(`demo-fr-${user}-${k + 1}`),
-        q(sys),
-        q(title),
-        q(description),
-        q(kind),
-        q(CLIENTS[(user.length + k) % CLIENTS.length]),
-        q(status),
-        q(priority),
-        q(user),
-        q(status === "ON_HOLD" ? "Waiting for the client to confirm the requirements." : notes),
-        q(dateAgo(dueDays)),
-        q(pick([P.Vimbai, P.Simbarashe])),
-        q(ago(createdDays, 10)),
-        q(ago(doneDays ?? between(0, 3), 15)),
-        q(doneDays ? ago(doneDays, 15) : null),
-      ].join(", ")} WHERE ${exists(user)};`,
-    );
-  });
-  if (leads)
-    out.push(
-      `UPDATE systems SET data = json_set(data, '$.lead', ${q(user)}, '$.updatedBy', ${q(user[0].toUpperCase())}) WHERE id = ${q(leads)} AND ${exists(user)};`,
-    );
-}
 
 process.stdout.write(out.join("\n") + "\n");
