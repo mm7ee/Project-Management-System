@@ -130,6 +130,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   const myProjects = systems.filter(isMine);
 
   // Sign-in opens the Dashboard, unless someone chose a Projects tab to start on.
+  const [signOutJump, setSignOutJump] = useState(0);
   const [view, setView] = useState<View>(() => (prefs.start === "DASHBOARD" ? "dashboard" : "projects"));
   const [filter, setFilter] = useState<Filter>(() =>
     prefs.start === "DASHBOARD" || (prefs.start === "MINE" && !myProjects.length) ? "ALL" : (prefs.start as Filter),
@@ -371,6 +372,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
         }}
         onAccount={() => {
           setView("settings");
+          setSignOutJump((n) => n + 1);
           if (selectedId) closeProject();
         }}
         viewOnly={data.viewOnly}
@@ -522,6 +524,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             onPrefs={savePrefs}
             onProfileSaved={reload}
             onSignedOut={reload}
+            signOutJump={signOutJump}
           />
           </>
         ) : view === "pcns" ? (

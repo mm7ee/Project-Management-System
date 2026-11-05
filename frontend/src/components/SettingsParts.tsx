@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 
-export function Section({ icon, title, sub, children }: { icon: ReactNode; title: string; sub?: string; children: ReactNode }) {
+export function Section({ icon, title, sub, id, flash, children }: { icon: ReactNode; title: string; sub?: string; id?: string; flash?: boolean; children: ReactNode }) {
   return (
-    <section className="set-card">
+    <section id={id} className={`set-card ${flash ? "flash" : ""}`}>
       <header className="set-head">
         <span className="set-icon">{icon}</span>
         <div>

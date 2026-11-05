@@ -465,6 +465,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .set-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .confirm-inline-row { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: var(--red-ink); }
 .set-note { font-size: 13px; color: var(--faint); }
+.set-card.flash { animation: set-flash 1.6s ease-out; }
+@keyframes set-flash { 0%, 40% { box-shadow: 0 0 0 2px var(--cyan); } 100% { box-shadow: 0 0 0 2px transparent; } }
+@media (prefers-reduced-motion: reduce) { .set-card.flash { animation: none; } }
 .retention-list { margin: 0; display: flex; flex-direction: column; }
 .retention-list > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px 16px; padding: 10px 0; border-top: 1px solid var(--border); font-size: 14px; }
 .retention-list > div:first-child { border-top: 0; padding-top: 0; }

@@ -45,11 +45,12 @@ interface Props {
   onPrefs: (p: Prefs) => Promise<void>;
   onProfileSaved: () => Promise<void>;
   onSignedOut: () => void;
+  signOutJump?: number; // bumped by the profile card in the sidebar: scroll to the Sessions card
 }
 
 const GLASS_LABEL: Record<Prefs["glass"], string> = { "1": "Clear", "2": "Light glass", "3": "Frosted", "4": "Heavy frost", "5": "Opaque" };
 
-export default function SettingsPage({ me, prefs, permissions, projects, mfaRequired, recoveryCodesLeft, twoStep, viewOnly, onPrefs, onProfileSaved, onSignedOut }: Props) {
+export default function SettingsPage({ me, prefs, permissions, projects, mfaRequired, recoveryCodesLeft, twoStep, viewOnly, onPrefs, onProfileSaved, onSignedOut, signOutJump = 0 }: Props) {
   const [saved, setSaved] = useState(false);
   const [email, setEmail] = useState(me.email ?? "");
   const [phone, setPhone] = useState(me.phone ?? "");
@@ -59,6 +60,15 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
   const [confirm, setConfirm] = useState("");
   const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
+  const [flash, setFlash] = useState(false);
+
+  useEffect(() => {
+    if (!signOutJump) return;
+    document.getElementById("settings-sessions")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setFlash(true);
+    const id = setTimeout(() => setFlash(false), 1600);
+    return () => clearTimeout(id);
+  }, [signOutJump]);
 
   useEffect(() => {
     if (!saved) return;
@@ -303,6 +313,8 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
         </Section>
 
         <Section
+          id="settings-sessions"
+          flash={flash}
           icon={<MonitorSmartphone size={18} />}
           title="Sessions"
           sub="You're signed in on this device. Sign out of all devices if you used a shared or lost computer."
