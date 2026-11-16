@@ -11,6 +11,8 @@ export const SHARE_LINK_DAYS = 90;
 export const MFA_HELP_DAYS = 90;
 /** Sign-in sessions last this long, then are removed. */
 export const SESSION_DAYS = 7;
+/** Failed sign-in counters (the username tried and the IP address), used for the lockout. */
+export const SIGNIN_FAILURE_HOURS = 24;
 
 export interface RetentionRule {
   what: string;
@@ -25,6 +27,7 @@ export const RETENTION: RetentionRule[] = [
   { what: "Expired or revoked share links", kept: `${SHARE_LINK_DAYS} days` },
   { what: "Handled two-step verification help requests", kept: `${MFA_HELP_DAYS} days` },
   { what: "Sign-in sessions", kept: `${SESSION_DAYS} days, or until you sign out` },
+  { what: "Failed sign-in counters (username tried, IP address) behind the lockout", kept: `${SIGNIN_FAILURE_HOURS} hours` },
   { what: "Used recovery codes, expired sign-in and passkey challenges", kept: "Removed the next weekday morning" },
   { what: "Previous passwords (hashed, to stop reuse)", kept: "The four most recent" },
 ];

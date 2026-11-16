@@ -954,6 +954,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .mfa-check small { margin-left: auto; font-weight: 500; color: var(--faint); }
 .mfa-policy { display: flex; flex-direction: column; gap: 10px; padding: 16px; margin-bottom: 8px; }
 .flag-mfa { background: var(--tint-green); color: var(--green-ink); margin-left: 6px; }
+.flag-locked { background: var(--tint-red); color: var(--red-ink); margin-left: 6px; }
 .form-ok svg, .form-warn svg { vertical-align: -3px; }
 .danger-text { color: var(--red); }
 .mfa-gate { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: var(--canvas); }
@@ -1635,6 +1636,7 @@ a.nav-item { text-decoration: none; }
 .mfa-help ol { margin: 10px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; line-height: 1.5; color: var(--text); }
 .flag-mfa svg + svg { margin-left: 2px; }
 .mfa-requests { margin-bottom: 16px; border-color: var(--amber); }
+.mfa-requests.locked-accounts { border-color: var(--red); }
 .mfa-requests ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .mfa-requests li { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 12px; border-radius: 10px; background: var(--canvas); border: 1px solid var(--border); }
 .mfa-request-text { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 2px; }

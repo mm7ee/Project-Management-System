@@ -80,6 +80,8 @@ export interface User {
   mfaEnabled?: boolean; // two-step verification is on: an authenticator app and/or a passkey
   mfaMethods?: ("app" | "passkey")[]; // which ones (shown to administrators)
   lastLogin?: string; // ISO; only sent to people who can view the activity log
+  lockedUntil?: string; // ISO; the account is locked after too many wrong passwords (sent to administrators only)
+  lockedAt?: string; // ISO; when it locked
 }
 
 /** A developer on the project, or its lead: what "Assigned to me" shows. */

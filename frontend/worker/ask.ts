@@ -78,8 +78,9 @@ export function buildSnapshot(input: {
   blockers: Blocker[];
   limits: Limits;
   brief?: boolean; // context only (a developer's own work comes separately): skip request and history lists
+  lockedAccounts?: { name: string; until: string }[]; // administrators only: accounts locked by too many wrong passwords
 }): string {
-  const { now, systems, people, assignments, features, blockers, limits, brief = false } = input;
+  const { now, systems, people, assignments, features, blockers, limits, brief = false, lockedAccounts } = input;
   const today = new Date(now);
   const q = quarterOf(today);
   const nameOf = new Map(people.map((p) => [p.id, p.name]));
@@ -132,6 +133,12 @@ export function buildSnapshot(input: {
       .filter((s) => !s.finishedAt && s.dueAt && (Date.parse(s.dueAt) - now) / DAY >= 0 && (Date.parse(s.dueAt) - now) / DAY <= 30)
       .map((s) => `${clean(s.name, 80)}: ${dueIn(s.dueAt, now)}`),
   );
+  if (lockedAccounts) {
+    watch(
+      "LOCKED ACCOUNTS (too many wrong passwords; each unlocks itself at the time shown, or an administrator can unlock it in Settings → People)",
+      lockedAccounts.map((a) => `${clean(a.name)}: until ${a.until.slice(11, 16)} UTC on ${day(a.until)}`),
+    );
+  }
 
   lines.push(
     "",

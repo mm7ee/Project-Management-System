@@ -25,7 +25,8 @@ import {
 import { DEFAULT_LIMITS, DEFAULT_WORKSPACES, MAX_DOCUMENT_BYTES, formatBytes, type Blocker, type Limits, type ProjectDocument } from "../src/data/project";
 import { buildShowcase } from "../src/data/showcase";
 import { PASSWORD_HISTORY, passwordProblem } from "../src/data/password";
-import { SESSION_DAYS } from "../src/data/retention";
+import { SESSION_DAYS, SIGNIN_FAILURE_HOURS } from "../src/data/retention";
+import { DEFAULT_SIGNIN_RULES, SIGNIN_WINDOW_MINUTES, cleanSigninRules, lockMinutesFor, signinRefusal, type SigninRules } from "../src/data/signin";
 import { purgeExpired } from "./retention";
 import type { ProjectTemplate } from "../src/data/templates";
 import { awaitingSignature, cleanPcn, pcnStatus, type Pcn, type Signatory } from "../src/data/pcn";
@@ -84,6 +85,8 @@ interface UserRow {
   mfa_pending: string | null;
   mfa_last_step: number;
   mfa_enabled_at: string | null;
+  locked_until: number | null;
+  locked_at: string | null;
 }
 
 const toUser = (r: UserRow, projectIds: string[] = []): User => ({
@@ -127,6 +130,8 @@ const guestUser = (l: ShareLinkRow): UserRow => ({
   mfa_pending: null,
   mfa_last_step: 0,
   mfa_enabled_at: null,
+  locked_until: null,
+  locked_at: null,
 });
 
 interface TemplateRow {
@@ -267,12 +272,91 @@ async function issueRecoveryCodes(db: D1Database, userId: string): Promise<strin
 
 async function startSession(db: D1Database, req: Request, row: UserRow, detail: Record<string, unknown>): Promise<Response> {
   const token = newToken();
-  await db
-    .prepare("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)")
-    .bind(await tokenHash(token), row.id, Date.now() + SESSION_DAYS * 86_400_000)
-    .run();
+  await db.batch([
+    db.prepare("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)").bind(await tokenHash(token), row.id, Date.now() + SESSION_DAYS * 86_400_000),
+    // A full sign-in starts the count of wrong passwords again.
+    db.prepare("DELETE FROM login_failures WHERE user_id = ?").bind(row.id),
+  ]);
   await audit(db, req, row, "login", null, { ...detail, ...(row.must_change_password ? { temporaryPassword: true } : {}) });
   return json({ ok: true }, 200, { "set-cookie": sessionCookie(token, req, SESSION_DAYS * 86_400) });
+}
+
+// ---------- sign-in lockout ----------
+// Every failed password (and wrong two-step code) is a row in login_failures, so the limits hold
+// across every copy of the Worker. Too many on one account locks it; too many from one address
+// refuses that address. Either way the person sees the same message as a wrong password.
+
+async function signinRules(db: D1Database): Promise<SigninRules> {
+  const row = await db.prepare("SELECT value FROM settings WHERE key = 'signin_rules'").first<{ value: string }>();
+  return row ? cleanSigninRules(JSON.parse(row.value)) : DEFAULT_SIGNIN_RULES;
+}
+
+type FailureReason = "password" | "two_step" | "locked" | "address";
+
+/** Records one failure, and clears out any older than the retention period while it's there. */
+async function recordFailure(db: D1Database, req: Request, f: { username: string; userId: string | null; reason: FailureReason; at: number }) {
+  await db.batch([
+    db
+      .prepare("INSERT INTO login_failures (id, at, username, user_id, ip, reason) VALUES (?, ?, ?, ?, ?, ?)")
+      .bind(newToken().slice(0, 16), f.at, f.username.toLowerCase().slice(0, 64), f.userId, req.headers.get("cf-connecting-ip"), f.reason),
+    db.prepare("DELETE FROM login_failures WHERE at < ?").bind(f.at - SIGNIN_FAILURE_HOURS * 3_600_000),
+  ]);
+}
+
+/** Failed sign-ins from this request's address within the window. */
+async function addressFailures(db: D1Database, req: Request, since: number): Promise<number> {
+  const ip = req.headers.get("cf-connecting-ip");
+  if (!ip) return 0;
+  return (await db.prepare("SELECT COUNT(*) AS n FROM login_failures WHERE ip = ? AND at > ?").bind(ip, since).first<{ n: number }>())!.n;
+}
+
+const isLocked = (row: { locked_until: number | null }, at = Date.now()) => !!row.locked_until && row.locked_until > at;
+
+/** Checked against when there's no account, so an unknown username takes as long as a real one. */
+const DUMMY_HASH = `pbkdf2$100000$${"00".repeat(16)}$${"00".repeat(32)}`;
+
+/**
+ * After a failure on a real account: locks it once it has had too many within the window. Failures
+ * from before its last lock ended don't count again. Administrators are told under the bell.
+ */
+async function lockIfNeeded(env: Env, ctx: ExecutionContext, req: Request, row: UserRow, rules: SigninRules, at: number) {
+  const db = env.DB;
+  const since = Math.max(at - SIGNIN_WINDOW_MINUTES * 60_000, row.locked_until ?? 0);
+  const failures = (
+    await db
+      .prepare("SELECT COUNT(*) AS n FROM login_failures WHERE user_id = ? AND reason IN ('password', 'two_step') AND at > ?")
+      .bind(row.id, since)
+      .first<{ n: number }>()
+  )!.n;
+  if (failures < rules.attempts) return;
+  const minutes = lockMinutesFor(row, rules);
+  const until = at + minutes * 60_000;
+  // Only the first request over the limit locks it, if two arrive at once.
+  const done = await db
+    .prepare("UPDATE users SET locked_until = ?, locked_at = ? WHERE id = ? AND (locked_until IS NULL OR locked_until <= ?)")
+    .bind(until, new Date(at).toISOString(), row.id, at)
+    .run();
+  if (!done.meta.changes) return;
+  await audit(db, req, row, "account_locked", row.id, {
+    name: row.name,
+    username: row.username,
+    failures,
+    minutes,
+    until: new Date(until).toISOString(),
+  });
+  const matrix = await roleMatrix(db);
+  const people = await db.prepare("SELECT id, role FROM users").all<{ id: string; role: Role }>();
+  const alerts: Alert[] = people.results
+    .filter((u) => permissionsFor(u.role, matrix).includes("manage_users"))
+    .map((u) => ({
+      userId: u.id,
+      kind: "account_locked" as const,
+      title: `${row.name}'s account is locked`,
+      body: `${failures} failed sign-ins in ${SIGNIN_WINDOW_MINUTES} minutes. It unlocks itself in ${minutes} minutes, or you can unlock it now in Settings → People.`,
+      link: "view:users",
+      dedupe: `locked:${row.id}:${until}`,
+    }));
+  ctx.waitUntil(raise(env, alerts).catch((e) => noteFailure(db, "Notification", e)));
 }
 
 /** The workspace list (settings key "workspaces"), or the defaults until someone edits it. */
@@ -423,12 +507,12 @@ async function audit(
 
 const ACTIVITY_KINDS: Record<string, string[]> = {
   signin: ["login", "logout", "logout_all"],
-  failed: ["login_failed"],
+  failed: ["login_failed", "account_locked", "signin_ip_blocked"],
   account: ["password_changed", "password_set_after_reset", "profile_updated", "mfa_enabled", "mfa_disabled", "mfa_recovery_regenerated"],
   systems: ["system_created", "system_progress", "system_updated", "system_developers", "system_deleted", "request_created", "request_dismissed", "template_created", "template_deleted", "pcn_updated", "pcn_signed"],
   features: ["feature_created", "feature_updated", "feature_deleted"],
   project: ["document_added", "document_removed", "blocker_raised", "blocker_resolved", "blocker_reopened", "blocker_deleted"],
-  admin: ["user_created", "user_updated", "user_password_reset", "user_deleted", "roles_updated", "limits_updated", "mfa_reset", "mfa_policy_updated", "delivery_updated", "digest_sent"],
+  admin: ["user_created", "user_updated", "user_password_reset", "user_deleted", "roles_updated", "limits_updated", "mfa_reset", "mfa_policy_updated", "delivery_updated", "digest_sent", "account_unlocked", "signin_rules_updated"],
 };
 
 // ---------- email and Teams settings ----------
@@ -497,15 +581,37 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
 
   if (path === "/api/login" && method === "POST") {
     const { username, password } = await body<{ username?: string; password?: string }>(req);
-    const row = await db
-      .prepare("SELECT * FROM users WHERE lower(username) = lower(?)")
-      .bind(String(username ?? "").trim())
-      .first<UserRow>();
-    // Same error either way, so usernames can't be probed.
-    if (!row || !(await verifyPassword(String(password ?? ""), row.password_hash))) {
-      const tried = String(username ?? "").trim().slice(0, 64);
+    const tried = String(username ?? "").trim().slice(0, 64);
+    const rules = await signinRules(db);
+    const at = Date.now();
+    // Wrong password, unknown username, locked account or a refused address: one message for all,
+    // so usernames can't be probed and a lock can't be told apart.
+    const refused = new HttpError(401, signinRefusal(rules));
+    const since = at - SIGNIN_WINDOW_MINUTES * 60_000;
+    if ((await addressFailures(db, req, since)) >= rules.ipAttempts) {
+      await recordFailure(db, req, { username: tried, userId: null, reason: "address", at });
+      await audit(db, req, { id: null, name: tried || "(blank)" }, "login_failed", null, { username: tried, reason: "too many failed sign-ins from this address" });
+      throw refused;
+    }
+    const row = await db.prepare("SELECT * FROM users WHERE lower(username) = lower(?)").bind(tried).first<UserRow>();
+    const passwordOk = await verifyPassword(String(password ?? ""), row?.password_hash ?? DUMMY_HASH);
+    if (row && isLocked(row, at)) {
+      // Refused even with the right password, until the lock ends or an administrator lifts it.
+      await recordFailure(db, req, { username: tried, userId: row.id, reason: "locked", at });
+      await audit(db, req, row, "login_failed", null, { username: tried, reason: "account locked" });
+      throw refused;
+    }
+    if (!row || !passwordOk) {
+      await recordFailure(db, req, { username: tried, userId: row?.id ?? null, reason: "password", at });
       await audit(db, req, { id: row?.id ?? null, name: row?.name ?? (tried || "(blank)") }, "login_failed", null, { username: tried });
-      throw new HttpError(401, "Wrong username or password");
+      if (row) await lockIfNeeded(env, ctx, req, row, rules, at);
+      // Logged once, as the address reaches the limit.
+      const fromAddress = await addressFailures(db, req, since);
+      if (fromAddress === rules.ipAttempts) {
+        const ip = req.headers.get("cf-connecting-ip");
+        await audit(db, req, { id: null, name: ip ?? "(unknown address)" }, "signin_ip_blocked", null, { ip, failures: fromAddress, minutes: SIGNIN_WINDOW_MINUTES });
+      }
+      throw refused;
     }
     // Passwords set before the policy may fall short of it. Only now, while we hold the plain text,
     // can that be checked; such accounts must choose a compliant one before doing anything else.
@@ -540,10 +646,18 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     if (!challenge) throw new HttpError(401, "That sign-in has expired. Enter your password again.", "mfa_expired");
     const row = await db.prepare("SELECT * FROM users WHERE id = ?").bind(challenge.user_id).first<UserRow>();
     if (!row || !(await hasMfa(db, row))) throw new HttpError(401, "That sign-in has expired. Enter your password again.", "mfa_expired");
+    if (isLocked(row)) {
+      await db.prepare("DELETE FROM mfa_challenges WHERE token_hash = ?").bind(hash).run();
+      throw new HttpError(401, "That sign-in has expired. Enter your password again.", "mfa_expired");
+    }
     const used = await checkSecondFactor(db, env, row, String(b.code ?? ""));
     if (!used) {
       const attempts = challenge.attempts + 1;
       await audit(db, req, row, "login_failed", null, { username: row.username, reason: "wrong two-step code" });
+      // Wrong codes count towards the lock too, so someone with the password can't keep guessing codes.
+      const at = Date.now();
+      await recordFailure(db, req, { username: row.username, userId: row.id, reason: "two_step", at });
+      await lockIfNeeded(env, ctx, req, row, await signinRules(db), at);
       if (attempts >= MFA_MAX_ATTEMPTS) {
         await db.prepare("DELETE FROM mfa_challenges WHERE token_hash = ?").bind(hash).run();
         throw new HttpError(401, "Too many wrong codes. Enter your password again.", "mfa_expired");
@@ -586,7 +700,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       .first<{ user_id: string; attempts: number }>();
     if (!ticket) throw new HttpError(401, "That sign-in has expired. Enter your password again.", "mfa_expired");
     const row = await db.prepare("SELECT * FROM users WHERE id = ?").bind(ticket.user_id).first<UserRow>();
-    if (!row) throw new HttpError(401, "That sign-in has expired. Enter your password again.", "mfa_expired");
+    if (!row || isLocked(row)) throw new HttpError(401, "That sign-in has expired. Enter your password again.", "mfa_expired");
     const cred = b.credential ?? {};
     try {
       const key = await db
@@ -1198,6 +1312,19 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     return json(next);
   }
 
+  // How many wrong passwords lock an account, for how long, and the per-address limit.
+  if (path === "/api/settings/signin" && method === "PUT") {
+    need("manage_users");
+    const before = await signinRules(db);
+    const next = cleanSigninRules(await body<Partial<SigninRules>>(req));
+    await db
+      .prepare("INSERT INTO settings (key, value) VALUES ('signin_rules', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+      .bind(JSON.stringify(next))
+      .run();
+    if (JSON.stringify(before) !== JSON.stringify(next)) await audit(db, req, me, "signin_rules_updated", null, { from: before, to: next });
+    return json(next);
+  }
+
   if (path === "/api/data" && method === "GET") {
     const [systems, users, requests, assigned, features, documents, blockers, limits, templates] = await Promise.all([
       db.prepare("SELECT data FROM systems ORDER BY sort, rowid").all<{ data: string }>(),
@@ -1233,6 +1360,10 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
           const keys = keysOf.get(u.id) ?? 0;
           if (keys) user.mfaEnabled = true;
           if (can("manage_users") && user.mfaEnabled) user.mfaMethods = [...(u.mfa_secret ? ["app" as const] : []), ...(keys ? ["passkey" as const] : [])];
+          if (can("manage_users") && isLocked(u)) {
+            user.lockedUntil = new Date(u.locked_until!).toISOString();
+            if (u.locked_at) user.lockedAt = u.locked_at;
+          }
           return user;
         });
         if (!can("audit_log")) return list;
@@ -1290,6 +1421,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       workspaces: await workspaceList(db),
       ...(guest ? { viewOnly: { label: guest.label, expiresAt: guest.expires_at } } : {}),
       mfaPolicy: policy,
+      ...(can("manage_users") ? { signinRules: await signinRules(db) } : {}),
       templates: templates.results.map(toTemplate),
       recoveryCodesLeft: (await db.prepare("SELECT COUNT(*) AS n FROM mfa_recovery WHERE user_id = ? AND used_at IS NULL").bind(me.id).first<{ n: number }>())!.n,
       // Your own second-step methods, for Settings.
@@ -1332,7 +1464,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
 
     const [systems, people, assignments, features, blockers, limits, updateAsks] = await Promise.all([
       db.prepare("SELECT data FROM systems ORDER BY sort, rowid").all<{ data: string }>(),
-      db.prepare("SELECT id, name, username, role FROM users ORDER BY name").all<AskPerson>(),
+      db.prepare("SELECT id, name, username, role, locked_until FROM users ORDER BY name").all<AskPerson & { locked_until: number | null }>(),
       db.prepare("SELECT user_id, system_id FROM assignments").all<{ user_id: string; system_id: string }>(),
       db.prepare("SELECT * FROM features ORDER BY created_at DESC").all<FeatureRow>(),
       db.prepare("SELECT * FROM blockers ORDER BY raised_at DESC").all<Record<string, string | null>>(),
@@ -1375,6 +1507,14 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       assignments: assignments.results,
       features: visibleFeatures,
       brief: mode === "developer",
+      // Only people who manage users can see who is locked out, here as in Settings → People.
+      ...(can("manage_users")
+        ? {
+            lockedAccounts: people.results
+              .filter((p) => isLocked(p, t))
+              .map((p) => ({ name: p.name, until: new Date(p.locked_until!).toISOString() })),
+          }
+        : {}),
       blockers: blockers.results.map(
         (r): Blocker => ({
           id: r.id!,
@@ -2232,6 +2372,26 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     return json({ password: temp });
   }
 
+  // Lifts a sign-in lock early. The count of wrong passwords starts again from nothing.
+  const unlockMatch = path.match(/^\/api\/users\/([a-z0-9._-]+)\/unlock$/);
+  if (unlockMatch && method === "POST") {
+    need("manage_users");
+    const row = await db.prepare("SELECT * FROM users WHERE id = ?").bind(unlockMatch[1]).first<UserRow>();
+    if (!row) throw new HttpError(404, "User not found");
+    if (!isLocked(row)) throw new HttpError(400, `${row.name}'s account isn't locked`);
+    await db.batch([
+      db.prepare("UPDATE users SET locked_until = NULL, locked_at = NULL WHERE id = ?").bind(row.id),
+      db.prepare("DELETE FROM login_failures WHERE user_id = ?").bind(row.id),
+    ]);
+    await audit(db, req, me, "account_unlocked", row.id, {
+      name: row.name,
+      username: row.username,
+      lockedAt: row.locked_at,
+      wasLockedUntil: new Date(row.locked_until!).toISOString(),
+    });
+    return json({ ok: true });
+  }
+
   const userMatch = path.match(/^\/api\/users\/([a-z0-9._-]+)$/);
   if (userMatch && method === "PATCH") {
     need("manage_users");
@@ -2320,6 +2480,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       db.prepare("DELETE FROM requests WHERE requested_by = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM assignments WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM notifications WHERE user_id = ?").bind(userMatch[1]),
+      db.prepare("DELETE FROM login_failures WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("UPDATE features SET assignee = NULL WHERE assignee = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM users WHERE id = ?").bind(userMatch[1]),
     ]);

@@ -88,6 +88,18 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
         : e.userId
           ? "Failed sign-in: wrong password"
           : `Failed sign-in: unknown username "${str(d.username)}"`;
+    case "account_locked":
+      return `Account locked after ${str(d.failures)} failed sign-ins, for ${str(d.minutes)} minutes`;
+    case "account_unlocked":
+      return `Unlocked ${str(d.name)}'s account`;
+    case "signin_ip_blocked":
+      return `Refused sign-ins from ${str(d.ip)} after ${str(d.failures)} failures in ${str(d.minutes)} minutes`;
+    case "signin_rules_updated": {
+      const to = d.to as { attempts: number; lockMinutes: number; ipAttempts: number } | undefined;
+      return to
+        ? `Set sign-in security: lock after ${to.attempts} wrong passwords for ${to.lockMinutes} minutes; refuse an address after ${to.ipAttempts} failures`
+        : "Changed sign-in security";
+    }
     case "mfa_enabled":
       return "Turned on two-step verification";
     case "mfa_disabled":
@@ -374,7 +386,7 @@ export default function ActivityPage({ users, systems, now }: Props) {
           </thead>
           <tbody>
             {items.map((e) => {
-              const failed = e.action === "login_failed";
+              const failed = e.action === "login_failed" || e.action === "account_locked" || e.action === "signin_ip_blocked";
               const signin = e.action === "login";
               return (
                 <tr key={e.id} className={failed ? "act-failed" : ""}>

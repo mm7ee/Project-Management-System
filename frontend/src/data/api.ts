@@ -4,6 +4,7 @@ import type { Feature } from "./features";
 import type { Blocker, Limits, ProjectDocument } from "./project";
 import type { ProjectTemplate } from "./templates";
 import type { MfaPolicy, Permission, Prefs, RolePermissions, UpdateRequest, User } from "./roles";
+import type { SigninRules } from "./signin";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code?: string, public payload: Record<string, unknown> = {}) {
@@ -74,6 +75,7 @@ export interface AppData {
   limits: Limits;
   workspaces: string[]; // the workspace list projects are grouped by
   mfaPolicy: MfaPolicy;
+  signinRules?: SigninRules; // the lockout rules (administrators only)
   recoveryCodesLeft: number; // your unused two-step recovery codes
   twoStep: TwoStep; // your own second-step methods
   mfaHelp: MfaHelpRequest[]; // people locked out of two-step verification (administrators only)

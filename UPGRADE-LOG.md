@@ -47,3 +47,35 @@ migrations 0001–0020 moved to `migrations-d1/`.
   - the activity log and its search, ignoring capitals
   - daily digests, the Monday Briefing, notifications and Ask Pulse
 - Concept Notes: developers see only their own.
+
+## Phase 0: sign-in lockout
+
+**What was built**
+- Too many wrong passwords on one account within 15 minutes (default 5) locks it for 15 minutes. Too many failed
+  sign-ins from one internet address (default 20 in 15 minutes) refuses that address. Wrong two-step codes count too.
+- A locked account, a refused address, an unknown username and a wrong password all get the same message.
+- The counters are in Postgres, so the limits hold across every copy of the Worker.
+- Each lock is in the activity log, and everyone who can manage users gets a bell alert.
+- Settings → People shows a **Locked accounts** card and a red "Locked" flag, each with an **Unlock** button.
+- New page **Settings → Administration → Sign-in security** for the attempt limit, the lock length and the
+  per-address limit. The built-in admin account can be locked, but always unlocks itself within 15 minutes.
+- Retention: failed sign-in counters are removed after 24 hours (`SIGNIN_FAILURE_HOURS`).
+- Ask Pulse: people who manage users can ask who is locked out.
+- Demo data: a locked demo account and a few failed attempts (`demo-lf-*`).
+- Postman: 20 new requests for the rules, the lock, the same-message rule and unlocking. The "Admin creates a user"
+  fixture password no longer contains the username, so the checks after it pass again.
+
+**Migrations:** `migrations/0002_signin_lockout.sql`: the `login_failures` table with indexes on
+(user_id, at), (ip, at) and (at); `users.locked_until` (BIGINT ms) and `users.locked_at`. The same change for the
+D1 fallback is `migrations-d1/0021_signin_lockout.sql`.
+
+**New permissions:** none. Unlocking and the sign-in rules use `manage_users`. By default only Admin has it;
+Manager, Team Leader, Projects Assistant, Developer and Standard user don't, unless Settings → Roles & permissions
+gives it to them.
+
+**New endpoints**
+- `PUT /api/settings/signin` with `{ attempts, lockMinutes, ipAttempts }` (needs `manage_users`). Values are kept within bounds.
+- `POST /api/users/:id/unlock` (needs `manage_users`): 400 if the account isn't locked, 404 if there's no such user.
+- `GET /api/data` now sends `signinRules`, and `lockedUntil`/`lockedAt` on users, to people who can manage users only.
+
+**New screens:** Settings → Administration → Sign-in security; the Locked accounts card in Settings → People.

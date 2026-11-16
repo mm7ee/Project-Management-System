@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertOctagon, Check, Copy, Fingerprint, KeyRound, LifeBuoy, Pencil, Plus, ShieldCheck, ShieldOff, Smartphone, Trash2, X } from "lucide-react";
+import { AlertOctagon, Check, Copy, Fingerprint, KeyRound, LifeBuoy, Lock, LockOpen, Pencil, Plus, ShieldCheck, ShieldOff, Smartphone, Trash2, X } from "lucide-react";
 import { api, type MfaHelpRequest } from "../data/api";
 import { initials, type System } from "../data/systems";
 import { timeAgo } from "../time";
@@ -19,6 +19,7 @@ import type { Limits, Workload } from "../data/project";
 import PasswordRules, { generatePassword } from "./PasswordRules";
 import ShareLinks from "./ShareLinks";
 import { PASSWORD_MIN, passwordProblem } from "../data/password";
+import { ADMIN_MAX_LOCK_MINUTES, DEFAULT_SIGNIN_RULES, SIGNIN_BOUNDS, SIGNIN_WINDOW_MINUTES, type SigninRules } from "../data/signin";
 
 interface Props {
   me: User;
@@ -28,12 +29,13 @@ interface Props {
   limits: Limits;
   mfaPolicy: MfaPolicy;
   mfaHelp: MfaHelpRequest[]; // people locked out of two-step verification
+  signinRules?: SigninRules; // the lockout rules (administrators only)
   workload: (u: User) => Workload;
   onChanged: () => Promise<void>;
-  section: "people" | "twostep" | "links" | "limits" | "roles"; // which part Settings is showing
+  section: "people" | "twostep" | "signin" | "links" | "limits" | "roles"; // which part Settings is showing
 }
 
-export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaPolicy, mfaHelp, workload, onChanged, section }: Props) {
+export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaPolicy, mfaHelp, signinRules, workload, onChanged, section }: Props) {
   const now = Date.now();
   const [mfaResetting, setMfaResetting] = useState<string | null>(null);
   const [confirmHelp, setConfirmHelp] = useState<string | null>(null);
@@ -44,6 +46,8 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaP
   const [resetting, setResetting] = useState<string | null>(null);
   const [issued, setIssued] = useState<{ name: string; password: string } | null>(null);
   const [error, setError] = useState("");
+  const locked = users.filter((u) => u.lockedUntil && Date.parse(u.lockedUntil) > now);
+  const lockedTime = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
   const projectNames = (ids: string[] = []) =>
     ids.map((id) => systems.find((s) => s.id === id)?.name).filter(Boolean).join(", ");
 
@@ -127,6 +131,41 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaP
         </section>
       )}
 
+      {locked.length > 0 && (
+        <section className="set-card mfa-requests locked-accounts" aria-label="Locked accounts">
+          <header className="set-head">
+            <span className="set-icon">
+              <Lock size={18} />
+            </span>
+            <div>
+              <h3>Locked accounts</h3>
+              <p>
+                Too many wrong passwords. Each unlocks itself at the time shown. If you've checked with the person that it was them, you can unlock it now.
+                If it wasn't them, reset their password instead.
+              </p>
+            </div>
+          </header>
+          <ul>
+            {locked.map((u) => (
+              <li key={u.id}>
+                <span className="avatar">{initials(u.name)}</span>
+                <span className="mfa-request-text">
+                  <b>{u.name}</b>
+                  <small>
+                    {u.lockedAt ? `Locked ${timeAgo(u.lockedAt, now)} · ` : ""}unlocks itself at {lockedTime(u.lockedUntil!)}
+                  </small>
+                </span>
+                <span className="page-actions">
+                  <button className="btn btn-navy sm" onClick={() => run(() => api(`/users/${u.id}/unlock`, "POST"))} aria-label={`Unlock ${u.name}'s account`}>
+                    <LockOpen size={14} /> Unlock
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <div className="table-wrap">
         <table className="table">
           <thead>
@@ -155,6 +194,11 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaP
                 <td>
                   <span className={`role-chip role-${u.role}`}>{ROLE_LABEL[u.role]}</span>
                   {u.mustChangePassword && <span className="flag flag-request pw-pending">Must set a new password</span>}
+                  {u.lockedUntil && Date.parse(u.lockedUntil) > now && (
+                    <span className="flag flag-locked" title={`Too many wrong passwords. Unlocks itself at ${lockedTime(u.lockedUntil)}.`}>
+                      <Lock size={12} aria-hidden="true" /> Locked
+                    </span>
+                  )}
                   {u.mfaEnabled ? (
                     <span
                       className="flag flag-mfa"
@@ -242,6 +286,16 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaP
                         <button className="icon-link" onClick={() => setEditing(u)} aria-label={`Edit ${u.name}`} title="Edit">
                           <Pencil size={15} />
                         </button>
+                        {u.lockedUntil && Date.parse(u.lockedUntil) > now && (
+                          <button
+                            className="icon-link"
+                            onClick={() => run(() => api(`/users/${u.id}/unlock`, "POST"))}
+                            aria-label={`Unlock ${u.name}'s account`}
+                            title="Unlock (locked after too many wrong passwords)"
+                          >
+                            <LockOpen size={15} />
+                          </button>
+                        )}
                         {u.id !== me.id && (
                           <button
                             className="icon-link"
@@ -292,6 +346,8 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaP
       )}
 
       {section === "twostep" && <MfaPolicyEditor me={me} policy={mfaPolicy} users={users} onSave={(p) => run(() => api("/settings/mfa", "PUT", p))} />}
+
+      {section === "signin" && <SigninRulesEditor rules={signinRules ?? DEFAULT_SIGNIN_RULES} onSave={(r) => run(() => api("/settings/signin", "PUT", r))} />}
 
       {section === "links" && <ShareLinks />}
 
@@ -363,6 +419,62 @@ function MfaPolicyEditor({ me, policy, users, onSave }: { me: User; policy: MfaP
           </label>
         ))}
       </div>
+    </section>
+  );
+}
+
+/** How many wrong passwords lock an account and for how long, and the limit per address. */
+function SigninRulesEditor({ rules, onSave }: { rules: SigninRules; onSave: (r: SigninRules) => Promise<boolean> }) {
+  const [draft, setDraft] = useState(rules);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => setDraft(rules), [rules]);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(rules);
+  const valid = (Object.keys(SIGNIN_BOUNDS) as (keyof SigninRules)[]).every(
+    (k) => Number.isInteger(draft[k]) && draft[k] >= SIGNIN_BOUNDS[k][0] && draft[k] <= SIGNIN_BOUNDS[k][1],
+  );
+  const field = (k: keyof SigninRules, label: string, hint: string) => (
+    <label className="field">
+      <span>{label}</span>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={SIGNIN_BOUNDS[k][0]}
+        max={SIGNIN_BOUNDS[k][1]}
+        required
+        value={Number.isNaN(draft[k]) ? "" : draft[k]}
+        onChange={(e) => {
+          setSaved(false);
+          setDraft((d) => ({ ...d, [k]: e.target.valueAsNumber }));
+        }}
+      />
+      <small className="field-hint">
+        {hint} Between {SIGNIN_BOUNDS[k][0]} and {SIGNIN_BOUNDS[k][1]}.
+      </small>
+    </label>
+  );
+  return (
+    <section className="matrix-section">
+      <header className="page-head">
+        <div>
+          <h2>Sign-in security</h2>
+          <p>
+            Stops anyone guessing passwords. Too many wrong passwords on one account within {SIGNIN_WINDOW_MINUTES} minutes locks it; too many failed
+            sign-ins from one internet address refuses that address. Both see the same message as a wrong password, so nobody can tell which usernames exist.
+          </p>
+        </div>
+        <button className="btn btn-navy" disabled={!dirty || !valid} onClick={async () => setSaved(await onSave(draft))}>
+          {saved && !dirty ? "Saved" : "Save"}
+        </button>
+      </header>
+      <div className="limits-grid set-card">
+        {field("attempts", "Wrong passwords before an account locks", `Counted over ${SIGNIN_WINDOW_MINUTES} minutes. Wrong two-step codes count too.`)}
+        {field("lockMinutes", "Minutes an account stays locked", "It unlocks itself after this. You can unlock it sooner in People.")}
+        {field("ipAttempts", "Failed sign-ins from one address before it's refused", `Counted over ${SIGNIN_WINDOW_MINUTES} minutes, across every account.`)}
+      </div>
+      <p className="set-note">
+        The built-in admin account can be locked too, but always unlocks itself within {ADMIN_MAX_LOCK_MINUTES} minutes, so Pulse can't be left without an
+        administrator. Locks and unlocks are recorded in the activity log, and administrators are told under the bell.
+      </p>
     </section>
   );
 }

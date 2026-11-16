@@ -24,6 +24,7 @@ DELETE FROM documents WHERE id LIKE 'demo-%';
 DELETE FROM requests WHERE id LIKE 'demo-%';
 DELETE FROM notifications WHERE link LIKE '%demo-%' OR digest LIKE '%demo-%';
 DELETE FROM systems WHERE id LIKE 'demo-%';
+DELETE FROM login_failures WHERE id LIKE 'demo-%';
 DELETE FROM users WHERE id LIKE 'demo-%';
 `;
 if (mode === "remove") {
@@ -379,5 +380,26 @@ systems.forEach((s, i) => {
     `INSERT INTO requests (id, system_id, requested_by, message, created_at) VALUES (${q(`demo-rq-${i + 1}`)}, ${q(sys)}, ${q(P.Vimbai)}, ${q(message)}, ${q(ago(days, 9))});`,
   );
 });
+
+// ---------- sign-in lockout ----------
+// Two wrong passwords on one demo account (not enough to lock it), and one demo account locked for
+// a few minutes from when the demo data is loaded, so Settings → People shows the Unlock button.
+// The addresses are from 203.0.113.0/24, which is set aside for examples.
+[
+  ["demo.michael", P.Michael, 7, "203.0.113.10"],
+  ["demo.michael", P.Michael, 4, "203.0.113.10"],
+  ["demo.vunganayi", P.Vunganayi, 9, "203.0.113.24"],
+  ["demo.vunganayi", P.Vunganayi, 8, "203.0.113.24"],
+  ["demo.vunganayi", P.Vunganayi, 6, "203.0.113.24"],
+  ["demo.vunganayi", P.Vunganayi, 4, "203.0.113.24"],
+  ["demo.vunganayi", P.Vunganayi, 2, "203.0.113.24"],
+].forEach(([username, userId, minsAgo, ip], i) => {
+  out.push(
+    `INSERT INTO login_failures (id, at, username, user_id, ip, reason) VALUES (${q(`demo-lf-${i + 1}`)}, ${NOW - minsAgo * 60_000}, ${q(username)}, ${q(userId)}, ${q(ip)}, 'password');`,
+  );
+});
+out.push(
+  `UPDATE users SET locked_until = ${NOW + 13 * 60_000}, locked_at = ${q(new Date(NOW - 2 * 60_000).toISOString())} WHERE id = ${q(P.Vunganayi)};`,
+);
 
 process.stdout.write(out.join("\n") + "\n");

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertOctagon, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, Menu, Plus, Search, Send, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { AlertOctagon, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, LockKeyhole, Menu, Plus, Search, Send, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { getSchedule, type System } from "./data/systems";
 import { api, useAppData, type AppData } from "./data/api";
 import { isAssigned, type Permission, type Prefs } from "./data/roles";
@@ -351,6 +351,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
     limits,
     mfaPolicy: data.mfaPolicy,
     mfaHelp: data.mfaHelp,
+    signinRules: data.signinRules,
     workload: (u: User) => workloadOf(u, systems, features, limits, now),
     onChanged: reload,
   };
@@ -548,6 +549,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
                     { key: "people", label: "People", icon: Users, content: <UsersPage section="people" {...usersPageProps} /> },
                     { key: "roles", label: "Roles & permissions", icon: ShieldCheck, content: <UsersPage section="roles" {...usersPageProps} /> },
                     { key: "twostep", label: "Two-step rules", icon: Fingerprint, content: <UsersPage section="twostep" {...usersPageProps} /> },
+                    { key: "signin", label: "Sign-in security", icon: LockKeyhole, content: <UsersPage section="signin" {...usersPageProps} /> },
                     { key: "limits", label: "Workload limits", icon: Gauge, content: <UsersPage section="limits" {...usersPageProps} /> },
                     { key: "links", label: "View-only links", icon: Link2, content: <UsersPage section="links" {...usersPageProps} /> },
                     { key: "delivery", label: "Email & Teams", icon: Send, content: <DeliverySection /> },
