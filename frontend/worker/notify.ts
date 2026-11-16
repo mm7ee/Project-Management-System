@@ -135,7 +135,7 @@ export async function raise(env: Env, alerts: Alert[], channel?: ChannelPost): P
   const results = await db.batch(
     rows.map((a) =>
       db
-        .prepare("INSERT OR IGNORE INTO notifications (id, user_id, kind, title, body, link, digest, dedupe, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .prepare("INSERT INTO notifications (id, user_id, kind, title, body, link, digest, dedupe, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING")
         .bind(a.id, a.userId, a.kind, a.title.slice(0, 200), (a.body ?? "").slice(0, 500), a.link ?? null, a.digest ? JSON.stringify(a.digest) : null, a.dedupe ?? null, at),
     ),
   );

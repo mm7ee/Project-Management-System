@@ -29,8 +29,16 @@ interface Ai {
   run(model: string, input: Record<string, unknown>): Promise<unknown>;
 }
 
+/** Cloudflare Hyperdrive: a pooled, cached connection to the Postgres database. */
+interface Hyperdrive {
+  connectionString: string;
+}
+
 interface Env {
-  DB: D1Database;
+  DB: D1Database; // the database in use; set from HYPERDRIVE (Postgres) or D1 by withDatabase()
+  HYPERDRIVE?: Hyperdrive; // Postgres on Neon
+  D1?: D1Database; // the old D1 database, kept as a fallback
+  DATABASE?: "postgres" | "d1"; // which one this deploy uses (wrangler.jsonc vars)
   ASSETS: Fetcher;
   AI?: Ai; // Workers AI binding, for Ask Pulse
   MFA_KEY?: string; // encrypts two-step verification secrets; a Worker secret (.dev.vars locally)

@@ -34,6 +34,7 @@ import { newChallenge, readClientData, verifyAssertion, verifyRegistration } fro
 import { noteFailure, postToTeams, raise, readDelivery, sendEmail, emailFor, type Alert, type ChannelPost, type Delivery } from "./notify";
 import { runBriefing, runDailyDigests } from "./digest";
 import { toFeature, type FeatureRow } from "./rows";
+import { pgDatabase } from "./pg";
 import type { AppNotification, DeliveryStatus, Digest, NotificationKind } from "../src/data/notifications";
 import {
   DEFAULT_ROLE_PERMISSIONS,
@@ -497,7 +498,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
   if (path === "/api/login" && method === "POST") {
     const { username, password } = await body<{ username?: string; password?: string }>(req);
     const row = await db
-      .prepare("SELECT * FROM users WHERE username = ? COLLATE NOCASE")
+      .prepare("SELECT * FROM users WHERE lower(username) = lower(?)")
       .bind(String(username ?? "").trim())
       .first<UserRow>();
     // Same error either way, so usernames can't be probed.
@@ -1488,7 +1489,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     await checkRoom(added);
     const removed = before.filter((id) => !ids.includes(id));
     const stmts = [
-      ...added.map((id) => db.prepare("INSERT OR IGNORE INTO assignments (user_id, system_id) VALUES (?, ?)").bind(id, systemId)),
+      ...added.map((id) => db.prepare("INSERT INTO assignments (user_id, system_id) VALUES (?, ?) ON CONFLICT DO NOTHING").bind(id, systemId)),
       ...removed.map((id) => db.prepare("DELETE FROM assignments WHERE user_id = ? AND system_id = ?").bind(id, systemId)),
     ];
     if (stmts.length) await db.batch(stmts);
@@ -2275,7 +2276,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     const removed = before.filter((p) => !projectIds.includes(p));
     if (added.length || removed.length) {
       await db.batch([
-        ...added.map((p) => db.prepare("INSERT OR IGNORE INTO assignments (user_id, system_id) VALUES (?, ?)").bind(row.id, p)),
+        ...added.map((p) => db.prepare("INSERT INTO assignments (user_id, system_id) VALUES (?, ?) ON CONFLICT DO NOTHING").bind(row.id, p)),
         ...removed.map((p) => db.prepare("DELETE FROM assignments WHERE user_id = ? AND system_id = ?").bind(row.id, p)),
       ]);
       if (added.length) alert(await projectAlerts(row.id, added));
@@ -2373,7 +2374,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     }
     const search = (q.get("q") ?? "").trim().slice(0, 64);
     if (search) {
-      where.push("(actor LIKE ? OR detail LIKE ? OR ip LIKE ?)");
+      where.push("(actor ILIKE ? OR detail ILIKE ? OR ip ILIKE ?)");
       args.push(`%${search}%`, `%${search}%`, `%${search}%`);
     }
     const rows = await db
@@ -2415,11 +2416,25 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
   throw new HttpError(404, "Not found");
 }
 
+/**
+ * The database this deploy uses: Postgres (Neon, through Hyperdrive) unless DATABASE is "d1", which
+ * switches back to the old D1 database. The rest of the Worker only ever sees env.DB.
+ */
+function withDatabase(env: Env): Env {
+  if (env.DATABASE === "d1") {
+    if (!env.D1) throw new Error("DATABASE is d1 but there's no D1 binding");
+    return { ...env, DB: env.D1 };
+  }
+  if (!env.HYPERDRIVE) throw new Error("No database: the HYPERDRIVE binding is missing");
+  return { ...env, DB: pgDatabase(env.HYPERDRIVE.connectionString) };
+}
+
 export default {
-  async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  async fetch(req: Request, rawEnv: Env, ctx: ExecutionContext): Promise<Response> {
     const path = new URL(req.url).pathname;
-    if (!path.startsWith("/api/")) return env.ASSETS.fetch(req);
+    if (!path.startsWith("/api/")) return rawEnv.ASSETS.fetch(req);
     try {
+      const env = withDatabase(rawEnv);
       return await api(req, env, path, ctx);
     } catch (e) {
       if (e instanceof HttpError) return json({ error: e.message, ...(e.code ? { code: e.code } : {}), ...(e.extra ?? {}) }, e.status);
@@ -2430,7 +2445,8 @@ export default {
 
   // The schedule is in wrangler.jsonc: daily digests on weekdays, the Monday Briefing on Mondays.
   // The weekday run also clears out what the retention policy no longer keeps.
-  async scheduled(event: { cron: string }, env: Env) {
+  async scheduled(event: { cron: string }, rawEnv: Env) {
+    const env = withDatabase(rawEnv);
     const briefing = event.cron === BRIEFING_CRON;
     if (!briefing) await purgeExpired(env.DB).catch((e) => console.error("Retention clean-up failed", e));
     await (briefing ? runBriefing(env) : runDailyDigests(env)).catch((e) => noteFailure(env.DB, briefing ? "Monday Briefing" : "Daily digest", e));

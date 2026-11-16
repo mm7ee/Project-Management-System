@@ -1,1 +1,5 @@
 demo-data.sql
+.env
+.env.*
+.neon
+node_modules/

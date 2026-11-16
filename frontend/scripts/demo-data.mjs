@@ -2,7 +2,7 @@
 // and Concept Notes, spread over the last 18 months so the charts and reports fill out.
 //
 // Every record's id starts with "demo-", so it can all be removed again in one go:
-//   node scripts/demo-data.mjs seed   > demo-seed.sql    (then: wrangler d1 execute DB --remote --file demo-seed.sql)
+//   node scripts/demo-data.mjs seed   > demo-seed.sql    (then: node scripts/db.mjs exec main demo-seed.sql)
 //   node scripts/demo-data.mjs remove > demo-remove.sql
 // or simply `npm run demo:seed` / `npm run demo:remove` (live database).
 //
@@ -242,7 +242,7 @@ PROJECTS.forEach(([name, status, description, leadKey, devKeys, startedDays, len
   systems.push(s);
   out.push(`INSERT INTO systems (id, sort, data) VALUES (${q(id)}, ${1000 + i}, ${q(JSON.stringify(s))});`);
   // Completed projects keep their lead but no longer hold developers' project slots.
-  if (status !== "COMPLETED") for (const d of devKeys) out.push(`INSERT OR IGNORE INTO assignments (user_id, system_id) VALUES (${q(P[d])}, ${q(id)});`);
+  if (status !== "COMPLETED") for (const d of devKeys) out.push(`INSERT INTO assignments (user_id, system_id) VALUES (${q(P[d])}, ${q(id)}) ON CONFLICT DO NOTHING;`);
 });
 // Anesu ends up on four projects: one over the limit, to show the overload flag and suggestions.
 

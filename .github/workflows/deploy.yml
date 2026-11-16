@@ -1,9 +1,9 @@
 # Every push to main rebuilds Pulse and deploys the app Worker "omni-tracker" to Cloudflare. People reach it at
 # https://pulse.utsa--wanza--ortfolio.workers.dev through the "pulse" Worker (frontend/gateway, deployed by hand).
 # Needs repo secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.
-# Database migrations are NOT run here: the CI token can publish Workers but has no D1
-# access. Apply them first with `npm run db:migrate` (frontend/) before pushing code that
-# needs a new column, or the deployed Worker will fail on it.
+# Database migrations are NOT run here: the database is Postgres on Neon and its connection string
+# lives only in .dev.vars on the machine that runs them. Apply them first with `npm run db:migrate`
+# (frontend/) before pushing code that needs a new column, or the deployed Worker will fail on it.
 name: Deploy to Cloudflare
 
 on:
