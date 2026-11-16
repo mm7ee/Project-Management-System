@@ -66,3 +66,8 @@ Choices made during the Pulse upgrade that later phases must follow. Newest last
   address and rule changes go in the activity log under "Failed sign-ins" and "Administration".
 - **The D1 fallback got the same migration** (`migrations-d1/0021_signin_lockout.sql`, applied to D1), so falling
   back to D1 still lets people sign in.
+- **Backing up the live database before a release** (the phase prompts' `wrangler d1 export` no longer applies):
+  1. `npm run db:backup -- ../backup-before-phase-N.sql` writes every row, and the list of applied migrations, as
+     INSERTs, then checks the file holds every row. Restore by migrating an empty database and running the file with
+     `node scripts/db.mjs exec`. `backup-*.sql` is gitignored.
+  2. Also make a Neon branch `backup-before-phase-N` from `production`, an instant copy that can be restored in Neon.

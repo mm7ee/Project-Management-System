@@ -13,7 +13,8 @@
     "demo:seed": "node scripts/demo-data.mjs seed > demo-data.sql && node scripts/db.mjs exec main demo-data.sql",
     "demo:remove": "node scripts/demo-data.mjs remove > demo-data.sql && node scripts/db.mjs exec main demo-data.sql",
     "db:migrate:dev": "node scripts/db.mjs migrate dev",
-    "db:status": "node scripts/db.mjs status main"
+    "db:status": "node scripts/db.mjs status main",
+    "db:backup": "node scripts/db.mjs backup main"
   },
   "dependencies": {
     "@neon/config": "^1.14.0",

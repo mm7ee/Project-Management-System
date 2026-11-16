@@ -7,6 +7,8 @@
 //   node scripts/db.mjs exec    main|dev <file>   run a .sql file (e.g. demo data) in one transaction
 //   node scripts/db.mjs copy    main|dev <dump>   load a D1 export (wrangler d1 export … --output=dump.sql)
 //                                                 into empty tables, then check every row arrived
+//   node scripts/db.mjs backup  main|dev <file>   write every row (and the applied migrations) to a .sql file
+//                                                 of INSERTs; restore by migrating an empty database and running it
 //
 // npm scripts wrap the common ones: db:migrate, db:migrate:dev, db:status, demo:seed, demo:remove.
 
@@ -38,7 +40,7 @@ function connectionString(which) {
   return line.slice(key.length + 1).trim().replace(/^["']|["']$/g, "");
 }
 
-if (!["migrate", "status", "exec", "copy"].includes(command)) fail("Usage: node scripts/db.mjs migrate|status|exec|copy main|dev [file]");
+if (!["migrate", "status", "exec", "copy", "backup"].includes(command)) fail("Usage: node scripts/db.mjs migrate|status|exec|copy|backup main|dev [file]");
 
 const url = connectionString(target);
 const host = (() => {
@@ -150,8 +152,56 @@ async function copy() {
   if (skipped.length) console.log(`  not copied (no such table in Postgres): ${skipped.join(", ")}`);
 }
 
+/** A SQL literal for one value, as postgres.js returns it. */
+function literal(v) {
+  if (v === null || v === undefined) return "NULL";
+  if (typeof v === "number" || typeof v === "bigint") return String(v);
+  if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
+  if (Buffer.isBuffer(v)) return `'\\x${v.toString("hex")}'::bytea`;
+  if (v instanceof Date) return `'${v.toISOString()}'`;
+  return `'${String(v).replace(/'/g, "''")}'`;
+}
+
+/** Writes every table's rows as INSERTs, in one snapshot, then checks the file holds them all. */
+async function backup() {
+  if (!file) fail("Give the file to write, e.g. ../backup-before-phase-1.sql");
+  const { writeFileSync } = await import("node:fs");
+  const out = [`-- Pulse backup of ${target} (${host}), ${new Date().toISOString()}.`, "-- Restore: migrate an empty database, then run this file (node scripts/db.mjs exec <db> <file>).", "BEGIN;"];
+  const counts = [];
+  await sql.begin("ISOLATION LEVEL REPEATABLE READ READ ONLY", async (tx) => {
+    // Every column, and which are serial, in one round trip (the database is far away).
+    const columns = await tx`
+      SELECT table_name, column_name, pg_get_serial_sequence(quote_ident(table_name), column_name) AS seq
+      FROM information_schema.columns c
+      WHERE table_schema = 'public'
+        AND table_name IN (SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE')
+      ORDER BY table_name, ordinal_position`;
+    const names = [...new Set(columns.map((c) => c.table_name))].filter((t) => t !== "schema_migrations");
+    for (const t of ["schema_migrations", ...names]) {
+      const mine = columns.filter((c) => c.table_name === t);
+      const cols = mine.map((c) => c.column_name);
+      const rows = await tx.unsafe(`SELECT ${cols.map((c) => `"${c}"`).join(", ")} FROM "${t}"`);
+      out.push(`-- ${t}: ${rows.length} rows`);
+      if (t === "schema_migrations") out.push("DELETE FROM schema_migrations;");
+      for (const r of rows) out.push(`INSERT INTO "${t}" (${cols.map((c) => `"${c}"`).join(", ")}) VALUES (${cols.map((c) => literal(r[c])).join(", ")});`);
+      for (const c of mine.filter((c) => c.seq)) {
+        out.push(`SELECT setval('${c.seq}', GREATEST((SELECT COALESCE(MAX("${c.column_name}"), 0) FROM "${t}"), 1));`);
+      }
+      counts.push([t, rows.length]);
+    }
+  });
+  out.push("COMMIT;", "");
+  writeFileSync(file, out.join("\n"));
+  const written = readFileSync(file, "utf8").split("\n").filter((l) => l.startsWith("INSERT INTO")).length;
+  const total = counts.reduce((a, [, n]) => a + n, 0);
+  console.log(`${label}: backed up to ${file}`);
+  for (const [t, n] of counts) console.log(`  ${String(n).padStart(6)}  ${t}`);
+  if (written !== total) fail(`The file holds ${written} rows but the database has ${total}. Don't rely on it.`);
+  console.log(`  ${total} rows written and checked.`);
+}
+
 try {
-  await { migrate, status, exec, copy }[command]();
+  await { migrate, status, exec, copy, backup }[command]();
 } catch (e) {
   console.error(`${label}: ${e.message}`);
   process.exitCode = 1;
