@@ -63,7 +63,7 @@ export default function MyWork({ systems, now }: { systems: System[]; now: numbe
                       <small>{project(i.systemId)}</small>
                     </span>
                     <ItemPriority priority={i.priority} />
-                    <ItemStatusPill status={i.status} onHold={i.onHold} wontDo={i.resolution === "WONT_DO"} />
+                    <ItemStatusPill item={i} />
                     <small className={late ? "text-red strong" : "muted"}>
                       {show === "done" ? timeAgo(i.resolvedAt ?? i.updatedAt, now) : i.dueDate ? `due ${formatDate(i.dueDate)}` : "no due date"}
                     </small>

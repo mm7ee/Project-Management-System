@@ -7,11 +7,9 @@ import { formatDate, timeAgo } from "../time";
 import {
   KEY_PATTERN,
   PAGE_SIZE,
-  STATUS_META,
   TYPE_META,
   WORK_PRIORITIES,
   WORK_PRIORITY_META,
-  WORK_STATUSES,
   WORK_TYPES,
   isDone,
   type WorkItem,
@@ -20,6 +18,7 @@ import {
   type WorkItemType,
 } from "../data/workitems";
 import { ItemPriority, ItemStatusPill, Rollup, TypeIcon, itemHref } from "./WorkItemBits";
+import type { StatusDef } from "../data/workflows";
 
 interface Props {
   system: System;
@@ -58,6 +57,12 @@ export default function WorkItemsTab({ system, users, now, canCreate, canManage,
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
   const [created, setCreated] = useState<WorkItem | null>(null);
+  const [statuses, setStatuses] = useState<StatusDef[]>([]);
+  useEffect(() => {
+    api<StatusDef[]>("/statuses")
+      .then(setStatuses)
+      .catch(() => setStatuses([]));
+  }, []);
   const userName = (id?: string) => users.find((u) => u.id === id)?.name;
 
   // The search box waits for a pause in typing.
@@ -184,9 +189,9 @@ export default function WorkItemsTab({ system, users, now, canCreate, canManage,
         </select>
         <select className={status ? "set" : ""} value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Status">
           <option value="">Any status</option>
-          {WORK_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {STATUS_META[s].label}
+          {statuses.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
             </option>
           ))}
         </select>
@@ -307,7 +312,7 @@ function Row({ item: i, assignee, now, systemId }: { item: WorkItemSummary; assi
         </span>
       </td>
       <td>
-        <ItemStatusPill status={i.status} onHold={i.onHold} wontDo={i.resolution === "WONT_DO"} />
+        <ItemStatusPill item={i} />
       </td>
       <td>
         <ItemPriority priority={i.priority} />

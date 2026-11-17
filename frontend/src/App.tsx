@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertOctagon, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, LockKeyhole, Menu, Plus, Search, Send, ShieldCheck, Sparkles, Users } from "lucide-react";
+import { AlertOctagon, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, LockKeyhole, Menu, Plus, Search, Send, ShieldCheck, Sparkles, Users, Workflow } from "lucide-react";
 import { getSchedule, type System } from "./data/systems";
 import { api, useAppData, type AppData } from "./data/api";
 import { isAssigned, type Permission, type Prefs } from "./data/roles";
@@ -31,6 +31,8 @@ import { PcnDocument } from "./components/Pcn";
 import ConceptNotesPage from "./components/ConceptNotesPage";
 import DashboardPage from "./components/DashboardPage";
 import ProjectsPage from "./components/ProjectsPage";
+import BoardsPage from "./components/BoardsPage";
+import WorkflowsSettings from "./components/WorkflowsSettings";
 import { awaitingSignature, type SignoffStatus } from "./data/pcn";
 import { mfaRequiredFor, type User } from "./data/roles";
 import AskPanel from "./components/AskPanel";
@@ -54,9 +56,10 @@ const greeting = () => {
 const VIEW_PREFS = "omnitrack:view-prefs";
 
 // #/projects/<id>/items is its Work items tab; #/projects/<id>/items/<KEY-n> one work item.
-const PROJECT_ROUTE = /^#\/projects\/([a-z0-9-]+)(?:\/(pcn|items)(?:\/([A-Z]{2,10}-\d{1,7}))?)?\/?$/;
+const PROJECT_ROUTE = /^#\/projects\/([a-z0-9-]+)(?:\/(pcn|items|board)(?:\/([A-Z]{2,10}-\d{1,7}))?)?\/?$/;
 const projectInHash = () => window.location.hash.match(PROJECT_ROUTE)?.[1] ?? null;
 const itemsInHash = () => window.location.hash.match(PROJECT_ROUTE)?.[2] === "items";
+const boardInHash = () => window.location.hash.match(PROJECT_ROUTE)?.[2] === "board";
 const itemKeyInHash = () => window.location.hash.match(PROJECT_ROUTE)?.[3] ?? undefined;
 // #/projects/<id>/pcn shows that project's Concept Note as a printable document.
 const pcnInHash = () => /^#\/projects\/[a-z0-9-]+\/pcn$/.test(window.location.hash);
@@ -164,12 +167,14 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   const [selectedId, setSelectedId] = useState<string | null>(projectInHash);
   const [showPcn, setShowPcn] = useState(pcnInHash);
   const [showItems, setShowItems] = useState(itemsInHash);
+  const [showBoard, setShowBoard] = useState(boardInHash);
   const [itemKey, setItemKey] = useState(itemKeyInHash);
   useEffect(() => {
     const onHash = () => {
       setSelectedId(projectInHash());
       setShowPcn(pcnInHash());
       setShowItems(itemsInHash());
+      setShowBoard(boardInHash());
       setItemKey(itemKeyInHash());
     };
     window.addEventListener("hashchange", onHash);
@@ -525,7 +530,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
               onNewFeature={() => setFeatureEdit({ feature: null, systemId: selected.id })}
               onChanged={reload}
               canEditPcn={can("manage_systems") || selected.pcnBy === me.id}
-              section={showItems ? "items" : "overview"}
+              section={showBoard ? "board" : showItems ? "items" : "overview"}
+              canAssignOthers={can("edit_work_items")}
               itemKey={showItems ? itemKey : undefined}
               canCreateItems={can("create_work_items")}
               readOnly={!!data.viewOnly}
@@ -567,8 +573,21 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
                     { key: "delivery", label: "Email & Teams", icon: Send, content: <DeliverySection /> },
                   ]
                 : []),
+              ...(can("manage_workflows")
+                ? [{ key: "workflows", label: "Workflows", icon: Workflow, content: <WorkflowsSettings users={users} workspaces={data.workspaces} canEdit={can("manage_workflows")} /> }]
+                : []),
               ...(can("audit_log") ? [{ key: "activity", label: "Activity log", icon: History, content: <ActivityPage users={users} systems={systems} now={now} /> }] : []),
             ]}
+          />
+        ) : view === "boards" ? (
+          <BoardsPage
+            workspaces={data.workspaces}
+            systems={systems}
+            users={users}
+            me={me}
+            now={now}
+            readOnly={!!data.viewOnly}
+            canAssignOthers={can("edit_work_items")}
           />
         ) : view === "pcns" ? (
           <ConceptNotesPage

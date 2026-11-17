@@ -9,11 +9,9 @@ import {
   LINK_META,
   LINK_TYPES,
   RESOLUTION_META,
-  STATUS_META,
   TYPE_META,
   WORK_PRIORITIES,
   WORK_PRIORITY_META,
-  WORK_STATUSES,
   WORK_TYPES,
   allowedParentTypes,
   childTypesOf,
@@ -30,6 +28,7 @@ import {
 } from "../data/workitems";
 import Markdown from "./Markdown";
 import { ItemPriority, ItemStatusPill, MarkdownField, Rollup, TypeIcon, itemHref } from "./WorkItemBits";
+import MoveDialog, { type PendingMove } from "./MoveDialog";
 
 interface Props {
   system: System;
@@ -48,6 +47,7 @@ export default function WorkItemPage({ system, itemKey, users, me, now, readOnly
   const [missing, setMissing] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<PendingMove | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -171,6 +171,21 @@ export default function WorkItemPage({ system, itemKey, users, me, now, readOnly
         </p>
       )}
 
+      {pending && (
+        <MoveDialog
+          move={pending}
+          users={users}
+          me={me}
+          canAssignOthers={can.assignOthers}
+          onCancel={() => setPending(null)}
+          onDone={async (next) => {
+            setPending(null);
+            setItem(next);
+            await onChanged();
+          }}
+        />
+      )}
+
       <div className="wi-grid">
         <div className="wi-main">
           <Description item={item} canEdit={can.edit} usernames={usernames} onSave={(description) => save({ description })} />
@@ -212,11 +227,11 @@ export default function WorkItemPage({ system, itemKey, users, me, now, readOnly
                     <p>
                       {h.from ? (
                         <>
-                          {STATUS_META[h.from].label} → <b>{STATUS_META[h.to].label}</b>
+                          {h.fromName ?? h.from} → <b>{h.toName}</b>
                         </>
                       ) : (
                         <>
-                          Created in <b>{STATUS_META[h.to].label}</b>
+                          Created in <b>{h.toName}</b>
                         </>
                       )}
                     </p>
@@ -232,17 +247,42 @@ export default function WorkItemPage({ system, itemKey, users, me, now, readOnly
 
         <aside className="wi-side" aria-label="Details">
           <Field label="Status">
-            {can.edit ? (
-              <select value={item.status} disabled={busy} onChange={(e) => save({ status: e.target.value })} aria-label="Status">
-                {WORK_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {STATUS_META[s].label}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <ItemStatusPill status={item.status} onHold={item.onHold} wontDo={item.resolution === "WONT_DO"} />
-            )}
+            <div className="wi-move">
+              <ItemStatusPill item={item} />
+              {!readOnly && item.moves.length > 0 && (
+                <select
+                  value=""
+                  disabled={busy}
+                  aria-label={`Move ${item.key} to another status`}
+                  onChange={async (e) => {
+                    const mv = item.moves.find((x) => x.transitionId === e.target.value);
+                    if (!mv || !mv.allowed) return;
+                    if (mv.needs.comment || mv.needs.assignee || mv.needs.fields.length) {
+                      setPending({ itemKey: item.key, transitionId: mv.transitionId, name: mv.name, toName: mv.toName, needs: mv.needs, source: item.source });
+                      return;
+                    }
+                    setBusy(true);
+                    setError("");
+                    try {
+                      setItem(await api<WorkItem>(`/items/${item.key}/transitions`, "POST", { transitionId: mv.transitionId }));
+                      await onChanged();
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Couldn't make that move");
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  <option value="">Move to…</option>
+                  {item.moves.map((mv) => (
+                    <option key={mv.transitionId} value={mv.transitionId} disabled={!mv.allowed} title={mv.reason}>
+                      {mv.name} → {mv.toName}
+                      {!mv.allowed && mv.reason ? ` (${mv.reason})` : mv.needs.comment ? " (needs a comment)" : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
           </Field>
           {done && (
             <Field label="Resolution">
@@ -599,7 +639,7 @@ function Children({ item, systemId, nameOf, canCreate, onAdded }: { item: WorkIt
                 <span className="mono">{c.key}</span>
                 <span className={`wi-child-summary ${isDone(c) ? "wi-done" : ""}`}>{c.summary}</span>
                 <small>{nameOf(c.assignee)}</small>
-                <ItemStatusPill status={c.status} onHold={c.onHold} wontDo={c.resolution === "WONT_DO"} />
+                <ItemStatusPill item={c} />
               </a>
             </li>
           ))}
@@ -715,7 +755,7 @@ function Links({ item, canEdit, run }: { item: WorkItem; canEdit: boolean; run: 
                     <TypeIcon type={l.item.type} />
                     <span className="mono">{l.item.key}</span>
                     <span className={`wi-child-summary ${isDone(l.item) ? "wi-done" : ""}`}>{l.item.summary}</span>
-                    <ItemStatusPill status={l.item.status} wontDo={l.item.resolution === "WONT_DO"} />
+                    <ItemStatusPill item={l.item} />
                   </a>
                   {canEdit && (
                     <button className="icon-link" onClick={() => run(() => api(`/items/${item.key}/links/${l.id}`, "DELETE"))} aria-label={`Remove the link to ${l.item.key}`} title="Remove link">

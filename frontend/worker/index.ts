@@ -45,11 +45,15 @@ import {
   deleteItem,
   featureToItem,
   afterChange,
+  moveFeatureTo,
   itemById,
   itemsApi,
   recomputeProgress,
   type ItemContext,
 } from "./workitems";
+import { workflowsApi } from "./workflows";
+import { askBoardLines, boardsApi } from "./boards";
+import { EFFECTIVE_WORKFLOW, loadWorkflow } from "./workflowData";
 import type { AppNotification, DeliveryStatus, Digest, NotificationKind } from "../src/data/notifications";
 import {
   DEFAULT_ROLE_PERMISSIONS,
@@ -554,6 +558,7 @@ const ACTIVITY_KINDS: Record<string, string[]> = {
   account: ["password_changed", "password_set_after_reset", "profile_updated", "mfa_enabled", "mfa_disabled", "mfa_recovery_regenerated"],
   systems: ["system_created", "system_progress", "system_updated", "system_developers", "system_deleted", "request_created", "request_dismissed", "template_created", "template_deleted", "pcn_updated", "pcn_signed"],
   features: ["feature_created", "feature_updated", "feature_deleted"],
+  workflows: ["workflow_created", "workflow_updated", "workflow_deleted", "workflow_assigned", "status_created", "status_updated", "status_deleted", "work_items_moved", "board_updated"],
   items: [
     "work_item_created",
     "work_item_updated",
@@ -879,6 +884,8 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
         path === "/api/notifications" ||
         /^\/api\/systems\/[a-z0-9-]+\/history$/.test(path) ||
         path === "/api/items" ||
+        path === "/api/boards" ||
+        path === "/api/statuses" ||
         /^\/api\/items\/[A-Z]{2,10}-\d{1,7}(\/comments)?$/.test(path))) ||
     (method === "POST" && (path === "/api/ask" || path === "/api/requests")) ||
     (method === "DELETE" && /^\/api\/requests\/[a-f0-9]+$/.test(path));
@@ -953,8 +960,27 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     audit: (action, target, detail) => audit(db, req, me, action, target, detail),
     alert: (alerts) => alert(alerts),
   };
-  const itemsResponse = await itemsApi(itemCtx, path, method);
+  const itemsResponse = (await itemsApi(itemCtx, path, method)) ?? (await workflowsApi(itemCtx, path, method)) ?? (await boardsApi(itemCtx, path, method));
   if (itemsResponse) return itemsResponse;
+
+  /**
+   * After a project changes workspace: it takes the new workspace's workflow, unless some of its work
+   * items are in statuses that workflow doesn't have. Then it keeps the workflow it had, as its own.
+   */
+  const keepWorkflowIfNeeded = async (systemId: string, before: string) => {
+    const row = await db.prepare(`SELECT s.workflow_id, ${EFFECTIVE_WORKFLOW} AS wf FROM systems s WHERE s.id = ?`).bind(systemId).first<{ workflow_id: string | null; wf: string }>();
+    if (!row || row.workflow_id || row.wf === before) return;
+    const wf = await loadWorkflow(db, row.wf);
+    const misfit = await db
+      .prepare(`SELECT 1 FROM work_items WHERE system_id = ? AND status NOT IN (${wf.statuses.map(() => "?").join(", ")}) LIMIT 1`)
+      .bind(systemId, ...wf.statuses.map((x) => x.id))
+      .first();
+    if (misfit) await db.prepare("UPDATE systems SET workflow_id = ? WHERE id = ?").bind(before, systemId).run();
+  };
+  const workflowsBefore = async () =>
+    new Map(
+      (await db.prepare(`SELECT s.id, ${EFFECTIVE_WORKFLOW} AS wf FROM systems s`).all<{ id: string; wf: string }>()).results.map((r) => [r.id, r.wf]),
+    );
 
   const nameOfUser = async (id: string) => (await db.prepare("SELECT name FROM users WHERE id = ?").bind(id).first<{ name: string }>())?.name ?? "Someone";
   /** Each signatory with an account hears once per project that a Concept Note needs them. */
@@ -1170,10 +1196,19 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     const before = await workspaceList(db);
     const renames = new Map(entries.filter((w) => w.was && w.was !== w.name && before.includes(w.was)).map((w) => [w.was!, w.name]));
     const rows = await db.prepare("SELECT id, data FROM systems").all<{ id: string; data: string }>();
+    const wfBefore = await workflowsBefore();
     const stmts = [
       db
         .prepare("INSERT INTO settings (key, value) VALUES ('workspaces', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
         .bind(JSON.stringify(names)),
+      // A renamed workspace keeps its workflow and its board; a removed one's go.
+      ...[...renames].flatMap(([was, now]) => [
+        db.prepare("UPDATE workspace_workflows SET workspace = ? WHERE workspace = ?").bind(now, was),
+        db.prepare("UPDATE boards SET workspace = ?, name = ? WHERE workspace = ?").bind(now, `${now} board`, was),
+      ]),
+      ...before
+        .filter((w) => !names.includes(w) && !renames.has(w))
+        .flatMap((w) => [db.prepare("DELETE FROM workspace_workflows WHERE workspace = ?").bind(w), db.prepare("DELETE FROM boards WHERE workspace = ?").bind(w)]),
     ];
     for (const r of rows.results) {
       const sys = JSON.parse(r.data) as System;
@@ -1183,6 +1218,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       stmts.push(db.prepare("UPDATE systems SET data = ? WHERE id = ?").bind(JSON.stringify(sys), r.id));
     }
     await db.batch(stmts);
+    for (const [id, wf] of wfBefore) await keepWorkflowIfNeeded(id, wf);
     await audit(db, req, me, "workspaces_updated", null, { from: before, to: names, ...(renames.size ? { renamed: Object.fromEntries(renames) } : {}) });
     return json({ workspaces: names });
   }
@@ -1579,7 +1615,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
             limits,
           })
         : "";
-    const itemLines = await askItemLines(itemCtx, new Map(people.results.map((p) => [p.id, p.name])));
+    const itemLines = [...(await askItemLines(itemCtx, new Map(people.results.map((p) => [p.id, p.name])))), ...(await askBoardLines(itemCtx))];
     const snapshot = focus + buildSnapshot({
       now: t,
       systems: allSystems,
@@ -1945,6 +1981,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       if (result.added.length || result.removed.length) await audit(db, req, me, "system_developers", id, { name: next.name, ...result });
     }
 
+    const wfBefore = next.workspace !== current.workspace ? (await workflowsBefore()).get(id) : undefined;
     const stmts = [
       db
         .prepare("UPDATE systems SET data = ?, key = ?, progress_from_items = ? WHERE id = ?")
@@ -1954,6 +1991,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     // Posting progress answers any open update requests for this project.
     if (touchesProgress) stmts.push(db.prepare("DELETE FROM requests WHERE system_id = ?").bind(id));
     await db.batch(stmts);
+    if (wfBefore) await keepWorkflowIfNeeded(id, wfBefore);
     if (touchesProgress) {
       const snap = (s: System) => ({ progress: s.progress, status: s.status, health: s.health ?? null });
       await audit(db, req, me, "system_progress", id, {
@@ -2288,14 +2326,17 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       description: text(b.description, "Description") ?? "",
       kind: oneOf(b.kind ?? "CHANGE", FEATURE_KINDS, "request type"),
       client: text(b.client, "Requested by") ?? "",
-      status: oneOf(b.status ?? "NOT_STARTED", FEATURE_STATUSES, "status"),
       priority: oneOf(b.priority ?? "MEDIUM", PRIORITIES, "priority"),
       assignee: b.assignee,
       notes: text(b.notes, "Notes") ?? null,
       dueAt: checkDate(b.dueAt, "Expected delivery"),
     });
     // The assignee hears about it below, in the feature request's own words.
-    const item = await createItem({ ...itemCtx, alert: () => undefined }, fields, "client_request");
+    const status = oneOf(b.status ?? "NOT_STARTED", FEATURE_STATUSES, "status");
+    const quiet = { ...itemCtx, alert: () => undefined };
+    const item = await createItem(quiet, fields, "client_request");
+    // It starts where its workflow starts, then moves on through the workflow's moves if asked to.
+    if (status !== "NOT_STARTED") await moveFeatureTo(quiet, item, status);
     const f = await featureRow(item.id);
     await audit(db, req, me, "feature_created", system.id, {
       name: system.name,
@@ -2360,9 +2401,11 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     const changed = (Object.keys(columns) as (keyof typeof columns)[]).filter((k) => next[columns[k]] !== row[columns[k]]);
     if (!changed.length) return json(toFeature(row));
     const item = (await itemById(itemCtx, row.id))!;
-    const given = Object.fromEntries(changed.map((k) => [k, next[columns[k]]])) as Parameters<typeof featureToItem>[0];
-    const res = await applyChange(itemCtx, item, featureToItem(given, { type: item.type, status: item.status, labels: await featureLabels(row.id) }));
+    const given = Object.fromEntries(changed.filter((k) => k !== "status").map((k) => [k, next[columns[k]]])) as Parameters<typeof featureToItem>[0];
+    const res = await applyChange(itemCtx, item, featureToItem(given, { type: item.type, labels: await featureLabels(row.id) }));
     await afterChange(itemCtx, res, false);
+    // A new status is a move (or a few) in the project's workflow, under its rules.
+    if (changed.includes("status")) await moveFeatureTo(itemCtx, res.after, next.status);
     const saved = await featureRow(row.id);
     const sys = await db.prepare("SELECT data FROM systems WHERE id = ?").bind(saved.system_id).first<{ data: string }>();
     await audit(db, req, me, "feature_updated", saved.system_id, {

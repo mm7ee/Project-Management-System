@@ -160,3 +160,91 @@ Developers also edit the items assigned to them, and the ones they reported.
 - `POST /api/items/:key/attachments` (multipart) and `DELETE .../attachments/:id` add and remove attachments.
 - `POST /api/items/:key/worklogs` and `DELETE .../worklogs/:id` log and remove time.
 - `PATCH /api/systems/:id` now also takes `key` and `progressFromItems`.
+
+## Phase 2: configurable workflows and Kanban boards
+
+**What was built**
+- **Workflows:**
+  - statuses, each in a category
+  - the moves allowed between them
+  - conditions (roles, assignee only, reporter only)
+  - validators (a comment, an assignee, a field filled in, all sub-tasks done)
+  - post-functions (assign to a person, a role or the reporter; clear the assignee; set the resolution; notify)
+
+  Each workspace is given a workflow, and a project can use its own. Every rule is enforced on the server.
+- **Two seeded workflows:**
+  - **Default:** To Do → In Progress → In Review → Done, and back to To Do from anywhere. Every existing work item is
+    already in it.
+  - **Infrastructure deployment:** Backlog → In Progress → Testing → Change Approval → Deployed → Closed. Only a
+    Manager may deploy, and deploying needs a comment.
+- **Settings → Administration → Workflows:**
+  - which workflow each workspace and project uses
+  - each workflow's statuses (order, where items start, usage counts) and moves with their rules
+  - a simple diagram of the workflow
+  - the shared status list
+
+  Whenever a change would strand work items, it asks where they should go.
+- **Moving items:**
+  - The item page's Status shows "Move to…", listing this workflow's moves; ones you can't make are greyed out with
+    the reason.
+  - A move that needs something opens a small pop-up.
+  - Feature requests change status through the same moves.
+- **Boards:** one per project (a new **Board** tab) and one per workspace (the new **Boards** page in the sidebar).
+  - Columns each show one or more statuses, and can have a WIP limit; a column over its limit turns amber with its
+    count.
+  - Dragging a card makes the move, asking for a comment or field when needed; if the move isn't allowed, the card
+    stays put with a message. Every card also has a "Move…" list for the keyboard and screen readers.
+  - Swimlanes: none, assignee, epic or priority.
+  - Quick filters: Only my items, Bugs, Due this week, Blocked and a label.
+  - Cards show the key, summary, type, priority, assignee, story points, due date, epic and a blocked flag.
+  - On a phone, the columns stack into one.
+- **WIP limits** are listed beside the developer workload limits in Settings → Workload limits.
+- **Ask Pulse** knows each item's status by name, and the boards' WIP limits (for people who see every item).
+- **Activity log:** a "Workflows & boards" filter; status changes read by name, with the move that made them.
+- **Demo data:** "Fleet & Transport Booking" uses the Infrastructure deployment workflow, with items in each of its
+  statuses. "WhatsApp Customer Channel" has a board with WIP limits and swimlanes by epic.
+- **Postman:** 32 new requests.
+
+**Migration:** `migrations/0004_workflows_boards.sql`.
+- New tables:
+  - `workflows`
+  - `workflow_statuses`
+  - `workflow_transitions`
+  - `workflow_rules`
+  - `workspace_workflows`
+  - `boards`
+  - `board_columns`
+  - `board_column_statuses`
+- New column: `systems.workflow_id`.
+- Five new statuses: Backlog, Testing, Change Approval, Deployed, Closed.
+- Seeds both workflows.
+- Rebuilds the `features` view, so "Testing" is any in-progress status named for review, testing or approval.
+
+**New permission and its defaults**
+
+| Permission | Admin | Manager | Team Leader | Projects Assistant | Developer | Standard user |
+| --- | --- | --- | --- | --- | --- | --- |
+| Edit workflows (`manage_workflows`) | yes | no | yes | no | no | no |
+
+Board columns and WIP limits use the existing "Add, delete and edit systems".
+
+**New endpoints**
+- `GET /api/statuses` lists the shared statuses. `POST /api/statuses` adds one; `PATCH` and `DELETE
+  /api/statuses/:id` edit and delete one (deleting takes `moveTo` when items use it).
+- `GET /api/workflows` returns the workflows, statuses, assignments and usage. `POST /api/workflows` creates one
+  (`copyFrom`). `PUT /api/workflows/:id` saves its statuses and moves (with `moves` when items need somewhere to go).
+  `DELETE /api/workflows/:id` deletes one.
+- `PUT /api/workflow-assignments` changes which workflow each workspace and project uses (with `moves` when needed).
+- `GET /api/items/:key/transitions` lists the moves you may make. `POST /api/items/:key/transitions` takes
+  `transitionId` or `to`, plus `comment` and `fields`. `PATCH /api/items/:key` with `status` makes the same move.
+- `GET /api/boards?system=<id>` or `?workspace=<name>` returns a board, with the quick filters `mine`, `type`, `due`,
+  `blocked` and `label`. `PUT /api/boards/:id` saves its name, swimlanes and columns. `GET /api/boards/wip` lists
+  every board's WIP limits.
+
+**New screens:**
+- Settings → Administration → Workflows
+- the project's Board tab (`#/projects/<id>/board`)
+- the Boards page in the sidebar
+- the move pop-up
+- board columns
+- WIP limits in Settings → Workload limits

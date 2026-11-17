@@ -20,6 +20,7 @@ const REMOVE = `-- Removes every demo record (ids starting "demo-").
 DELETE FROM assignments WHERE system_id LIKE 'demo-%' OR user_id LIKE 'demo-%';
 DELETE FROM document_chunks WHERE doc_id IN (SELECT id FROM documents WHERE work_item_id LIKE 'demo-%');
 DELETE FROM work_items WHERE id LIKE 'demo-%';
+DELETE FROM boards WHERE id LIKE 'demo-%';
 DELETE FROM blockers WHERE id LIKE 'demo-%';
 DELETE FROM documents WHERE id LIKE 'demo-%';
 DELETE FROM requests WHERE id LIKE 'demo-%';
@@ -502,6 +503,26 @@ for (const sys of inFlight) {
   });
 }
 
+// One project runs on the Infrastructure deployment workflow: its items in that workflow's statuses.
+const INFRA = systems.find((s) => s.name === "Fleet & Transport Booking");
+const INFRA_STATUS = { TODO: "BACKLOG", IN_PROGRESS: "IN_PROGRESS", IN_REVIEW: "TESTING", DONE: "CLOSED" };
+let infraSeen = 0;
+for (const it of items.filter((x) => INFRA && x.systemId === INFRA.id && x.type !== "EPIC")) {
+  const to = (st) => INFRA_STATUS[st] ?? st;
+  it.status = to(it.status);
+  it.path = (it.path ?? ["TODO"]).map(to);
+  // Some testing items wait for change approval; some closed ones are only deployed so far.
+  if (it.status === "TESTING" && infraSeen++ % 2 === 0) {
+    it.status = "CHANGE_APPROVAL";
+    it.path = [...it.path, "CHANGE_APPROVAL"];
+  } else if (it.status === "CLOSED" && infraSeen++ % 3 === 0) {
+    it.path = [...it.path.slice(0, -1), "CHANGE_APPROVAL", "DEPLOYED"];
+    it.status = "DEPLOYED";
+  } else if (it.status === "CLOSED") {
+    it.path = [...it.path.slice(0, -1), "CHANGE_APPROVAL", "DEPLOYED", "CLOSED"];
+  }
+}
+
 // Numbered per project, oldest first, as Pulse would have numbered them.
 items.sort((a, b) => a.created.localeCompare(b.created));
 const counters = {};
@@ -511,12 +532,14 @@ for (const it of items) {
   // An epic is done when everything in it is.
   if (it.type === "EPIC") {
     const kids = items.filter((x) => x.parentId === it.id);
-    const allDone = kids.length && kids.every((x) => x.status === "DONE");
-    it.status = allDone ? "DONE" : kids.some((x) => x.status !== "TODO") ? "IN_PROGRESS" : "TODO";
+    const allDone = kids.length && kids.every((x) => ["DONE", "CLOSED", "DEPLOYED"].includes(x.status));
+    const infra = INFRA && it.systemId === INFRA.id;
+    it.status = allDone ? (infra ? "CLOSED" : "DONE") : kids.some((x) => !["TODO", "BACKLOG"].includes(x.status)) ? "IN_PROGRESS" : infra ? "BACKLOG" : "TODO";
     it.resolution = allDone ? "DONE" : null;
     it.updated = kids.reduce((m, x) => (x.updated > m ? x.updated : m), it.created);
     it.resolved = allDone ? it.updated : null;
-    it.path = allDone ? ["TODO", "IN_PROGRESS", "DONE"] : it.status === "IN_PROGRESS" ? ["TODO", "IN_PROGRESS"] : ["TODO"];
+    const first = infra ? "BACKLOG" : "TODO";
+    it.path = allDone ? [first, "IN_PROGRESS", it.status] : it.status === "IN_PROGRESS" ? [first, "IN_PROGRESS"] : [first];
   }
   out.push(
     `INSERT INTO work_items (id, system_id, number, type, parent_id, summary, description, status, resolution, on_hold, priority, assignee, reporter, component, story_points, original_estimate, remaining_estimate, start_date, due_date, created_at, updated_at, resolved_at, source, client, notes) VALUES (${[
@@ -570,6 +593,22 @@ workLogs.forEach((w, i) =>
   out.push(`INSERT INTO work_logs (id, item_id, user_id, minutes, note, work_date, created_at) VALUES (${q(`demo-wl-${i + 1}`)}, ${q(w.itemId)}, ${q(w.userId)}, ${w.minutes}, ${q(w.note)}, ${q(w.day)}, ${q(`${w.day}T16:00:00.000Z`)});`),
 );
 out.push(`UPDATE systems SET item_seq = COALESCE((SELECT MAX(number) FROM work_items w WHERE w.system_id = systems.id), 0) WHERE id LIKE 'demo-%';`);
+if (INFRA) out.push(`UPDATE systems SET workflow_id = 'infra-deploy' WHERE id = ${q(INFRA.id)};`);
+
+// A board with work-in-progress limits, one column over its limit.
+{
+  const sys = inFlight[0];
+  out.push(`INSERT INTO boards (id, system_id, name, swimlanes, created_at, updated_at) VALUES ('demo-b-1', ${q(sys.id)}, ${q(`${sys.name} board`)}, 'epic', ${q(ago(30))}, ${q(ago(2))});`);
+  [
+    ["To Do", null, ["TODO"]],
+    ["Doing", 1, ["IN_PROGRESS", "IN_REVIEW"]],
+    ["Done", null, ["DONE"]],
+  ].forEach(([name, limit, statuses], i) => {
+    out.push(`INSERT INTO board_columns (id, board_id, name, position, wip_limit) VALUES ('demo-bc-${i + 1}', 'demo-b-1', ${q(name)}, ${i + 1}, ${limit ?? "NULL"});`);
+    for (const st of statuses) out.push(`INSERT INTO board_column_statuses (board_id, column_id, status_id) VALUES ('demo-b-1', 'demo-bc-${i + 1}', ${q(st)});`);
+  });
+}
+
 // One project takes its progress from its work items, to show how that reads.
 {
   const sys = inFlight[0];

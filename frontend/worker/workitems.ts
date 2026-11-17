@@ -23,10 +23,8 @@ import {
   MAX_SUMMARY,
   PAGE_SIZE,
   RESOLUTION_META,
-  STATUS_META,
   TYPE_META,
   WORK_PRIORITIES,
-  WORK_STATUSES,
   WORK_TYPES,
   childTypesOf,
   cleanLabel,
@@ -44,9 +42,13 @@ import {
   type WorkItemType,
   type WorkLog,
   type WorkPriority,
+  type ItemMove,
+  type StatusCategory,
   type WorkSource,
   type WorkStatus,
 } from "../src/data/workitems";
+import { checkTransition, needsInput, transitionsFrom, type MoveInput, type Transition, type Workflow } from "../src/data/workflows";
+import { initialStatus, loadWorkflow, workflowIdFor } from "./workflowData";
 
 export interface ItemContext {
   db: D1Database;
@@ -71,6 +73,8 @@ export interface ItemRow {
   summary: string;
   description: string;
   status: WorkStatus;
+  status_name: string;
+  status_category: StatusCategory;
   resolution: Resolution | null;
   on_hold: number;
   priority: WorkPriority;
@@ -98,12 +102,14 @@ export interface ItemRow {
 }
 
 /** Everything a list or page needs about an item, in one query. Cancelled ("won't do") children don't count. */
-const SELECT = `SELECT w.*, s.key AS project_key, (s.data::json ->> 'name') AS project_name, p.number AS parent_number,
+const SELECT = `SELECT w.*, st.name AS status_name, st.category AS status_category,
+  s.key AS project_key, (s.data::json ->> 'name') AS project_name, p.number AS parent_number,
   (SELECT string_agg(l.label, ',' ORDER BY l.label) FROM work_item_labels l WHERE l.item_id = w.id) AS labels,
   (SELECT COUNT(*) FROM work_items c WHERE c.parent_id = w.id AND COALESCE(c.resolution, '') <> 'WONT_DO') AS child_total,
   (SELECT COUNT(*) FROM work_items c JOIN work_statuses cs ON cs.id = c.status
      WHERE c.parent_id = w.id AND cs.category = 'DONE' AND COALESCE(c.resolution, '') <> 'WONT_DO') AS child_done
   FROM work_items w
+  JOIN work_statuses st ON st.id = w.status
   JOIN systems s ON s.id = w.system_id
   LEFT JOIN work_items p ON p.id = w.parent_id`;
 
@@ -119,6 +125,8 @@ export function toSummary(r: ItemRow): WorkItemSummary {
     type: r.type,
     summary: r.summary,
     status: r.status,
+    statusName: r.status_name,
+    statusCategory: r.status_category,
     ...(r.resolution ? { resolution: r.resolution } : {}),
     onHold: !!r.on_hold,
     priority: r.priority,
@@ -167,7 +175,7 @@ const SORTS: Record<string, string> = {
   created: "w.created_at",
   priority: PRIORITY_ORDER,
   due: "w.due_date",
-  status: "(SELECT position FROM work_statuses ws WHERE ws.id = w.status)",
+  status: "CASE st.category WHEN 'TODO' THEN 0 WHEN 'IN_PROGRESS' THEN 1 ELSE 2 END, st.position",
   summary: "lower(w.summary)",
   type: "CASE w.type WHEN 'EPIC' THEN 0 WHEN 'STORY' THEN 1 WHEN 'TASK' THEN 2 WHEN 'BUG' THEN 3 ELSE 4 END",
 };
@@ -189,7 +197,7 @@ async function listItems(c: ItemContext, q: URLSearchParams) {
   if (system) add("w.system_id = ?", system);
   const types = list(q.get("type")).filter((t) => (WORK_TYPES as string[]).includes(t));
   if (types.length) add(`w.type IN (${types.map(() => "?").join(", ")})`, ...types);
-  const statuses = list(q.get("status")).filter((t) => (WORK_STATUSES as string[]).includes(t));
+  const statuses = list(q.get("status")).filter((t) => /^[A-Z][A-Z0-9_]{0,39}$/.test(t));
   if (statuses.length) add(`w.status IN (${statuses.map(() => "?").join(", ")})`, ...statuses);
   const priorities = list(q.get("priority")).filter((t) => (WORK_PRIORITIES as string[]).includes(t));
   if (priorities.length) add(`w.priority IN (${priorities.map(() => "?").join(", ")})`, ...priorities);
@@ -212,11 +220,11 @@ async function listItems(c: ItemContext, q: URLSearchParams) {
     else add("w.parent_id = ?", parent);
   }
   const state = q.get("state");
-  if (state === "open") add("NOT EXISTS (SELECT 1 FROM work_statuses ws WHERE ws.id = w.status AND ws.category = 'DONE')");
-  if (state === "done") add("EXISTS (SELECT 1 FROM work_statuses ws WHERE ws.id = w.status AND ws.category = 'DONE')");
+  if (state === "open") add("st.category <> 'DONE'");
+  if (state === "done") add("st.category = 'DONE'");
   const due = q.get("due");
   const today = c.now.slice(0, 10);
-  if (due === "overdue") add("w.due_date < ? AND NOT EXISTS (SELECT 1 FROM work_statuses ws WHERE ws.id = w.status AND ws.category = 'DONE')", today);
+  if (due === "overdue") add("w.due_date < ? AND st.category <> 'DONE'", today);
   if (due === "week") add("w.due_date >= ? AND w.due_date <= ?", today, new Date(Date.parse(today) + 7 * 86_400_000).toISOString().slice(0, 10));
   const text = (q.get("q") ?? "").trim().slice(0, 100);
   if (text) {
@@ -241,7 +249,7 @@ async function listItems(c: ItemContext, q: URLSearchParams) {
 
 async function countOnly(c: ItemContext, where: string[], args: unknown[]) {
   const r = await c.db
-    .prepare(`SELECT COUNT(*) AS n FROM work_items w JOIN systems s ON s.id = w.system_id WHERE ${where.join(" AND ")}`)
+    .prepare(`SELECT COUNT(*) AS n FROM work_items w JOIN work_statuses st ON st.id = w.status JOIN systems s ON s.id = w.system_id WHERE ${where.join(" AND ")}`)
     .bind(...args)
     .first<{ n: number }>();
   return r?.n;
@@ -283,7 +291,14 @@ async function detail(c: ItemContext, r: ItemRow): Promise<WorkItem> {
           .bind(r.id)
           .all<Record<string, string | number>>(),
     c.db.prepare("SELECT * FROM work_logs WHERE item_id = ? ORDER BY work_date DESC, created_at DESC").bind(r.id).all<Record<string, string | number>>(),
-    c.db.prepare("SELECT * FROM status_history WHERE item_id = ? ORDER BY id").bind(r.id).all<Record<string, string | null>>(),
+    c.db
+      .prepare(
+        `SELECT h.*, f.name AS from_name, t.name AS to_name FROM status_history h
+         LEFT JOIN work_statuses f ON f.id = h.from_status LEFT JOIN work_statuses t ON t.id = h.to_status
+         WHERE h.item_id = ? ORDER BY h.id`,
+      )
+      .bind(r.id)
+      .all<Record<string, string | null>>(),
     c.db.prepare("SELECT COUNT(*) AS n FROM work_item_comments WHERE item_id = ?").bind(r.id).first<{ n: number }>(),
   ]);
   const workLogs: WorkLog[] = logs.results.map((l) => ({
@@ -323,15 +338,267 @@ async function detail(c: ItemContext, r: ItemRow): Promise<WorkItem> {
     workLogs,
     history: history.results.map(
       (h): StatusChange => ({
-        ...(h.from_status ? { from: h.from_status as WorkStatus } : {}),
-        to: h.to_status as WorkStatus,
+        ...(h.from_status ? { from: h.from_status, fromName: h.from_name ?? h.from_status } : {}),
+        to: h.to_status!,
+        toName: h.to_name ?? h.to_status!,
         ...(h.changed_by ? { by: h.changed_by } : {}),
         at: h.changed_at!,
       }),
     ),
     commentCount: Number(comments?.n ?? 0),
     can: rights(c, r),
+    ...(await movesFor(c, r)),
   };
+}
+
+// ---------- workflow transitions ----------
+
+/** The item as the workflow rules read it. */
+async function forCheck(c: ItemContext, r: ItemRow) {
+  const open = await c.db
+    .prepare("SELECT COUNT(*) AS n FROM work_items w JOIN work_statuses st ON st.id = w.status WHERE w.parent_id = ? AND w.type = 'SUBTASK' AND st.category <> 'DONE'")
+    .bind(r.id)
+    .first<{ n: number }>();
+  return {
+    status: r.status,
+    assignee: r.assignee,
+    reporter: r.reporter,
+    description: r.description,
+    dueDate: r.due_date,
+    startDate: r.start_date,
+    storyPoints: r.story_points,
+    originalEstimate: r.original_estimate,
+    component: r.component,
+    labels: r.labels ? r.labels.split(",") : [],
+    openSubtasks: Number(open?.n ?? 0),
+  };
+}
+
+/** The moves out of the item's status, each with whether this person may make it and what it needs. */
+async function movesFor(c: ItemContext, r: ItemRow): Promise<{ workflowId: string; moves: ItemMove[] }> {
+  const wf = await loadWorkflow(c.db, await workflowIdFor(c.db, r.system_id));
+  const names = await statusNames(c);
+  const item = await forCheck(c, r);
+  const editable = rights(c, r).edit;
+  return {
+    workflowId: wf.id,
+    moves: transitionsFrom(wf, r.status).map((t) => {
+      const check = checkTransition(t, item, c.me);
+      const to = names.get(t.to);
+      return {
+        transitionId: t.id,
+        name: t.name,
+        to: t.to,
+        toName: to?.name ?? t.to,
+        toCategory: to?.category ?? "TODO",
+        allowed: editable && check.allowed,
+        ...(!editable ? { reason: "You can't change this work item" } : check.reason ? { reason: check.reason } : {}),
+        needs: check.needs,
+      };
+    }),
+  };
+}
+
+async function statusNames(c: ItemContext) {
+  const rows = await c.db.prepare("SELECT id, name, category FROM work_statuses").all<{ id: string; name: string; category: StatusCategory }>();
+  return new Map(rows.results.map((x) => [x.id, x]));
+}
+
+export interface MoveRequest {
+  transitionId?: unknown;
+  to?: unknown;
+  comment?: unknown;
+  fields?: MoveInput["fields"];
+  resolution?: Resolution; // a Done move made for a cancelled feature request
+}
+
+/** Someone who has `role`: the project's lead first, then its developers, then anyone, by name. */
+async function personWithRole(c: ItemContext, role: string, systemId: string): Promise<string | null> {
+  const row = await c.db
+    .prepare(
+      `SELECT u.id FROM users u WHERE u.role = ?
+       ORDER BY (u.id = (SELECT s.data::json ->> 'lead' FROM systems s WHERE s.id = ?))::int DESC,
+         EXISTS (SELECT 1 FROM assignments a WHERE a.user_id = u.id AND a.system_id = ?)::int DESC, u.name LIMIT 1`,
+    )
+    .bind(role, systemId, systemId)
+    .first<{ id: string }>();
+  return row?.id ?? null;
+}
+
+/**
+ * Makes one move in the item's workflow: checks the conditions and validators, applies any fields
+ * given with it, adds the comment, runs the post-functions, logs it and tells people. Returns the change.
+ */
+export async function transitionItem(c: ItemContext, r: ItemRow, m: MoveRequest, opts: { log?: boolean; quiet?: boolean } = {}): Promise<ChangeResult> {
+  // quiet: a step on the way somewhere else (a feature request's status walk). Only the last step tells
+  // people and updates the project's progress; every step still records its history.
+  const log = opts.log ?? true;
+  const may = rights(c, r);
+  if (!may.edit) throw new HttpError(403, "Only the assignee, the reporter or someone who can edit any work item can move this");
+  const wf = await loadWorkflow(c.db, await workflowIdFor(c.db, r.system_id));
+  const options = transitionsFrom(wf, r.status);
+  const t: Transition | undefined = m.transitionId ? options.find((x) => x.id === m.transitionId) : options.find((x) => x.to === m.to);
+  const names = await statusNames(c);
+  if (!t) {
+    const to = names.get(String(m.to ?? ""))?.name ?? "that status";
+    throw new HttpError(400, `The ${wf.name} workflow doesn't allow a move from ${r.status_name} to ${to}`, "transition_not_allowed");
+  }
+  const comment = typeof m.comment === "string" ? m.comment.trim().slice(0, MAX_COMMENT) : "";
+  const fields = m.fields && typeof m.fields === "object" ? m.fields : {};
+  const check = checkTransition(t, await forCheck(c, r), c.me, { comment, fields });
+  if (!check.allowed) throw new HttpError(403, check.reason ?? "You can't make that move", "transition_condition");
+  if (needsInput(check)) {
+    const wants = [...(check.needs.comment ? ["a comment"] : []), ...(check.needs.assignee ? ["an assignee"] : []), ...check.needs.fields.map((f) => f)];
+    throw new HttpError(400, `"${t.name}" needs ${wants.join(", ")} first`, "transition_needs", { needs: check.needs, transition: t.id });
+  }
+  if (fields.assignee !== undefined && !may.assignOthers) {
+    const to = (fields.assignee || null) as string | null;
+    if (to && to !== c.me.id) throw new HttpError(403, "You can assign a work item to yourself only");
+  }
+
+  const patch: ItemPatch = { ...fields, status: t.to };
+  for (const rule of t.rules.filter((x) => x.kind === "post_function")) {
+    if (rule.rule === "assign_user" && rule.value) {
+      const u = await c.db.prepare("SELECT role FROM users WHERE id = ?").bind(rule.value).first<{ role: Role }>();
+      if (u && u.role !== "viewer") patch.assignee = rule.value;
+    }
+    if (rule.rule === "assign_role" && rule.value) patch.assignee = (await personWithRole(c, rule.value, r.system_id)) ?? patch.assignee;
+    if (rule.rule === "assign_reporter") patch.assignee = r.reporter;
+    if (rule.rule === "clear_assignee") patch.assignee = null;
+    if (rule.rule === "set_resolution" && (rule.value === "DONE" || rule.value === "WONT_DO")) patch.resolution = rule.value;
+  }
+  if (m.resolution) patch.resolution = m.resolution;
+  // A client request goes to developers only: a post-function can't hand it to anyone else.
+  if (r.source === "client_request" && patch.assignee && patch.assignee !== fields.assignee) {
+    const u = await c.db.prepare("SELECT role FROM users WHERE id = ?").bind(patch.assignee).first<{ role: Role }>();
+    if (u?.role !== "developer") delete patch.assignee;
+  }
+  const res = await applyChange(c, r, patch, true);
+
+  if (comment) {
+    const id = newToken().slice(0, 16);
+    await c.db.prepare("INSERT INTO work_item_comments (id, item_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)").bind(id, r.id, c.me.id, comment, c.now).run();
+    await c.audit("comment_added", r.system_id, { name: r.project_name, key: keyOf(r), summary: r.summary, comment: comment.slice(0, 300), transition: t.name });
+    await notifyMentions(c, res.after, comment, `Moving it to ${res.after.status_name}`);
+  }
+  if (log) {
+    await c.audit("work_item_updated", res.after.system_id, {
+      name: res.after.project_name,
+      key: keyOf(res.after),
+      summary: res.after.summary,
+      transition: t.name,
+      fields: res.changed,
+      ...res.diff,
+      ...(res.diff.status ? { statusNames: { from: r.status_name, to: res.after.status_name } } : {}),
+    });
+  }
+  if (opts.quiet) return res;
+  // "Notify" post-functions, beyond the watchers (who hear anyway).
+  const notify = t.rules.filter((x) => x.kind === "post_function" && x.rule === "notify").map((x) => x.value ?? "watchers");
+  const extra = new Set<string>();
+  for (const v of notify) {
+    if (v === "assignee" && res.after.assignee) extra.add(res.after.assignee);
+    if (v === "reporter") extra.add(res.after.reporter);
+    if (v.startsWith("role:")) {
+      const ids = await c.db.prepare("SELECT id FROM users WHERE role = ?").bind(v.slice(5)).all<{ id: string }>();
+      ids.results.forEach((u) => extra.add(u.id));
+    }
+  }
+  const watchers = new Set((await c.db.prepare("SELECT user_id FROM work_item_watchers WHERE item_id = ?").bind(r.id).all<{ user_id: string }>()).results.map((w) => w.user_id));
+  const seeAll = await developersSeeAll(c);
+  const roles = new Map(
+    (await c.db.prepare("SELECT id, role FROM users").all<{ id: string; role: Role }>()).results.map((u) => [u.id, u.role]),
+  );
+  c.alert(
+    [...extra]
+      .filter((id) => !watchers.has(id))
+      .filter((id) => roles.get(id) !== "developer" || seeAll || id === res.after.assignee || id === res.after.reporter)
+      .map((id) => ({
+        userId: id,
+        kind: "watching" as const,
+        title: `${keyOf(res.after)} ${res.after.summary}`.slice(0, 200),
+        body: `${t.name}: now ${res.after.status_name}. By ${c.me.name}.`,
+        link: itemLink(res.after),
+      })),
+  );
+  await afterChange(c, res);
+  return res;
+}
+
+const TESTING_NAME = /review|test|approval/i;
+
+/**
+ * A feature request's status, as a status in the project's workflow: where the request should end up.
+ * Returns null when it is already there.
+ */
+async function featureTarget(c: ItemContext, wf: Workflow, r: ItemRow, status: FeatureStatus): Promise<string | null> {
+  const names = await statusNames(c);
+  const inWf = wf.statuses.map((s) => names.get(s.id)!).filter(Boolean);
+  const cat = (k: StatusCategory) => inWf.filter((s) => s.category === k);
+  const current = names.get(r.status);
+  switch (status) {
+    case "NOT_STARTED":
+      return current?.category === "TODO" ? null : initialStatus(wf);
+    case "IN_PROGRESS": {
+      if (current?.category === "IN_PROGRESS" && !TESTING_NAME.test(current.name)) return null;
+      return (cat("IN_PROGRESS").find((s) => !TESTING_NAME.test(s.name)) ?? cat("IN_PROGRESS")[0])?.id ?? null;
+    }
+    case "TESTING": {
+      if (current?.category === "IN_PROGRESS" && TESTING_NAME.test(current.name)) return null;
+      const list = cat("IN_PROGRESS");
+      return (list.find((s) => TESTING_NAME.test(s.name)) ?? list[list.length - 1])?.id ?? null;
+    }
+    case "COMPLETED":
+    case "CANCELLED":
+      return current?.category === "DONE" ? null : cat("DONE")[0]?.id ?? null;
+    case "ON_HOLD":
+      return current?.category === "DONE" ? ((cat("IN_PROGRESS")[0] ?? cat("TODO")[0])?.id ?? null) : null;
+  }
+}
+
+/**
+ * Moves a feature request to the status its old status names, through the moves its project's
+ * workflow allows this person to make (the shortest way there). Refuses when there is no such way.
+ */
+export async function moveFeatureTo(c: ItemContext, r: ItemRow, status: FeatureStatus): Promise<ItemRow> {
+  const wf = await loadWorkflow(c.db, await workflowIdFor(c.db, r.system_id));
+  const target = await featureTarget(c, wf, r, status);
+  let row = r;
+  if (target) {
+    // Breadth-first over the moves this person may make without giving anything more.
+    const item = await forCheck(c, r);
+    const prev = new Map<string, { from: string; t: Transition } | null>([[r.status, null]]);
+    const queue = [r.status];
+    while (queue.length && !prev.has(target)) {
+      const at = queue.shift()!;
+      for (const t of transitionsFrom(wf, at)) {
+        if (prev.has(t.to)) continue;
+        const check = checkTransition(t, { ...item, status: at }, c.me);
+        if (!check.allowed || needsInput(check)) continue;
+        prev.set(t.to, { from: at, t });
+        queue.push(t.to);
+      }
+    }
+    if (!prev.has(target)) {
+      const name = (await statusNames(c)).get(target)?.name ?? target;
+      throw new HttpError(
+        400,
+        `The ${wf.name} workflow doesn't let you move this request from ${r.status_name} to ${name} directly. Open work item ${keyOf(r)} to move it step by step.`,
+        "transition_not_allowed",
+      );
+    }
+    const steps: Transition[] = [];
+    for (let at = target; prev.get(at); at = prev.get(at)!.from) steps.unshift(prev.get(at)!.t);
+    for (const [i, t] of steps.entries()) {
+      const last = i === steps.length - 1;
+      row = (await transitionItem(c, row, { transitionId: t.id, ...(last && status === "CANCELLED" ? { resolution: "WONT_DO" as const } : {}) }, { log: false, quiet: !last })).after;
+    }
+  } else if ((status === "CANCELLED" || status === "COMPLETED") && row.status_category === "DONE") {
+    row = (await applyChange(c, row, { resolution: status === "CANCELLED" ? "WONT_DO" : "DONE" }, true)).after;
+  }
+  const hold = status === "ON_HOLD";
+  if (!!row.on_hold !== hold && row.status_category !== "DONE") row = (await applyChange(c, row, { onHold: hold })).after;
+  return row;
 }
 
 // ---------- validation ----------
@@ -546,7 +813,10 @@ export interface ChangeResult {
  * Validates and saves a change to one item: hierarchy, statuses and resolution, labels, numbering
  * on a move, status history and watchers, in one transaction. Permission checks are the caller's.
  */
-export async function applyChange(c: ItemContext, r: ItemRow, b: ItemPatch): Promise<ChangeResult> {
+export async function applyChange(c: ItemContext, r: ItemRow, b: ItemPatch, viaTransition = false): Promise<ChangeResult> {
+  if (b.status !== undefined && b.status !== r.status && !viaTransition) {
+    throw new HttpError(400, "Statuses change through the workflow's moves", "use_transition");
+  }
   const next = { ...r };
   let nextLabels = r.labels ? r.labels.split(",") : [];
   if (b.summary !== undefined) next.summary = str(b.summary, "Summary", MAX_SUMMARY, true)!;
@@ -577,6 +847,12 @@ export async function applyChange(c: ItemContext, r: ItemRow, b: ItemPatch): Pro
     next.system_id = target.id;
     next.parent_id = null;
     moving = true;
+    // Its status, in the new project's workflow: the same one if it has it, else the first of the same kind.
+    const wf = await loadWorkflow(c.db, await workflowIdFor(c.db, target.id));
+    if (!wf.statuses.some((x) => x.id === r.status)) {
+      const names = await statusNames(c);
+      next.status = wf.statuses.find((x) => names.get(x.id)?.category === r.status_category)?.id ?? initialStatus(wf);
+    }
   }
 
   // The hierarchy: a new parent, or the same parent under a new type, must fit.
@@ -598,9 +874,11 @@ export async function applyChange(c: ItemContext, r: ItemRow, b: ItemPatch): Pro
   }
 
   // Status, resolution and the dates that go with them.
-  if (b.status !== undefined) next.status = pick(b.status, WORK_STATUSES, "status");
-  const doneNow = STATUS_META[next.status].category === "DONE";
-  const doneBefore = STATUS_META[r.status].category === "DONE";
+  if (b.status !== undefined) next.status = String(b.status);
+  const names = await statusNames(c);
+  if (!names.has(next.status)) throw new HttpError(400, "Unknown status");
+  const doneNow = names.get(next.status)!.category === "DONE";
+  const doneBefore = r.status_category === "DONE";
   if (b.resolution !== undefined && b.resolution !== null && b.resolution !== "") next.resolution = pick(b.resolution, Object.keys(RESOLUTION_META) as Resolution[], "resolution");
   if (doneNow) {
     if (!next.resolution) next.resolution = "DONE";
@@ -723,7 +1001,7 @@ export async function afterChange(c: ItemContext, res: ChangeResult, alertAssign
   }
   const words = changed.map((k) =>
     k === "status"
-      ? `status changed to ${STATUS_META[after.status].label}`
+      ? `status changed to ${after.status_name}`
       : k === "assignee"
         ? after.assignee
           ? "reassigned"
@@ -766,8 +1044,10 @@ export async function createItem(c: ItemContext, b: NewItem, source: WorkSource,
   if (!sys) throw new HttpError(404, "System not found");
   const type = pick(b.type ?? "TASK", WORK_TYPES, "type");
   const parent = await checkParent(c, b.parent, type, sys.id);
-  const status = pick(b.status ?? "TODO", WORK_STATUSES, "status");
-  const done = STATUS_META[status].category === "DONE";
+  // Every new item starts in its workflow's first status; a feature request then moves on from there.
+  const wf = await loadWorkflow(c.db, await workflowIdFor(c.db, sys.id));
+  const status = initialStatus(wf);
+  const done = (await statusNames(c)).get(status)?.category === "DONE";
   const resolution = done ? (b.resolution === "WONT_DO" ? "WONT_DO" : "DONE") : null;
   const assignee = await checkAssignee(c, b.assignee, source);
   const start = date(b.startDate, "Start date");
@@ -853,28 +1133,10 @@ export async function deleteItem(c: ItemContext, r: ItemRow) {
 
 const FEATURE_PRIORITY: Record<Priority, WorkPriority> = { CRITICAL: "HIGHEST", HIGH: "HIGH", MEDIUM: "MEDIUM", LOW: "LOW" };
 
-/** A feature request's status as the work item fields that hold it. */
-export function featureStatusToItem(status: FeatureStatus, current?: WorkStatus): { status: WorkStatus; resolution: Resolution | null; onHold: boolean } {
-  switch (status) {
-    case "NOT_STARTED":
-      return { status: "TODO", resolution: null, onHold: false };
-    case "IN_PROGRESS":
-      return { status: "IN_PROGRESS", resolution: null, onHold: false };
-    case "TESTING":
-      return { status: "IN_REVIEW", resolution: null, onHold: false };
-    case "ON_HOLD":
-      return { status: current && STATUS_META[current].category !== "DONE" ? current : "IN_PROGRESS", resolution: null, onHold: true };
-    case "COMPLETED":
-      return { status: "DONE", resolution: "DONE", onHold: false };
-    case "CANCELLED":
-      return { status: "DONE", resolution: "WONT_DO", onHold: false };
-  }
-}
-
 /** The work item fields for a feature request's fields (only those given). */
 export function featureToItem(
-  f: { title?: unknown; description?: unknown; kind?: FeatureKind; client?: unknown; status?: FeatureStatus; priority?: Priority; assignee?: unknown; notes?: unknown; dueAt?: unknown; systemId?: unknown },
-  current?: { type: WorkItemType; status: WorkStatus; labels: string[] },
+  f: { title?: unknown; description?: unknown; kind?: FeatureKind; client?: unknown; priority?: Priority; assignee?: unknown; notes?: unknown; dueAt?: unknown; systemId?: unknown },
+  current?: { type: WorkItemType; labels: string[] },
 ): ItemPatch & NewItem {
   const out: ItemPatch & NewItem = { systemId: f.systemId };
   if (f.systemId === undefined) delete (out as { systemId?: unknown }).systemId;
@@ -885,12 +1147,6 @@ export function featureToItem(
   if (f.assignee !== undefined) out.assignee = f.assignee;
   if (f.dueAt !== undefined) out.dueDate = f.dueAt;
   if (f.priority !== undefined) out.priority = FEATURE_PRIORITY[f.priority];
-  if (f.status !== undefined) {
-    const s = featureStatusToItem(f.status, current?.status);
-    out.status = s.status;
-    out.resolution = s.resolution ?? undefined;
-    out.onHold = s.onHold;
-  }
   if (f.kind !== undefined) {
     const kindLabels = Object.values(KIND_LABELS) as string[];
     out.labels = [...(current?.labels ?? []).filter((l) => !kindLabels.includes(l)), KIND_LABELS[f.kind]];
@@ -945,7 +1201,11 @@ export async function itemsApi(c: ItemContext, path: string, method: string): Pr
       if (to && to !== c.me.id) throw new HttpError(403, "You can assign a work item to yourself only");
       if (to !== r.assignee && r.assignee && r.assignee !== c.me.id) throw new HttpError(403, "Someone else is assigned; ask whoever assigns work to change it");
     }
-    const res = await applyChange(c, r, b);
+    // A new status is a move in the workflow, with its rules; the other fields follow.
+    let row = r;
+    const { status, comment, ...rest } = b as ItemPatch & { comment?: unknown };
+    if (status !== undefined && status !== r.status) row = (await transitionItem(c, r, { to: status, comment })).after;
+    const res = await applyChange(c, row, rest);
     if (res.changed.length) {
       await c.audit("work_item_updated", res.after.system_id, { name: res.after.project_name, key: keyOf(res.after), summary: res.after.summary, fields: res.changed, ...res.diff });
       await afterChange(c, res);
@@ -959,6 +1219,16 @@ export async function itemsApi(c: ItemContext, path: string, method: string): Pr
     const subtasks = await deleteItem(c, r);
     await c.audit("work_item_deleted", r.system_id, { name: r.project_name, key: keyOf(r), summary: r.summary, type: r.type, ...(subtasks ? { subtasks } : {}) });
     return json({ ok: true });
+  }
+
+  m = path.match(new RegExp(`^/api/items/${KEY}/transitions$`));
+  if (m && method === "GET") return json((await movesFor(c, await itemByKey(c, m[1]))).moves);
+  if (m && method === "POST") {
+    const r = await itemByKey(c, m[1]);
+    const b = await body<MoveRequest>(req);
+    delete b.resolution;
+    const res = await transitionItem(c, r, b);
+    return json(await detail(c, res.after));
   }
 
   m = path.match(new RegExp(`^/api/items/${KEY}/clone$`));
@@ -1208,7 +1478,7 @@ export async function askItemLines(c: ItemContext, nameOf: Map<string, string>, 
   const rows = await c.db
     .prepare(
       `${SELECT} WHERE ${vis.sql}
-       ORDER BY CASE WHEN EXISTS (SELECT 1 FROM work_statuses ws WHERE ws.id = w.status AND ws.category = 'DONE') THEN 1 ELSE 0 END,
+       ORDER BY CASE WHEN st.category = 'DONE' THEN 1 ELSE 0 END,
          ${PRIORITY_ORDER}, w.due_date NULLS LAST, w.updated_at DESC LIMIT ?`,
     )
     .bind(...vis.args, limit)
@@ -1233,7 +1503,7 @@ export async function askItemLines(c: ItemContext, nameOf: Map<string, string>, 
         TYPE_META[s.type].label,
         clip(s.summary, 100),
         clip(r.project_name, 60),
-        `${STATUS_META[s.status].label}${s.resolution === "WONT_DO" ? " (won't do)" : ""}${s.onHold ? " (on hold)" : ""}`,
+        `${s.statusName}${s.resolution === "WONT_DO" ? " (won't do)" : ""}${s.onHold ? " (on hold)" : ""}`,
         s.priority.toLowerCase(),
         s.assignee ? (nameOf.get(s.assignee) ?? "unknown") : "unassigned",
         s.dueDate ?? "-",

@@ -6,7 +6,8 @@
 export type WorkItemType = "EPIC" | "STORY" | "TASK" | "BUG" | "SUBTASK";
 export type WorkPriority = "HIGHEST" | "HIGH" | "MEDIUM" | "LOW" | "LOWEST";
 export type StatusCategory = "TODO" | "IN_PROGRESS" | "DONE";
-export type WorkStatus = "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE";
+/** A status id: Phase 1's four (TODO, IN_PROGRESS, IN_REVIEW, DONE) and any added in Settings → Workflows. */
+export type WorkStatus = string;
 export type Resolution = "DONE" | "WONT_DO";
 export type WorkSource = "internal" | "client_request";
 export type LinkType = "BLOCKS" | "RELATES" | "DUPLICATES" | "CLONES";
@@ -20,14 +21,15 @@ export const TYPE_META: Record<WorkItemType, { label: string; tone: string }> = 
 };
 export const WORK_TYPES = Object.keys(TYPE_META) as WorkItemType[];
 
-/** Statuses in board order. Phase 2 makes them configurable; each keeps a category. */
-export const STATUS_META: Record<WorkStatus, { label: string; category: StatusCategory; tone: string }> = {
+/** Phase 1's four statuses, for reading old activity log entries. Statuses now live in the database. */
+export const STATUS_META: Record<string, { label: string; category: StatusCategory; tone: string }> = {
   TODO: { label: "To Do", category: "TODO", tone: "slate" },
   IN_PROGRESS: { label: "In Progress", category: "IN_PROGRESS", tone: "cyan" },
   IN_REVIEW: { label: "In Review", category: "IN_PROGRESS", tone: "violet" },
   DONE: { label: "Done", category: "DONE", tone: "green" },
 };
-export const WORK_STATUSES = Object.keys(STATUS_META) as WorkStatus[];
+/** Each category's colour. */
+export const CATEGORY_TONE: Record<StatusCategory, string> = { TODO: "slate", IN_PROGRESS: "cyan", DONE: "green" };
 
 /** Highest first. */
 export const WORK_PRIORITY_META: Record<WorkPriority, { label: string; rank: number }> = {
@@ -69,6 +71,8 @@ export interface WorkItemSummary {
   type: WorkItemType;
   summary: string;
   status: WorkStatus;
+  statusName: string;
+  statusCategory: StatusCategory;
   resolution?: Resolution;
   onHold: boolean;
   priority: WorkPriority;
@@ -105,6 +109,20 @@ export interface WorkItem extends WorkItemSummary {
   history: StatusChange[];
   commentCount: number;
   can: { edit: boolean; delete: boolean; comment: boolean; logTime: boolean; assignOthers: boolean };
+  workflowId: string;
+  moves: ItemMove[]; // the moves out of its status, with whether you may make each
+}
+
+/** A move a person may (or may not) make from an item's status. */
+export interface ItemMove {
+  transitionId: string;
+  name: string;
+  to: string;
+  toName: string;
+  toCategory: StatusCategory;
+  allowed: boolean;
+  reason?: string;
+  needs: { comment: boolean; assignee: boolean; fields: string[] };
 }
 
 export interface WorkItemLink {
@@ -134,7 +152,9 @@ export interface WorkLog {
 
 export interface StatusChange {
   from?: WorkStatus;
+  fromName?: string;
   to: WorkStatus;
+  toName: string;
   by?: string;
   at: string;
 }
@@ -154,7 +174,7 @@ export interface WorkItemPage {
   offset: number;
 }
 
-export const isDone = (i: { status: WorkStatus }) => STATUS_META[i.status].category === "DONE";
+export const isDone = (i: { statusCategory: StatusCategory }) => i.statusCategory === "DONE";
 
 /** Which types may sit under which: Epic → Story/Task/Bug → Sub-task. */
 export function allowedParentTypes(type: WorkItemType): WorkItemType[] | null {

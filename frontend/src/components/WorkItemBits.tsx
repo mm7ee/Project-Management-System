@@ -1,6 +1,6 @@
 import { useId, useState } from "react";
 import { Bookmark, Bug, CheckSquare, Layers, ListTree } from "lucide-react";
-import { STATUS_META, TYPE_META, WORK_PRIORITY_META, type WorkItemType, type WorkPriority, type WorkStatus } from "../data/workitems";
+import { CATEGORY_TONE, TYPE_META, WORK_PRIORITY_META, type StatusCategory, type WorkItemType, type WorkPriority } from "../data/workitems";
 import Markdown from "./Markdown";
 
 /** The address of a work item's page. */
@@ -18,12 +18,12 @@ export function TypeIcon({ type, size = 15 }: { type: WorkItemType; size?: numbe
   );
 }
 
-export function ItemStatusPill({ status, onHold, wontDo }: { status: WorkStatus; onHold?: boolean; wontDo?: boolean }) {
-  const m = STATUS_META[status];
+/** An item's status, coloured by its category (To Do grey, In Progress blue, Done green). */
+export function ItemStatusPill({ item }: { item: { statusName: string; statusCategory: StatusCategory; onHold?: boolean; resolution?: string } }) {
   return (
     <span className="wi-status-wrap">
-      <span className={`pill sm fill-${m.tone}`}>{wontDo ? "Won't do" : m.label}</span>
-      {onHold && <span className="pill sm fill-amber">On hold</span>}
+      <span className={`pill sm fill-${CATEGORY_TONE[item.statusCategory]}`}>{item.resolution === "WONT_DO" ? `${item.statusName} · won't do` : item.statusName}</span>
+      {item.onHold && <span className="pill sm fill-amber">On hold</span>}
     </span>
   );
 }

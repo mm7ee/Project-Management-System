@@ -18,6 +18,7 @@ import {
 import type { Limits, Workload } from "../data/project";
 import PasswordRules, { generatePassword } from "./PasswordRules";
 import ShareLinks from "./ShareLinks";
+import WipLimits from "./WipLimits";
 import { PASSWORD_MIN, passwordProblem } from "../data/password";
 import { ADMIN_MAX_LOCK_MINUTES, DEFAULT_SIGNIN_RULES, SIGNIN_BOUNDS, SIGNIN_WINDOW_MINUTES, type SigninRules } from "../data/signin";
 
@@ -351,7 +352,12 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaP
 
       {section === "links" && <ShareLinks />}
 
-      {section === "limits" && <LimitsEditor limits={limits} onSave={(l) => run(() => api("/settings/limits", "PUT", l))} />}
+      {section === "limits" && (
+        <>
+          <LimitsEditor limits={limits} onSave={(l) => run(() => api("/settings/limits", "PUT", l))} />
+          <WipLimits />
+        </>
+      )}
 
       {section === "roles" && <RoleMatrix matrix={roleMatrix} onSave={(m) => run(() => api("/roles", "PUT", m))} />}
 

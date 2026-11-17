@@ -17,6 +17,7 @@ export type Permission =
   | "edit_work_items" // edit and assign any work item; without it you edit the items assigned to you or that you reported
   | "delete_work_items" // delete work items
   | "log_time" // log time spent on the work items you can see
+  | "manage_workflows" // edit statuses and workflows, and choose which workflow each workspace and project uses
   | "reports" // generate and download reports
   | "manage_users" // create users, assign roles/projects, change permissions
   | "audit_log"; // view the activity log: sign-ins, failed sign-ins and every change
@@ -45,6 +46,7 @@ export const PERMISSIONS: { key: Permission; label: string }[] = [
   { key: "edit_work_items", label: "Edit and assign any work item" },
   { key: "delete_work_items", label: "Delete work items" },
   { key: "log_time", label: "Log time on work items" },
+  { key: "manage_workflows", label: "Edit workflows" },
   { key: "reports", label: "Generate reports" },
   { key: "manage_users", label: "Manage users, roles and permissions" },
   { key: "audit_log", label: "View the activity log" },
@@ -55,7 +57,7 @@ export type RolePermissions = Record<Role, Permission[]>;
 export const DEFAULT_ROLE_PERMISSIONS: RolePermissions = {
   admin: PERMISSIONS.map((p) => p.key),
   manager: ["request_updates", "propose_projects", "manage_features", "assign_developers", "reports", "create_work_items", "edit_work_items", "delete_work_items", "log_time"],
-  team_lead: ["manage_systems", "assign_developers", "request_updates", "propose_projects", "manage_features", "reports", "create_work_items", "edit_work_items", "delete_work_items", "log_time"],
+  team_lead: ["manage_systems", "assign_developers", "request_updates", "propose_projects", "manage_features", "reports", "create_work_items", "edit_work_items", "delete_work_items", "log_time", "manage_workflows"],
   assistant: ["request_updates", "propose_projects", "reports", "create_work_items"],
   developer: ["edit_assigned", "propose_projects", "log_features", "create_work_items", "log_time"],
   viewer: [],

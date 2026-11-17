@@ -26,6 +26,8 @@ export const RETENTION: RetentionRule[] = [
     kept: "For the life of the project, until someone with permission deletes the item (its sub-tasks go with it)",
   },
   { what: "Watchers of a work item", kept: "Until they stop watching, or are removed from Pulse" },
+  { what: "Statuses, workflows and which workspace or project uses each", kept: "Until someone allowed to edit workflows changes or deletes them" },
+  { what: "Boards, their columns and work-in-progress limits", kept: "For the life of the project or workspace" },
   { what: "User accounts", kept: "Until an administrator removes the person; their sessions, codes, passkeys and notifications go with them" },
   { what: "Activity log (sign-ins, failed sign-ins, changes, IP addresses)", kept: "12 months" },
   { what: "Notifications and digests", kept: `${NOTIFICATION_DAYS} days` },

@@ -35,6 +35,7 @@ import { FeatureStatusPill, PriorityBadge } from "./FeatureModal";
 import LeadContact from "./LeadContact";
 import WorkItemsTab from "./WorkItemsTab";
 import WorkItemPage from "./WorkItemPage";
+import BoardView from "./BoardView";
 import { DateLine, ProgressBar, ScheduleChip, StatusPill, updatedText } from "./SystemCard";
 
 interface Props {
@@ -69,7 +70,8 @@ interface Props {
   onNewFeature: () => void;
   onChanged: () => Promise<void>; // reload after a document or blocker change
   canEditPcn: boolean; // wrote the Concept Note, or may manage systems
-  section: "overview" | "items"; // which tab: #/projects/<id> or #/projects/<id>/items
+  section: "overview" | "items" | "board"; // which tab: #/projects/<id>, …/items or …/board
+  canAssignOthers: boolean; // may give work to anyone
   itemKey?: string; // a work item's page: #/projects/<id>/items/<KEY-n>
   canCreateItems: boolean;
   readOnly: boolean; // a view-only link
@@ -201,9 +203,14 @@ export default function ProjectPage(p: Props) {
         <a href={`#/projects/${system.id}/items`} className={p.section === "items" ? "on" : ""} aria-current={p.section === "items" && !p.itemKey ? "page" : undefined}>
           Work items <span className="mono">{system.key}</span>
         </a>
+        <a href={`#/projects/${system.id}/board`} className={p.section === "board" ? "on" : ""} aria-current={p.section === "board" ? "page" : undefined}>
+          Board
+        </a>
       </nav>
 
-      {p.section === "items" ? (
+      {p.section === "board" ? (
+        <BoardView scope={{ systemId: system.id }} users={users} me={me} now={now} readOnly={p.readOnly} canAssignOthers={p.canAssignOthers} />
+      ) : p.section === "items" ? (
         p.itemKey ? (
           <WorkItemPage system={system} itemKey={p.itemKey} users={users} me={me} now={now} readOnly={p.readOnly} canCreate={p.canCreateItems} onChanged={p.onChanged} />
         ) : (

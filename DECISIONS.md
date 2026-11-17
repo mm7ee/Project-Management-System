@@ -138,3 +138,75 @@ Choices made during the Pulse upgrade that later phases must follow. Newest last
   It never inserts HTML from the text, and only makes http(s) and mailto links.
 - **The D1 fallback is retired from this phase on.** D1 has no work item tables, so switching back to it would break
   feature requests. The restore path is the backup file and the Neon backup branch.
+
+## Phase 2: workflows and boards (2026-11-17)
+
+- **Statuses are one shared list** (`work_statuses`), each in a category (To Do, In Progress or Done). A workflow
+  uses some of them (`workflow_statuses`, in board order, with one where items start). Sharing means "Done" is the
+  same everywhere, and a workspace board can line projects up even when their workflows differ.
+- **A project's workflow** is its own (`systems.workflow_id`) if it has one, else its workspace's
+  (`workspace_workflows`), else the Default. The Default can't be deleted, and it stays the default; to change what
+  most projects use, give their workspaces another workflow.
+- **Every status change is a workflow move,** checked on the server: the item page's "Move to…", a board drag, or a
+  PATCH with `status`. A move must exist from the current status, or be one of the moves allowed "from any status".
+  The conditions and validators are evaluated by one shared function (`src/data/workflows.ts`), so the browser
+  greys out exactly what the server would refuse.
+- **Conditions are combined with AND.** Several "role" conditions on one move mean any of those roles.
+  **Administrators pass role conditions,** as they keep every permission elsewhere in Pulse. So "only a Manager
+  deploys" lets Managers and Administrators deploy. Anyone moving an item must also be allowed to edit it (Phase 1).
+- **Validators:**
+  - A comment, an assignee or a field can be given with the move; the board and item page ask for them in a small
+    pop-up.
+  - "All sub-tasks done" can't be answered in the pop-up, so the move is refused with the reason.
+  - A post-function that assigns someone counts as setting an assignee.
+- **Post-functions** run after the move:
+  - Assign to a person, to someone with a role (the project's lead first, then its developers, then anyone with that
+    role, by name), or to the reporter; or clear the assignee.
+  - Set the resolution.
+  - Notify the watchers (who hear anyway), the assignee, the reporter or every person with a role. Developers only
+    hear about items they can see.
+  - A client request can only be assigned to a developer, so a post-function that would give it to anyone else is
+    skipped.
+- **The seeded Infrastructure deployment workflow** adds two moves the brief didn't name, so work can go back:
+  "Failed testing" (Testing → In Progress) and "Reject change" (Change Approval → In Progress, with a comment). Close
+  sets the resolution to Done, and Deployed counts as done.
+- **Feature requests still change status from their own page.** A new status there is turned into this project's
+  workflow status:
+  - not started → where items start
+  - in progress → the first in-progress status
+  - testing → an in-progress status named for review, testing or approval
+  - completed or cancelled → the first done status
+  - on hold → stays put, flagged
+
+  Pulse then walks the shortest chain of moves this person is allowed to make without giving anything extra. If
+  there's none (for example a move needs a comment), the request is refused and the person is told to move it from
+  the work item. The features view treats any in-progress status named for review, testing or approval as "Testing".
+- **New items start where their workflow starts.** A feature request logged as already in progress or done is
+  created there and then moved on by the same walk.
+- **Changing workflows never strands items.** Any change that would leave items in a status their workflow no longer
+  has is refused (409, `needs_moves`) with the statuses and counts; the editor asks where each should go and retries.
+  This covers removing a status from a workflow, deleting a status, and changing a workspace's or project's workflow.
+  Every item moved this way gets a status history row, and the change is logged as `work_items_moved`.
+- **Moving a project to another workspace,** or removing its workspace, takes the new workspace's workflow, unless
+  some of its items are in statuses that workflow doesn't have. Then the project keeps its old workflow as its own,
+  and an administrator can switch it in Settings, choosing where the items go. Renaming a workspace carries its
+  workflow and board with it.
+- **Boards** (`boards`, `board_columns`, `board_column_statuses`): one per project and one per workspace, created
+  the first time someone opens them.
+  - A project's board starts with a column per status of its workflow. A workspace's board starts with To Do,
+    In Progress and Done, covering every status.
+  - A status can be in one column of a board.
+  - Statuses added to a workflow later aren't added to boards automatically; the board says which statuses aren't
+    on it.
+  - Columns, their WIP limits, the board's name and its default swimlanes need "Add, delete and edit systems".
+    Choosing swimlanes while viewing is personal and isn't saved.
+- **Cards** are the project's (or workspace's) work items except epics, which show as swimlanes and on cards.
+  Finished items show for 14 days after their last change. The board shows at most 400 cards, and says so when there
+  are more. A card is **blocked** when an unfinished item blocks it, or it's on hold. Developers see only their own
+  cards, and WIP counts for them count only their own items.
+- **WIP counts** cover every item in a column's statuses, regardless of the quick filters (epics excluded). A
+  column turns amber above its limit. Settings → Workload limits lists every board's limits and how full each is.
+- **Boards go in the sidebar** under Workspace, next to Feature requests: it fits Pulse's navigation, and the
+  Boards page picks a workspace's board or a project's.
+- **Permissions:** the new "Edit workflows" (`manage_workflows`) goes to Admin and Team Leader. Workflows change how
+  every project works, so it isn't given to Managers by default; an administrator can add it to any role.

@@ -2859,6 +2859,49 @@
           }
         },
         {
+          "name": "Work items: the developer sends the story for review",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"in review\", () => pm.expect(pm.response.json().status).to.eql(\"IN_REVIEW\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{storyKey}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{storyKey}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"IN_REVIEW\"\n}"
+            }
+          }
+        },
+        {
           "name": "Work items: the developer finishes the story",
           "event": [
             {
@@ -2910,7 +2953,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
-                  "pm.test(\"status history\", () => { const r = pm.response.json(); pm.expect(r.history.map((h) => h.to).join() === \"TODO,IN_PROGRESS,DONE\").to.be.true; });",
+                  "pm.test(\"status history\", () => { const r = pm.response.json(); pm.expect(r.history.map((h) => h.to).join() === \"TODO,IN_PROGRESS,IN_REVIEW,DONE\").to.be.true; });",
                   "pm.test(\"time tracking\", () => { const r = pm.response.json(); pm.expect(r.loggedMinutes === 90 && r.remainingEstimate === 150 && r.originalEstimate === 240).to.be.true; });",
                   "pm.test(\"link\", () => { const r = pm.response.json(); pm.expect(r.links.length === 1 && r.links[0].direction === \"outward\").to.be.true; });",
                   "pm.test(\"comment count\", () => { const r = pm.response.json(); pm.expect(r.commentCount === 1).to.be.true; });"
@@ -3537,6 +3580,1307 @@
                 {
                   "key": "kind",
                   "value": "items"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Workflows: statuses are listed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"seeded statuses\", () => { const r = pm.response.json(); pm.expect(r.some((s) => s.id === \"TODO\") && r.some((s) => s.id === \"CHANGE_APPROVAL\" && s.category === \"IN_PROGRESS\")).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{viewerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/statuses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "statuses"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Workflows: the two seeded workflows",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Default and Infrastructure deployment\", () => { const r = pm.response.json(); pm.expect(r.workflows.some((w) => w.id === \"default\" && w.isDefault) && r.workflows.some((w) => w.id === \"infra-deploy\")).to.be.true; });",
+                  "pm.test(\"only a Manager deploys\", () => { const r = pm.response.json(); pm.expect(r.workflows.find((w) => w.id === \"infra-deploy\").transitions.find((t) => t.to === \"DEPLOYED\").rules.some((x) => x.rule === \"role\" && x.value === \"manager\")).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/workflows",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workflows"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Workflows: a viewer can't change them",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{viewerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/workflow-assignments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workflow-assignments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projects\": {\n    \"{{systemId}}\": \"infra-deploy\"\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Workflows: admin creates a task for the developer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"starts in To Do, default workflow\", () => { const r = pm.response.json(); pm.expect(r.status === \"TODO\" && r.workflowId === \"default\").to.be.true; });",
+                  "pm.environment.set(\"wfKey\", pm.response.json().key);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"systemId\": \"{{systemId}}\",\n  \"type\": \"TASK\",\n  \"summary\": \"Workflow check\",\n  \"assignee\": \"qa-dev\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Workflows: the developer sees their moves",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"may start it\", () => { const r = pm.response.json(); pm.expect(r.some((m) => m.to === \"IN_PROGRESS\" && m.allowed)).to.be.true; });",
+                  "pm.test(\"no jump to Done\", () => { const r = pm.response.json(); pm.expect(!r.some((m) => m.to === \"DONE\")).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{wfKey}}/transitions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{wfKey}}",
+                "transitions"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Workflows: a move the workflow doesn't have is refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{wfKey}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{wfKey}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"DONE\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Workflows: the developer starts work",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"in progress\", () => { const r = pm.response.json(); pm.expect(r.status === \"IN_PROGRESS\").to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{wfKey}}/transitions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{wfKey}}",
+                "transitions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"IN_PROGRESS\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Workflows: moving the project to another workflow asks about its items",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"lists the statuses that need a new home\", () => { const r = pm.response.json(); pm.expect(r.code === \"needs_moves\" && r.statuses.length > 0).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/workflow-assignments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workflow-assignments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projects\": {\n    \"{{systemId}}\": \"infra-deploy\"\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Workflows: …and moves them when told where",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/workflow-assignments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workflow-assignments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projects\": {\n    \"{{systemId}}\": \"infra-deploy\"\n  },\n  \"moves\": {\n    \"TODO\": \"BACKLOG\",\n    \"IN_REVIEW\": \"TESTING\",\n    \"DONE\": \"CLOSED\"\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Workflows: the item keeps In Progress in the new workflow",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"same status, new workflow\", () => { const r = pm.response.json(); pm.expect(r.workflowId === \"infra-deploy\" && r.status === \"IN_PROGRESS\").to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{wfKey}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{wfKey}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Workflows: the developer sends it to testing",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"testing\", () => { const r = pm.response.json(); pm.expect(r.status === \"TESTING\").to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{wfKey}}/transitions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{wfKey}}",
+                "transitions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"TESTING\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Workflows: …and asks for change approval",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{wfKey}}/transitions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{wfKey}}",
+                "transitions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"CHANGE_APPROVAL\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Workflows: a developer can't deploy",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{wfKey}}/transitions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{wfKey}}",
+                "transitions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"DEPLOYED\",\n  \"comment\": \"Ship it\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Workflows: deploying needs a comment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"asks for a comment\", () => { const r = pm.response.json(); pm.expect(r.code === \"transition_needs\" && r.needs.comment === true).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{wfKey}}/transitions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{wfKey}}",
+                "transitions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"DEPLOYED\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Workflows: deploying with a comment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"deployed and resolved\", () => { const r = pm.response.json(); pm.expect(r.status === \"DEPLOYED\" && r.statusCategory === \"DONE\" && r.resolution === \"DONE\").to.be.true; });",
+                  "pm.test(\"history by name\", () => { const r = pm.response.json(); pm.expect(r.history.slice(-1)[0].toName === \"Deployed\").to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{wfKey}}/transitions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{wfKey}}",
+                "transitions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"DEPLOYED\",\n  \"comment\": \"Deployed in the 22:00 window. Change ref CHG-1.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Workflows: the deploy comment was kept",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"comment saved\", () => { const r = pm.response.json(); pm.expect(r.comments.some((x) => x.body.includes(\"CHG-1\"))).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{wfKey}}/comments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{wfKey}}",
+                "comments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Boards: the project's board",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"a column per status of its workflow\", () => { const r = pm.response.json(); pm.expect(r.board.columns.length === 6 && r.board.columns[0].statuses[0] === \"BACKLOG\").to.be.true; });",
+                  "pm.test(\"no epics as cards\", () => { const r = pm.response.json(); pm.expect(r.cards.every((c) => c.type !== \"EPIC\")).to.be.true; });",
+                  "pm.test(\"admin may configure\", () => { const r = pm.response.json(); pm.expect(r.canConfigure === true).to.be.true; });",
+                  "pm.environment.set(\"boardId\", pm.response.json().board.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/boards?system={{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "boards"
+              ],
+              "query": [
+                {
+                  "key": "system",
+                  "value": "{{systemId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Boards: only my items",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"own cards only\", () => { const r = pm.response.json(); pm.expect(r.cards.every((c) => c.assignee === \"qa-dev\")).to.be.true; });",
+                  "pm.test(\"can't configure\", () => { const r = pm.response.json(); pm.expect(r.canConfigure === false).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/boards?system={{systemId}}&mine=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "boards"
+              ],
+              "query": [
+                {
+                  "key": "system",
+                  "value": "{{systemId}}"
+                },
+                {
+                  "key": "mine",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Boards: a viewer can't change a board",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{viewerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/boards/{{boardId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "boards",
+                "{{boardId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nope\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Boards: a status in two columns is refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/boards/{{boardId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "boards",
+                "{{boardId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"columns\": [\n    {\n      \"name\": \"A\",\n      \"statuses\": [\n        \"BACKLOG\"\n      ]\n    },\n    {\n      \"name\": \"B\",\n      \"statuses\": [\n        \"BACKLOG\"\n      ]\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Boards: admin sets columns and a WIP limit",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/boards/{{boardId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "boards",
+                "{{boardId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"swimlanes\": \"assignee\",\n  \"columns\": [\n    {\n      \"name\": \"Backlog\",\n      \"statuses\": [\n        \"BACKLOG\"\n      ]\n    },\n    {\n      \"name\": \"Doing\",\n      \"wipLimit\": 1,\n      \"statuses\": [\n        \"IN_PROGRESS\",\n        \"TESTING\",\n        \"CHANGE_APPROVAL\"\n      ]\n    },\n    {\n      \"name\": \"Shipped\",\n      \"statuses\": [\n        \"DEPLOYED\",\n        \"CLOSED\"\n      ]\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Boards: the new layout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"saved\", () => { const r = pm.response.json(); pm.expect(r.board.columns.map((x) => x.name).join() === \"Backlog,Doing,Shipped\" && r.board.swimlanes === \"assignee\").to.be.true; });",
+                  "pm.test(\"WIP limit\", () => { const r = pm.response.json(); pm.expect(r.board.columns[1].wipLimit === 1).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/boards?system={{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "boards"
+              ],
+              "query": [
+                {
+                  "key": "system",
+                  "value": "{{systemId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Boards: WIP limits for Settings",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"listed\", () => { const r = pm.response.json(); pm.expect(r.boards.some((b) => b.columns.some((x) => x.name === \"Doing\" && x.wipLimit === 1))).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/boards/wip",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "boards",
+                "wip"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Boards: a workspace's board",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"To Do, In Progress, Done\", () => { const r = pm.response.json(); pm.expect(r.board.workspace === \"Projects\" && r.board.columns.length >= 3).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/boards?workspace=Projects",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "boards"
+              ],
+              "query": [
+                {
+                  "key": "workspace",
+                  "value": "Projects"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Workflows: the project goes back to its workspace's workflow",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/workflow-assignments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workflow-assignments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projects\": {\n    \"{{systemId}}\": null\n  },\n  \"moves\": {\n    \"BACKLOG\": \"TODO\",\n    \"TESTING\": \"IN_REVIEW\",\n    \"CHANGE_APPROVAL\": \"IN_REVIEW\",\n    \"DEPLOYED\": \"DONE\",\n    \"CLOSED\": \"DONE\"\n  }\n}"
+            }
+          }
+        },
+        {
+          "name": "Workflows: admin adds a status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 201\", () => pm.response.to.have.status(201));",
+                  "pm.environment.set(\"qaStatus\", pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/statuses",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "statuses"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Waiting\",\n  \"category\": \"IN_PROGRESS\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Workflows: admin makes a workflow",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 201\", () => pm.response.to.have.status(201));",
+                  "pm.environment.set(\"qaFlow\", pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/workflows",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workflows"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Flow\",\n  \"copyFrom\": \"default\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Workflows: admin edits it",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"saved\", () => { const r = pm.response.json(); pm.expect(r.statuses.length === 3 && r.transitions.length === 3).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/workflows/{{qaFlow}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workflows",
+                "{{qaFlow}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"QA Flow\",\n  \"statuses\": [\n    {\n      \"id\": \"TODO\",\n      \"initial\": true\n    },\n    {\n      \"id\": \"{{qaStatus}}\"\n    },\n    {\n      \"id\": \"DONE\"\n    }\n  ],\n  \"transitions\": [\n    {\n      \"name\": \"Wait\",\n      \"from\": \"TODO\",\n      \"to\": \"{{qaStatus}}\",\n      \"rules\": [\n        {\n          \"kind\": \"validator\",\n          \"rule\": \"field_filled\",\n          \"value\": \"dueDate\"\n        },\n        {\n          \"kind\": \"post_function\",\n          \"rule\": \"assign_reporter\"\n        }\n      ]\n    },\n    {\n      \"name\": \"Finish\",\n      \"from\": \"{{qaStatus}}\",\n      \"to\": \"DONE\",\n      \"rules\": [\n        {\n          \"kind\": \"validator\",\n          \"rule\": \"subtasks_done\"\n        }\n      ]\n    },\n    {\n      \"name\": \"Reopen\",\n      \"from\": null,\n      \"to\": \"TODO\",\n      \"rules\": []\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Workflows: an unknown rule is refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/workflows/{{qaFlow}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workflows",
+                "{{qaFlow}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transitions\": [\n    {\n      \"name\": \"Bad\",\n      \"from\": \"TODO\",\n      \"to\": \"DONE\",\n      \"rules\": [\n        {\n          \"kind\": \"validator\",\n          \"rule\": \"sacrifice_a_goat\"\n        }\n      ]\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Workflows: admin deletes the workflow",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/workflows/{{qaFlow}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "workflows",
+                "{{qaFlow}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Workflows: admin deletes the status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/statuses/{{qaStatus}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "statuses",
+                "{{qaStatus}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Workflows: the activity log has them",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"logged\", () => { const r = pm.response.json(); pm.expect([\"workflow_assigned\", \"work_items_moved\", \"board_updated\", \"workflow_created\", \"status_created\"].every((a) => r.items.some((e) => e.action === a))).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/activity?kind=workflows&limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "activity"
+              ],
+              "query": [
+                {
+                  "key": "kind",
+                  "value": "workflows"
                 },
                 {
                   "key": "limit",

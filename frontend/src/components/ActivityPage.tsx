@@ -13,7 +13,7 @@ interface Props {
   now: number;
 }
 
-type Kind = "" | "signin" | "failed" | "account" | "systems" | "features" | "items" | "project" | "admin";
+type Kind = "" | "signin" | "failed" | "account" | "systems" | "features" | "items" | "workflows" | "project" | "admin";
 const KINDS: { key: Kind; label: string }[] = [
   { key: "", label: "Everything" },
   { key: "signin", label: "Sign-ins" },
@@ -21,6 +21,7 @@ const KINDS: { key: Kind; label: string }[] = [
   { key: "systems", label: "Systems" },
   { key: "features", label: "Feature requests" },
   { key: "items", label: "Work items" },
+  { key: "workflows", label: "Workflows & boards" },
   { key: "project", label: "Documents & blockers" },
   { key: "admin", label: "Users & roles" },
   { key: "account", label: "Own account" },
@@ -291,7 +292,10 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
       const parts = fields.map((f) => {
         const c = change(f);
         if (!c) return FIELD_WORDS[f] ?? f;
-        if (f === "status") return `status ${itemStatus(c.from)} → ${itemStatus(c.to)}`;
+        if (f === "status") {
+          const names = d.statusNames as { from: unknown; to: unknown } | undefined;
+          return `status ${names ? str(names.from) : itemStatus(c.from)} → ${names ? str(names.to) : itemStatus(c.to)}${d.transition ? ` (${str(d.transition)})` : ""}`;
+        }
         if (f === "priority") return `priority ${itemPriority(c.from)} → ${itemPriority(c.to)}`;
         if (f === "assignee") return `assignee ${c.from ? userName(c.from) : "nobody"} → ${c.to ? userName(c.to) : "nobody"}`;
         if (f === "type") return `type ${itemType(c.from)} → ${itemType(c.to)}`;
@@ -305,6 +309,45 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
       });
       const key = typeof d.key === "string" ? d.key : str((d.key as { to?: unknown } | undefined)?.to);
       return `Updated ${key} "${str(d.summary)}" on ${name}: ${parts.join("; ")}`;
+    }
+    case "workflow_created":
+      return `Created the workflow ${str(d.workflow)}, a copy of ${str(d.copiedFrom)}`;
+    case "workflow_updated": {
+      const to = (d.to ?? {}) as { statuses?: string[]; moves?: string[] };
+      const from = (d.from ?? {}) as { statuses?: string[]; moves?: string[] };
+      const parts = [
+        ...(d.renamed ? [`renamed from ${str((d.renamed as { from: unknown }).from)}`] : []),
+        ...(JSON.stringify(from.statuses) !== JSON.stringify(to.statuses) ? [`statuses now ${(to.statuses ?? []).join(", ")}`] : []),
+        ...(JSON.stringify(from.moves) !== JSON.stringify(to.moves) ? [`${(to.moves ?? []).length} moves: ${(to.moves ?? []).join("; ")}`] : []),
+      ];
+      return `Edited the ${str(d.workflow)} workflow${parts.length ? `: ${parts.join("; ")}` : ""}`;
+    }
+    case "workflow_deleted":
+      return `Deleted the workflow ${str(d.workflow)}`;
+    case "workflow_assigned": {
+      const changed = (d.changed as string[] | undefined) ?? [];
+      const ws = Object.entries((d.workspaces ?? {}) as Record<string, { to: unknown }>).map(([w, v]) => `${w} workspace → ${str(v.to)}`);
+      const pr = Object.entries((d.projects ?? {}) as Record<string, { to: unknown }>).map(([p, v]) => `${p} → ${str(v.to)}`);
+      return `Changed which workflow is used: ${[...ws, ...pr].join("; ") || "no change"}${changed.length ? ` (${changed.length} project${changed.length === 1 ? "" : "s"} affected)` : ""}`;
+    }
+    case "status_created":
+      return `Added the status ${str(d.status)} (${str(d.category).replace("_", " ").toLowerCase()})`;
+    case "status_updated": {
+      const from = (d.from ?? {}) as { name?: unknown; category?: unknown };
+      const to = (d.to ?? {}) as { name?: unknown; category?: unknown };
+      return `Changed the status ${str(from.name)}${from.name !== to.name ? ` to ${str(to.name)}` : ""}${from.category !== to.category ? `, now ${str(to.category).replace("_", " ").toLowerCase()}` : ""}`;
+    }
+    case "status_deleted":
+      return `Deleted the status ${str(d.status)}${d.movedTo ? `; its work items moved to ${str(d.movedTo)}` : ""}`;
+    case "work_items_moved":
+      return `Moved ${str(d.count)} work item${d.count === 1 ? "" : "s"} from ${str(d.from)} to ${str(d.to)}: ${str(d.reason)}`;
+    case "board_updated": {
+      const parts = [
+        ...(d.renamed ? [`renamed to ${str((d.renamed as { to: unknown }).to)}`] : []),
+        ...(d.swimlanes ? [`swimlanes ${str((d.swimlanes as { to: unknown }).to)}`] : []),
+        ...(d.columns ? [`columns: ${((d.columns as { to: string[] }).to ?? []).join("; ")}`] : []),
+      ];
+      return `Changed the board ${str(d.board)}${parts.length ? `: ${parts.join("; ")}` : ""}`;
     }
     case "work_item_deleted":
       return `Deleted ${itemType(d.type)} ${str(d.key)} "${str(d.summary)}" from ${name}${d.subtasks ? ` with ${str(d.subtasks)} sub-task${d.subtasks === 1 ? "" : "s"}` : ""}`;
