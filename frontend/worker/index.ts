@@ -54,6 +54,8 @@ import {
 import { workflowsApi } from "./workflows";
 import { askBoardLines, boardsApi } from "./boards";
 import { sprintHealth, sprintsApi } from "./sprints";
+import { askSearchLines, runSubscriptions, searchApi } from "./search";
+import { askAutomationLines, automationApi, runEvent, runScheduledRules } from "./automation";
 import { EFFECTIVE_WORKFLOW, loadWorkflow } from "./workflowData";
 import type { AppNotification, DeliveryStatus, Digest, NotificationKind } from "../src/data/notifications";
 import {
@@ -75,6 +77,8 @@ import {
 const COOKIE = "omni_session";
 /** Mondays at 08:00 Harare time. Must match the entry in wrangler.jsonc. */
 const BRIEFING_CRON = "0 6 * * MON";
+/** Every hour: filter subscriptions and scheduled automation rules. Must match wrangler.jsonc. */
+const HOURLY_CRON = "0 * * * *";
 /** Ask Pulse: questions per person per window, kept per Worker instance (a guard, not a quota). */
 const ASK_LIMIT = 20;
 const ASK_WINDOW_MS = 10 * 60_000;
@@ -562,6 +566,8 @@ const ACTIVITY_KINDS: Record<string, string[]> = {
   systems: ["system_created", "system_progress", "system_updated", "system_developers", "system_deleted", "request_created", "request_dismissed", "template_created", "template_deleted", "pcn_updated", "pcn_signed"],
   features: ["feature_created", "feature_updated", "feature_deleted"],
   workflows: ["workflow_created", "workflow_updated", "workflow_deleted", "workflow_assigned", "status_created", "status_updated", "status_deleted", "work_items_moved", "board_updated"],
+  search: ["filter_created", "filter_updated", "filter_deleted", "filter_subscribed", "filter_unsubscribed", "dashboard_created", "dashboard_updated", "dashboard_deleted"],
+  automation: ["automation_rule_created", "automation_rule_updated", "automation_rule_deleted", "automation_rule_run"],
   sprints: ["sprint_created", "sprint_updated", "sprint_deleted", "sprint_started", "sprint_completed", "sprint_scope_changed", "backlog_ranked"],
   items: [
     "work_item_created",
@@ -966,8 +972,10 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     now,
     audit: (action, target, detail) => audit(db, req, me, action, target, detail),
     alert: (alerts) => alert(alerts),
+    // Automation reacts after the response, so a person never waits for a rule.
+    emit: guest ? undefined : (e) => ctx.waitUntil(runEvent(env, e).catch((err) => console.error("automation failed", err))),
   };
-  const itemsResponse = (await itemsApi(itemCtx, path, method)) ?? (await workflowsApi(itemCtx, path, method)) ?? (await boardsApi(itemCtx, path, method)) ?? (await sprintsApi(itemCtx, path, method));
+  const itemsResponse = (await itemsApi(itemCtx, path, method)) ?? (await workflowsApi(itemCtx, path, method)) ?? (await boardsApi(itemCtx, path, method)) ?? (await sprintsApi(itemCtx, path, method)) ?? (await searchApi(itemCtx, env, path, method)) ?? (await automationApi(itemCtx, env, path, method));
   if (itemsResponse) return itemsResponse;
 
   /**
@@ -1626,6 +1634,8 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     const itemLines = [
       ...(await askItemLines(itemCtx, new Map(people.results.map((p) => [p.id, p.name])))),
       ...(await askBoardLines(itemCtx)),
+      ...(guest ? [] : await askSearchLines(itemCtx)),
+      ...(can("manage_automation") ? await askAutomationLines(db) : []),
       ...(sprints.length
         ? [
             "",
@@ -2788,6 +2798,11 @@ export default {
   // The weekday run also clears out what the retention policy no longer keeps.
   async scheduled(event: { cron: string }, rawEnv: Env) {
     const env = withDatabase(rawEnv);
+    if (event.cron === HOURLY_CRON) {
+      await runSubscriptions(env).catch((e) => noteFailure(env.DB, "Filter subscriptions", e));
+      await runScheduledRules(env).catch((e) => console.error("Scheduled automation failed", e));
+      return;
+    }
     const briefing = event.cron === BRIEFING_CRON;
     if (!briefing) await purgeExpired(env.DB).catch((e) => console.error("Retention clean-up failed", e));
     await (briefing ? runBriefing(env) : runDailyDigests(env)).catch((e) => noteFailure(env.DB, briefing ? "Monday Briefing" : "Daily digest", e));

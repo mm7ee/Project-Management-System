@@ -266,3 +266,88 @@ Choices made during the Pulse upgrade that later phases must follow. Newest last
   the share done trails the share of days gone by more than 20 points) goes to Ask Pulse and as a "Sprints" section
   in the Monday Briefing. For developers who see only their own items, Ask Pulse counts only those.
 - **New bell alert:** `sprint`, sent to the assignees in a sprint when it starts.
+
+## Phase 4: search, saved filters, dashboards and automation (2026-11-17)
+
+- **PQL (Pulse Query Language)** follows Jira's JQL. One parser (`src/data/pql.ts`) serves the browser (suggestions
+  and errors as you type) and the Worker; the Worker compiles it to SQL (`worker/pql.ts`).
+  - Each field maps to a fixed SQL fragment, and every value the user typed is a bound parameter. No user text is
+    ever placed into SQL, so a query like `summary ~ "'; DROP TABLE …"` is only text. Unit tests check this
+    (`npm test`).
+  - ORDER BY accepts only listed fields. With no ORDER BY, results come newest-updated first.
+  - **`!=` and `NOT IN` work as in Jira:** they don't match empty values. `assignee != mutsa` leaves out unassigned
+    items; add `OR assignee IS EMPTY` to include them.
+  - Priority compares by rank, so `priority >= High` means High or Highest, and `ORDER BY priority DESC` puts
+    Highest first, as in Jira.
+  - `text ~` looks in the summary, description and comments; `summary ~` and `description ~` look in one each.
+  - A plain date (`2026-11-01`) compares by day. Relative dates (`-7d`, `-2w`, `1m`) and `now()` compare to the
+    moment. Week functions use Harare time, with weeks starting on Monday.
+  - An unknown field, function or value gets a "did you mean …?" suggestion (when it is within two edits, or a third of the word for long words), and the error
+    points at where it is in the query.
+- **Visibility is the only rule PQL enforces.** Pulse has no per-item security levels. Every query is wrapped in the
+  same rule as the rest of the app: a developer without "Log and assign feature requests" sees only items they're
+  assigned to or reported. That covers search, CSV export, gadgets, subscriptions and Ask Pulse.
+- **Sharing filters and dashboards** needs a new permission, "Share filters and dashboards" (`share_searches`),
+  given to Admin, Manager, Team Leader and Projects Assistant. Without it, people can still save private filters and
+  dashboards.
+  - They can be shared with a role, a workspace or everyone.
+  - A workspace share is seen by people who lead or work on a project in that workspace. Anyone who may share sees
+    every workspace's shares.
+  - Only the owner can change or delete a filter or dashboard. Anyone who can see a filter can star it and subscribe
+    to it.
+- **Gadgets run the saved filter as the viewer**, not as the owner. A shared dashboard therefore never shows anyone
+  more than they could find with Search. A gadget's filter must be one its owner can see when the dashboard is saved.
+  If the filter is deleted later, the gadget says so.
+- **The eight gadget kinds:**
+  - filter results
+  - pie chart, by a chosen field
+  - created vs resolved, last 30 days
+  - sprint health
+  - workload by assignee
+  - overdue
+  - two-dimensional statistics, two chosen fields
+  - recent activity, from the activity log entries for the filter's items
+
+  Group-by fields come from a fixed list. The existing Dashboard stays as "Pulse overview": the default, and the
+  only one on view-only links. The browser remembers which dashboard was last opened.
+- **Subscriptions** run from the new hourly cron (`0 * * * *`), at the hour chosen in Harare time, daily or weekly.
+  They arrive under the bell with the results as a digest, and by email once email is connected (following the
+  person's "email summaries" setting). Each one sends at most once per hour slot.
+- **Ask Pulse writes PQL.** "Turn this into a search" under an answer (and "Ask in plain English" on the Search page)
+  sends the question to Workers AI with the PQL grammar, the project keys, statuses and usernames. The answer is
+  parsed, and if it doesn't parse, the model gets one retry with the error. The PQL is always shown before it's
+  run or saved, and running it applies the normal visibility rule. Not offered on view-only links.
+- **Automation rules** need a new permission, "Manage automation rules" (`manage_automation`), given to Admin and
+  Team Leader.
+  - **Triggers:** created, moved status (optionally to one status), a field changed (optionally one field), comment
+    added, all sub-tasks done, sprint started or completed, or a schedule (a weekday or every day, at an hour).
+  - **Scope:** every project, one workspace or one project. **Condition:** optional PQL, which the item must match.
+    For scheduled and sprint rules, it picks the items to act on.
+  - **Actions:**
+    - move to a status (by name or `category:DONE`), through the project's workflow, so it obeys the moves allowed
+      and their required fields
+    - assign (a person, nobody, the reporter, the project lead, or someone with a role on the project)
+    - set a field
+    - add a comment
+    - notify
+    - create a sub-task
+    - link to another item
+- **Rules act as "Automation: rule name".** That name appears in history, comments and the activity log. A rule runs
+  with full rights (it needs no permissions of its own), but only within its scope and condition.
+  - Rules run after the response (`ctx.waitUntil`), so nobody waits for them.
+  - A rule's own changes can set off other rules, up to 3 levels deep; beyond that they're logged as "skipped".
+  - Each rule has a limit of runs a minute (default 10, at most 100). Runs over the limit are logged as skipped.
+  - Every run, including skipped ones, goes in `automation_runs` with what set it off, the item, the result and what
+    it changed. Run logs are kept 90 days.
+- **Notify** sends to the assignee, the reporter, the watchers, a person, everyone with a role, or the Teams
+  channel, by bell, email and/or Teams. Bulk runs (scheduled and sprint rules) send each person one message listing
+  the items, not one per item.
+- **Three example rules are seeded, all off:**
+  - a Highest-priority bug is assigned to the project's Team Leader and posted to Teams
+  - when all sub-tasks are done, the parent moves to Done
+  - every Monday at 08:00, the assignees of overdue items are reminded by bell and email
+- **Storage:** new data is in real columns and tables (`saved_filters`, `filter_favourites`, `filter_subscriptions`,
+  `dashboards`, `dashboard_gadgets`, `automation_rules`, `automation_actions`, `automation_runs`). None of it is in
+  `GET /api/data`. When a person is removed, the weekday clean-up removes their favourites and subscriptions. Their filters and dashboards stay,
+  shown as by "Former user", until someone deletes them.
+- **New bell alerts:** `subscription` (a filter's results) and `automation` (a rule's notify action).

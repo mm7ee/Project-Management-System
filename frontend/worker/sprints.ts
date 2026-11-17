@@ -379,6 +379,7 @@ export async function sprintsApi(c: ItemContext, path: string, method: string): 
       })),
     );
     await c.audit("sprint_started", p.id, { name: p.name, sprint: s.name, start, end: sprintEnd(start, weeks), goal: s.goal });
+    c.emit?.({ type: "sprint_started", sprintId: s.id, systemId: p.id });
     return json(toSprint(await getSprint(c, s.id)));
   }
 
@@ -470,6 +471,7 @@ export async function sprintsApi(c: ItemContext, path: string, method: string): 
     stmts.push(db.prepare("UPDATE work_items SET sprint_id = ? WHERE sprint_id = ? AND id IN (SELECT w.id FROM work_items w JOIN work_statuses st ON st.id = w.status WHERE w.sprint_id = ? AND st.category <> 'DONE')").bind(target?.id ?? null, s.id, s.id));
     await db.batch(stmts);
     await c.audit("sprint_completed", p.id, { name: p.name, sprint: s.name, ...snap, unfinishedTo: target?.name ?? "backlog" });
+    c.emit?.({ type: "sprint_completed", sprintId: s.id, systemId: p.id });
     return json({ sprint: toSprint(await getSprint(c, s.id), await db.prepare("SELECT * FROM sprint_snapshots WHERE sprint_id = ?").bind(s.id).first<SnapRow>()), movedTo: target ? toSprint(target) : null });
   }
 

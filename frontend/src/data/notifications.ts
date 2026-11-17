@@ -1,6 +1,6 @@
 // Notifications and digests, shared by the Worker (which writes them) and the bell in the app.
 
-export type NotificationKind = "assigned" | "update_requested" | "signature" | "daily_digest" | "monday_briefing" | "account_locked" | "mentioned" | "watching" | "sprint";
+export type NotificationKind = "assigned" | "update_requested" | "signature" | "daily_digest" | "monday_briefing" | "account_locked" | "mentioned" | "watching" | "sprint" | "subscription" | "automation";
 
 export interface DigestItem {
   text: string;

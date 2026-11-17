@@ -19,6 +19,8 @@ export type Permission =
   | "log_time" // log time spent on the work items you can see
   | "manage_workflows" // edit statuses and workflows, and choose which workflow each workspace and project uses
   | "manage_sprints" // plan sprints from the backlog, start and complete them
+  | "share_searches" // share saved filters and dashboards with a role, a workspace or everyone
+  | "manage_automation" // create and change automation rules
   | "reports" // generate and download reports
   | "manage_users" // create users, assign roles/projects, change permissions
   | "audit_log"; // view the activity log: sign-ins, failed sign-ins and every change
@@ -49,6 +51,8 @@ export const PERMISSIONS: { key: Permission; label: string }[] = [
   { key: "log_time", label: "Log time on work items" },
   { key: "manage_workflows", label: "Edit workflows" },
   { key: "manage_sprints", label: "Plan and run sprints" },
+  { key: "share_searches", label: "Share filters and dashboards" },
+  { key: "manage_automation", label: "Manage automation rules" },
   { key: "reports", label: "Generate reports" },
   { key: "manage_users", label: "Manage users, roles and permissions" },
   { key: "audit_log", label: "View the activity log" },
@@ -58,9 +62,9 @@ export type RolePermissions = Record<Role, Permission[]>;
 
 export const DEFAULT_ROLE_PERMISSIONS: RolePermissions = {
   admin: PERMISSIONS.map((p) => p.key),
-  manager: ["request_updates", "propose_projects", "manage_features", "assign_developers", "reports", "create_work_items", "edit_work_items", "delete_work_items", "log_time", "manage_sprints"],
-  team_lead: ["manage_systems", "assign_developers", "request_updates", "propose_projects", "manage_features", "reports", "create_work_items", "edit_work_items", "delete_work_items", "log_time", "manage_workflows", "manage_sprints"],
-  assistant: ["request_updates", "propose_projects", "reports", "create_work_items"],
+  manager: ["request_updates", "propose_projects", "manage_features", "assign_developers", "reports", "create_work_items", "edit_work_items", "delete_work_items", "log_time", "manage_sprints", "share_searches"],
+  team_lead: ["manage_systems", "assign_developers", "request_updates", "propose_projects", "manage_features", "reports", "create_work_items", "edit_work_items", "delete_work_items", "log_time", "manage_workflows", "manage_sprints", "share_searches", "manage_automation"],
+  assistant: ["request_updates", "propose_projects", "reports", "create_work_items", "share_searches"],
   developer: ["edit_assigned", "propose_projects", "log_features", "create_work_items", "log_time"],
   viewer: [],
 };

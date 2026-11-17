@@ -5,6 +5,7 @@ import { isLate, isOpen } from "../data/features";
 import type { System } from "../data/systems";
 import type { Feature } from "../data/features";
 import type { User } from "../data/roles";
+import AskToPql from "./AskToPql";
 
 interface Turn {
   q: string;
@@ -21,6 +22,7 @@ interface Props {
   me: User;
   developer: boolean; // a developer's personal work assistant rather than the team view
   onOpenProject: (id: string) => void;
+  onSearch?: (pql: string) => void; // signed in: offer to turn an answered question into a search
 }
 
 const PRIORITY_ORDER = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const;
@@ -54,7 +56,7 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
  * Ask Pulse: plain-English questions answered by the server from the live data.
  * The conversation stays while the page is open; follow-ups carry the last two turns.
  */
-export default function AskPanel({ open, onClose, systems, users, features, me, developer, onOpenProject }: Props) {
+export default function AskPanel({ open, onClose, systems, users, features, me, developer, onOpenProject, onSearch }: Props) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -313,6 +315,7 @@ export default function AskPanel({ open, onClose, systems, users, features, me, 
                 <div className="ask-a">
                   {render(t.a)}
                   {(!busy || i < turns.length - 1) && <CopyAnswer text={t.a} />}
+                  {onSearch && !shareToken && (!busy || i < turns.length - 1) && <AskToPql question={t.q} onSearch={onSearch} />}
                 </div>
               )}
               {t.error && <div className="ask-a ask-error">{t.error}</div>}

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertOctagon, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, LockKeyhole, Menu, Plus, Search, Send, ShieldCheck, Sparkles, Users, Workflow } from "lucide-react";
+import { AlertOctagon, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, LockKeyhole, Menu, Zap, Plus, Search, Send, ShieldCheck, Sparkles, Users, Workflow } from "lucide-react";
 import { getSchedule, type System } from "./data/systems";
 import { api, useAppData, type AppData } from "./data/api";
 import { isAssigned, type Permission, type Prefs } from "./data/roles";
@@ -32,6 +32,9 @@ import ConceptNotesPage from "./components/ConceptNotesPage";
 import DashboardPage from "./components/DashboardPage";
 import ProjectsPage from "./components/ProjectsPage";
 import BoardsPage from "./components/BoardsPage";
+import SearchPage from "./components/SearchPage";
+import CustomDashboards from "./components/CustomDashboards";
+import AutomationSettings from "./components/AutomationSettings";
 import WorkflowsSettings from "./components/WorkflowsSettings";
 import { awaitingSignature, type SignoffStatus } from "./data/pcn";
 import { mfaRequiredFor, type User } from "./data/roles";
@@ -140,6 +143,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   // Sign-in opens the Dashboard, unless someone chose a Projects tab to start on.
   const [signOutJump, setSignOutJump] = useState(0);
   const [view, setView] = useState<View>(() => (prefs.start === "DASHBOARD" ? "dashboard" : "projects"));
+  // A search opened from somewhere else (Ask Pulse): the query, and a counter so the same one reruns.
+  const [searchFor, setSearchFor] = useState<{ pql: string; n: number } | null>(null);
   const [filter, setFilter] = useState<Filter>(() =>
     prefs.start === "DASHBOARD" || (prefs.start === "MINE" && !myProjects.length) ? "ALL" : (prefs.start as Filter),
   );
@@ -476,6 +481,16 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           me={me}
           developer={me.role === "developer" && !can("manage_features")}
           onOpenProject={openProject}
+          onSearch={
+            data.viewOnly
+              ? undefined
+              : (pql) => {
+                  setSearchFor((s) => ({ pql, n: (s?.n ?? 0) + 1 }));
+                  setView("search");
+                  setAsking(false);
+                  if (selectedId) closeProject();
+                }
+          }
         />
 
         {selectedId ? (
@@ -579,9 +594,14 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
               ...(can("manage_workflows")
                 ? [{ key: "workflows", label: "Workflows", icon: Workflow, content: <WorkflowsSettings users={users} workspaces={data.workspaces} canEdit={can("manage_workflows")} /> }]
                 : []),
+              ...(can("manage_automation")
+                ? [{ key: "automation", label: "Automation", icon: Zap, content: <AutomationSettings users={users} systems={systems} workspaces={data.workspaces} now={now} /> }]
+                : []),
               ...(can("audit_log") ? [{ key: "activity", label: "Activity log", icon: History, content: <ActivityPage users={users} systems={systems} now={now} /> }] : []),
             ]}
           />
+        ) : view === "search" && !data.viewOnly ? (
+          <SearchPage key={searchFor?.n ?? 0} users={users} workspaces={data.workspaces} now={now} canShare={can("share_searches")} initialPql={searchFor?.pql} />
         ) : view === "boards" ? (
           <BoardsPage
             workspaces={data.workspaces}
@@ -630,6 +650,14 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
         ) : view === "dashboard" ? (
           <>
             {banners}
+            <CustomDashboards
+              enabled={!data.viewOnly}
+              users={users}
+              systems={systems}
+              workspaces={data.workspaces}
+              now={now}
+              canShare={can("share_searches")}
+              overview={
             <DashboardPage
               me={me}
               systems={systems}
@@ -644,6 +672,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
               onOpen={openProject}
               onTab={showTab}
               showMyWork={!data.viewOnly}
+            />
+              }
             />
           </>
         ) : (

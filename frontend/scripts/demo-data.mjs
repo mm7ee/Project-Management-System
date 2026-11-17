@@ -22,6 +22,8 @@ DELETE FROM document_chunks WHERE doc_id IN (SELECT id FROM documents WHERE work
 DELETE FROM work_items WHERE id LIKE 'demo-%';
 DELETE FROM boards WHERE id LIKE 'demo-%';
 DELETE FROM sprints WHERE id LIKE 'demo-%';
+DELETE FROM dashboards WHERE id LIKE 'demo-%';
+DELETE FROM saved_filters WHERE id LIKE 'demo-%';
 DELETE FROM blockers WHERE id LIKE 'demo-%';
 DELETE FROM documents WHERE id LIKE 'demo-%';
 DELETE FROM requests WHERE id LIKE 'demo-%';
@@ -788,5 +790,37 @@ systems.forEach((s, i) => {
 out.push(
   `UPDATE users SET locked_until = ${NOW + 13 * 60_000}, locked_at = ${q(new Date(NOW - 2 * 60_000).toISOString())} WHERE id = ${q(P.Vunganayi)};`,
 );
+
+// ---------- saved filters and a dashboard (Phase 4) ----------
+// Filters by the demo manager and team leader, shared so the dashboard works for everyone; each
+// viewer still sees only the work items they're allowed to see.
+const FILTERS = [
+  ["demo-flt-open-bugs", "Open bugs (demo)", "type = Bug AND statusCategory != Done ORDER BY priority DESC", P.Tarisai, "everyone", null],
+  ["demo-flt-urgent", "Urgent and open (demo)", "priority in (Highest, High) AND statusCategory != Done ORDER BY due ASC", P.Vimbai, "everyone", null],
+  ["demo-flt-sprint", "In running sprints (demo)", "sprint in openSprints() ORDER BY status", P.Tarisai, "role", "developer"],
+  ["demo-flt-all-open", "All open work (demo)", "statusCategory != Done", P.Vimbai, "everyone", null],
+  ["demo-flt-mine", "My open work (demo)", "assignee = currentUser() AND statusCategory != Done ORDER BY due ASC", P.Vimbai, "private", null],
+];
+for (const [id, name, pql, owner, scope, value] of FILTERS) {
+  const at = ago(between(3, 20), 10);
+  out.push(`INSERT INTO saved_filters (id, name, description, pql, owner_id, share_scope, share_value, created_at, updated_at) VALUES (${[q(id), q(name), "'Demo filter'", q(pql), q(owner), q(scope), q(value), q(at), q(at)].join(", ")});`);
+}
+out.push(`INSERT INTO filter_favourites (filter_id, user_id, created_at) VALUES ('demo-flt-urgent', ${q(P.Vimbai)}, ${q(ago(2))}), ('demo-flt-open-bugs', ${q(P.Tarisai)}, ${q(ago(2))});`);
+out.push(`INSERT INTO filter_subscriptions (id, filter_id, user_id, frequency, weekday, hour, created_at) VALUES ('demo-sub-1', 'demo-flt-urgent', ${q(P.Vimbai)}, 'weekly', 1, 8, ${q(ago(2))});`);
+out.push(`INSERT INTO dashboards (id, name, owner_id, share_scope, share_value, layout, created_at, updated_at) VALUES ('demo-dash-delivery', 'Delivery (demo)', ${q(P.Vimbai)}, 'everyone', NULL, 'two', ${q(ago(2))}, ${q(ago(2))});`);
+[
+  ["urgent", "filter_results", "demo-flt-urgent", "Urgent and open", 0, null, null, 8],
+  ["pie", "pie", "demo-flt-all-open", "Open work by status", 0, "status", null, 10],
+  ["load", "workload", "demo-flt-all-open", "Who has what", 0, null, null, 10],
+  ["crvr", "created_resolved", "demo-flt-open-bugs", "Bugs: created vs resolved", 1, null, null, 10],
+  ["sprint", "sprint_health", "demo-flt-sprint", "Running sprints", 1, null, null, 10],
+  ["late", "overdue", "demo-flt-all-open", "Overdue", 1, null, null, 8],
+  ["twod", "two_d", "demo-flt-all-open", "Status by priority", 1, "status", "priority", 10],
+  ["act", "activity", "demo-flt-urgent", "Latest changes to urgent items", 0, null, null, 10],
+].forEach(([key, kind, filter, title, col, field, field2, rows], i) => {
+  out.push(
+    `INSERT INTO dashboard_gadgets (id, dashboard_id, kind, filter_id, title, column_index, position, field, field2, max_rows) VALUES (${[q(`demo-g-${key}`), "'demo-dash-delivery'", q(kind), q(filter), q(title), col, i, q(field), q(field2), rows].join(", ")});`,
+  );
+});
 
 process.stdout.write(out.join("\n") + "\n");

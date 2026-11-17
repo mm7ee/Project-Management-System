@@ -11,6 +11,8 @@ export const SHARE_LINK_DAYS = 90;
 export const MFA_HELP_DAYS = 90;
 /** Sign-in sessions last this long, then are removed. */
 export const SESSION_DAYS = 7;
+/** Automation rules' run logs. */
+export const AUTOMATION_RUN_DAYS = 90;
 /** Failed sign-in counters (the username tried and the IP address), used for the lockout. */
 export const SIGNIN_FAILURE_HOURS = 24;
 
@@ -29,6 +31,9 @@ export const RETENTION: RetentionRule[] = [
   { what: "Statuses, workflows and which workspace or project uses each", kept: "Until someone allowed to edit workflows changes or deletes them" },
   { what: "Boards, their columns and work-in-progress limits", kept: "For the life of the project or workspace" },
   { what: "Sprints, which work items were in them, and their completed-sprint snapshots", kept: "For the life of the project; a sprint that never started can be deleted" },
+  { what: "Saved filters, their favourites and email subscriptions, and dashboards", kept: "Until whoever made them deletes them; a removed person's favourites and subscriptions go with them" },
+  { what: "Automation rules", kept: "Until someone who manages automation deletes them" },
+  { what: "Automation run logs", kept: `${AUTOMATION_RUN_DAYS} days` },
   { what: "User accounts", kept: "Until an administrator removes the person; their sessions, codes, passkeys and notifications go with them" },
   { what: "Activity log (sign-ins, failed sign-ins, changes, IP addresses)", kept: "12 months" },
   { what: "Notifications and digests", kept: `${NOTIFICATION_DAYS} days` },

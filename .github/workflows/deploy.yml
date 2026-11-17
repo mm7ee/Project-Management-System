@@ -29,6 +29,8 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      # The PQL unit tests (Vitest): a query that compiles wrongly stops the deploy.
+      - run: npm test
       # Retry once: Cloudflare's API occasionally times out (504) mid-deploy.
       - run: npm run deploy || (sleep 30 && npx --yes wrangler@4 deploy)
         env:

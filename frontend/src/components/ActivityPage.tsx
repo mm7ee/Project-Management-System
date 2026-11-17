@@ -13,7 +13,7 @@ interface Props {
   now: number;
 }
 
-type Kind = "" | "signin" | "failed" | "account" | "systems" | "features" | "items" | "workflows" | "sprints" | "project" | "admin";
+type Kind = "" | "signin" | "failed" | "account" | "systems" | "features" | "items" | "workflows" | "sprints" | "search" | "automation" | "project" | "admin";
 const KINDS: { key: Kind; label: string }[] = [
   { key: "", label: "Everything" },
   { key: "signin", label: "Sign-ins" },
@@ -23,6 +23,8 @@ const KINDS: { key: Kind; label: string }[] = [
   { key: "items", label: "Work items" },
   { key: "workflows", label: "Workflows & boards" },
   { key: "sprints", label: "Sprints" },
+  { key: "search", label: "Filters & dashboards" },
+  { key: "automation", label: "Automation" },
   { key: "project", label: "Documents & blockers" },
   { key: "admin", label: "Users & roles" },
   { key: "account", label: "Own account" },
@@ -314,6 +316,50 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
       const key = typeof d.key === "string" ? d.key : str((d.key as { to?: unknown } | undefined)?.to);
       return `Updated ${key} "${str(d.summary)}" on ${name}: ${parts.join("; ")}`;
     }
+    case "filter_created":
+      return `Saved the filter "${str(d.filter)}" (${str(d.shared).toLowerCase()}): ${str(d.pql) || "everything"}`;
+    case "filter_updated": {
+      const from = (d.from ?? {}) as Record<string, unknown>;
+      const to = (d.to ?? {}) as Record<string, unknown>;
+      const parts = (["name", "pql", "shared"] as const).filter((k) => from[k] !== to[k]).map((k) => `${k === "pql" ? "query" : k === "shared" ? "sharing" : k} ${str(from[k]) || "none"} → ${str(to[k]) || "none"}`);
+      return `Edited the filter "${str(d.filter)}": ${parts.join("; ") || "no change"}`;
+    }
+    case "filter_deleted":
+      return `Deleted the filter "${str(d.filter)}"`;
+    case "filter_subscribed": {
+      const day = d.weekday ? ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][Number(d.weekday) - 1] : "";
+      return `Subscribed to "${str(d.filter)}": ${d.frequency === "daily" ? "every day" : `every ${day}`} at ${String(d.hour).padStart(2, "0")}:00`;
+    }
+    case "filter_unsubscribed":
+      return `Stopped a subscription to "${str(d.filter)}"`;
+    case "dashboard_created":
+      return `Made the dashboard "${str(d.dashboard)}" (${str(d.shared).toLowerCase()})`;
+    case "dashboard_updated": {
+      const from = (d.from ?? {}) as Record<string, unknown>;
+      const to = (d.to ?? {}) as Record<string, unknown>;
+      const parts = (["name", "layout", "shared"] as const).filter((k) => from[k] !== to[k]).map((k) => `${k === "shared" ? "sharing" : k} ${str(from[k])} → ${str(to[k])}`);
+      const fg = ((from.gadgets as string[]) ?? []).join(", ");
+      const tg = ((to.gadgets as string[]) ?? []).join(", ");
+      if (fg !== tg) parts.push(`gadgets now ${tg || "none"}`);
+      return `Edited the dashboard "${str(d.dashboard)}": ${parts.join("; ") || "no change"}`;
+    }
+    case "dashboard_deleted":
+      return `Deleted the dashboard "${str(d.dashboard)}"`;
+    case "automation_rule_created":
+      return `Created the automation rule "${str(d.name)}" (${d.enabled ? "on" : "off"}): ${str(d.trigger).toLowerCase()}, then ${((d.actions as string[]) ?? []).join(", ").toLowerCase()}`;
+    case "automation_rule_updated": {
+      const from = (d.from ?? {}) as Record<string, unknown>;
+      const to = (d.to ?? {}) as Record<string, unknown>;
+      const parts = (["name", "enabled", "trigger", "scope", "condition"] as const)
+        .filter((k) => from[k] !== to[k])
+        .map((k) => (k === "enabled" ? (to.enabled ? "turned on" : "turned off") : `${k} ${str(from[k])} → ${str(to[k])}`));
+      if (JSON.stringify(from.actions) !== JSON.stringify(to.actions)) parts.push(`actions now ${((to.actions as string[]) ?? []).join(", ").toLowerCase()}`);
+      return `Edited the automation rule "${str(d.name)}": ${parts.join("; ") || "no change"}`;
+    }
+    case "automation_rule_deleted":
+      return `Deleted the automation rule "${str(d.name)}"`;
+    case "automation_rule_run":
+      return `Ran the automation rule "${str(d.name)}" by hand${d.key ? ` on ${str(d.key)}` : ""}`;
     case "sprint_created":
       return `Planned ${str(d.sprint)} on ${name}, starting ${str(d.start)} for ${str(d.weeks)} week${d.weeks === 1 ? "" : "s"}`;
     case "sprint_updated": {

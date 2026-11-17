@@ -1,7 +1,7 @@
 // The clean-up that enforces the retention policy in src/data/retention.ts. Runs each weekday morning
 // with the daily-digest cron; deletes are by date, so a missed run just catches up the next time.
 
-import { AUDIT_DAYS, MFA_HELP_DAYS, NOTIFICATION_DAYS, SHARE_LINK_DAYS, SIGNIN_FAILURE_HOURS } from "../src/data/retention";
+import { AUDIT_DAYS, AUTOMATION_RUN_DAYS, MFA_HELP_DAYS, NOTIFICATION_DAYS, SHARE_LINK_DAYS, SIGNIN_FAILURE_HOURS } from "../src/data/retention";
 
 const DAY = 86_400_000;
 
@@ -21,12 +21,13 @@ export async function purgeExpired(db: D1Database, now = Date.now()): Promise<Re
       db.prepare("DELETE FROM mfa_help_requests WHERE status != 'OPEN' AND handled_at < ?").bind(before(MFA_HELP_DAYS)),
     ],
     ["login_failures", db.prepare("DELETE FROM login_failures WHERE at < ?").bind(now - SIGNIN_FAILURE_HOURS * 3_600_000)],
+    ["automation_runs", db.prepare("DELETE FROM automation_runs WHERE at < ?").bind(before(AUTOMATION_RUN_DAYS))],
     ["sessions", db.prepare("DELETE FROM sessions WHERE expires_at < ?").bind(now)],
     ["mfa_challenges", db.prepare("DELETE FROM mfa_challenges WHERE expires_at < ?").bind(now)],
     ["webauthn_challenges", db.prepare("DELETE FROM webauthn_challenges WHERE expires_at < ?").bind(now)],
     ["mfa_recovery", db.prepare("DELETE FROM mfa_recovery WHERE used_at IS NOT NULL")],
     // Left behind by people removed before every table was cleared on removal.
-    ...(["passkeys", "mfa_help_requests", "notifications", "password_history", "login_failures", "work_item_watchers"] as const).map(
+    ...(["passkeys", "mfa_help_requests", "notifications", "password_history", "login_failures", "work_item_watchers", "filter_favourites", "filter_subscriptions"] as const).map(
       (t): [string, D1PreparedStatement] => [
         `${t} (removed users)`,
         db.prepare(`DELETE FROM ${t} WHERE user_id NOT IN (SELECT id FROM users)`),

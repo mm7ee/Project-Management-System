@@ -315,3 +315,89 @@ Board columns and WIP limits use the existing "Add, delete and edit systems".
 - the date dialog
 - Agile reports on the Reports page
 - the "Plan in sprints" switch on the Work items tab
+
+## Phase 4: PQL, saved filters, dashboards and automation
+
+**What was built**
+- **Search** in the sidebar, in two modes:
+  - **Basic:** choose projects, types, statuses, priorities and an assignee, and type words. The query it makes is
+    shown in PQL.
+  - **PQL**, like Jira's JQL: `project = INFRA AND status != Done AND assignee = currentUser() ORDER BY priority`.
+    - Suggestions appear as you type: fields, operators, functions and values (arrow keys, then Enter or Tab).
+    - Mistakes get a "did you mean …?" with the wrong part highlighted.
+  - **Ask in plain English:** Pulse writes the PQL for you to check.
+  - **Results:** a table you sort by clicking a heading (which rewrites ORDER BY), "Show more", and CSV export of up
+    to 1,000 items.
+- **Saved filters:**
+  - private, or shared with a role, a workspace or everyone
+  - star favourites
+  - **subscribe** to have the results sent daily or weekly at a chosen hour, under the bell and by email
+- **Ask Pulse:** "Turn this into a search" under an answer shows the question as PQL, with "Open in Search" and
+  "Save as filter".
+- **Dashboards:**
+  - The Dashboard page has a picker. "Pulse overview" is the existing dashboard and stays the default.
+  - New dashboards are personal or shared, with one, two or three columns.
+  - Each gadget reads a saved filter. The eight kinds are filter results, pie chart, created vs resolved, sprint
+    health, workload, overdue, two-dimensional statistics and recent activity.
+  - An editor adds, removes, moves and configures gadgets.
+- **Automation:** Settings → Administration → Automation.
+  - A rule is "when … if … then …":
+    - **when:** a trigger, or a schedule
+    - **if:** an optional PQL condition
+    - **then:** up to 10 actions (move status, assign, set a field, comment, notify, create a sub-task, link)
+  - Each rule has an on/off switch, "Run now" and a run log.
+  - Loop protection: rules can set off other rules up to 3 levels deep, and each rule has a limit of runs a minute.
+  - Three example rules come switched off.
+- **Hourly cron** (`0 * * * *`) for subscriptions and scheduled rules.
+- **Activity log:** "Filters & dashboards" and "Automation" filters, with readable descriptions.
+- **Retention:** run logs are kept 90 days. When a person is removed, their favourites and subscriptions are
+  removed too.
+- **Demo data:** five saved filters (one with a favourite and a subscription) and a "Delivery (demo)" dashboard with
+  all eight gadget kinds.
+- **Postman:** 29 new requests. **Unit tests:** `npm test` runs 27 PQL tests (Vitest), and CI runs them before every
+  deploy.
+
+**Migration:** `migrations/0006_search_dashboards_automation.sql`.
+- New tables:
+  - `saved_filters`, `filter_favourites`, `filter_subscriptions`
+  - `dashboards`, `dashboard_gadgets`
+  - `automation_rules`, `automation_actions`, `automation_runs`
+- It seeds the three example rules (off).
+- If roles have saved permissions, it adds the new permissions' defaults to them.
+
+**New permissions and their defaults**
+
+| Permission | Admin | Manager | Team Leader | Projects Assistant | Developer | Standard user |
+| --- | --- | --- | --- | --- | --- | --- |
+| Share filters and dashboards (`share_searches`) | yes | yes | yes | yes | no | no |
+| Manage automation rules (`manage_automation`) | yes | no | yes | no | no | no |
+
+Everyone signed in can search and keep private filters and dashboards. View-only links can't use any of it.
+
+**New endpoints**
+- **Search**
+  - `POST /api/search` (`pql`, `offset`, `limit` up to 100) returns `{ items, total, offset }`. A PQL mistake is a
+    400 with `code: "pql"` and `start`/`end`.
+  - `GET /api/search/fields` returns the fields, functions and known values.
+- **Saved filters**
+  - `GET /api/filters` lists them and `POST /api/filters` saves one. `PUT` and `DELETE /api/filters/:id` change and
+    delete one.
+  - `POST` and `DELETE /api/filters/:id/favourite` star and unstar one.
+  - `POST /api/filters/:id/subscriptions` (`frequency`, `weekday`, `hour`) subscribes, and `DELETE
+    /api/filters/:id/subscriptions/:sid` stops a subscription.
+- **Dashboards**
+  - `GET /api/dashboards` lists them and `POST /api/dashboards` saves one. `PUT` and `DELETE /api/dashboards/:id`
+    change and delete one (with `gadgets`).
+  - `GET /api/dashboards/:id/gadgets/:gid` returns one gadget's data, for the person viewing it.
+- **Ask Pulse:** `POST /api/ask/pql` (`question`) returns `{ pql, error? }`.
+- **Automation**
+  - `GET /api/automation/rules` lists the rules and `POST /api/automation/rules` adds one. `PUT` and `DELETE
+    /api/automation/rules/:id` change and delete one.
+  - `GET /api/automation/rules/:id/runs` returns the run log.
+  - `POST /api/automation/rules/:id/run` runs a rule now (`itemKey` for item rules).
+
+**New screens:**
+- Search, with its saved filters panel, the "Save filter" dialog and the subscriptions dialog
+- the dashboard picker, custom dashboards and the dashboard editor
+- Settings → Administration → Automation: the rule list, the rule editor and the run log
+- "Turn this into a search" in Ask Pulse

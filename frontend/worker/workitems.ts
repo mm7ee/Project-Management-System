@@ -62,7 +62,16 @@ export interface ItemContext {
   audit: (action: string, target: string | null, detail: Record<string, unknown>) => Promise<void>;
   /** Raises alerts for others (never the person acting), without holding up the request. */
   alert: (alerts: Alert[]) => void;
+  /** Tells automation what happened (worker/automation.ts). Absent where nothing should react. */
+  emit?: (e: ItemEvent) => void;
 }
+
+/** Something automation rules can react to. */
+export type ItemEvent =
+  | { type: "item_created" | "comment_added" | "subtasks_done"; itemId: string }
+  | { type: "item_transitioned"; itemId: string; from: string; to: string }
+  | { type: "field_changed"; itemId: string; fields: string[] }
+  | { type: "sprint_started" | "sprint_completed"; sprintId: string; systemId: string };
 
 export interface ItemRow {
   id: string;
@@ -104,7 +113,7 @@ export interface ItemRow {
 }
 
 /** Everything a list or page needs about an item, in one query. Cancelled ("won't do") children don't count. */
-const SELECT = `SELECT w.*, st.name AS status_name, st.category AS status_category,
+export const SELECT = `SELECT w.*, st.name AS status_name, st.category AS status_category,
   s.key AS project_key, (s.data::json ->> 'name') AS project_name, p.number AS parent_number,
   (SELECT string_agg(l.label, ',' ORDER BY l.label) FROM work_item_labels l WHERE l.item_id = w.id) AS labels,
   (SELECT COUNT(*) FROM work_items c WHERE c.parent_id = w.id AND COALESCE(c.resolution, '') <> 'WONT_DO') AS child_total,
@@ -416,7 +425,7 @@ export interface MoveRequest {
 }
 
 /** Someone who has `role`: the project's lead first, then its developers, then anyone, by name. */
-async function personWithRole(c: ItemContext, role: string, systemId: string): Promise<string | null> {
+export async function personWithRole(c: ItemContext, role: string, systemId: string): Promise<string | null> {
   const row = await c.db
     .prepare(
       `SELECT u.id FROM users u WHERE u.role = ?
@@ -478,12 +487,7 @@ export async function transitionItem(c: ItemContext, r: ItemRow, m: MoveRequest,
   }
   const res = await applyChange(c, r, patch, true);
 
-  if (comment) {
-    const id = newToken().slice(0, 16);
-    await c.db.prepare("INSERT INTO work_item_comments (id, item_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)").bind(id, r.id, c.me.id, comment, c.now).run();
-    await c.audit("comment_added", r.system_id, { name: r.project_name, key: keyOf(r), summary: r.summary, comment: comment.slice(0, 300), transition: t.name });
-    await notifyMentions(c, res.after, comment, `Moving it to ${res.after.status_name}`);
-  }
+  if (comment) await addComment(c, res.after, comment, { transition: t.name });
   if (log) {
     await c.audit("work_item_updated", res.after.system_id, {
       name: res.after.project_name,
@@ -525,6 +529,16 @@ export async function transitionItem(c: ItemContext, r: ItemRow, m: MoveRequest,
       })),
   );
   await afterChange(c, res);
+  if (res.changed.includes("status")) {
+    c.emit?.({ type: "item_transitioned", itemId: r.id, from: r.status, to: res.after.status });
+    if (res.after.type === "SUBTASK" && res.after.parent_id && res.after.status_category === "DONE") {
+      const open = await c.db
+        .prepare("SELECT COUNT(*) AS n FROM work_items w JOIN work_statuses st ON st.id = w.status WHERE w.parent_id = ? AND w.type = 'SUBTASK' AND st.category <> 'DONE'")
+        .bind(res.after.parent_id)
+        .first<{ n: number }>();
+      if (!Number(open?.n)) c.emit?.({ type: "subtasks_done", itemId: res.after.parent_id });
+    }
+  }
   return res;
 }
 
@@ -994,6 +1008,7 @@ export async function applyChange(c: ItemContext, r: ItemRow, b: ItemPatch, viaT
 export async function afterChange(c: ItemContext, res: ChangeResult, alertAssignee = true) {
   const { before, after, changed } = res;
   if (!changed.length) return;
+  c.emit?.({ type: "field_changed", itemId: after.id, fields: changed });
   if (alertAssignee && changed.includes("assignee") && after.assignee) {
     c.alert([
       {
@@ -1121,6 +1136,7 @@ export async function createItem(c: ItemContext, b: NewItem, source: WorkSource,
     ]);
   }
   await recomputeProgress(c, row.system_id);
+  c.emit?.({ type: "item_created", itemId: row.id });
   return row;
 }
 
@@ -1294,14 +1310,7 @@ export async function itemsApi(c: ItemContext, path: string, method: string): Pr
     const r = await itemByKey(c, m[1]);
     if (!rights(c, r).comment) throw new HttpError(403, "This link is view-only");
     const text = str((await body<{ body?: unknown }>(req)).body, "Comment", MAX_COMMENT, true)!;
-    const id = newToken().slice(0, 16);
-    await db.batch([
-      db.prepare("INSERT INTO work_item_comments (id, item_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)").bind(id, r.id, c.me.id, text, c.now),
-      db.prepare("UPDATE work_items SET updated_at = ? WHERE id = ?").bind(c.now, r.id),
-    ]);
-    await c.audit("comment_added", r.system_id, { name: r.project_name, key: keyOf(r), summary: r.summary, comment: text.slice(0, 300) });
-    const mentioned = await notifyMentions(c, r, text, "In a comment");
-    await notifyWatchers(c, r, "New comment", mentioned);
+    const id = await addComment(c, r, text);
     return json({ id, authorId: c.me.id, body: text, createdAt: c.now } satisfies WorkComment, 201);
   }
   m = path.match(new RegExp(`^/api/items/${KEY}/comments/([a-z0-9-]{4,40})$`));
@@ -1473,6 +1482,20 @@ export async function itemsApi(c: ItemContext, path: string, method: string): Pr
   }
 
   throw new HttpError(404, "Not found");
+}
+
+/** Adds a comment: logged, mentions told, watchers told, automation told. Returns its id. */
+export async function addComment(c: ItemContext, r: ItemRow, text: string, extra: Record<string, unknown> = {}): Promise<string> {
+  const id = newToken().slice(0, 16);
+  await c.db.batch([
+    c.db.prepare("INSERT INTO work_item_comments (id, item_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)").bind(id, r.id, c.me.id, text, c.now),
+    c.db.prepare("UPDATE work_items SET updated_at = ? WHERE id = ?").bind(c.now, r.id),
+  ]);
+  await c.audit("comment_added", r.system_id, { name: r.project_name, key: keyOf(r), summary: r.summary, comment: text.slice(0, 300), ...extra });
+  const mentioned = await notifyMentions(c, r, text, "In a comment");
+  await notifyWatchers(c, r, "New comment", mentioned);
+  c.emit?.({ type: "comment_added", itemId: r.id });
+  return id;
 }
 
 // ---------- Ask Pulse ----------
