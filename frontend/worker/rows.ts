@@ -18,6 +18,7 @@ export interface FeatureRow {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+  item_key?: string | null; // its work item's key (INFRA-12); from the features view
 }
 
 export const toFeature = (r: FeatureRow): Feature => ({
@@ -36,4 +37,5 @@ export const toFeature = (r: FeatureRow): Feature => ({
   ...(r.notes ? { notes: r.notes } : {}),
   ...(r.due_at ? { dueAt: r.due_at } : {}),
   ...(r.completed_at ? { completedAt: r.completed_at } : {}),
+  ...(r.item_key ? { key: r.item_key } : {}),
 });

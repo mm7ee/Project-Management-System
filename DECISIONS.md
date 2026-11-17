@@ -71,3 +71,70 @@ Choices made during the Pulse upgrade that later phases must follow. Newest last
      INSERTs, then checks the file holds every row. Restore by migrating an empty database and running the file with
      `node scripts/db.mjs exec`. `backup-*.sql` is gitignored.
   2. Also make a Neon branch `backup-before-phase-N` from `production`, an instant copy that can be restored in Neon.
+
+## Phase 1: work items (2026-11-17)
+
+- **Feature requests are work items.** The `features` table became a database **view** of the same name, columns
+  and values over `work_items WHERE source = 'client_request'`, so every reader (GET /api/data, digests, the
+  Monday Briefing, Ask Pulse, /executive, reports) works unchanged. The /api/features endpoints write through
+  the work item code (`worker/workitems.ts`). A work item keeps the old request id, so nothing that pointed at
+  one broke. The migration checked on a copy of the live data that all 66 requests read back identically.
+- **Mapping a request's fields:**
+
+  | Request field | Work item |
+  | --- | --- |
+  | Bug fix | Bug |
+  | New module, change, enhancement | Story |
+  | The request type itself | a label: `new-module`, `change`, `enhancement` or `bug-fix` |
+  | Not started | To Do |
+  | In progress | In Progress |
+  | Testing | In Review |
+  | Completed | Done, resolution Done |
+  | Cancelled | Done, resolution Won't do |
+  | On hold | In Progress, flagged **on hold** (`on_hold`) |
+  | Critical priority | Highest |
+
+  Highest and Lowest read back as Critical and Low.
+- **Statuses** are rows in `work_statuses` (To Do, In Progress, In Review, Done), each in a category (`TODO`,
+  `IN_PROGRESS`, `DONE`). Code decides "done" by category, never by the status name, ready for Phase 2.
+- **Resolution:** an item in a Done-category status has a resolution, Done or Won't do. "Won't do" items don't count
+  towards epic roll-ups or project progress. Leaving Done clears the resolution and the resolved date.
+- **Numbering** uses `systems.item_seq`, raised and read in the same statement that inserts the item
+  (`WITH n AS (UPDATE ... RETURNING item_seq) INSERT ...`), so two items created at once can't share a number. A
+  deleted item's number isn't reused. Moving an item to another project gives it the next number there.
+- **Keys** live in `systems.key` (unique, `^[A-Z]{2,10}$`). The suggestion is the initials of a name of several
+  words, ignoring small words such as "and" and "of" (Leave Planner → LP), or the first five letters of a one-word
+  name (Infrastructure → INFRA). A letter is added when the key is taken. The migration gave existing projects
+  keys by the same rule. A key is fixed once any work item exists in the project.
+- **Visibility:** developers without `manage_features` see only the work items assigned to them or that they
+  reported. This applies in lists, item pages, links, the parent list, attachments, comments and alerts, Ask Pulse
+  and project history, as with feature requests. Everyone else sees every item. View-only links read items and
+  comments but never attachments, and change nothing.
+- **Editing:**
+  - "Edit and assign any work item" (`edit_work_items`) may change anything.
+  - Without it, the **assignee**, and the **reporter** if they have `create_work_items`, may edit the item, but may
+    assign it only to themselves.
+  - For client requests, `manage_features` counts as edit-any, and the old feature request rules still apply
+    on the Feature requests page.
+- **Assignees:** anyone except Standard users; client requests go to developers only, as before. Making someone a
+  Standard user unassigns their work items.
+- **Watchers:** the reporter and assignee watch automatically, and a new assignee starts watching. Watchers get
+  a bell alert (kind `watching`) for field changes, comments, links and attachments, except for their own changes.
+  An @mention (kind `mentioned`) only reaches people who can see the item. Someone mentioned isn't also sent the
+  watcher alert for the same comment.
+- **Deleting** an item deletes its sub-tasks and every item's attachments, comments, links, time and history.
+  Children of a deleted epic stay, without an epic. Deleting a project deletes its work items.
+- **Attachments** are rows in `documents` with `work_item_id` set, stored the same way (1 MB chunks, 10 MB per file).
+  They're left out of the project's Documents list, and downloading one checks the item's visibility.
+- **Time** is stored in minutes and shown as Jira does, with 8-hour days ("1d 2h"). Logging time lowers the
+  remaining estimate by the time logged, unless a new remaining figure is given. Removing a log adds it back.
+- **Project progress from work items** (`systems.progress_from_items`): the share of stories, tasks and bugs that are
+  done. Epics and sub-tasks are left out because their work is inside those. It's recalculated whenever an item
+  changes, and each change is logged as `system_progress` with `fromWorkItems`. While it's on, progress can't be
+  set by hand.
+- **Clone** copies the type, summary ("CLONE - ..."), description, priority, parent, labels, component, points,
+  estimate and dates. It starts in To Do, reported by whoever cloned it, and links back with "clones".
+- **Descriptions and comments are Markdown,** shown by Pulse's own small renderer (`src/components/Markdown.tsx`).
+  It never inserts HTML from the text, and only makes http(s) and mailto links.
+- **The D1 fallback is retired from this phase on.** D1 has no work item tables, so switching back to it would break
+  feature requests. The restore path is the backup file and the Neon backup branch.

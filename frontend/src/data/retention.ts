@@ -21,6 +21,11 @@ export interface RetentionRule {
 
 export const RETENTION: RetentionRule[] = [
   { what: "Projects, features, documents, blockers and concept notes", kept: "For the life of the project, until someone with permission deletes it" },
+  {
+    what: "Work items, with their comments, attachments, links, time logs and status history",
+    kept: "For the life of the project, until someone with permission deletes the item (its sub-tasks go with it)",
+  },
+  { what: "Watchers of a work item", kept: "Until they stop watching, or are removed from Pulse" },
   { what: "User accounts", kept: "Until an administrator removes the person; their sessions, codes, passkeys and notifications go with them" },
   { what: "Activity log (sign-ins, failed sign-ins, changes, IP addresses)", kept: "12 months" },
   { what: "Notifications and digests", kept: `${NOTIFICATION_DAYS} days` },

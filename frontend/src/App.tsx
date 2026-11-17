@@ -53,7 +53,11 @@ const greeting = () => {
 /** Where a view-only link keeps its display settings (this browser only). */
 const VIEW_PREFS = "omnitrack:view-prefs";
 
-const projectInHash = () => window.location.hash.match(/^#\/projects\/([a-z0-9-]+)(\/pcn)?$/)?.[1] ?? null;
+// #/projects/<id>/items is its Work items tab; #/projects/<id>/items/<KEY-n> one work item.
+const PROJECT_ROUTE = /^#\/projects\/([a-z0-9-]+)(?:\/(pcn|items)(?:\/([A-Z]{2,10}-\d{1,7}))?)?\/?$/;
+const projectInHash = () => window.location.hash.match(PROJECT_ROUTE)?.[1] ?? null;
+const itemsInHash = () => window.location.hash.match(PROJECT_ROUTE)?.[2] === "items";
+const itemKeyInHash = () => window.location.hash.match(PROJECT_ROUTE)?.[3] ?? undefined;
 // #/projects/<id>/pcn shows that project's Concept Note as a printable document.
 const pcnInHash = () => /^#\/projects\/[a-z0-9-]+\/pcn$/.test(window.location.hash);
 
@@ -159,10 +163,14 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   };
   const [selectedId, setSelectedId] = useState<string | null>(projectInHash);
   const [showPcn, setShowPcn] = useState(pcnInHash);
+  const [showItems, setShowItems] = useState(itemsInHash);
+  const [itemKey, setItemKey] = useState(itemKeyInHash);
   useEffect(() => {
     const onHash = () => {
       setSelectedId(projectInHash());
       setShowPcn(pcnInHash());
+      setShowItems(itemsInHash());
+      setItemKey(itemKeyInHash());
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
@@ -517,6 +525,10 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
               onNewFeature={() => setFeatureEdit({ feature: null, systemId: selected.id })}
               onChanged={reload}
               canEditPcn={can("manage_systems") || selected.pcnBy === me.id}
+              section={showItems ? "items" : "overview"}
+              itemKey={showItems ? itemKey : undefined}
+              canCreateItems={can("create_work_items")}
+              readOnly={!!data.viewOnly}
               onSignPcn={(index, decision, remarks) => signPcn(selected.id, index, decision, remarks)}
             />
           ) : (
@@ -609,6 +621,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
               isMine={isMine}
               onOpen={openProject}
               onTab={showTab}
+              showMyWork={!data.viewOnly}
             />
           </>
         ) : (

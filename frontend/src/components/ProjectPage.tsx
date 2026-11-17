@@ -33,6 +33,8 @@ import { describe } from "./ActivityPage";
 import { DeveloperSearch } from "./DeveloperPicker";
 import { FeatureStatusPill, PriorityBadge } from "./FeatureModal";
 import LeadContact from "./LeadContact";
+import WorkItemsTab from "./WorkItemsTab";
+import WorkItemPage from "./WorkItemPage";
 import { DateLine, ProgressBar, ScheduleChip, StatusPill, updatedText } from "./SystemCard";
 
 interface Props {
@@ -67,6 +69,10 @@ interface Props {
   onNewFeature: () => void;
   onChanged: () => Promise<void>; // reload after a document or blocker change
   canEditPcn: boolean; // wrote the Concept Note, or may manage systems
+  section: "overview" | "items"; // which tab: #/projects/<id> or #/projects/<id>/items
+  itemKey?: string; // a work item's page: #/projects/<id>/items/<KEY-n>
+  canCreateItems: boolean;
+  readOnly: boolean; // a view-only link
   onSignPcn: (index: number, decision: SignoffStatus, remarks?: string) => Promise<void>;
 }
 
@@ -188,6 +194,23 @@ export default function ProjectPage(p: Props) {
 
       {error && <p className="form-error banner">{error}</p>}
 
+      <nav className="p-tabs no-print" aria-label="Project sections">
+        <a href={`#/projects/${system.id}`} className={p.section === "overview" ? "on" : ""} aria-current={p.section === "overview" ? "page" : undefined}>
+          Overview
+        </a>
+        <a href={`#/projects/${system.id}/items`} className={p.section === "items" ? "on" : ""} aria-current={p.section === "items" && !p.itemKey ? "page" : undefined}>
+          Work items <span className="mono">{system.key}</span>
+        </a>
+      </nav>
+
+      {p.section === "items" ? (
+        p.itemKey ? (
+          <WorkItemPage system={system} itemKey={p.itemKey} users={users} me={me} now={now} readOnly={p.readOnly} canCreate={p.canCreateItems} onChanged={p.onChanged} />
+        ) : (
+          <WorkItemsTab system={system} users={users} now={now} canCreate={p.canCreateItems} canManage={p.canManage} readOnly={p.readOnly} onChanged={p.onChanged} />
+        )
+      ) : (
+      <>
       {/* What is holding the project up, before anything else. */}
       {(openBlockers.length > 0 || stalled !== null || onHold.length > 0) && (
         <section className="blocker-band" aria-label="Blockers">
@@ -388,7 +411,9 @@ export default function ProjectPage(p: Props) {
                     <li key={f.id}>
                       <button type="button" onClick={() => p.onOpenFeature(f)}>
                         <span className="feature-mini-title">
-                          <b>{f.title}</b>
+                          <b>
+                            {f.key && <span className="mono wi-key-inline">{f.key}</span>} {f.title}
+                          </b>
                           <small className={isLate(f, now) ? "text-red" : ""}>
                             {users.find((u) => u.id === f.assignee)?.name ?? "Unassigned"}
                             {f.client ? ` · for ${f.client}` : ""}
@@ -606,6 +631,8 @@ export default function ProjectPage(p: Props) {
             ))}
         </aside>
       </div>
+      </>
+      )}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { api } from "../data/api";
 import { STATUS_META, initials, type Status, type System } from "../data/systems";
 import { FEATURE_STATUS_META, PRIORITY_META, type FeatureStatus, type Priority } from "../data/features";
 import { PERMISSIONS, ROLE_LABEL, type ActivityEntry, type Role, type User } from "../data/roles";
+import { STATUS_META as ITEM_STATUS, TYPE_META, WORK_PRIORITY_META, formatMinutes, type WorkItemType, type WorkPriority, type WorkStatus } from "../data/workitems";
 import { timeAgo } from "../time";
 
 interface Props {
@@ -12,13 +13,14 @@ interface Props {
   now: number;
 }
 
-type Kind = "" | "signin" | "failed" | "account" | "systems" | "features" | "project" | "admin";
+type Kind = "" | "signin" | "failed" | "account" | "systems" | "features" | "items" | "project" | "admin";
 const KINDS: { key: Kind; label: string }[] = [
   { key: "", label: "Everything" },
   { key: "signin", label: "Sign-ins" },
   { key: "failed", label: "Failed sign-ins" },
   { key: "systems", label: "Systems" },
   { key: "features", label: "Feature requests" },
+  { key: "items", label: "Work items" },
   { key: "project", label: "Documents & blockers" },
   { key: "admin", label: "Users & roles" },
   { key: "account", label: "Own account" },
@@ -66,6 +68,31 @@ export function device(agent: string | null): string {
             : "";
   return os ? `${browser} on ${os}` : browser;
 }
+
+const FIELD_WORDS: Record<string, string> = {
+  summary: "summary",
+  description: "description",
+  type: "type",
+  status: "status",
+  resolution: "resolution",
+  onHold: "on hold",
+  priority: "priority",
+  assignee: "assignee",
+  parent: "parent",
+  labels: "labels",
+  component: "component",
+  storyPoints: "story points",
+  originalEstimate: "original estimate",
+  remainingEstimate: "remaining estimate",
+  startDate: "start date",
+  dueDate: "due date",
+  client: "requested by",
+  notes: "notes",
+  systemId: "project",
+};
+const itemType = (v: unknown) => TYPE_META[v as WorkItemType]?.label.toLowerCase() ?? "work item";
+const itemStatus = (v: unknown) => ITEM_STATUS[v as WorkStatus]?.label ?? (v ? String(v) : "none");
+const itemPriority = (v: unknown) => WORK_PRIORITY_META[v as WorkPriority]?.label ?? String(v);
 
 /** Plain-language sentence for one entry. Names come from the entry, so deleted things still read well. */
 export function describe(e: ActivityEntry, users: User[], systems: System[]): string {
@@ -150,9 +177,19 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
       if (from.status !== to.status) parts.push(`status ${statusLabel(from.status)} → ${statusLabel(to.status)}`);
       if (from.health !== to.health) parts.push(to.health === "Maintenance" ? "put under maintenance" : "maintenance ended");
       if (d.note) parts.push(`note "${str(d.note)}"`);
+      if (d.fromWorkItems) return `${name}'s progress moved with its work items: ${parts.join(", ") || "no change"}`;
       return `Updated ${name}: ${parts.join(", ") || "no change"}`;
     }
     case "system_updated": {
+      if (d.key) {
+        const k = d.key as { from: unknown; to: unknown };
+        return `Changed ${name}'s key from ${str(k.from)} to ${str(k.to)}`;
+      }
+      if (d.progressFromItems) {
+        return (d.progressFromItems as { to: unknown }).to
+          ? `Set ${name} to take its progress from its work items`
+          : `Set ${name}'s progress by hand again`;
+      }
       const lead = d.lead as { from: unknown; to: unknown } | undefined;
       const fields = ((d.fields as string[] | undefined) ?? []).filter((f) => f !== "lead");
       const parts = [
@@ -244,6 +281,55 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
         )
         .join("; ")}`;
     }
+    case "work_item_created":
+      return d.clonedFrom
+        ? `Cloned ${str(d.clonedFrom)} as ${str(d.key)} on ${name}`
+        : `Created ${itemType(d.type)} ${str(d.key)} "${str(d.summary)}" on ${name}${d.assignee ? `, assigned to ${userName(d.assignee)}` : ""}`;
+    case "work_item_updated": {
+      const fields = (d.fields as string[] | undefined) ?? [];
+      const change = (k: string) => d[k] as { from: unknown; to: unknown } | undefined;
+      const parts = fields.map((f) => {
+        const c = change(f);
+        if (!c) return FIELD_WORDS[f] ?? f;
+        if (f === "status") return `status ${itemStatus(c.from)} → ${itemStatus(c.to)}`;
+        if (f === "priority") return `priority ${itemPriority(c.from)} → ${itemPriority(c.to)}`;
+        if (f === "assignee") return `assignee ${c.from ? userName(c.from) : "nobody"} → ${c.to ? userName(c.to) : "nobody"}`;
+        if (f === "type") return `type ${itemType(c.from)} → ${itemType(c.to)}`;
+        if (f === "summary") return `summary "${str(c.from)}" → "${str(c.to)}"`;
+        if (f === "systemId") return `moved to ${sysName(c.to)}${d.key && typeof d.key === "object" ? ` as ${str((d.key as { to: unknown }).to)}` : ""}`;
+        if (f === "onHold") return c.to ? "put on hold" : "taken off hold";
+        if (f === "description" || f === "notes") return `${FIELD_WORDS[f]} changed`;
+        if (f === "originalEstimate" || f === "remainingEstimate") return `${FIELD_WORDS[f]} ${formatMinutes(c.from as number)} → ${formatMinutes(c.to as number)}`;
+        if (f === "labels") return `labels ${(c.from as string[]).join(", ") || "none"} → ${(c.to as string[]).join(", ") || "none"}`;
+        return `${FIELD_WORDS[f] ?? f} ${c.from == null || c.from === "" ? "none" : str(c.from)} → ${c.to == null || c.to === "" ? "none" : str(c.to)}`;
+      });
+      const key = typeof d.key === "string" ? d.key : str((d.key as { to?: unknown } | undefined)?.to);
+      return `Updated ${key} "${str(d.summary)}" on ${name}: ${parts.join("; ")}`;
+    }
+    case "work_item_deleted":
+      return `Deleted ${itemType(d.type)} ${str(d.key)} "${str(d.summary)}" from ${name}${d.subtasks ? ` with ${str(d.subtasks)} sub-task${d.subtasks === 1 ? "" : "s"}` : ""}`;
+    case "comment_added":
+      return `Commented on ${str(d.key)} "${str(d.summary)}": "${str(d.comment).slice(0, 120)}"`;
+    case "comment_edited":
+      return `Edited a comment on ${str(d.key)}: "${str(d.from).slice(0, 60)}" → "${str(d.to).slice(0, 60)}"`;
+    case "comment_deleted":
+      return `Deleted a comment on ${str(d.key)}: "${str(d.comment).slice(0, 120)}"`;
+    case "link_added":
+      return `Linked work items: ${str(d.link)}`;
+    case "link_removed":
+      return `Removed the link ${str(d.link)}`;
+    case "attachment_added":
+      return `Attached "${str(d.document)}" to ${str(d.key)}`;
+    case "attachment_removed":
+      return `Removed the attachment "${str(d.document)}" from ${str(d.key)}`;
+    case "time_logged":
+      return `Logged ${formatMinutes(Number(d.minutes))} on ${str(d.key)} for ${str(d.date)}${d.note ? `: "${str(d.note)}"` : ""}`;
+    case "time_log_deleted":
+      return `Removed ${formatMinutes(Number(d.minutes))} logged on ${str(d.key)} for ${str(d.date)}`;
+    case "work_item_watched":
+      return `Started watching ${str(d.key)} "${str(d.summary)}"`;
+    case "work_item_unwatched":
+      return `Stopped watching ${str(d.key)} "${str(d.summary)}"`;
     default:
       return e.action;
   }

@@ -36,6 +36,20 @@ import { noteFailure, postToTeams, raise, readDelivery, sendEmail, emailFor, typ
 import { runBriefing, runDailyDigests } from "./digest";
 import { toFeature, type FeatureRow } from "./rows";
 import { pgDatabase } from "./pg";
+import { HttpError, body, json } from "./http";
+import { KEY_PATTERN, suggestKey } from "../src/data/workitems";
+import {
+  applyChange,
+  askItemLines,
+  createItem,
+  deleteItem,
+  featureToItem,
+  afterChange,
+  itemById,
+  itemsApi,
+  recomputeProgress,
+  type ItemContext,
+} from "./workitems";
 import type { AppNotification, DeliveryStatus, Digest, NotificationKind } from "../src/data/notifications";
 import {
   DEFAULT_ROLE_PERMISSIONS,
@@ -61,14 +75,6 @@ const ASK_LIMIT = 20;
 const ASK_WINDOW_MS = 10 * 60_000;
 const askLog = new Map<string, number[]>();
 
-class HttpError extends Error {
-  constructor(public status: number, message: string, public code?: string, public extra?: Record<string, unknown>) {
-    super(message);
-  }
-}
-
-const json = (data: unknown, status = 200, headers: Record<string, string> = {}) =>
-  new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json", ...headers } });
 
 interface UserRow {
   id: string;
@@ -156,13 +162,6 @@ function slug(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "item";
 }
 
-async function body<T>(req: Request): Promise<T> {
-  try {
-    return (await req.json()) as T;
-  } catch {
-    throw new HttpError(400, "Invalid JSON body");
-  }
-}
 
 function cookieToken(req: Request): string | null {
   const m = (req.headers.get("cookie") ?? "").match(new RegExp(`(?:^|;\\s*)${COOKIE}=([a-f0-9]{64})`));
@@ -382,6 +381,25 @@ async function currentUser(req: Request, db: D1Database): Promise<UserRow | null
     .first<UserRow>();
 }
 
+/** A project as stored: its details as JSON, with its key and progress setting in their own columns. */
+interface SystemRow {
+  data: string;
+  key: string;
+  progress_from_items: number;
+  has_items?: boolean;
+}
+const toSystem = (r: SystemRow): System => ({
+  ...JSON.parse(r.data),
+  key: r.key,
+  ...(r.progress_from_items ? { progressFromItems: true } : {}),
+  ...(r.has_items ? { hasWorkItems: true } : {}),
+});
+/** What goes in the JSON column: the key and progress setting live in their own columns. */
+const systemData = (s: System) => {
+  const { key: _key, progressFromItems: _p, hasWorkItems: _h, ...rest } = s;
+  return JSON.stringify(rest);
+};
+
 async function getSystem(db: D1Database, id: string): Promise<System> {
   const row = await db.prepare("SELECT data FROM systems WHERE id = ?").bind(id).first<{ data: string }>();
   if (!row) throw new HttpError(404, "System not found");
@@ -425,6 +443,13 @@ function checkDate(v: unknown, field: string): string | null {
     throw new HttpError(400, `${field} must be a date`);
   }
   return v;
+}
+
+/** A project key: 2 to 10 capital letters. */
+function checkKey(v: unknown): string {
+  const key = String(v ?? "").trim().toUpperCase();
+  if (!KEY_PATTERN.test(key)) throw new HttpError(400, "A project key is 2 to 10 capital letters, such as INFRA");
+  return key;
 }
 
 function checkRole(r: unknown): Role {
@@ -505,12 +530,46 @@ async function audit(
   }
 }
 
+/** Activity about work items: developers who see only their own items see only their own entries. */
+const ITEM_ACTIONS = new Set([
+  "work_item_created",
+  "work_item_updated",
+  "work_item_deleted",
+  "comment_added",
+  "comment_edited",
+  "comment_deleted",
+  "link_added",
+  "link_removed",
+  "attachment_added",
+  "attachment_removed",
+  "time_logged",
+  "time_log_deleted",
+  "work_item_watched",
+  "work_item_unwatched",
+]);
+
 const ACTIVITY_KINDS: Record<string, string[]> = {
   signin: ["login", "logout", "logout_all"],
   failed: ["login_failed", "account_locked", "signin_ip_blocked"],
   account: ["password_changed", "password_set_after_reset", "profile_updated", "mfa_enabled", "mfa_disabled", "mfa_recovery_regenerated"],
   systems: ["system_created", "system_progress", "system_updated", "system_developers", "system_deleted", "request_created", "request_dismissed", "template_created", "template_deleted", "pcn_updated", "pcn_signed"],
   features: ["feature_created", "feature_updated", "feature_deleted"],
+  items: [
+    "work_item_created",
+    "work_item_updated",
+    "work_item_deleted",
+    "comment_added",
+    "comment_edited",
+    "comment_deleted",
+    "link_added",
+    "link_removed",
+    "attachment_added",
+    "attachment_removed",
+    "time_logged",
+    "time_log_deleted",
+    "work_item_watched",
+    "work_item_unwatched",
+  ],
   project: ["document_added", "document_removed", "blocker_raised", "blocker_resolved", "blocker_reopened", "blocker_deleted"],
   admin: ["user_created", "user_updated", "user_password_reset", "user_deleted", "roles_updated", "limits_updated", "mfa_reset", "mfa_policy_updated", "delivery_updated", "digest_sent", "account_unlocked", "signin_rules_updated"],
 };
@@ -815,7 +874,12 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     : null;
   if (shareToken && !guest) throw new HttpError(401, "This view-only link has expired or been turned off.", "share_invalid");
   const guestAllowed =
-    (method === "GET" && (path === "/api/data" || path === "/api/notifications" || /^\/api\/systems\/[a-z0-9-]+\/history$/.test(path))) ||
+    (method === "GET" &&
+      (path === "/api/data" ||
+        path === "/api/notifications" ||
+        /^\/api\/systems\/[a-z0-9-]+\/history$/.test(path) ||
+        path === "/api/items" ||
+        /^\/api\/items\/[A-Z]{2,10}-\d{1,7}(\/comments)?$/.test(path))) ||
     (method === "POST" && (path === "/api/ask" || path === "/api/requests")) ||
     (method === "DELETE" && /^\/api\/requests\/[a-f0-9]+$/.test(path));
   if (guest && !guestAllowed) {
@@ -877,6 +941,21 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     const others = alerts.filter((a) => a.userId !== me.id);
     if (others.length) ctx.waitUntil(raise(env, others, channel).catch((e) => noteFailure(db, "Notification", e)));
   };
+  // Work items (worker/workitems.ts) run with the same person, permissions and visibility rules.
+  const itemCtx: ItemContext = {
+    db,
+    req,
+    me: { id: me.id, name: me.name, username: me.username, role: me.role },
+    guest: !!guest,
+    can,
+    ownOnly: ownFeaturesOnly,
+    now,
+    audit: (action, target, detail) => audit(db, req, me, action, target, detail),
+    alert: (alerts) => alert(alerts),
+  };
+  const itemsResponse = await itemsApi(itemCtx, path, method);
+  if (itemsResponse) return itemsResponse;
+
   const nameOfUser = async (id: string) => (await db.prepare("SELECT name FROM users WHERE id = ?").bind(id).first<{ name: string }>())?.name ?? "Someone";
   /** Each signatory with an account hears once per project that a Concept Note needs them. */
   const askToSign = (system: { id: string; name: string }, pcn: Pcn) =>
@@ -1327,14 +1406,14 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
 
   if (path === "/api/data" && method === "GET") {
     const [systems, users, requests, assigned, features, documents, blockers, limits, templates] = await Promise.all([
-      db.prepare("SELECT data FROM systems ORDER BY sort, rowid").all<{ data: string }>(),
+      db.prepare("SELECT data, key, progress_from_items, EXISTS (SELECT 1 FROM work_items w WHERE w.system_id = systems.id) AS has_items FROM systems ORDER BY sort, rowid").all<SystemRow>(),
       db.prepare("SELECT * FROM users ORDER BY name").all<UserRow>(),
       db.prepare("SELECT * FROM requests ORDER BY created_at DESC").all<Record<string, string>>(),
       db
         .prepare("SELECT a.user_id, a.system_id FROM assignments a JOIN systems s ON s.id = a.system_id ORDER BY s.sort, s.rowid")
         .all<{ user_id: string; system_id: string }>(),
       db.prepare("SELECT * FROM features ORDER BY created_at DESC").all<FeatureRow>(),
-      db.prepare("SELECT * FROM documents ORDER BY uploaded_at DESC").all<Record<string, string | number | null>>(),
+      db.prepare("SELECT * FROM documents WHERE work_item_id IS NULL ORDER BY uploaded_at DESC").all<Record<string, string | number | null>>(),
       db.prepare("SELECT * FROM blockers ORDER BY raised_at DESC").all<Record<string, string | null>>(),
       workloadLimits(db),
       db.prepare("SELECT * FROM templates ORDER BY created_by IS NOT NULL, created_at").all<TemplateRow>(),
@@ -1346,7 +1425,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       prefs: cleanPrefs(JSON.parse(me.prefs || "{}"), START_KEYS),
       permissions: perms,
       roleMatrix: matrix,
-      systems: systems.results.map((r) => pcnFor(JSON.parse(r.data))),
+      systems: systems.results.map((r) => pcnFor(toSystem(r))),
       users: await (async () => {
         // Two-step is on with an app or a passkey; admins also see which methods.
         const keyed = await db.prepare("SELECT user_id, COUNT(*) AS n FROM passkeys GROUP BY user_id").all<{ user_id: string; n: number }>();
@@ -1500,6 +1579,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
             limits,
           })
         : "";
+    const itemLines = await askItemLines(itemCtx, new Map(people.results.map((p) => [p.id, p.name])));
     const snapshot = focus + buildSnapshot({
       now: t,
       systems: allSystems,
@@ -1527,7 +1607,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
         }),
       ),
       limits,
-    });
+    }) + itemLines.join("\n");
     try {
       const stream = await askStream(env.AI, snapshot, question, history, mode);
       return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
@@ -1710,9 +1790,15 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       updatedBy: initials(me.name),
     };
     const sort = (await db.prepare("SELECT COALESCE(MAX(sort), 0) + 1 AS s FROM systems").first<{ s: number }>())!.s;
-    await db.prepare("INSERT INTO systems (id, sort, data) VALUES (?, ?, ?)").bind(id, sort, JSON.stringify(system)).run();
+    // Its key: the one asked for, or one suggested from the name.
+    const taken = new Set((await db.prepare("SELECT key FROM systems").all<{ key: string }>()).results.map((r) => r.key));
+    const key = b.key ? checkKey(b.key) : suggestKey(name, taken);
+    if (taken.has(key)) throw new HttpError(409, `The key ${key} is taken by another project`);
+    await db.prepare("INSERT INTO systems (id, sort, data, key) VALUES (?, ?, ?, ?)").bind(id, sort, JSON.stringify(system), key).run();
+    system.key = key;
     await audit(db, req, me, "system_created", id, {
       name,
+      key,
       status,
       progress: system.progress,
       ...(system.template ? { template: system.template } : {}),
@@ -1791,6 +1877,27 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       pcnChange = { name: current.name, from: before, to: pcnStatus(pcn) };
     }
 
+    const columns = (await db.prepare("SELECT key, progress_from_items FROM systems WHERE id = ?").bind(id).first<{ key: string; progress_from_items: number }>())!;
+    // The key can change until the project's first work item exists.
+    let keyChange: { from: string; to: string } | null = null;
+    if (b.key !== undefined && b.key !== columns.key) {
+      need("manage_systems");
+      const key = checkKey(b.key);
+      if (await db.prepare("SELECT 1 FROM work_items WHERE system_id = ?").bind(id).first()) {
+        throw new HttpError(400, `The key is locked: ${columns.key}-1 already exists`);
+      }
+      if (await db.prepare("SELECT 1 FROM systems WHERE key = ? AND id <> ?").bind(key, id).first()) throw new HttpError(409, `The key ${key} is taken by another project`);
+      keyChange = { from: columns.key, to: key };
+    }
+    let fromItems = !!columns.progress_from_items;
+    if (b.progressFromItems !== undefined && !!b.progressFromItems !== fromItems) {
+      need("manage_systems");
+      fromItems = !!b.progressFromItems;
+    }
+    if (fromItems && b.progress !== undefined && b.progress !== current.progress) {
+      throw new HttpError(400, "This project takes its progress from its work items. Turn that off to set it by hand.");
+    }
+
     // Progress, status and maintenance are "progress updates": the assigned developer may post them.
     const touchesProgress =
       b.progress !== undefined || b.status !== undefined || b.health !== undefined || b.maintenanceNote !== undefined;
@@ -1838,7 +1945,11 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       if (result.added.length || result.removed.length) await audit(db, req, me, "system_developers", id, { name: next.name, ...result });
     }
 
-    const stmts = [db.prepare("UPDATE systems SET data = ? WHERE id = ?").bind(JSON.stringify(next), id)];
+    const stmts = [
+      db
+        .prepare("UPDATE systems SET data = ?, key = ?, progress_from_items = ? WHERE id = ?")
+        .bind(systemData(next), keyChange?.to ?? columns.key, fromItems ? 1 : 0, id),
+    ];
     if (pcnChange) await audit(db, req, me, "pcn_updated", id, pcnChange);
     // Posting progress answers any open update requests for this project.
     if (touchesProgress) stmts.push(db.prepare("DELETE FROM requests WHERE system_id = ?").bind(id));
@@ -1860,6 +1971,11 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
         { title: `${await nameOfUser(next.lead)} now leads ${next.name}`, body: `By ${me.name}.`, link: `#/projects/${id}` },
       );
     }
+    if (keyChange) await audit(db, req, me, "system_updated", id, { name: next.name, fields: ["key"], key: keyChange });
+    if (fromItems !== !!columns.progress_from_items) {
+      await audit(db, req, me, "system_updated", id, { name: next.name, fields: ["progressFromItems"], progressFromItems: { from: !fromItems, to: fromItems } });
+      if (fromItems) await recomputeProgress(itemCtx, id);
+    }
     if (changed.length) {
       await audit(db, req, me, "system_updated", id, {
         name: next.name,
@@ -1868,7 +1984,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
         ...(changed.includes("workspace") ? { workspace: { from: current.workspace ?? null, to: next.workspace ?? null } } : {}),
       });
     }
-    return json(pcnFor(next));
+    return json(pcnFor({ ...(await getSystem(db, id)), key: keyChange?.to ?? columns.key, ...(fromItems ? { progressFromItems: true } : {}) }));
   }
 
   if (sysMatch && method === "DELETE") {
@@ -1876,13 +1992,13 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     const id = sysMatch[1];
     const gone = await getSystem(db, id);
     await db.batch([
-      db.prepare("DELETE FROM systems WHERE id = ?").bind(id),
-      db.prepare("DELETE FROM requests WHERE system_id = ?").bind(id),
-      db.prepare("DELETE FROM assignments WHERE system_id = ?").bind(id),
-      db.prepare("DELETE FROM features WHERE system_id = ?").bind(id),
       db.prepare("DELETE FROM document_chunks WHERE doc_id IN (SELECT id FROM documents WHERE system_id = ?)").bind(id),
       db.prepare("DELETE FROM documents WHERE system_id = ?").bind(id),
+      db.prepare("DELETE FROM requests WHERE system_id = ?").bind(id),
+      db.prepare("DELETE FROM assignments WHERE system_id = ?").bind(id),
       db.prepare("DELETE FROM blockers WHERE system_id = ?").bind(id),
+      // Its work items (feature requests included), with their comments, links, history and time logs.
+      db.prepare("DELETE FROM systems WHERE id = ?").bind(id),
     ]);
     await audit(db, req, me, "system_deleted", id, { name: gone.name });
     return json({ ok: true });
@@ -1985,6 +2101,10 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
   if (docMatch && method === "GET") {
     const doc = await db.prepare("SELECT * FROM documents WHERE id = ? AND kind = 'file'").bind(docMatch[1]).first<Record<string, string>>();
     if (!doc) throw new HttpError(404, "Document not found");
+    if (doc.work_item_id && ownFeaturesOnly) {
+      const item = await itemById(itemCtx, doc.work_item_id);
+      if (!item || (item.assignee !== me.id && item.reporter !== me.id)) throw new HttpError(404, "Document not found");
+    }
     const chunks = await db.prepare("SELECT data FROM document_chunks WHERE doc_id = ? ORDER BY seq").bind(doc.id).all<{ data: ArrayBuffer | number[] }>();
     const parts = chunks.results.map((c) => new Uint8Array(c.data as ArrayBuffer));
     const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
@@ -2006,6 +2126,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
   if (docMatch && method === "DELETE") {
     const doc = await db.prepare("SELECT * FROM documents WHERE id = ?").bind(docMatch[1]).first<Record<string, string>>();
     if (!doc) throw new HttpError(404, "Document not found");
+    if (doc.work_item_id) throw new HttpError(400, "Remove attachments from their work item");
     if (doc.uploaded_by !== me.id && !can("manage_systems")) throw new HttpError(403, "Only whoever added it or a manager can remove a document");
     await db.batch([
       db.prepare("DELETE FROM document_chunks WHERE doc_id = ?").bind(doc.id),
@@ -2062,7 +2183,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       .all<{ id: number; at: string; user_id: string | null; actor: string; action: string; target: string; detail: string }>();
     return json(
       rows.results
-        .filter((r) => !ownFeaturesOnly || !r.action.startsWith("feature_") || r.user_id === me.id)
+        .filter((r) => !ownFeaturesOnly || !(r.action.startsWith("feature_") || ITEM_ACTIONS.has(r.action)) || r.user_id === me.id)
         .map((r) => ({
         id: r.id,
         at: r.at,
@@ -2150,49 +2271,37 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
   // Anyone with manage_features logs, edits and assigns them; the assigned developer keeps
   // the status and their notes current. With log_features (developers), people log requests
   // assigned to themselves or no one, and edit the details of the ones they logged.
-  const checkAssignee = async (v: unknown): Promise<string | null> => {
-    const id = text(v, "Developer");
-    if (!id) return null;
-    if (!(await db.prepare("SELECT 1 FROM users WHERE id = ? AND role = 'developer'").bind(id).first())) {
-      throw new HttpError(400, "Only users with the developer role can be assigned");
-    }
-    return id;
-  };
+  // Each feature request is a work item (source "client_request"); these endpoints keep their old
+  // shape and rules and run on the work item code underneath. The `features` view reads them back.
+  const featureRow = async (id: string) => (await db.prepare("SELECT * FROM features WHERE id = ?").bind(id).first<FeatureRow>())!;
+  const featureLabels = async (id: string) =>
+    (await db.prepare("SELECT label FROM work_item_labels WHERE item_id = ?").bind(id).all<{ label: string }>()).results.map((l) => l.label);
 
   if (path === "/api/features" && method === "POST") {
     if (!can("manage_features") && !can("log_features")) throw new HttpError(403, "You don't have permission to do that");
     const b = await body<Partial<Feature>>(req);
     if (!can("manage_features") && b.assignee && b.assignee !== me.id) throw new HttpError(403, "You can assign a request to yourself only. A manager assigns others.");
     const system = await getSystem(db, String(b.systemId ?? ""));
-    const status = oneOf(b.status ?? "NOT_STARTED", FEATURE_STATUSES, "status");
-    const f: FeatureRow = {
-      id: newToken().slice(0, 16),
-      system_id: system.id,
+    const fields = featureToItem({
+      systemId: system.id,
       title: text(b.title, "Feature", true)!,
       description: text(b.description, "Description") ?? "",
       kind: oneOf(b.kind ?? "CHANGE", FEATURE_KINDS, "request type"),
       client: text(b.client, "Requested by") ?? "",
-      status,
+      status: oneOf(b.status ?? "NOT_STARTED", FEATURE_STATUSES, "status"),
       priority: oneOf(b.priority ?? "MEDIUM", PRIORITIES, "priority"),
-      assignee: await checkAssignee(b.assignee),
+      assignee: b.assignee,
       notes: text(b.notes, "Notes") ?? null,
-      due_at: checkDate(b.dueAt, "Expected delivery"),
-      created_by: me.id,
-      created_at: now,
-      updated_at: now,
-      completed_at: status === "COMPLETED" ? now : null,
-    };
-    await db
-      .prepare(
-        `INSERT INTO features (id, system_id, title, description, kind, client, status, priority, assignee, notes, due_at, created_by, created_at, updated_at, completed_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .bind(f.id, f.system_id, f.title, f.description, f.kind, f.client, f.status, f.priority, f.assignee, f.notes, f.due_at, f.created_by, f.created_at, f.updated_at, f.completed_at)
-      .run();
+      dueAt: checkDate(b.dueAt, "Expected delivery"),
+    });
+    // The assignee hears about it below, in the feature request's own words.
+    const item = await createItem({ ...itemCtx, alert: () => undefined }, fields, "client_request");
+    const f = await featureRow(item.id);
     await audit(db, req, me, "feature_created", system.id, {
       name: system.name,
       title: f.title,
       priority: f.priority,
+      key: f.item_key,
       ...(f.client ? { client: f.client } : {}),
       ...(f.assignee ? { assignee: f.assignee } : {}),
     });
@@ -2205,7 +2314,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     return json(toFeature(f), 201);
   }
 
-  const featMatch = path.match(/^\/api\/features\/([a-f0-9]+)$/);
+  const featMatch = path.match(/^\/api\/features\/([a-z0-9-]+)$/);
   if (featMatch && method === "PATCH") {
     const row = await db.prepare("SELECT * FROM features WHERE id = ?").bind(featMatch[1]).first<FeatureRow>();
     if (!row) throw new HttpError(404, "Feature request not found");
@@ -2232,11 +2341,9 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     if (b.kind !== undefined) next.kind = oneOf(b.kind, FEATURE_KINDS, "request type");
     if (b.client !== undefined) next.client = text(b.client, "Requested by") ?? "";
     if (b.priority !== undefined) next.priority = oneOf(b.priority, PRIORITIES, "priority");
-    if (b.assignee !== undefined) next.assignee = await checkAssignee(b.assignee);
+    if (b.assignee !== undefined) next.assignee = text(b.assignee, "Developer") ?? null;
     if (b.dueAt !== undefined) next.due_at = checkDate(b.dueAt, "Expected delivery");
     if (b.systemId !== undefined) next.system_id = (await getSystem(db, String(b.systemId))).id;
-    if (next.status === "COMPLETED" && row.status !== "COMPLETED") next.completed_at = now;
-    if (next.status !== "COMPLETED") next.completed_at = null;
 
     const columns: Record<(typeof developerFields)[number] | (typeof otherFields)[number], keyof FeatureRow> = {
       status: "status",
@@ -2252,40 +2359,39 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     };
     const changed = (Object.keys(columns) as (keyof typeof columns)[]).filter((k) => next[columns[k]] !== row[columns[k]]);
     if (!changed.length) return json(toFeature(row));
-    next.updated_at = now;
-    await db
-      .prepare(
-        `UPDATE features SET system_id = ?, title = ?, description = ?, kind = ?, client = ?, status = ?, priority = ?,
-         assignee = ?, notes = ?, due_at = ?, updated_at = ?, completed_at = ? WHERE id = ?`,
-      )
-      .bind(next.system_id, next.title, next.description, next.kind, next.client, next.status, next.priority, next.assignee, next.notes, next.due_at, next.updated_at, next.completed_at, row.id)
-      .run();
-    const sys = await db.prepare("SELECT data FROM systems WHERE id = ?").bind(next.system_id).first<{ data: string }>();
-    await audit(db, req, me, "feature_updated", next.system_id, {
-      name: sys ? JSON.parse(sys.data).name : next.system_id,
-      title: next.title,
+    const item = (await itemById(itemCtx, row.id))!;
+    const given = Object.fromEntries(changed.map((k) => [k, next[columns[k]]])) as Parameters<typeof featureToItem>[0];
+    const res = await applyChange(itemCtx, item, featureToItem(given, { type: item.type, status: item.status, labels: await featureLabels(row.id) }));
+    await afterChange(itemCtx, res, false);
+    const saved = await featureRow(row.id);
+    const sys = await db.prepare("SELECT data FROM systems WHERE id = ?").bind(saved.system_id).first<{ data: string }>();
+    await audit(db, req, me, "feature_updated", saved.system_id, {
+      name: sys ? JSON.parse(sys.data).name : saved.system_id,
+      title: saved.title,
+      key: saved.item_key,
       fields: changed,
-      ...(changed.includes("status") ? { status: { from: row.status, to: next.status } } : {}),
-      ...(changed.includes("priority") ? { priority: { from: row.priority, to: next.priority } } : {}),
-      ...(changed.includes("assignee") ? { assignee: { from: row.assignee, to: next.assignee } } : {}),
+      ...(changed.includes("status") ? { status: { from: row.status, to: saved.status } } : {}),
+      ...(changed.includes("priority") ? { priority: { from: row.priority, to: saved.priority } } : {}),
+      ...(changed.includes("assignee") ? { assignee: { from: row.assignee, to: saved.assignee } } : {}),
+      ...(changed.includes("systemId") ? { movedFrom: row.item_key } : {}),
     });
-    if (changed.includes("assignee") && next.assignee) {
-      const project = sys ? (JSON.parse(sys.data) as System).name : next.system_id;
+    if (changed.includes("assignee") && saved.assignee) {
+      const project = sys ? (JSON.parse(sys.data) as System).name : saved.system_id;
       alert(
-        [{ userId: next.assignee, kind: "assigned", title: `Request assigned to you: ${next.title}`, body: `${project}, ${next.priority.toLowerCase()} priority. From ${me.name}.`, link: "view:features" }],
-        { title: `${await nameOfUser(next.assignee)} was assigned "${next.title}"`, body: `${project}, ${next.priority.toLowerCase()} priority. From ${me.name}.`, link: `#/projects/${next.system_id}` },
+        [{ userId: saved.assignee, kind: "assigned", title: `Request assigned to you: ${saved.title}`, body: `${project}, ${saved.priority.toLowerCase()} priority. From ${me.name}.`, link: "view:features" }],
+        { title: `${await nameOfUser(saved.assignee)} was assigned "${saved.title}"`, body: `${project}, ${saved.priority.toLowerCase()} priority. From ${me.name}.`, link: `#/projects/${saved.system_id}` },
       );
     }
-    return json(toFeature(next));
+    return json(toFeature(saved));
   }
 
   if (featMatch && method === "DELETE") {
     need("manage_features");
     const row = await db.prepare("SELECT * FROM features WHERE id = ?").bind(featMatch[1]).first<FeatureRow>();
     if (!row) throw new HttpError(404, "Feature request not found");
-    await db.prepare("DELETE FROM features WHERE id = ?").bind(row.id).run();
+    await deleteItem(itemCtx, (await itemById(itemCtx, row.id))!);
     const sys = await db.prepare("SELECT data FROM systems WHERE id = ?").bind(row.system_id).first<{ data: string }>();
-    await audit(db, req, me, "feature_deleted", row.system_id, { name: sys ? JSON.parse(sys.data).name : row.system_id, title: row.title });
+    await audit(db, req, me, "feature_deleted", row.system_id, { name: sys ? JSON.parse(sys.data).name : row.system_id, title: row.title, key: row.item_key });
     return json({ ok: true });
   }
 
@@ -2441,10 +2547,11 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       ]);
       if (added.length) alert(await projectAlerts(row.id, added));
     }
-    // Feature requests can only be assigned to developers.
+    // Feature requests can only be assigned to developers, and Standard users can't be assigned work.
     if (role !== "developer" && row.role === "developer") {
-      await db.prepare("UPDATE features SET assignee = NULL WHERE assignee = ?").bind(row.id).run();
+      await db.prepare("UPDATE work_items SET assignee = NULL WHERE assignee = ? AND source = 'client_request'").bind(row.id).run();
     }
+    if (role === "viewer" && row.role !== "viewer") await db.prepare("UPDATE work_items SET assignee = NULL WHERE assignee = ?").bind(row.id).run();
     // A password reset signs the user out everywhere.
     if (b.password) await db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(row.id).run();
     const fieldsChanged = (["name", "title", "email", "phone"] as const).filter((f) => {
@@ -2481,7 +2588,8 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       db.prepare("DELETE FROM assignments WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM notifications WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM login_failures WHERE user_id = ?").bind(userMatch[1]),
-      db.prepare("UPDATE features SET assignee = NULL WHERE assignee = ?").bind(userMatch[1]),
+      db.prepare("UPDATE work_items SET assignee = NULL WHERE assignee = ?").bind(userMatch[1]),
+      db.prepare("DELETE FROM work_item_watchers WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM users WHERE id = ?").bind(userMatch[1]),
     ]);
     await audit(db, req, me, "user_deleted", userMatch[1], { name: row.name, username: row.username, role: row.role });

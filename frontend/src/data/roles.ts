@@ -13,6 +13,10 @@ export type Permission =
   | "propose_projects" // propose a new project with a Project Concept Note (starts as an Idea)
   | "log_features" // log feature requests (assigned to yourself or no one) and edit the ones you logged
   | "manage_features" // log client feature requests, set their priority and assign developers
+  | "create_work_items" // create work items (assigned to yourself or no one, unless you may edit any)
+  | "edit_work_items" // edit and assign any work item; without it you edit the items assigned to you or that you reported
+  | "delete_work_items" // delete work items
+  | "log_time" // log time spent on the work items you can see
   | "reports" // generate and download reports
   | "manage_users" // create users, assign roles/projects, change permissions
   | "audit_log"; // view the activity log: sign-ins, failed sign-ins and every change
@@ -37,6 +41,10 @@ export const PERMISSIONS: { key: Permission; label: string }[] = [
   { key: "propose_projects", label: "Propose new projects with a Concept Note" },
   { key: "log_features", label: "Log feature requests" },
   { key: "manage_features", label: "Log and assign feature requests" },
+  { key: "create_work_items", label: "Create work items" },
+  { key: "edit_work_items", label: "Edit and assign any work item" },
+  { key: "delete_work_items", label: "Delete work items" },
+  { key: "log_time", label: "Log time on work items" },
   { key: "reports", label: "Generate reports" },
   { key: "manage_users", label: "Manage users, roles and permissions" },
   { key: "audit_log", label: "View the activity log" },
@@ -46,10 +54,10 @@ export type RolePermissions = Record<Role, Permission[]>;
 
 export const DEFAULT_ROLE_PERMISSIONS: RolePermissions = {
   admin: PERMISSIONS.map((p) => p.key),
-  manager: ["request_updates", "propose_projects", "manage_features", "assign_developers", "reports"],
-  team_lead: ["manage_systems", "assign_developers", "request_updates", "propose_projects", "manage_features", "reports"],
-  assistant: ["request_updates", "propose_projects", "reports"],
-  developer: ["edit_assigned", "propose_projects", "log_features"],
+  manager: ["request_updates", "propose_projects", "manage_features", "assign_developers", "reports", "create_work_items", "edit_work_items", "delete_work_items", "log_time"],
+  team_lead: ["manage_systems", "assign_developers", "request_updates", "propose_projects", "manage_features", "reports", "create_work_items", "edit_work_items", "delete_work_items", "log_time"],
+  assistant: ["request_updates", "propose_projects", "reports", "create_work_items"],
+  developer: ["edit_assigned", "propose_projects", "log_features", "create_work_items", "log_time"],
   viewer: [],
 };
 

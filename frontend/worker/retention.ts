@@ -26,12 +26,14 @@ export async function purgeExpired(db: D1Database, now = Date.now()): Promise<Re
     ["webauthn_challenges", db.prepare("DELETE FROM webauthn_challenges WHERE expires_at < ?").bind(now)],
     ["mfa_recovery", db.prepare("DELETE FROM mfa_recovery WHERE used_at IS NOT NULL")],
     // Left behind by people removed before every table was cleared on removal.
-    ...(["passkeys", "mfa_help_requests", "notifications", "password_history", "login_failures"] as const).map(
+    ...(["passkeys", "mfa_help_requests", "notifications", "password_history", "login_failures", "work_item_watchers"] as const).map(
       (t): [string, D1PreparedStatement] => [
         `${t} (removed users)`,
         db.prepare(`DELETE FROM ${t} WHERE user_id NOT IN (SELECT id FROM users)`),
       ],
     ),
+    // An attachment's file outlives its document only if a removal was interrupted.
+    ["document_chunks (orphaned)", db.prepare("DELETE FROM document_chunks WHERE doc_id NOT IN (SELECT id FROM documents)")],
   ];
   const results = await db.batch(steps.map(([, s]) => s));
   return Object.fromEntries(steps.map(([name], i) => [name, results[i].meta.changes ?? 0]));

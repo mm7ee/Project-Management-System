@@ -1,5 +1,6 @@
 // Feature requests: work a client asks for on a project, new or already delivered.
-// Shared by the UI and the Worker; the requests themselves live in the D1 `features` table.
+// Shared by the UI and the Worker. Each request is a work item (source "client_request"); the
+// `features` database view shows them in the shape below.
 
 export type FeatureKind = "NEW_MODULE" | "CHANGE" | "ENHANCEMENT" | "BUG_FIX";
 export type FeatureStatus = "NOT_STARTED" | "IN_PROGRESS" | "ON_HOLD" | "TESTING" | "COMPLETED" | "CANCELLED";
@@ -21,6 +22,7 @@ export interface Feature {
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
+  key?: string; // the work item it is (INFRA-12): every feature request is a work item
 }
 
 export const KIND_META: Record<FeatureKind, string> = {

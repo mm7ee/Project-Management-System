@@ -18,7 +18,8 @@ if (mode !== "seed" && mode !== "remove") {
 
 const REMOVE = `-- Removes every demo record (ids starting "demo-").
 DELETE FROM assignments WHERE system_id LIKE 'demo-%' OR user_id LIKE 'demo-%';
-DELETE FROM features WHERE id LIKE 'demo-%';
+DELETE FROM document_chunks WHERE doc_id IN (SELECT id FROM documents WHERE work_item_id LIKE 'demo-%');
+DELETE FROM work_items WHERE id LIKE 'demo-%';
 DELETE FROM blockers WHERE id LIKE 'demo-%';
 DELETE FROM documents WHERE id LIKE 'demo-%';
 DELETE FROM requests WHERE id LIKE 'demo-%';
@@ -241,11 +242,39 @@ PROJECTS.forEach(([name, status, description, leadKey, devKeys, startedDays, len
     s.pcnBy = lead;
   }
   systems.push(s);
-  out.push(`INSERT INTO systems (id, sort, data) VALUES (${q(id)}, ${1000 + i}, ${q(JSON.stringify(s))});`);
+  // A temporary key; the block after the projects gives each a proper one that no real project uses.
+  out.push(`INSERT INTO systems (id, sort, data, key) VALUES (${q(id)}, ${1000 + i}, ${q(JSON.stringify(s))}, ${q(`QQ${String.fromCharCode(65 + Math.floor(i / 26))}${String.fromCharCode(65 + (i % 26))}`)});`);
   // Completed projects keep their lead but no longer hold developers' project slots.
   if (status !== "COMPLETED") for (const d of devKeys) out.push(`INSERT INTO assignments (user_id, system_id) VALUES (${q(P[d])}, ${q(id)}) ON CONFLICT DO NOTHING;`);
 });
 // Anesu ends up on four projects: one over the limit, to show the overload flag and suggestions.
+
+// Project keys, the way Pulse suggests them (initials, or the first five letters of a one-word name),
+// with a letter added where a real project already has that key.
+out.push(`DO $$
+DECLARE r RECORD; words TEXT[]; kept TEXT[]; w TEXT; base TEXT; cand TEXT; n INTEGER;
+BEGIN
+  FOR r IN SELECT id, data FROM systems WHERE id LIKE 'demo-%' ORDER BY sort LOOP
+    words := ARRAY(SELECT x FROM regexp_split_to_table(upper(COALESCE(r.data::json ->> 'name', '')), '[^A-Z]+') AS x WHERE x <> '');
+    kept := ARRAY(SELECT x FROM unnest(words) AS x WHERE x NOT IN ('A', 'AN', 'AND', 'FOR', 'IN', 'OF', 'ON', 'THE', 'TO', 'WITH'));
+    IF COALESCE(array_length(kept, 1), 0) >= 2 THEN words := kept; END IF;
+    IF COALESCE(array_length(words, 1), 0) >= 2 THEN
+      base := ''; FOREACH w IN ARRAY words LOOP base := base || left(w, 1); END LOOP; base := left(base, 10);
+    ELSIF COALESCE(array_length(words, 1), 0) = 1 THEN base := rpad(left(words[1], 5), 2, 'X');
+    ELSE base := 'PRJ'; END IF;
+    cand := base; n := 0;
+    WHILE EXISTS (SELECT 1 FROM systems WHERE key = cand AND id <> r.id) LOOP
+      n := n + 1;
+      cand := CASE WHEN n <= 26 THEN left(base, 9) || chr(64 + n) ELSE left(base, 8) || chr(64 + (n - 1) / 26) || chr(65 + (n - 1) % 26) END;
+    END LOOP;
+    UPDATE systems SET key = cand WHERE id = r.id;
+  END LOOP;
+END $$;`);
+
+// Work items, collected here and written out (numbered per project, oldest first) after the requests.
+const items = [];
+const KIND_LABEL = { NEW_MODULE: "new-module", CHANGE: "change", ENHANCEMENT: "enhancement", BUG_FIX: "bug-fix" };
+const addDays = (iso, days) => new Date(Date.parse(iso) + days * DAY).toISOString();
 
 // ---------- feature requests ----------
 const REQUESTS = [
@@ -297,25 +326,256 @@ for (let i = 0; i < reqCount; i++) {
           ? "Back end done; working on the screens."
           : null;
   const created = ago(createdDays, between(8, 16));
+  const updated = completedDays ? ago(completedDays, 15) : ago(Math.max(0, createdDays - between(1, 10)), 14);
+  const work = { NOT_STARTED: "TODO", IN_PROGRESS: "IN_PROGRESS", ON_HOLD: "IN_PROGRESS", TESTING: "IN_REVIEW", COMPLETED: "DONE", CANCELLED: "DONE" }[status];
+  // How it moved: To Do, then on through the statuses to where it is now.
+  const path = { TODO: ["TODO"], IN_PROGRESS: ["TODO", "IN_PROGRESS"], IN_REVIEW: ["TODO", "IN_PROGRESS", "IN_REVIEW"], DONE: status === "CANCELLED" ? ["TODO", "DONE"] : ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"] }[work];
+  items.push({
+    id: `demo-fr-${i + 1}`,
+    systemId: sys.id,
+    type: kind === "BUG_FIX" ? "BUG" : "STORY",
+    summary: title,
+    description,
+    status: work,
+    resolution: status === "COMPLETED" ? "DONE" : status === "CANCELLED" ? "WONT_DO" : null,
+    onHold: status === "ON_HOLD",
+    priority: priority === "CRITICAL" ? "HIGHEST" : priority,
+    assignee,
+    reporter: pick([P.Vimbai, P.Tarisai, P.Thamani]),
+    due: dateAgo(dueDays),
+    created,
+    updated,
+    resolved: work === "DONE" ? updated : null,
+    source: "client_request",
+    client: CLIENTS[(i * 3) % CLIENTS.length],
+    notes,
+    labels: [KIND_LABEL[kind]],
+    path,
+  });
+}
+
+// ---------- work items in flight ----------
+// Each project being built gets epics broken into stories, tasks and bugs (some with sub-tasks), done
+// in line with the project's progress, with estimates, logged time, comments and links.
+const EPICS = [
+  [
+    "Discovery and design",
+    [
+      ["STORY", "Map the current process with operations", "Sit with two team leaders and write down every step, form and spreadsheet used today."],
+      ["TASK", "Write the solution design", "Screens, data model, integrations and the go-live plan, for sign-off."],
+      ["STORY", "Agree the reporting the client needs", "Which figures, how often, and who receives them."],
+    ],
+  ],
+  [
+    "Build the core screens",
+    [
+      ["STORY", "Agents can search and open a record", "Search by name, phone number or reference; open the full history in one click."],
+      ["STORY", "Supervisors see the live queue", "Waiting items, oldest first, with who is working on each."],
+      ["TASK", "Set up the API and database", "Tables, migrations and the first endpoints, with tests."],
+      ["BUG", "Search times out on large result sets", "Searching a common surname takes over 30 seconds and then fails."],
+    ],
+  ],
+  [
+    "Testing and go-live",
+    [
+      ["TASK", "Write the UAT test scripts", "One script per user journey, with expected results."],
+      ["STORY", "Pilot with one campaign", "Two weeks on one campaign before everyone moves across."],
+      ["TASK", "Train team leaders", "A one-hour session per shift, and a one-page guide."],
+      ["BUG", "Dates show in the wrong time zone", "Times on the history tab are two hours behind Harare time."],
+    ],
+  ],
+];
+const SUBTASKS = ["Front end", "Back end", "Tests"];
+const COMMENTS = [
+  "@demo.vimbai can you confirm the client signed off the design before we start?",
+  "Done on my side. **Ready for review**; the test steps are in the description.",
+  "Blocked until we get test data. @demo.tarisai please chase the client.",
+  "Found the cause: the index on `customer_name` was missing. Fixed and re-tested.",
+  "Moving this to next week: the pilot campaign starts on Monday.",
+  "Looks good. One small change: show the date as *dd Mmm yyyy* to match the rest of Pulse.",
+];
+const inFlight = systems.filter((s) => ["WIP", "TESTING", "TO_DEPLOY"].includes(s.status));
+let n = 0;
+const comments = [];
+const links = [];
+const workLogs = [];
+for (const sys of inFlight) {
+  const project = PROJECTS.find((p) => `demo-${slug(p[0])}` === sys.id);
+  const devs = project[4].length ? project[4].map((d) => P[d]) : [sys.lead];
+  const startedDays = Math.max(5, Math.round((NOW - Date.parse(sys.startedAt)) / DAY));
+  const leaves = EPICS.reduce((t, [, kids]) => t + kids.length, 0);
+  let leaf = 0;
+  EPICS.forEach(([epicName, kids], e) => {
+    const epicCreated = ago(Math.max(1, startedDays - e * 5), 9);
+    const epic = {
+      id: `demo-wi-${++n}`,
+      systemId: sys.id,
+      type: "EPIC",
+      summary: epicName,
+      description: `Everything for **${epicName.toLowerCase()}** on ${sys.name}.`,
+      priority: "HIGH",
+      assignee: sys.lead,
+      reporter: P.Tarisai,
+      created: epicCreated,
+      source: "internal",
+      labels: [],
+    };
+    items.push(epic);
+    const done = [];
+    kids.forEach(([type, summary, description], k) => {
+      // Done in order, in step with the project's progress; the next ones are under way.
+      const share = leaf++ / leaves;
+      const status = share < sys.progress / 100 ? "DONE" : share < sys.progress / 100 + 0.12 ? "IN_REVIEW" : share < sys.progress / 100 + 0.25 ? "IN_PROGRESS" : "TODO";
+      const created = addDays(epicCreated, k + 1);
+      const daysIn = Math.max(1, Math.round((NOW - Date.parse(created)) / DAY));
+      const updated = status === "TODO" ? created : ago(between(0, Math.min(daysIn - 1, 20)), 13);
+      const estimate = pick([240, 480, 960, 1440]);
+      const assignee = devs[(e + k) % devs.length];
+      const item = {
+        id: `demo-wi-${++n}`,
+        systemId: sys.id,
+        type,
+        parentId: epic.id,
+        summary,
+        description,
+        status,
+        resolution: status === "DONE" ? "DONE" : null,
+        priority: type === "BUG" ? pick(["HIGHEST", "HIGH"]) : pick(["HIGH", "MEDIUM", "MEDIUM", "LOW"]),
+        assignee,
+        reporter: pick([P.Vimbai, P.Tarisai, sys.lead]),
+        created,
+        updated,
+        resolved: status === "DONE" ? updated : null,
+        start: created.slice(0, 10),
+        due: dateAgo(Math.round(daysIn / 2) - between(5, 25)),
+        estimate,
+        remaining: status === "DONE" ? 0 : status === "TODO" ? estimate : Math.round(estimate / 2),
+        points: type === "BUG" ? null : pick([1, 2, 3, 5, 8]),
+        component: pick(["Front end", "Back end", "Reports", "Integrations"]),
+        source: "internal",
+        labels: type === "BUG" ? ["defect"] : k === 0 ? ["client-facing"] : [],
+        path: { TODO: ["TODO"], IN_PROGRESS: ["TODO", "IN_PROGRESS"], IN_REVIEW: ["TODO", "IN_PROGRESS", "IN_REVIEW"], DONE: ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"] }[status],
+      };
+      items.push(item);
+      if (status !== "TODO") {
+        for (let w = 0; w < between(1, 3); w++) {
+          workLogs.push({ itemId: item.id, userId: assignee, minutes: pick([60, 90, 120, 180, 240]), note: pick(["Build", "Fixes after review", "Testing", "Pairing with the lead", ""]), day: ago(between(0, Math.min(daysIn - 1, 25))).slice(0, 10) });
+        }
+      }
+      // Stories get sub-tasks, done as the story is.
+      if (type === "STORY" && k % 2 === 0) {
+        SUBTASKS.forEach((st, j) => {
+          const subDone = status === "DONE" || (status !== "TODO" && j === 0);
+          items.push({
+            id: `demo-wi-${++n}`,
+            systemId: sys.id,
+            type: "SUBTASK",
+            parentId: item.id,
+            summary: `${st}: ${summary.toLowerCase()}`,
+            description: "",
+            status: subDone ? "DONE" : status === "TODO" ? "TODO" : "IN_PROGRESS",
+            resolution: subDone ? "DONE" : null,
+            priority: item.priority,
+            assignee,
+            reporter: assignee,
+            created: addDays(created, 1),
+            updated: subDone ? updated : addDays(created, 1),
+            resolved: subDone ? updated : null,
+            source: "internal",
+            labels: [],
+            path: subDone ? ["TODO", "IN_PROGRESS", "DONE"] : status === "TODO" ? ["TODO"] : ["TODO", "IN_PROGRESS"],
+          });
+        });
+      }
+      if (rand() < 0.45) {
+        for (let c = 0; c < between(1, 3); c++) {
+          comments.push({ itemId: item.id, authorId: pick([assignee, P.Vimbai, P.Tarisai, sys.lead]), body: pick(COMMENTS), at: addDays(created, c + 1) });
+        }
+      }
+      done.push(item);
+    });
+    // A bug that holds up a story, and work that relates across the epic.
+    const bug = done.find((x) => x.type === "BUG");
+    const story = done.find((x) => x.type === "STORY");
+    if (bug && story) links.push({ from: bug.id, to: story.id, type: "BLOCKS", at: bug.created, by: bug.reporter });
+    if (done.length > 2) links.push({ from: done[0].id, to: done[2].id, type: "RELATES", at: done[2].created, by: done[0].reporter });
+  });
+}
+
+// Numbered per project, oldest first, as Pulse would have numbered them.
+items.sort((a, b) => a.created.localeCompare(b.created));
+const counters = {};
+for (const it of items) it.number = counters[it.systemId] = (counters[it.systemId] ?? 0) + 1;
+for (const it of items) {
+  it.updated ??= it.created;
+  // An epic is done when everything in it is.
+  if (it.type === "EPIC") {
+    const kids = items.filter((x) => x.parentId === it.id);
+    const allDone = kids.length && kids.every((x) => x.status === "DONE");
+    it.status = allDone ? "DONE" : kids.some((x) => x.status !== "TODO") ? "IN_PROGRESS" : "TODO";
+    it.resolution = allDone ? "DONE" : null;
+    it.updated = kids.reduce((m, x) => (x.updated > m ? x.updated : m), it.created);
+    it.resolved = allDone ? it.updated : null;
+    it.path = allDone ? ["TODO", "IN_PROGRESS", "DONE"] : it.status === "IN_PROGRESS" ? ["TODO", "IN_PROGRESS"] : ["TODO"];
+  }
   out.push(
-    `INSERT INTO features (id, system_id, title, description, kind, client, status, priority, assignee, notes, due_at, created_by, created_at, updated_at, completed_at) VALUES (${[
-      q(`demo-fr-${i + 1}`),
-      q(sys.id),
-      q(title),
-      q(description),
-      q(kind),
-      q(CLIENTS[(i * 3) % CLIENTS.length]),
-      q(status),
-      q(priority),
-      q(assignee),
-      q(notes),
-      q(dateAgo(dueDays)),
-      q(pick([P.Vimbai, P.Tarisai, P.Thamani])),
-      q(created),
-      q(completedDays ? ago(completedDays, 15) : ago(Math.max(0, createdDays - between(1, 10)), 14)),
-      q(completedDays ? ago(completedDays, 15) : null),
+    `INSERT INTO work_items (id, system_id, number, type, parent_id, summary, description, status, resolution, on_hold, priority, assignee, reporter, component, story_points, original_estimate, remaining_estimate, start_date, due_date, created_at, updated_at, resolved_at, source, client, notes) VALUES (${[
+      q(it.id),
+      q(it.systemId),
+      it.number,
+      q(it.type),
+      q(it.parentId ?? null),
+      q(it.summary),
+      q(it.description ?? ""),
+      q(it.status),
+      q(it.resolution ?? null),
+      it.onHold ? 1 : 0,
+      q(it.priority),
+      q(it.assignee ?? null),
+      q(it.reporter),
+      q(it.component ?? null),
+      it.points ?? "NULL",
+      it.estimate ?? "NULL",
+      it.remaining ?? "NULL",
+      q(it.start ?? null),
+      q(it.due ?? null),
+      q(it.created),
+      q(it.updated),
+      q(it.resolved ?? null),
+      q(it.source),
+      q(it.client ?? null),
+      q(it.notes ?? null),
     ].join(", ")});`,
   );
+  for (const l of it.labels) out.push(`INSERT INTO work_item_labels (item_id, label) VALUES (${q(it.id)}, ${q(l)});`);
+  for (const u of new Set([it.reporter, it.assignee].filter(Boolean))) {
+    out.push(`INSERT INTO work_item_watchers (item_id, user_id, created_at) VALUES (${q(it.id)}, ${q(u)}, ${q(it.created)}) ON CONFLICT DO NOTHING;`);
+  }
+  // Its status history: created in To Do, then each move spread between creation and the last update.
+  const steps = it.path ?? ["TODO"];
+  steps.forEach((to, i) => {
+    const at = i === 0 ? it.created : new Date(Date.parse(it.created) + ((Date.parse(it.updated) - Date.parse(it.created)) * i) / (steps.length - 1)).toISOString();
+    out.push(
+      `INSERT INTO status_history (item_id, from_status, to_status, changed_by, changed_at) VALUES (${q(it.id)}, ${i ? q(steps[i - 1]) : "NULL"}, ${q(to)}, ${q(i ? (it.assignee ?? it.reporter) : it.reporter)}, ${q(at)});`,
+    );
+  });
+}
+comments.forEach((c, i) =>
+  out.push(`INSERT INTO work_item_comments (id, item_id, author_id, body, created_at) VALUES (${q(`demo-c-${i + 1}`)}, ${q(c.itemId)}, ${q(c.authorId)}, ${q(c.body)}, ${q(c.at)});`),
+);
+links.forEach((l, i) =>
+  out.push(`INSERT INTO work_item_links (id, from_id, to_id, link_type, created_by, created_at) VALUES (${q(`demo-l-${i + 1}`)}, ${q(l.from)}, ${q(l.to)}, ${q(l.type)}, ${q(l.by)}, ${q(l.at)});`),
+);
+workLogs.forEach((w, i) =>
+  out.push(`INSERT INTO work_logs (id, item_id, user_id, minutes, note, work_date, created_at) VALUES (${q(`demo-wl-${i + 1}`)}, ${q(w.itemId)}, ${q(w.userId)}, ${w.minutes}, ${q(w.note)}, ${q(w.day)}, ${q(`${w.day}T16:00:00.000Z`)});`),
+);
+out.push(`UPDATE systems SET item_seq = COALESCE((SELECT MAX(number) FROM work_items w WHERE w.system_id = systems.id), 0) WHERE id LIKE 'demo-%';`);
+// One project takes its progress from its work items, to show how that reads.
+{
+  const sys = inFlight[0];
+  const leavesOf = items.filter((x) => x.systemId === sys.id && ["STORY", "TASK", "BUG"].includes(x.type) && x.resolution !== "WONT_DO");
+  const pct = leavesOf.length ? Math.round((leavesOf.filter((x) => x.status === "DONE").length / leavesOf.length) * 100) : 0;
+  out.push(`UPDATE systems SET progress_from_items = 1, data = jsonb_set(data::jsonb, '{progress}', '${pct}')::text WHERE id = ${q(sys.id)};`);
 }
 
 // ---------- blockers ----------

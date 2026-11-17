@@ -6,6 +6,7 @@ import { templateDueDate, type ProjectTemplate } from "../data/templates";
 import DeveloperPicker from "./DeveloperPicker";
 import { emptyPcn, pcnMissing, type Pcn } from "../data/pcn";
 import { PcnForm } from "./Pcn";
+import { KEY_PATTERN, suggestKey } from "../data/workitems";
 
 interface Props {
   workspaces: string[];
@@ -33,6 +34,11 @@ export default function AddSystemModal({ workspaces, initialWorkspace = "", user
   const [dueFromTemplate, setDueFromTemplate] = useState(false); // due date still the template's suggestion
   const [deleting, setDeleting] = useState<string | null>(null);
   const [name, setName] = useState("");
+  // The project key: suggested from the name until someone types their own.
+  const [keyDraft, setKeyDraft] = useState<string | null>(null);
+  const takenKeys = systems.map((s) => s.key ?? "");
+  const key = keyDraft ?? (name.trim() ? suggestKey(name, takenKeys) : "");
+  const keyProblem = !key ? "" : !KEY_PATTERN.test(key) ? "2 to 10 capital letters" : takenKeys.includes(key) ? `${key} is taken by another project` : "";
   const [description, setDescription] = useState("");
   const [workspace, setWorkspace] = useState(workspaces.includes(initialWorkspace) ? initialWorkspace : (workspaces[0] ?? ""));
   const [url, setUrl] = useState("");
@@ -231,8 +237,10 @@ export default function AddSystemModal({ workspaces, initialWorkspace = "", user
         onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => {
           e.preventDefault();
+          if (keyProblem) return;
           onSave({
             name: name.trim(),
+            ...(key ? { key } : {}),
             description: description.trim(),
             url: url.trim(),
             ...(workspace ? { workspace } : {}),
@@ -268,6 +276,21 @@ export default function AddSystemModal({ workspaces, initialWorkspace = "", user
         <label className="field">
           <span>Name</span>
           <input required autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Leave Planner" />
+        </label>
+
+        <label className="field">
+          <span>Key</span>
+          <input
+            className="mono"
+            value={key}
+            onChange={(e) => setKeyDraft(e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 10))}
+            placeholder="e.g. LP"
+            aria-describedby="key-hint"
+            aria-invalid={!!keyProblem}
+          />
+          <small id="key-hint" className={keyProblem ? "form-error" : "field-hint"}>
+            {keyProblem || `Its work items will be numbered ${key || "KEY"}-1, ${key || "KEY"}-2… You can change the key until the first one exists.`}
+          </small>
         </label>
 
         <label className="field">

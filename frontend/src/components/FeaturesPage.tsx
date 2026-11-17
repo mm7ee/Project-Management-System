@@ -71,7 +71,7 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
             ? [f.client]
             : searchIn === "developer"
               ? [developerOf(f)]
-              : [f.title, f.description, f.client, f.notes ?? "", projectOf(f), developerOf(f), KIND_META[f.kind]];
+              : [f.title, f.description, f.client, f.notes ?? "", projectOf(f), developerOf(f), KIND_META[f.kind], f.key ?? ""];
     // Every word must appear somewhere in the chosen fields, so "lms export" finds an export request on the LMS.
     const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
     return scoped
@@ -332,6 +332,7 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
                       <span className="feature-cell">
                         <b>{f.title}</b>
                         <small>
+                          {f.key && <span className="mono wi-key-inline">{f.key}</span>}
                           {KIND_META[f.kind]}
                           {f.client ? ` · for ${f.client}` : ""}
                           {f.notes && (

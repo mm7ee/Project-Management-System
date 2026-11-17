@@ -25,6 +25,7 @@ import { STAGES, STAGE_COLOR, TooltipLayer, stageOf } from "./reports/chartKit";
 import { WorkloadBars } from "./reports/Charts";
 import { Columns, Donut, Sparkline, TrendChart } from "./reports/DashCharts";
 import Panel from "./Panel";
+import MyWork from "./MyWork";
 
 interface Props {
   me: User;
@@ -39,6 +40,7 @@ interface Props {
   isMine: (s: System) => boolean;
   onOpen: (id: string) => void;
   onTab: (f: Filter) => void; // open the Projects page on a tab
+  showMyWork?: boolean; // signed in (not a view-only link): your own work items
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -51,7 +53,7 @@ const SCHEDULE_COLOR: Record<Schedule, string> = {
 };
 
 /** The analytical home page, laid out like an admin dashboard: figures, trends, breakdowns, activity. */
-export default function DashboardPage({ systems, users, features, blockers, documents, limits, now, isMine, onOpen, onTab }: Props) {
+export default function DashboardPage({ systems, users, features, blockers, documents, limits, now, isMine, onOpen, onTab, showMyWork = false }: Props) {
   const [range, setRange] = useState<"year" | "12m">("year");
   const [stageScope, setStageScope] = useState<"all" | "mine">("all");
   const name = (id?: string) => users.find((u) => u.id === id)?.name;
@@ -417,8 +419,10 @@ export default function DashboardPage({ systems, users, features, blockers, docu
           </Panel>
         </div>
 
+        {showMyWork && <MyWork systems={systems} now={now} />}
+
         {mine.length > 0 && (
-          <Panel title="Your work" action={<span className="d-hint">projects you're on or lead</span>}>
+          <Panel title="Your projects" action={<span className="d-hint">projects you're on or lead</span>}>
             <ul className="dash-mine">
               {mine.map((s) => {
                 const sched = SCHEDULE_META[getSchedule(s, now)];

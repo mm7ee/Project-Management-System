@@ -1,7 +1,7 @@
 // The System shape and the status/schedule rules, shared by the UI and the Worker.
 
 import type { Pcn } from "./pcn";
-// The systems themselves live in the D1 database (seeded by migrations/0002_seed.sql).
+// The systems themselves live in the database's systems table.
 
 export type Status = "LIVE" | "COMPLETED" | "WIP" | "TESTING" | "TO_DEPLOY" | "UPCOMING" | "IDEA";
 export type Health = "Stable" | "Maintenance";
@@ -9,6 +9,9 @@ export type Schedule = "ON_TRACK" | "AT_RISK" | "OVERDUE" | "DONE" | "UNSCHEDULE
 
 export interface System {
   id: string;
+  key?: string; // 2–10 capital letters; its work items are KEY-1, KEY-2… (fixed once the first exists)
+  progressFromItems?: boolean; // progress is the share of its work items that are done
+  hasWorkItems?: boolean; // at least one work item exists, so the key is fixed
   name: string;
   short: string; // 2–3 letter monogram for the icon tile
   description: string;

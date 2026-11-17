@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Bell, CheckCheck, FileSignature, Lock, MessageSquare, Newspaper, Sparkles, Sunrise, UserPlus, X } from "lucide-react";
+import { ArrowLeft, AtSign, Bell, CheckCheck, Eye, FileSignature, Lock, MessageSquare, Newspaper, Sparkles, Sunrise, UserPlus, X } from "lucide-react";
 import { api } from "../data/api";
 import type { AppNotification, Digest, NotificationKind } from "../data/notifications";
 
@@ -12,6 +12,8 @@ const ICON: Record<NotificationKind, typeof Bell> = {
   daily_digest: Sunrise,
   monday_briefing: Newspaper,
   account_locked: Lock,
+  mentioned: AtSign,
+  watching: Eye,
 };
 
 function ago(iso: string): string {

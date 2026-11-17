@@ -124,6 +124,16 @@ export default function FeatureModal({ feature, initialSystemId, systems, users,
         {feature && (
           <p className="modal-note">
             Logged by {name(feature.createdBy) ?? "someone"} · {formatDate(feature.createdAt)} · updated {timeAgo(feature.updatedAt, now)}
+            {feature.key && (
+              <>
+                {" "}
+                ·{" "}
+                <a href={`#/projects/${feature.systemId}/items/${feature.key}`} onClick={onClose}>
+                  Open work item {feature.key}
+                </a>{" "}
+                for comments, attachments, links and time
+              </>
+            )}
           </p>
         )}
 

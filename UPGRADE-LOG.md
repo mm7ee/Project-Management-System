@@ -79,3 +79,84 @@ gives it to them.
 - `GET /api/data` now sends `signinRules`, and `lockedUntil`/`lockedAt` on users, to people who can manage users only.
 
 **New screens:** Settings → Administration → Sign-in security; the Locked accounts card in Settings → People.
+
+## Phase 1: work items, keys, hierarchy, collaboration
+
+**What was built**
+- **Project keys:** every project has a key of 2 to 10 capital letters. New projects get a suggested key from
+  their name, which can be changed until the project's first work item exists.
+- **Work items numbered per project,** such as INFRA-1. Types: Epic, Story, Task, Bug and Sub-task, in the
+  hierarchy Epic → Story/Task/Bug → Sub-task, checked on the server.
+- **Fields:**
+  - summary, Markdown description, type, status and resolution, on hold
+  - priority (Highest to Lowest), assignee, reporter, labels, component, story points
+  - original and remaining estimate, start and due dates
+  - created, updated and resolved dates
+- **Statuses** To Do, In Progress, In Review and Done, each in a category.
+- **Progress roll-up:** epics show how much of their work is done. A project can take its progress from its
+  work items.
+- **Feature requests are now work items** (source "client request"), with nothing lost. The Feature requests page,
+  its pop-up and /api/features work as before, and each request shows its work item key.
+- **Status history** for every status change. For the existing requests it was rebuilt from the activity log.
+- **Collaboration on every work item:**
+  - Markdown comments, with @mentions that alert the person mentioned if they can see the item; you can edit and
+    delete your own comments
+  - watchers, who are alerted to changes
+  - links: blocks, relates to, duplicates and clones
+  - cloning
+  - attachments of up to 10 MB
+  - time tracking: logged, remaining and original estimate
+- **Screens:**
+  - a **Work items** tab on each project, with filters (open or done, My work, type, status, priority, assignee,
+    label and search), sorting, 50 items at a time, and quick create
+  - each work item's page, at `#/projects/<id>/items/<KEY-n>`
+  - **My work** on the Dashboard: your items, either open, due this week, overdue or done
+  - a Key field when adding a project
+- **Activity log:** every work item change is recorded with before and after values, and there's a new "Work items"
+  filter.
+- **Ask Pulse** knows the work items each person may see.
+- **Retention:** work items and everything on them last for the life of the project.
+- **Demo data:** the demo projects get keys; the demo requests are work items; projects being built have epics,
+  stories, tasks, bugs and sub-tasks, with comments, links and logged time; and one project takes its progress
+  from its work items.
+- **Postman:** 46 new requests.
+
+**Migration:** `migrations/0003_work_items.sql`.
+- New tables, each with indexes for its queries:
+  - `work_statuses`
+  - `work_items`
+  - `work_item_labels`
+  - `status_history`
+  - `work_item_comments`
+  - `work_item_watchers`
+  - `work_item_links`
+  - `work_logs`
+- New columns: `systems.key`, `systems.item_seq`, `systems.progress_from_items` and `documents.work_item_id`.
+- Moves `features` into `work_items` and replaces the table with a `features` view.
+- Adds the new permissions to roles already saved in Settings.
+
+**New permissions and their defaults**
+
+| Permission | Admin | Manager | Team Leader | Projects Assistant | Developer | Standard user |
+| --- | --- | --- | --- | --- | --- | --- |
+| Create work items (`create_work_items`) | yes | yes | yes | yes | yes | no |
+| Edit and assign any work item (`edit_work_items`) | yes | yes | yes | no | no | no |
+| Delete work items (`delete_work_items`) | yes | yes | yes | no | no | no |
+| Log time on work items (`log_time`) | yes | yes | yes | no | yes | no |
+
+Developers also edit the items assigned to them, and the ones they reported.
+
+**New endpoints** (all at `/api/items`; GET /api/data doesn't carry work items)
+- `GET /api/items` lists one page at a time. Filters: `system`, `type`, `status`, `priority`, `assignee` (`me`/`none`/id),
+  `reporter`, `label`, `component`, `source`, `parent`, `state` (open/done), `due` (overdue/week) and `q`. Sorting:
+  `sort` and `dir`. Paging: `limit` and `offset`.
+- `POST /api/items` creates an item.
+- `GET`, `PATCH` and `DELETE /api/items/:key` read, change and delete one.
+- `POST /api/items/:key/clone` clones it.
+- `GET` and `POST /api/items/:key/comments` list and add comments; `PATCH` and `DELETE .../comments/:id` edit and
+  delete your own.
+- `POST` and `DELETE /api/items/:key/watch` start and stop watching.
+- `POST /api/items/:key/links` and `DELETE .../links/:id` add and remove links.
+- `POST /api/items/:key/attachments` (multipart) and `DELETE .../attachments/:id` add and remove attachments.
+- `POST /api/items/:key/worklogs` and `DELETE .../worklogs/:id` log and remove time.
+- `PATCH /api/systems/:id` now also takes `key` and `progressFromItems`.
