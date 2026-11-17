@@ -310,7 +310,15 @@ Choices made during the Pulse upgrade that later phases must follow. Newest last
 
   Group-by fields come from a fixed list. The existing Dashboard stays as "Pulse overview": the default, and the
   only one on view-only links. The browser remembers which dashboard was last opened.
-- **Subscriptions** run from the new hourly cron (`0 * * * *`), at the hour chosen in Harare time, daily or weekly.
+- **One cron trigger, every hour.** The Cloudflare account is on Workers Free, which allows 5 cron triggers across
+  all its Workers, and the first Phase 4 deploy was refused for a sixth. Pulse now has a single `0 * * * *`
+  trigger instead of three. `worker/schedule.ts` works out what each run is due to do, from its scheduled time:
+  - every hour: filter subscriptions and scheduled automation rules
+  - weekdays at 07:00 Harare: the retention clean-up and daily digests, as before
+  - Mondays at 08:00 Harare: the Monday Briefing, as before
+
+  Unit tests cover the timetable.
+- **Subscriptions** run from the hourly cron, at the hour chosen in Harare time, daily or weekly.
   They arrive under the bell with the results as a digest, and by email once email is connected (following the
   person's "email summaries" setting). Each one sends at most once per hour slot.
 - **Ask Pulse writes PQL.** "Turn this into a search" under an answer (and "Ask in plain English" on the Search page)

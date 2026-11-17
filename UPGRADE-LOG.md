@@ -348,13 +348,15 @@ Board columns and WIP limits use the existing "Add, delete and edit systems".
   - Each rule has an on/off switch, "Run now" and a run log.
   - Loop protection: rules can set off other rules up to 3 levels deep, and each rule has a limit of runs a minute.
   - Three example rules come switched off.
-- **Hourly cron** (`0 * * * *`) for subscriptions and scheduled rules.
+- **One hourly cron** (`0 * * * *`) replaces the three. Each run does the subscriptions and scheduled rules, plus the
+  daily digests (weekdays 07:00 Harare) and the Monday Briefing (08:00) when they're due. This keeps the account
+  within the Workers Free limit of 5 cron triggers, which refused the first deploy.
 - **Activity log:** "Filters & dashboards" and "Automation" filters, with readable descriptions.
 - **Retention:** run logs are kept 90 days. When a person is removed, their favourites and subscriptions are
   removed too.
 - **Demo data:** five saved filters (one with a favourite and a subscription) and a "Delivery (demo)" dashboard with
   all eight gadget kinds.
-- **Postman:** 29 new requests. **Unit tests:** `npm test` runs 27 PQL tests (Vitest), and CI runs them before every
+- **Postman:** 29 new requests. **Unit tests:** `npm test` runs 31 tests (Vitest: PQL and the cron timetable), and CI runs them before every
   deploy.
 
 **Migration:** `migrations/0006_search_dashboards_automation.sql`.
