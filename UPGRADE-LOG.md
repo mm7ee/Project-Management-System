@@ -248,3 +248,70 @@ Board columns and WIP limits use the existing "Add, delete and edit systems".
 - the move pop-up
 - board columns
 - WIP limits in Settings → Workload limits
+
+## Phase 3: sprints, timeline and agile reports
+
+**What was built**
+- **Optional sprints:** a project can plan in sprints (Scrum) or stay Kanban.
+  - **Backlog** tab: open sprints, then the backlog, ranked by dragging (or with Up and Down buttons for the
+    keyboard). Story points are typed in place, with a total for the selected items.
+  - **Sprint planning:** a sprint has a name, a goal, a start date and a length of 1 to 4 weeks. Items are dragged in
+    (or moved with "Move to…"), with a capacity hint from past velocity.
+  - **Starting a sprint** sets its commitment and alerts its assignees. The board then shows only that sprint.
+  - **Completing a sprint** moves unfinished items to the backlog or the next sprint, and keeps a snapshot:
+    committed, completed, added, removed and not completed.
+  - Only one sprint runs per project at a time.
+- **Timeline:** a **Timeline** tab on each project, and a Board / Timeline switch on the Boards page for workspaces.
+  - Bars for epics, with their items underneath; at workspace level, the projects and their epics.
+  - Drag a bar to move it, or its ends to change its start or due date. A date dialog does the same from the
+    keyboard. Changes are permission-checked and logged.
+  - Drag from a bar's dot onto another bar to say it blocks that one; a warning shows when the blocker ends after
+    the blocked item starts.
+  - A today line, zoom (weeks, months, quarters) and print / PDF.
+- **Agile reports** on the Reports page, each with a "what to look for" note, a table of the figures, CSV export and
+  print / PDF:
+  - **Burndown:** work remaining in the sprint, against an ideal line.
+  - **Burnup:** work completed against total scope.
+  - **Velocity:** points committed and completed in the last 6 sprints.
+  - **Sprint report:** completed, not completed, added mid-sprint and removed.
+  - **Cumulative flow:** items in each status over time.
+  - **Control chart:** cycle time per item, with a rolling average and outliers.
+  - **Created vs resolved:** whether the backlog is growing.
+  - **Lead and cycle time:** medians and the 85th percentile.
+
+  They work for one project or a whole workspace, and developers see reports built from only their own items.
+- **Sprint health** (days left, points done of the sprint's points) in the Monday Briefing and Ask Pulse.
+- **Activity log:** a "Sprints" filter.
+- **Demo data:** "WhatsApp Customer Channel" plans in sprints: six finished sprints with snapshots, a running one and
+  a planned one.
+- **Postman:** 34 new requests.
+
+**Migration:** `migrations/0005_sprints.sql`.
+- New tables: `sprints` (one active per project, by a unique index), `sprint_items` and `sprint_snapshots`.
+- New columns: `systems.agile_mode`, `work_items.sprint_id` and `work_items.backlog_rank`.
+- New indexes for the reports.
+
+**New permission and its defaults**
+
+| Permission | Admin | Manager | Team Leader | Projects Assistant | Developer | Standard user |
+| --- | --- | --- | --- | --- | --- | --- |
+| Plan and run sprints (`manage_sprints`) | yes | yes | yes | no | no | no |
+
+**New endpoints**
+- `GET /api/backlog?system=<id>` returns the sprints and the ranked backlog. `POST /api/backlog/rank` re-ranks items
+  and moves them into or out of a sprint (`system`, `keys`, `target`, `before`).
+- `POST /api/sprints` creates a sprint; `PATCH` and `DELETE /api/sprints/:id` edit and delete one. `POST
+  /api/sprints/:id/start` starts it, and `POST /api/sprints/:id/complete` completes it (`moveTo`: `backlog`, `next`
+  or a sprint id).
+- `GET /api/timeline?system=<id>` or `?workspace=<name>` returns the timeline.
+- `GET /api/reports/agile/sprints?system=`, `/burndown?sprint=`, `/sprint?sprint=`, `/flow?system=|workspace=&days=`
+  and `/cycle?system=|workspace=&days=` return the report data.
+- `PATCH /api/systems/:id` now also takes `agileMode`.
+
+**New screens:**
+- the project's Backlog and Timeline tabs
+- the Boards page's Timeline
+- the sprint form and the "Complete sprint" pop-up
+- the date dialog
+- Agile reports on the Reports page
+- the "Plan in sprints" switch on the Work items tab

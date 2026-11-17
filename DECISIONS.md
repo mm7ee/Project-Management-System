@@ -210,3 +210,59 @@ Choices made during the Pulse upgrade that later phases must follow. Newest last
   Boards page picks a workspace's board or a project's.
 - **Permissions:** the new "Edit workflows" (`manage_workflows`) goes to Admin and Team Leader. Workflows change how
   every project works, so it isn't given to Managers by default; an administrator can add it to any role.
+
+## Phase 3: sprints, timeline and agile reports (2026-11-17)
+
+- **Scrum is switched on per project** (`systems.agile_mode`, Kanban by default) by anyone who can edit systems, from
+  the project's Work items tab. A Scrum project gets a **Backlog** tab, and its board shows only the running
+  sprint (a workspace board does the same for its Scrum projects). Switching back to Kanban waits until the running
+  sprint is completed.
+- **"Plan and run sprints"** (`manage_sprints`) goes to Admin, Manager and Team Leader. It covers creating, editing,
+  starting, completing and deleting sprints, and moving items into or out of them. Re-ranking the backlog also
+  works with "Edit and assign any work item". Story points are typed in the backlog through the normal work item
+  edit rules.
+- **The backlog** is ranked by `work_items.backlog_rank`; smaller is higher. Existing items were ranked in the order
+  they were created, and new items go to the bottom. A move places items just above the item they're dropped on,
+  between its neighbours' ranks, so nothing else needs renumbering. Epics stay out of sprints: plan their stories,
+  tasks and bugs. The backlog shows the top 500 and says how many there are in all.
+- **Sprints** last 1 to 4 weeks, and `end_date` is the last day. Only one runs per project at a time, and the database
+  enforces this with a unique index. Names default to "KEY Sprint N". Only a sprint that hasn't started can be
+  deleted; its items go back to the backlog.
+- **`sprint_items` records scope:**
+  - when each item joined a sprint, whether that was after it started, and its points then
+  - when it left during a running sprint
+  - how it ended: completed, not completed or removed
+
+  Leaving a sprint that hasn't started leaves no record. Moving an item to another project takes it out of its
+  sprint.
+- **The snapshot when a sprint completes:**
+  - **committed:** the items in it when it started, at their points then
+  - **added:** items that joined after the start, at their points then
+  - **removed:** items that left during it
+  - **completed and not completed:** the items in it at the end, at their points at the end
+
+  Unfinished items go to the backlog, a chosen future sprint, or the next sprint, which is made if there isn't one.
+  The capacity hint and velocity use the average completed points of the last three finished sprints.
+- **Burndown and burnup** are rebuilt day by day from `sprint_items` and `status_history`. Each item counts at its
+  current story points; a sprint where nothing has points is counted in items instead, and the report says so. The
+  ideal line runs from the committed amount to zero over the sprint's days.
+- **Cumulative flow** counts work items (not epics) in each status at the end of each day, replayed from status
+  history. **Created vs resolved** is the same window, totalled by week.
+- **Cycle time** runs from the first move into an In Progress status to resolved; **lead time** runs from created to
+  resolved. Items resolved "won't do" are left out. The control chart shows each finished item, a rolling average
+  of five, and an outlier line at two standard deviations above the mean.
+- **Reports respect visibility:** developers who see only their own items get reports from only those items. The
+  reports are on the Reports page, which needs the "reports" permission, under "Agile reports".
+- **The timeline** reuses existing data:
+  - an item's bar is its start and due dates
+  - an epic without dates spans its items (striped, and not draggable)
+  - a project's bar is its start and due date
+  - dependencies are Phase 1 "blocks" links
+  - dragging a bar, or choosing dates in the keyboard-friendly dialog, saves through the normal work item or
+    project edit, so it's permission-checked and logged
+  - a warning shows when a blocking item ends after the item it blocks starts
+  - in a workspace, an epic's items load when it's expanded
+- **Sprint health** (days left, points done against the sprint's points, the points committed, and "behind" when
+  the share done trails the share of days gone by more than 20 points) goes to Ask Pulse and as a "Sprints" section
+  in the Monday Briefing. For developers who see only their own items, Ask Pulse counts only those.
+- **New bell alert:** `sprint`, sent to the assignees in a sprint when it starts.

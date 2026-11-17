@@ -53,6 +53,7 @@ import {
 } from "./workitems";
 import { workflowsApi } from "./workflows";
 import { askBoardLines, boardsApi } from "./boards";
+import { sprintHealth, sprintsApi } from "./sprints";
 import { EFFECTIVE_WORKFLOW, loadWorkflow } from "./workflowData";
 import type { AppNotification, DeliveryStatus, Digest, NotificationKind } from "../src/data/notifications";
 import {
@@ -391,16 +392,18 @@ interface SystemRow {
   key: string;
   progress_from_items: number;
   has_items?: boolean;
+  agile_mode?: "kanban" | "scrum";
 }
 const toSystem = (r: SystemRow): System => ({
   ...JSON.parse(r.data),
   key: r.key,
   ...(r.progress_from_items ? { progressFromItems: true } : {}),
   ...(r.has_items ? { hasWorkItems: true } : {}),
+  agileMode: r.agile_mode ?? "kanban",
 });
 /** What goes in the JSON column: the key and progress setting live in their own columns. */
 const systemData = (s: System) => {
-  const { key: _key, progressFromItems: _p, hasWorkItems: _h, ...rest } = s;
+  const { key: _key, progressFromItems: _p, hasWorkItems: _h, agileMode: _a, ...rest } = s;
   return JSON.stringify(rest);
 };
 
@@ -559,6 +562,7 @@ const ACTIVITY_KINDS: Record<string, string[]> = {
   systems: ["system_created", "system_progress", "system_updated", "system_developers", "system_deleted", "request_created", "request_dismissed", "template_created", "template_deleted", "pcn_updated", "pcn_signed"],
   features: ["feature_created", "feature_updated", "feature_deleted"],
   workflows: ["workflow_created", "workflow_updated", "workflow_deleted", "workflow_assigned", "status_created", "status_updated", "status_deleted", "work_items_moved", "board_updated"],
+  sprints: ["sprint_created", "sprint_updated", "sprint_deleted", "sprint_started", "sprint_completed", "sprint_scope_changed", "backlog_ranked"],
   items: [
     "work_item_created",
     "work_item_updated",
@@ -886,6 +890,9 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
         path === "/api/items" ||
         path === "/api/boards" ||
         path === "/api/statuses" ||
+        path === "/api/backlog" ||
+        path === "/api/timeline" ||
+        path.startsWith("/api/reports/agile/") ||
         /^\/api\/items\/[A-Z]{2,10}-\d{1,7}(\/comments)?$/.test(path))) ||
     (method === "POST" && (path === "/api/ask" || path === "/api/requests")) ||
     (method === "DELETE" && /^\/api\/requests\/[a-f0-9]+$/.test(path));
@@ -960,7 +967,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     audit: (action, target, detail) => audit(db, req, me, action, target, detail),
     alert: (alerts) => alert(alerts),
   };
-  const itemsResponse = (await itemsApi(itemCtx, path, method)) ?? (await workflowsApi(itemCtx, path, method)) ?? (await boardsApi(itemCtx, path, method));
+  const itemsResponse = (await itemsApi(itemCtx, path, method)) ?? (await workflowsApi(itemCtx, path, method)) ?? (await boardsApi(itemCtx, path, method)) ?? (await sprintsApi(itemCtx, path, method));
   if (itemsResponse) return itemsResponse;
 
   /**
@@ -1442,7 +1449,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
 
   if (path === "/api/data" && method === "GET") {
     const [systems, users, requests, assigned, features, documents, blockers, limits, templates] = await Promise.all([
-      db.prepare("SELECT data, key, progress_from_items, EXISTS (SELECT 1 FROM work_items w WHERE w.system_id = systems.id) AS has_items FROM systems ORDER BY sort, rowid").all<SystemRow>(),
+      db.prepare("SELECT data, key, progress_from_items, agile_mode, EXISTS (SELECT 1 FROM work_items w WHERE w.system_id = systems.id) AS has_items FROM systems ORDER BY sort, rowid").all<SystemRow>(),
       db.prepare("SELECT * FROM users ORDER BY name").all<UserRow>(),
       db.prepare("SELECT * FROM requests ORDER BY created_at DESC").all<Record<string, string>>(),
       db
@@ -1615,7 +1622,18 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
             limits,
           })
         : "";
-    const itemLines = [...(await askItemLines(itemCtx, new Map(people.results.map((p) => [p.id, p.name])))), ...(await askBoardLines(itemCtx))];
+    const sprints = await sprintHealth(db, t, ownFeaturesOnly ? { userId: me.id } : undefined);
+    const itemLines = [
+      ...(await askItemLines(itemCtx, new Map(people.results.map((p) => [p.id, p.name])))),
+      ...(await askBoardLines(itemCtx)),
+      ...(sprints.length
+        ? [
+            "",
+            `RUNNING SPRINTS (project | sprint | goal | ends | days left | story points done of the sprint's points | points committed at the start | behind?)${ownFeaturesOnly ? " (counting only your own items)" : ""}`,
+            ...sprints.map((s) => [s.project, s.name, s.goal || "-", s.endDate, s.daysLeft, `${s.done} of ${s.scope}`, s.committed, s.behind ? "yes" : "no"].map((x) => String(x).replace(/\|/g, "/")).join(" | ")),
+          ]
+        : []),
+    ];
     const snapshot = focus + buildSnapshot({
       now: t,
       systems: allSystems,
@@ -1913,7 +1931,17 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       pcnChange = { name: current.name, from: before, to: pcnStatus(pcn) };
     }
 
-    const columns = (await db.prepare("SELECT key, progress_from_items FROM systems WHERE id = ?").bind(id).first<{ key: string; progress_from_items: number }>())!;
+    const columns = (await db.prepare("SELECT key, progress_from_items, agile_mode FROM systems WHERE id = ?").bind(id).first<{ key: string; progress_from_items: number; agile_mode: "kanban" | "scrum" }>())!;
+    // Scrum (sprints and a backlog) or Kanban only. Switching off sprints waits for the running one to finish.
+    let agileMode = columns.agile_mode;
+    if (b.agileMode !== undefined && b.agileMode !== columns.agile_mode) {
+      need("manage_systems");
+      if (b.agileMode !== "scrum" && b.agileMode !== "kanban") throw new HttpError(400, "Choose Scrum or Kanban");
+      if (b.agileMode === "kanban" && (await db.prepare("SELECT 1 FROM sprints WHERE system_id = ? AND state = 'ACTIVE'").bind(id).first())) {
+        throw new HttpError(400, "Complete the running sprint before switching off sprints");
+      }
+      agileMode = b.agileMode;
+    }
     // The key can change until the project's first work item exists.
     let keyChange: { from: string; to: string } | null = null;
     if (b.key !== undefined && b.key !== columns.key) {
@@ -1984,8 +2012,8 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     const wfBefore = next.workspace !== current.workspace ? (await workflowsBefore()).get(id) : undefined;
     const stmts = [
       db
-        .prepare("UPDATE systems SET data = ?, key = ?, progress_from_items = ? WHERE id = ?")
-        .bind(systemData(next), keyChange?.to ?? columns.key, fromItems ? 1 : 0, id),
+        .prepare("UPDATE systems SET data = ?, key = ?, progress_from_items = ?, agile_mode = ? WHERE id = ?")
+        .bind(systemData(next), keyChange?.to ?? columns.key, fromItems ? 1 : 0, agileMode, id),
     ];
     if (pcnChange) await audit(db, req, me, "pcn_updated", id, pcnChange);
     // Posting progress answers any open update requests for this project.
@@ -2010,6 +2038,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       );
     }
     if (keyChange) await audit(db, req, me, "system_updated", id, { name: next.name, fields: ["key"], key: keyChange });
+    if (agileMode !== columns.agile_mode) await audit(db, req, me, "system_updated", id, { name: next.name, fields: ["agileMode"], agileMode: { from: columns.agile_mode, to: agileMode } });
     if (fromItems !== !!columns.progress_from_items) {
       await audit(db, req, me, "system_updated", id, { name: next.name, fields: ["progressFromItems"], progressFromItems: { from: !fromItems, to: fromItems } });
       if (fromItems) await recomputeProgress(itemCtx, id);
@@ -2022,7 +2051,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
         ...(changed.includes("workspace") ? { workspace: { from: current.workspace ?? null, to: next.workspace ?? null } } : {}),
       });
     }
-    return json(pcnFor({ ...(await getSystem(db, id)), key: keyChange?.to ?? columns.key, ...(fromItems ? { progressFromItems: true } : {}) }));
+    return json(pcnFor({ ...(await getSystem(db, id)), key: keyChange?.to ?? columns.key, agileMode, ...(fromItems ? { progressFromItems: true } : {}) }));
   }
 
   if (sysMatch && method === "DELETE") {

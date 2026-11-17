@@ -448,6 +448,14 @@ function ProjectWorkSettings({ system, canManage, hasItems, onChanged }: { syste
       </div>
       {canManage ? (
         <label className="wi-progress-toggle">
+          <input type="checkbox" checked={system.agileMode === "scrum"} disabled={busy} onChange={(e) => save({ agileMode: e.target.checked ? "scrum" : "kanban" })} />
+          <span>Plan in sprints (Scrum), with a backlog</span>
+        </label>
+      ) : (
+        system.agileMode === "scrum" && <small className="muted">Planned in sprints.</small>
+      )}
+      {canManage ? (
+        <label className="wi-progress-toggle">
           <input type="checkbox" checked={!!system.progressFromItems} disabled={busy} onChange={(e) => save({ progressFromItems: e.target.checked })} />
           <span>Take the project's progress from its work items ({system.progress}% now)</span>
         </label>

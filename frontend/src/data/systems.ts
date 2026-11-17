@@ -12,6 +12,7 @@ export interface System {
   key?: string; // 2–10 capital letters; its work items are KEY-1, KEY-2… (fixed once the first exists)
   progressFromItems?: boolean; // progress is the share of its work items that are done
   hasWorkItems?: boolean; // at least one work item exists, so the key is fixed
+  agileMode?: "kanban" | "scrum"; // Scrum: planned in sprints, with a backlog
   name: string;
   short: string; // 2–3 letter monogram for the icon tile
   description: string;

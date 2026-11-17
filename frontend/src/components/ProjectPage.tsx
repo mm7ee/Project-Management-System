@@ -36,6 +36,8 @@ import LeadContact from "./LeadContact";
 import WorkItemsTab from "./WorkItemsTab";
 import WorkItemPage from "./WorkItemPage";
 import BoardView from "./BoardView";
+import BacklogView from "./BacklogView";
+import TimelineView from "./TimelineView";
 import { DateLine, ProgressBar, ScheduleChip, StatusPill, updatedText } from "./SystemCard";
 
 interface Props {
@@ -70,7 +72,7 @@ interface Props {
   onNewFeature: () => void;
   onChanged: () => Promise<void>; // reload after a document or blocker change
   canEditPcn: boolean; // wrote the Concept Note, or may manage systems
-  section: "overview" | "items" | "board"; // which tab: #/projects/<id>, …/items or …/board
+  section: "overview" | "items" | "board" | "backlog" | "timeline"; // which tab: #/projects/<id>, …/items, …/board, …/backlog or …/timeline
   canAssignOthers: boolean; // may give work to anyone
   itemKey?: string; // a work item's page: #/projects/<id>/items/<KEY-n>
   canCreateItems: boolean;
@@ -206,9 +208,21 @@ export default function ProjectPage(p: Props) {
         <a href={`#/projects/${system.id}/board`} className={p.section === "board" ? "on" : ""} aria-current={p.section === "board" ? "page" : undefined}>
           Board
         </a>
+        {system.agileMode === "scrum" && (
+          <a href={`#/projects/${system.id}/backlog`} className={p.section === "backlog" ? "on" : ""} aria-current={p.section === "backlog" ? "page" : undefined}>
+            Backlog
+          </a>
+        )}
+        <a href={`#/projects/${system.id}/timeline`} className={p.section === "timeline" ? "on" : ""} aria-current={p.section === "timeline" ? "page" : undefined}>
+          Timeline
+        </a>
       </nav>
 
-      {p.section === "board" ? (
+      {p.section === "backlog" ? (
+        <BacklogView system={system} users={users} now={now} readOnly={p.readOnly} canEditPoints={p.canAssignOthers} onChanged={p.onChanged} />
+      ) : p.section === "timeline" ? (
+        <TimelineView scope={{ systemId: system.id }} users={users} now={now} readOnly={p.readOnly} />
+      ) : p.section === "board" ? (
         <BoardView scope={{ systemId: system.id }} users={users} me={me} now={now} readOnly={p.readOnly} canAssignOthers={p.canAssignOthers} />
       ) : p.section === "items" ? (
         p.itemKey ? (

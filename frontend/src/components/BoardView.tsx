@@ -22,6 +22,8 @@ interface Card extends WorkItemSummary {
 }
 
 interface BoardData {
+  scrum?: boolean; // a Scrum project: the board shows its running sprint
+  sprint?: { id: string; name: string; goal: string | null; endDate: string } | null;
   board: { id: string; name: string; systemId: string | null; workspace: string | null; swimlanes: Swimlanes; columns: BoardColumn[] } | null;
   statuses: StatusDef[];
   workflows: Workflow[];
@@ -203,6 +205,18 @@ export default function BoardView({ scope, users, me, now, readOnly, canAssignOt
           <button className="icon-link" onClick={() => setNotice("")} aria-label="Dismiss">
             <X size={14} />
           </button>
+        </p>
+      )}
+      {data.scrum && (
+        <p className={data.sprint ? "board-sprint" : "board-unmapped"} role="status">
+          {data.sprint ? (
+            <>
+              <b>{data.sprint.name}</b>
+              {data.sprint.goal ? ` · ${data.sprint.goal}` : ""} · ends {formatDate(data.sprint.endDate)}
+            </>
+          ) : (
+            "No sprint is running. Start one from the Backlog tab; this board shows the running sprint."
+          )}
         </p>
       )}
       {data.unmapped.length > 0 && (

@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { System } from "../data/systems";
 import type { User } from "../data/roles";
 import BoardView from "./BoardView";
+import TimelineView from "./TimelineView";
 
 /** Boards: a workspace's board across its projects, or one project's. */
 export default function BoardsPage({
@@ -39,12 +40,20 @@ export default function BoardsPage({
     }
   };
   const live = systems.filter((s) => s.status !== "IDEA");
+  const [view, setView] = useState<"board" | "timeline">("board");
   return (
     <div className="page">
       <header className="page-head">
         <div>
           <h2>Boards</h2>
-          <p>Work items as cards in columns. Drag a card, or use its Move list, to move it on through its project's workflow.</p>
+          <p>Work items as cards in columns, or on a timeline. Drag a card, or use its Move list, to move it on through its project's workflow.</p>
+        </div>
+        <div className="seg" role="radiogroup" aria-label="Board or timeline">
+          {(["board", "timeline"] as const).map((v) => (
+            <button key={v} role="radio" aria-checked={view === v} className={view === v ? "on" : ""} onClick={() => setView(v)}>
+              {v === "board" ? "Board" : "Timeline"}
+            </button>
+          ))}
         </div>
         <select className="board-pick" value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Which board">
           <optgroup label="Workspaces (every project in it)">
@@ -64,6 +73,9 @@ export default function BoardsPage({
           </optgroup>
         </select>
       </header>
+      {view === "timeline" ? (
+        <TimelineView key={`t${pick}`} scope={pick.startsWith("ws:") ? { workspace: pick.slice(3) } : { systemId: pick.slice(2) }} users={users} now={now} readOnly={readOnly} />
+      ) : (
       <BoardView
         key={pick}
         scope={pick.startsWith("ws:") ? { workspace: pick.slice(3) } : { systemId: pick.slice(2) }}
@@ -73,6 +85,7 @@ export default function BoardsPage({
         readOnly={readOnly}
         canAssignOthers={canAssignOthers}
       />
+      )}
     </div>
   );
 }

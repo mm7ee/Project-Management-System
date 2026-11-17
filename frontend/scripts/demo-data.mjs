@@ -21,6 +21,7 @@ DELETE FROM assignments WHERE system_id LIKE 'demo-%' OR user_id LIKE 'demo-%';
 DELETE FROM document_chunks WHERE doc_id IN (SELECT id FROM documents WHERE work_item_id LIKE 'demo-%');
 DELETE FROM work_items WHERE id LIKE 'demo-%';
 DELETE FROM boards WHERE id LIKE 'demo-%';
+DELETE FROM sprints WHERE id LIKE 'demo-%';
 DELETE FROM blockers WHERE id LIKE 'demo-%';
 DELETE FROM documents WHERE id LIKE 'demo-%';
 DELETE FROM requests WHERE id LIKE 'demo-%';
@@ -607,6 +608,93 @@ if (INFRA) out.push(`UPDATE systems SET workflow_id = 'infra-deploy' WHERE id = 
     out.push(`INSERT INTO board_columns (id, board_id, name, position, wip_limit) VALUES ('demo-bc-${i + 1}', 'demo-b-1', ${q(name)}, ${i + 1}, ${limit ?? "NULL"});`);
     for (const st of statuses) out.push(`INSERT INTO board_column_statuses (board_id, column_id, status_id) VALUES ('demo-b-1', 'demo-bc-${i + 1}', ${q(st)});`);
   });
+}
+
+// Sprints: the board project plans in Scrum. Six finished sprints (each with its snapshot), the running
+// one and the next, so velocity, burndown and the sprint report have something to show.
+{
+  const sys = inFlight[0];
+  const LEN = 14;
+  const activeStart = Date.parse(dateAgo(5));
+  const mine = items.filter((x) => x.systemId === sys.id && x.type !== "EPIC" && x.type !== "SUBTASK");
+  out.push(`UPDATE systems SET agile_mode = 'scrum' WHERE id = ${q(sys.id)};`);
+  // Its bugs are estimated too, as a Scrum team would.
+  for (const x of mine.filter((i) => i.points == null)) {
+    x.points = 2;
+    out.push(`UPDATE work_items SET story_points = 2 WHERE id = ${q(x.id)};`);
+  }
+  const key = initials(sys.name).slice(0, 3);
+  const sprintsOut = [];
+  for (let k = 6; k >= 1; k--) {
+    const start = activeStart - k * LEN * DAY;
+    sprintsOut.push({ id: `demo-sp-${7 - k}`, name: `${sys.name.split(" ")[0]} Sprint ${7 - k}`, start, state: "CLOSED" });
+  }
+  sprintsOut.push({ id: "demo-sp-7", name: `${sys.name.split(" ")[0]} Sprint 7`, start: activeStart, state: "ACTIVE", goal: "Customers can start a WhatsApp chat from the website and reach an agent" });
+  sprintsOut.push({ id: "demo-sp-8", name: `${sys.name.split(" ")[0]} Sprint 8`, start: activeStart + LEN * DAY, state: "FUTURE", goal: "Supervisors see live WhatsApp queues" });
+  const day = (t) => new Date(t).toISOString().slice(0, 10);
+  for (const sp of sprintsOut) {
+    const end = sp.start + (LEN - 1) * DAY;
+    out.push(
+      `INSERT INTO sprints (id, system_id, name, goal, start_date, end_date, length_weeks, state, started_at, completed_at, created_by, created_at) VALUES (${[
+        q(sp.id),
+        q(sys.id),
+        q(sp.name),
+        q(sp.goal ?? ""),
+        q(day(sp.start)),
+        q(day(end)),
+        2,
+        q(sp.state),
+        q(sp.state !== "FUTURE" ? new Date(sp.start + 9 * 3_600_000).toISOString() : null),
+        q(sp.state === "CLOSED" ? new Date(end + 16 * 3_600_000).toISOString() : null),
+        q(P.Tarisai),
+        q(new Date(sp.start - 2 * DAY).toISOString()),
+      ].join(", ")});`,
+    );
+    sp.end = end;
+  }
+  const inSprint = (sp, item) => {
+    out.push(`UPDATE work_items SET sprint_id = ${q(sp.id)} WHERE id = ${q(item.id)};`);
+    out.push(
+      `INSERT INTO sprint_items (sprint_id, item_id, added_at, added_after_start, points, outcome) VALUES (${q(sp.id)}, ${q(item.id)}, ${q(new Date(sp.start + 8 * 3_600_000).toISOString())}, 0, ${item.points ?? "NULL"}, ${q(sp.state === "CLOSED" ? "completed" : null)});`,
+    );
+  };
+  // Finished items belong to the sprint they were finished in.
+  // The finished items are shared out over the six sprints in the order they were finished.
+  const finished = mine.filter((x) => x.status === "DONE" && x.resolved && Date.parse(x.resolved) < activeStart).sort((a, b) => a.resolved.localeCompare(b.resolved));
+  const closedSprints = sprintsOut.filter((x) => x.state === "CLOSED");
+  const share = (k) => finished.filter((_, i) => Math.floor((i * closedSprints.length) / Math.max(1, finished.length)) === k);
+  for (const [k, sp] of closedSprints.entries()) {
+    const done = share(k);
+    done.forEach((x) => inSprint(sp, x));
+    const completed = done.reduce((n, x) => n + (x.points ?? 0), 0);
+    // A little was always committed and not finished, as in real sprints.
+    const missed = between(0, 5);
+    out.push(
+      `INSERT INTO sprint_snapshots (sprint_id, committed_points, completed_points, added_points, removed_points, not_completed_points, committed_items, completed_items, added_items, removed_items, not_completed_items, created_at) VALUES (${[
+        q(sp.id),
+        completed + missed,
+        completed,
+        between(0, 3),
+        0,
+        missed,
+        done.length + (missed ? 1 : 0),
+        done.length,
+        0,
+        0,
+        missed ? 1 : 0,
+        q(new Date(sp.end + 16 * 3_600_000).toISOString()),
+      ].join(", ")});`,
+    );
+  }
+  // The running sprint holds the work in progress and the next few to do; the next sprint a few more.
+  const open = mine.filter((x) => x.status !== "DONE");
+  const doing = open.filter((x) => x.status !== "TODO");
+  const todo = open.filter((x) => x.status === "TODO");
+  [...doing, ...todo.slice(0, 2)].forEach((x) => inSprint(sprintsOut[6], x));
+  todo.slice(2, 5).forEach((x) => inSprint(sprintsOut[7], x));
+  // Its done items finished in this sprint count too.
+  mine.filter((x) => x.status === "DONE" && x.resolved && Date.parse(x.resolved) >= activeStart).forEach((x) => inSprint(sprintsOut[6], x));
+  void key;
 }
 
 // One project takes its progress from its work items, to show how that reads.

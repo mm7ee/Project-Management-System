@@ -13,7 +13,7 @@ interface Props {
   now: number;
 }
 
-type Kind = "" | "signin" | "failed" | "account" | "systems" | "features" | "items" | "workflows" | "project" | "admin";
+type Kind = "" | "signin" | "failed" | "account" | "systems" | "features" | "items" | "workflows" | "sprints" | "project" | "admin";
 const KINDS: { key: Kind; label: string }[] = [
   { key: "", label: "Everything" },
   { key: "signin", label: "Sign-ins" },
@@ -22,6 +22,7 @@ const KINDS: { key: Kind; label: string }[] = [
   { key: "features", label: "Feature requests" },
   { key: "items", label: "Work items" },
   { key: "workflows", label: "Workflows & boards" },
+  { key: "sprints", label: "Sprints" },
   { key: "project", label: "Documents & blockers" },
   { key: "admin", label: "Users & roles" },
   { key: "account", label: "Own account" },
@@ -186,6 +187,9 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
         const k = d.key as { from: unknown; to: unknown };
         return `Changed ${name}'s key from ${str(k.from)} to ${str(k.to)}`;
       }
+      if (d.agileMode) {
+        return (d.agileMode as { to: unknown }).to === "scrum" ? `Set ${name} to plan in sprints` : `Set ${name} to Kanban only`;
+      }
       if (d.progressFromItems) {
         return (d.progressFromItems as { to: unknown }).to
           ? `Set ${name} to take its progress from its work items`
@@ -310,6 +314,24 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
       const key = typeof d.key === "string" ? d.key : str((d.key as { to?: unknown } | undefined)?.to);
       return `Updated ${key} "${str(d.summary)}" on ${name}: ${parts.join("; ")}`;
     }
+    case "sprint_created":
+      return `Planned ${str(d.sprint)} on ${name}, starting ${str(d.start)} for ${str(d.weeks)} week${d.weeks === 1 ? "" : "s"}`;
+    case "sprint_updated": {
+      const from = (d.from ?? {}) as Record<string, unknown>;
+      const to = (d.to ?? {}) as Record<string, unknown>;
+      const parts = (["name", "goal", "start", "end"] as const).filter((k) => from[k] !== to[k]).map((k) => `${k} ${str(from[k]) || "none"} → ${str(to[k]) || "none"}`);
+      return `Edited ${str(d.sprint)} on ${name}: ${parts.join("; ") || "no change"}`;
+    }
+    case "sprint_deleted":
+      return `Deleted ${str(d.sprint)} on ${name}; ${str(d.itemsToBacklog)} items went back to the backlog`;
+    case "sprint_started":
+      return `Started ${str(d.sprint)} on ${name}, ending ${str(d.end)}`;
+    case "sprint_completed":
+      return `Completed ${str(d.sprint)} on ${name}: ${str(d.completedPoints)} of ${str(d.committedPoints)} committed points done; unfinished work to ${str(d.unfinishedTo)}`;
+    case "sprint_scope_changed":
+      return `Moved ${((d.keys as string[]) ?? []).join(", ")} to ${str(d.to)} on ${name}`;
+    case "backlog_ranked":
+      return `Re-ranked ${((d.keys as string[]) ?? []).join(", ")} in ${name}'s backlog${d.before ? `, above ${str(d.before)}` : ""}`;
     case "workflow_created":
       return `Created the workflow ${str(d.workflow)}, a copy of ${str(d.copiedFrom)}`;
     case "workflow_updated": {

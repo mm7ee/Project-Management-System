@@ -56,10 +56,11 @@ const greeting = () => {
 const VIEW_PREFS = "omnitrack:view-prefs";
 
 // #/projects/<id>/items is its Work items tab; #/projects/<id>/items/<KEY-n> one work item.
-const PROJECT_ROUTE = /^#\/projects\/([a-z0-9-]+)(?:\/(pcn|items|board)(?:\/([A-Z]{2,10}-\d{1,7}))?)?\/?$/;
+const PROJECT_ROUTE = /^#\/projects\/([a-z0-9-]+)(?:\/(pcn|items|board|backlog|timeline)(?:\/([A-Z]{2,10}-\d{1,7}))?)?\/?$/;
 const projectInHash = () => window.location.hash.match(PROJECT_ROUTE)?.[1] ?? null;
 const itemsInHash = () => window.location.hash.match(PROJECT_ROUTE)?.[2] === "items";
 const boardInHash = () => window.location.hash.match(PROJECT_ROUTE)?.[2] === "board";
+const tabInHash = () => window.location.hash.match(PROJECT_ROUTE)?.[2];
 const itemKeyInHash = () => window.location.hash.match(PROJECT_ROUTE)?.[3] ?? undefined;
 // #/projects/<id>/pcn shows that project's Concept Note as a printable document.
 const pcnInHash = () => /^#\/projects\/[a-z0-9-]+\/pcn$/.test(window.location.hash);
@@ -168,6 +169,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   const [showPcn, setShowPcn] = useState(pcnInHash);
   const [showItems, setShowItems] = useState(itemsInHash);
   const [showBoard, setShowBoard] = useState(boardInHash);
+  const [projectTab, setProjectTab] = useState(tabInHash);
   const [itemKey, setItemKey] = useState(itemKeyInHash);
   useEffect(() => {
     const onHash = () => {
@@ -175,6 +177,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
       setShowPcn(pcnInHash());
       setShowItems(itemsInHash());
       setShowBoard(boardInHash());
+      setProjectTab(tabInHash());
       setItemKey(itemKeyInHash());
     };
     window.addEventListener("hashchange", onHash);
@@ -530,7 +533,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
               onNewFeature={() => setFeatureEdit({ feature: null, systemId: selected.id })}
               onChanged={reload}
               canEditPcn={can("manage_systems") || selected.pcnBy === me.id}
-              section={showBoard ? "board" : showItems ? "items" : "overview"}
+              section={projectTab === "backlog" ? "backlog" : projectTab === "timeline" ? "timeline" : showBoard ? "board" : showItems ? "items" : "overview"}
               canAssignOthers={can("edit_work_items")}
               itemKey={showItems ? itemKey : undefined}
               canCreateItems={can("create_work_items")}

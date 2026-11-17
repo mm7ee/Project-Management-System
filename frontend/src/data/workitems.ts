@@ -85,6 +85,7 @@ export interface WorkItemSummary {
   parentId?: string;
   parentKey?: string;
   source: WorkSource;
+  sprintId?: string; // the sprint it's planned into, in a Scrum project
   createdAt: string;
   updatedAt: string;
   resolvedAt?: string;

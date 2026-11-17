@@ -4891,6 +4891,1443 @@
           }
         },
         {
+          "name": "Sprints: a viewer can't turn them on",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{viewerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems/{{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems",
+                "{{systemId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agileMode\": \"scrum\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Sprints: admin turns them on",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Scrum\", () => { const r = pm.response.json(); pm.expect(r.agileMode === \"scrum\").to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems/{{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems",
+                "{{systemId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agileMode\": \"scrum\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Sprints: the backlog",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"a Scrum backlog\", () => { const r = pm.response.json(); pm.expect(r.mode === \"scrum\" && Array.isArray(r.backlog) && r.canPlan === true).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/backlog?system={{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "backlog"
+              ],
+              "query": [
+                {
+                  "key": "system",
+                  "value": "{{systemId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sprints: a viewer can't plan one",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{viewerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/sprints",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sprints"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"systemId\": \"{{systemId}}\",\n  \"lengthWeeks\": 2\n}"
+            }
+          }
+        },
+        {
+          "name": "Sprints: five weeks is too long",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/sprints",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sprints"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"systemId\": \"{{systemId}}\",\n  \"lengthWeeks\": 5\n}"
+            }
+          }
+        },
+        {
+          "name": "Sprints: admin plans a sprint",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"planned\", () => { const r = pm.response.json(); pm.expect(r.state === \"FUTURE\" && /Sprint \\d+$/.test(r.name) && r.goal === \"Prove sprints work\").to.be.true; });",
+                  "pm.environment.set(\"sprintId\", pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/sprints",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sprints"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"systemId\": \"{{systemId}}\",\n  \"goal\": \"Prove sprints work\",\n  \"lengthWeeks\": 2\n}"
+            }
+          }
+        },
+        {
+          "name": "Sprints: a 3-point task for the developer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 201\", () => pm.response.to.have.status(201));",
+                  "pm.environment.set(\"spKey\", pm.response.json().key);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"systemId\": \"{{systemId}}\",\n  \"type\": \"TASK\",\n  \"summary\": \"Sprint task A\",\n  \"assignee\": \"qa-dev\",\n  \"storyPoints\": 3\n}"
+            }
+          }
+        },
+        {
+          "name": "Sprints: a 5-point task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 201\", () => pm.response.to.have.status(201));",
+                  "pm.environment.set(\"spKey2\", pm.response.json().key);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"systemId\": \"{{systemId}}\",\n  \"type\": \"TASK\",\n  \"summary\": \"Sprint task B\",\n  \"storyPoints\": 5\n}"
+            }
+          }
+        },
+        {
+          "name": "Sprints: both go into the sprint",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/backlog/rank",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "backlog",
+                "rank"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"system\": \"{{systemId}}\",\n  \"keys\": [\n    \"{{spKey}}\",\n    \"{{spKey2}}\"\n  ],\n  \"target\": \"{{sprintId}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Sprints: the sprint holds 8 points",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"8 points\", () => { const r = pm.response.json(); pm.expect(r.sprints.find((s) => s.id === pm.environment.get(\"sprintId\")).points === 8).to.be.true; });",
+                  "pm.test(\"left the backlog\", () => { const r = pm.response.json(); pm.expect(!r.backlog.some((i) => i.key === pm.environment.get(\"spKey\"))).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/backlog?system={{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "backlog"
+              ],
+              "query": [
+                {
+                  "key": "system",
+                  "value": "{{systemId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sprints: admin starts it",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"running\", () => { const r = pm.response.json(); pm.expect(r.state === \"ACTIVE\").to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/sprints/{{sprintId}}/start",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sprints",
+                "{{sprintId}}",
+                "start"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Sprints: admin plans a second",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 201\", () => pm.response.to.have.status(201));",
+                  "pm.environment.set(\"sprint2Id\", pm.response.json().id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/sprints",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sprints"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"systemId\": \"{{systemId}}\",\n  \"lengthWeeks\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "Sprints: only one can run at a time",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 409\", () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/sprints/{{sprint2Id}}/start",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sprints",
+                "{{sprint2Id}}",
+                "start"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Sprints: the board shows the running sprint only",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"the sprint\", () => { const r = pm.response.json(); pm.expect(r.scrum === true && r.sprint && r.sprint.id === pm.environment.get(\"sprintId\")).to.be.true; });",
+                  "pm.test(\"only its cards\", () => { const r = pm.response.json(); pm.expect(r.cards.length > 0 && r.cards.every((x) => x.sprintId === pm.environment.get(\"sprintId\"))).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/boards?system={{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "boards"
+              ],
+              "query": [
+                {
+                  "key": "system",
+                  "value": "{{systemId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sprints: the developer starts their task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{spKey}}/transitions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{spKey}}",
+                "transitions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"IN_PROGRESS\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Sprints: …sends it for review",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{spKey}}/transitions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{spKey}}",
+                "transitions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"IN_REVIEW\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Sprints: …and finishes it",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{spKey}}/transitions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{spKey}}",
+                "transitions"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"DONE\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Sprints: a 2-point task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 201\", () => pm.response.to.have.status(201));",
+                  "pm.environment.set(\"spKey3\", pm.response.json().key);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"systemId\": \"{{systemId}}\",\n  \"type\": \"TASK\",\n  \"summary\": \"Sprint task C\",\n  \"storyPoints\": 2\n}"
+            }
+          }
+        },
+        {
+          "name": "Sprints: added mid-sprint",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/backlog/rank",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "backlog",
+                "rank"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"system\": \"{{systemId}}\",\n  \"keys\": [\n    \"{{spKey3}}\"\n  ],\n  \"target\": \"{{sprintId}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Sprints: burndown",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"ideal from 8 to 0\", () => { const r = pm.response.json(); pm.expect(r.unit === \"points\" && r.ideal[0] === 8 && r.ideal[r.ideal.length - 1] === 0).to.be.true; });",
+                  "const last = pm.response.json().completed.filter((v) => v !== null).pop(); pm.test(\"3 done today\", () => pm.expect(last).to.eql(3));",
+                  "const scope = pm.response.json().scope.filter((v) => v !== null).pop(); pm.test(\"scope 10 with the addition\", () => pm.expect(scope).to.eql(10));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/agile/burndown?sprint={{sprintId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "agile",
+                "burndown"
+              ],
+              "query": [
+                {
+                  "key": "sprint",
+                  "value": "{{sprintId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sprints: sprint report",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"completed and added\", () => { const r = pm.response.json(); pm.expect(r.completed.some((i) => i.key === pm.environment.get(\"spKey\")) && r.added.some((i) => i.key === pm.environment.get(\"spKey3\"))).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/agile/sprint?sprint={{sprintId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "agile",
+                "sprint"
+              ],
+              "query": [
+                {
+                  "key": "sprint",
+                  "value": "{{sprintId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sprints: admin completes it, unfinished work to the backlog",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"closed\", () => { const r = pm.response.json(); pm.expect(r.sprint.state === \"CLOSED\").to.be.true; });",
+                  "pm.test(\"snapshot: 8 committed, 3 done, 2 added, 7 not done\", () => { const r = pm.response.json(); pm.expect(r.sprint.snapshot.committedPoints === 8 && r.sprint.snapshot.completedPoints === 3 && r.sprint.snapshot.addedPoints === 2 && r.sprint.snapshot.notCompletedPoints === 7).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/sprints/{{sprintId}}/complete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sprints",
+                "{{sprintId}}",
+                "complete"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"moveTo\": \"backlog\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Sprints: unfinished work is back in the backlog",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"back, and velocity 3\", () => { const r = pm.response.json(); pm.expect(r.backlog.some((i) => i.key === pm.environment.get(\"spKey2\")) && r.velocity.average === 3).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/backlog?system={{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "backlog"
+              ],
+              "query": [
+                {
+                  "key": "system",
+                  "value": "{{systemId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reports: velocity data",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"the closed sprint\", () => { const r = pm.response.json(); pm.expect(r.sprints.some((s) => s.state === \"CLOSED\" && s.snapshot && s.snapshot.completedPoints === 3)).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/agile/sprints?system={{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "agile",
+                "sprints"
+              ],
+              "query": [
+                {
+                  "key": "system",
+                  "value": "{{systemId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reports: cumulative flow",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"30 days of flow\", () => { const r = pm.response.json(); pm.expect(r.days.length === 30 && r.statuses.length > 0 && r.created.length === 30).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/agile/flow?system={{systemId}}&days=30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "agile",
+                "flow"
+              ],
+              "query": [
+                {
+                  "key": "system",
+                  "value": "{{systemId}}"
+                },
+                {
+                  "key": "days",
+                  "value": "30"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reports: cycle and lead time",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"timed\", () => { const r = pm.response.json(); pm.expect(r.items.some((i) => i.key === pm.environment.get(\"spKey\") && i.cycleDays !== null && i.leadDays >= i.cycleDays)).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/agile/cycle?system={{systemId}}&days=30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "agile",
+                "cycle"
+              ],
+              "query": [
+                {
+                  "key": "system",
+                  "value": "{{systemId}}"
+                },
+                {
+                  "key": "days",
+                  "value": "30"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reports: a developer's flow counts only their items",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"loads\", () => { const r = pm.response.json(); pm.expect(r.items.every((i) => i.key === pm.environment.get(\"spKey\") || i.summary)).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/agile/cycle?system={{systemId}}&days=30",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "agile",
+                "cycle"
+              ],
+              "query": [
+                {
+                  "key": "system",
+                  "value": "{{systemId}}"
+                },
+                {
+                  "key": "days",
+                  "value": "30"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Timeline: the project",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"epics and links\", () => { const r = pm.response.json(); pm.expect(r.projects.length === 1 && Array.isArray(r.projects[0].epics) && Array.isArray(r.links)).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/timeline?system={{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "timeline"
+              ],
+              "query": [
+                {
+                  "key": "system",
+                  "value": "{{systemId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Timeline: the workspace",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"projects\", () => { const r = pm.response.json(); pm.expect(Array.isArray(r.projects)).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/timeline?workspace=Projects",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "timeline"
+              ],
+              "query": [
+                {
+                  "key": "workspace",
+                  "value": "Projects"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Timeline: the developer moves their bar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"dates saved\", () => { const r = pm.response.json(); pm.expect(r.startDate === \"2026-11-02\" && r.dueDate === \"2026-11-09\").to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{spKey}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{spKey}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"startDate\": \"2026-11-02\",\n  \"dueDate\": \"2026-11-09\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Timeline: a viewer can't move bars",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{viewerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/items/{{spKey}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "items",
+                "{{spKey}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dueDate\": \"2026-11-20\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Sprints: admin deletes the planned sprint",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/sprints/{{sprint2Id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "sprints",
+                "{{sprint2Id}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sprints: admin turns them off again",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Kanban\", () => { const r = pm.response.json(); pm.expect(r.agileMode === \"kanban\").to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems/{{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems",
+                "{{systemId}}"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agileMode\": \"kanban\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Sprints: the activity log has them",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"logged\", () => { const r = pm.response.json(); pm.expect([\"sprint_created\", \"sprint_started\", \"sprint_completed\", \"sprint_scope_changed\", \"sprint_deleted\"].every((a) => r.items.some((e) => e.action === a))).to.be.true; });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/activity?kind=sprints&limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "activity"
+              ],
+              "query": [
+                {
+                  "key": "kind",
+                  "value": "sprints"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            }
+          }
+        },
+        {
           "name": "Unknown lead is rejected",
           "event": [
             {

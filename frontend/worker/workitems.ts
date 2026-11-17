@@ -92,6 +92,8 @@ export interface ItemRow {
   source: WorkSource;
   client: string | null;
   notes: string | null;
+  sprint_id: string | null;
+  backlog_rank: number | null;
   // joined
   project_key: string;
   project_name: string;
@@ -138,6 +140,7 @@ export function toSummary(r: ItemRow): WorkItemSummary {
     ...(r.due_date ? { dueDate: r.due_date } : {}),
     ...(r.parent_id ? { parentId: r.parent_id, parentKey: `${r.project_key}-${r.parent_number}` } : {}),
     source: r.source,
+    ...(r.sprint_id ? { sprintId: r.sprint_id } : {}),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     ...(r.resolved_at ? { resolvedAt: r.resolved_at } : {}),
@@ -925,9 +928,12 @@ export async function applyChange(c: ItemContext, r: ItemRow, b: ItemPatch, viaT
       db
         .prepare(
           `WITH n AS (UPDATE systems SET item_seq = item_seq + 1 WHERE id = ? RETURNING item_seq)
-           UPDATE work_items SET system_id = ?, number = (SELECT item_seq FROM n), parent_id = NULL WHERE id = ?`,
+           UPDATE work_items SET system_id = ?, number = (SELECT item_seq FROM n), parent_id = NULL, sprint_id = NULL,
+             backlog_rank = (SELECT COALESCE(MAX(x.backlog_rank), 0) + 1024 FROM work_items x WHERE x.system_id = ?) WHERE id = ?`,
         )
-        .bind(next.system_id, next.system_id, r.id),
+        .bind(next.system_id, next.system_id, next.system_id, r.id),
+      // It leaves any sprint it was in: scope change for a running one.
+      db.prepare("UPDATE sprint_items SET removed_at = ?, outcome = 'removed' WHERE item_id = ? AND removed_at IS NULL AND outcome IS NULL").bind(c.now, r.id),
     );
   }
   stmts.push(
@@ -1062,8 +1068,9 @@ export async function createItem(c: ItemContext, b: NewItem, source: WorkSource,
         `WITH n AS (UPDATE systems SET item_seq = item_seq + 1 WHERE id = ? RETURNING item_seq)
          INSERT INTO work_items (id, system_id, number, type, parent_id, summary, description, status, resolution, on_hold, priority,
            assignee, reporter, component, story_points, original_estimate, remaining_estimate, start_date, due_date,
-           created_at, updated_at, resolved_at, source, client, notes)
-         SELECT ?, ?, n.item_seq, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? FROM n RETURNING number`,
+           created_at, updated_at, resolved_at, source, client, notes, backlog_rank)
+         SELECT ?, ?, n.item_seq, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+           (SELECT COALESCE(MAX(x.backlog_rank), 0) + 1024 FROM work_items x WHERE x.system_id = ?) FROM n RETURNING number`,
       )
       .bind(
         sys.id,
@@ -1091,6 +1098,7 @@ export async function createItem(c: ItemContext, b: NewItem, source: WorkSource,
         source,
         str(b.client, "Requested by", 200),
         str(b.notes, "Notes", 2000),
+        sys.id,
       ),
     ...tags.map((l) => db.prepare("INSERT INTO work_item_labels (item_id, label) VALUES (?, ?)").bind(id, l)),
     db.prepare("INSERT INTO status_history (item_id, from_status, to_status, changed_by, changed_at) VALUES (?, NULL, ?, ?, ?)").bind(id, status, c.me.id, c.now),

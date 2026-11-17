@@ -11,6 +11,7 @@ import type { Digest, DigestItem, DigestSection } from "../src/data/notification
 import { ASK_MODEL, buildWorkFocus, clean, day, dueIn, rankFeatures, type AskPerson } from "./ask";
 import { emailFor, noteFailure, pause, raise, readDelivery, sendEmail } from "./notify";
 import { toFeature, type FeatureRow } from "./rows";
+import { sprintHealth } from "./sprints";
 
 const DAY = 86_400_000;
 /** Pulse's day runs on Harare time (UTC+2), whichever server wakes up. */
@@ -296,10 +297,16 @@ async function briefingSections(db: D1Database, w: Work): Promise<{ sections: Di
 
   // Always all three: an empty one says so, to managers and to the model, which otherwise fills the gap.
   const orNothing = (items: DigestItem[], nothing: string) => (items.length ? capped(items) : [{ text: nothing }]);
+  // Running sprints: days left and points done against the sprint's points.
+  const sprints: DigestItem[] = (await sprintHealth(db, w.now)).map((sp) => ({
+    text: `${clean(sp.project, 80)}, ${clean(sp.name, 60)}: ${sp.done} of ${sp.scope} points done (${sp.committed} committed), ${sp.daysLeft} day${sp.daysLeft === 1 ? "" : "s"} left${sp.behind ? ". Behind: less done than the days gone suggest" : ""}`,
+    link: projectLink(sp.systemId),
+  }));
   const sections: DigestSection[] = [
     { title: "What moved", items: orNothing(moved, "Nothing: no progress was recorded in the last 7 days.") },
     { title: "What slipped", items: orNothing(slipped, "Nothing is overdue, at risk or stalled.") },
     { title: "Needs a decision", items: orNothing(decide, "Nothing is waiting on a decision.") },
+    ...(sprints.length ? [{ title: "Sprints", items: capped(sprints) }] : []),
   ];
   return { sections, counts: [moved.length, slipped.length, decide.length] };
 }

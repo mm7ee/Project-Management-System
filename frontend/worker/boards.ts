@@ -128,7 +128,13 @@ export async function boardsApi(c: ItemContext, path: string, method: string): P
     }
     const board = await ensureBoard(c, systemId ? { systemId } : { workspace: workspace!.slice(0, 60) });
     const scope = scopeOf(board);
-    const where = [scope.sql, "w.type <> 'EPIC'", "(st.category <> 'DONE' OR w.updated_at >= ?)"];
+    // A Scrum project's board shows its running sprint only (a workspace board does the same for its Scrum projects).
+    const where = [
+      scope.sql,
+      "w.type <> 'EPIC'",
+      "(st.category <> 'DONE' OR w.updated_at >= ? OR s.agile_mode = 'scrum')",
+      "(s.agile_mode <> 'scrum' OR w.sprint_id IN (SELECT sp.id FROM sprints sp WHERE sp.system_id = w.system_id AND sp.state = 'ACTIVE'))",
+    ];
     const args: unknown[] = [...scope.args, new Date(Date.parse(c.now) - DONE_DAYS * 86_400_000).toISOString()];
     if (c.ownOnly) {
       where.push("(w.assignee = ? OR w.reporter = ?)");
@@ -188,7 +194,14 @@ export async function boardsApi(c: ItemContext, path: string, method: string): P
     const workflows = await loadWorkflows(db, [...new Set(projectWfs.results.map((p) => p.wf))]);
     const used = new Set(workflows.flatMap((w) => w.statuses.map((s) => s.id)));
     const mapped = new Set(columns.flatMap((col) => col.statuses));
+    const sprint = board.system_id
+      ? await db
+          .prepare("SELECT sp.id, sp.name, sp.goal, sp.end_date, s.agile_mode FROM systems s LEFT JOIN sprints sp ON sp.system_id = s.id AND sp.state = 'ACTIVE' WHERE s.id = ?")
+          .bind(board.system_id)
+          .first<{ id: string | null; name: string | null; goal: string | null; end_date: string | null; agile_mode: string }>()
+      : null;
     return json({
+      ...(sprint?.agile_mode === "scrum" ? { scrum: true, sprint: sprint.id ? { id: sprint.id, name: sprint.name, goal: sprint.goal, endDate: sprint.end_date } : null } : {}),
       board: { id: board.id, name: board.name, systemId: board.system_id, workspace: board.workspace, swimlanes: board.swimlanes, columns },
       statuses,
       workflows,
