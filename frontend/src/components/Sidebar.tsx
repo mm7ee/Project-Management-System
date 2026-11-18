@@ -1,4 +1,4 @@
-import { Columns3, Eye, Search, FileBarChart, FileText, FolderKanban, LayoutDashboard, ListChecks, Plus, Settings, X } from "lucide-react";
+import { Columns3, Eye, Search, Headset, FileBarChart, FileText, FolderKanban, LayoutDashboard, ListChecks, Plus, Settings, X } from "lucide-react";
 import { initials, type Status } from "../data/systems";
 import { ROLE_LABEL, type User } from "../data/roles";
 import { COMPANY_URL } from "../brand";
@@ -6,7 +6,7 @@ import PulseMark from "./PulseMark";
 import ParticleField from "./ParticleField";
 
 export type Filter = "ALL" | Status | "OVERDUE" | "REQUESTED" | "MAINTENANCE" | "MINE" | "BLOCKED";
-export type View = "dashboard" | "projects" | "project" | "features" | "boards" | "search" | "pcns" | "reports" | "users" | "activity" | "settings";
+export type View = "dashboard" | "projects" | "project" | "features" | "boards" | "search" | "service-desk" | "pcns" | "reports" | "users" | "activity" | "settings";
 
 interface Props {
   me: User;
@@ -80,6 +80,13 @@ export default function Sidebar(p: Props) {
             <button className={`nav-item ${p.view === "search" ? "active" : ""}`} onClick={go(() => p.onView("search"))}>
               <span>
                 <Search size={16} className="nav-icon" /> Search
+              </span>
+            </button>
+          )}
+          {!p.viewOnly && (
+            <button className={`nav-item ${p.view === "service-desk" ? "active" : ""}`} onClick={go(() => p.onView("service-desk"))}>
+              <span>
+                <Headset size={16} className="nav-icon" /> Service desk
               </span>
             </button>
           )}

@@ -6,6 +6,7 @@
 import { newToken } from "./auth";
 import { HttpError, body, json } from "./http";
 import { keyOf, toSummary, type ItemContext, type ItemRow } from "./workitems";
+import { PUBLIC_VIEWER, itemAccess, type Viewer } from "./access";
 import { statusCatalogue } from "./workflowData";
 import { MAX_WEEKS, MIN_WEEKS, averageVelocity, daysLeft, sprintEnd, type Sprint, type SprintSnapshot, type TimelineBar, type TimelineLink, type TimelineProject } from "../src/data/sprints";
 import type { StatusCategory } from "../src/data/workitems";
@@ -67,8 +68,10 @@ const toSprint = (r: SprintRow, snap?: SnapRow | null): Sprint => ({
     : {}),
 });
 
-const vis = (c: ItemContext, alias = "w") =>
-  c.ownOnly ? { sql: ` AND (${alias}.assignee = ? OR ${alias}.reporter = ?)`, args: [c.me.id, c.me.id] } : { sql: "", args: [] as unknown[] };
+const vis = (c: ItemContext, alias = "w") => {
+  const a = itemAccess(c.viewer, alias);
+  return { sql: ` AND ${a.sql}`, args: a.args };
+};
 
 const pts = (r: { story_points: number | null }) => (r.story_points == null ? 0 : Number(r.story_points));
 
@@ -708,22 +711,25 @@ export async function sprintsApi(c: ItemContext, path: string, method: string): 
 }
 
 /** Each running sprint's health, as this person may see it: for Ask Pulse and the Monday Briefing. */
-export async function sprintHealth(db: D1Database, now: number, own?: { userId: string }) {
+export async function sprintHealth(db: D1Database, now: number, viewer: Viewer = PUBLIC_VIEWER) {
+  // Counted from the items this viewer may see. With no viewer (the Monday Briefing, which goes to many
+  // people), items with a security level are left out.
+  const a = itemAccess(viewer);
   const rows = await db
     .prepare(
       `SELECT sp.id, sp.name, sp.goal, sp.start_date, sp.end_date, sp.system_id, (s.data::json ->> 'name') AS project,
          (SELECT COALESCE(SUM(si.points), 0) FROM sprint_items si JOIN work_items w ON w.id = si.item_id
-            WHERE si.sprint_id = sp.id AND si.added_after_start = 0${own ? " AND (w.assignee = ? OR w.reporter = ?)" : ""}) AS committed,
-         (SELECT COALESCE(SUM(w.story_points), 0) FROM work_items w WHERE w.sprint_id = sp.id${own ? " AND (w.assignee = ? OR w.reporter = ?)" : ""}) AS scope,
+            WHERE si.sprint_id = sp.id AND si.added_after_start = 0 AND ${a.sql}) AS committed,
+         (SELECT COALESCE(SUM(w.story_points), 0) FROM work_items w WHERE w.sprint_id = sp.id AND ${a.sql}) AS scope,
          (SELECT COALESCE(SUM(w.story_points), 0) FROM work_items w JOIN work_statuses st ON st.id = w.status
-            WHERE w.sprint_id = sp.id AND st.category = 'DONE'${own ? " AND (w.assignee = ? OR w.reporter = ?)" : ""}) AS done,
-         (SELECT COUNT(*) FROM work_items w WHERE w.sprint_id = sp.id${own ? " AND (w.assignee = ? OR w.reporter = ?)" : ""}) AS items
+            WHERE w.sprint_id = sp.id AND st.category = 'DONE' AND ${a.sql}) AS done,
+         (SELECT COUNT(*) FROM work_items w WHERE w.sprint_id = sp.id AND ${a.sql}) AS items
        FROM sprints sp JOIN systems s ON s.id = sp.system_id WHERE sp.state = 'ACTIVE' ORDER BY sp.end_date`,
     )
-    .bind(...(own ? [own.userId, own.userId, own.userId, own.userId, own.userId, own.userId, own.userId, own.userId] : []))
+    .bind(...a.args, ...a.args, ...a.args, ...a.args)
     .all<{ id: string; name: string; goal: string; start_date: string; end_date: string; system_id: string; project: string; committed: number; scope: number; done: number; items: number }>();
   return rows.results
-    .filter((r) => !own || Number(r.items) > 0)
+    .filter((r) => !viewer.ownOnly || Number(r.items) > 0)
     .map((r) => {
       const total = Math.max(1, Date.parse(r.end_date) - Date.parse(r.start_date) + 86_400_000);
       const elapsed = Math.min(1, Math.max(0, (now - Date.parse(r.start_date)) / total));

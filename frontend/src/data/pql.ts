@@ -30,6 +30,8 @@ export interface FieldDef {
   ops: Op[];
   empty: boolean;
   sortable: boolean;
+  /** A custom field (Phase 5): its ids (one per workspace using the name) and its kind. */
+  custom?: { ids: string[]; kind: "text" | "number" | "date" | "select" | "multiselect" | "user" };
 }
 
 export type Op = "=" | "!=" | ">" | "<" | ">=" | "<=" | "~" | "IN" | "NOT IN";
@@ -55,13 +57,27 @@ export const FIELDS: FieldDef[] = [
   { name: "resolved", kind: "date", description: "When it was resolved", ops: CMP.filter((o) => o !== "IN" && o !== "NOT IN"), empty: true, sortable: true },
   { name: "resolution", kind: "enum", description: 'Done or "Won\'t do"', ops: EQ, empty: true, sortable: false },
   { name: "storyPoints", kind: "number", description: "Story points", ops: CMP, empty: true, sortable: true },
-  { name: "source", kind: "enum", description: '"client request" or internal', ops: EQ, empty: false, sortable: false },
+  { name: "source", kind: "enum", description: '"client request", "service desk" or internal', ops: EQ, empty: false, sortable: false },
   { name: "workspace", kind: "enum", description: "The project's workspace", ops: EQ, empty: false, sortable: false },
   { name: "text", kind: "text", description: "Summary, description and comments; use ~", ops: ["~"], empty: false, sortable: false },
   { name: "summary", kind: "text", description: "The summary; use ~", ops: ["~"], empty: false, sortable: true },
   { name: "description", kind: "text", description: "The description; use ~", ops: ["~"], empty: true, sortable: false },
 ];
 export const FIELD_BY_NAME = new Map(FIELDS.map((f) => [f.name.toLowerCase(), f]));
+
+/** Custom fields as PQL fields. A name with spaces is written in quotes: "Customer tier" = Gold. */
+export function customFieldDefs(list: { name: string; kind: NonNullable<FieldDef["custom"]>["kind"]; ids: string[] }[]): FieldDef[] {
+  return list
+    .filter((c) => !FIELD_BY_NAME.has(c.name.toLowerCase()))
+    .map((c): FieldDef => {
+      const base = { name: c.name, empty: true, sortable: false, custom: { ids: c.ids, kind: c.kind } };
+      if (c.kind === "number") return { ...base, kind: "number", ops: CMP, description: "A custom number field" };
+      if (c.kind === "date") return { ...base, kind: "date", ops: CMP.filter((o) => o !== "IN" && o !== "NOT IN"), description: "A custom date field" };
+      if (c.kind === "user") return { ...base, kind: "user", ops: EQ, description: "A custom person field: a username, or currentUser()" };
+      if (c.kind === "text") return { ...base, kind: "text", ops: ["=", "!=", "~"], description: "A custom text field; ~ matches part of it" };
+      return { ...base, kind: "enum", ops: EQ, description: c.kind === "multiselect" ? "A custom multi-select field: any chosen value matches" : "A custom select field" };
+    });
+}
 
 export const FUNCTIONS: { name: string; description: string; kinds: FieldKind[]; list?: boolean }[] = [
   { name: "currentUser", description: "You", kinds: ["user"] },
@@ -209,8 +225,10 @@ const suggest = (word: string, options: string[]) => {
 };
 
 /** Parses PQL into a syntax tree. Throws PqlError with the position of the problem. */
-export function parse(text: string): Query {
+export function parse(text: string, custom: FieldDef[] = []): Query {
   const tokens = tokenize(text);
+  const byName = custom.length ? new Map([...FIELD_BY_NAME, ...custom.map((f): [string, FieldDef] => [f.name.toLowerCase(), f])]) : FIELD_BY_NAME;
+  const names = [...FIELDS, ...custom].map((f) => f.name);
   let pos = 0;
   const peek = () => tokens[pos];
   const isWord = (t: Token | undefined, w: string) => !!t && t.type === "word" && t.value.toUpperCase() === w;
@@ -260,9 +278,9 @@ export function parse(text: string): Query {
   const clause = (): Node => {
     const t = peek();
     if (!t) throw new PqlError("A condition is needed here, such as status = Done", end(), end() + 1);
-    if (t.type !== "word") throw new PqlError("A field name is needed here, such as status or assignee", t.start, t.end);
-    const field = FIELD_BY_NAME.get(t.value.toLowerCase());
-    if (!field) throw new PqlError(`Unknown field '${t.value}'${suggest(t.value, FIELDS.map((f) => f.name))}`, t.start, t.end);
+    if (t.type !== "word" && t.type !== "string") throw new PqlError("A field name is needed here, such as status or assignee", t.start, t.end);
+    const field = byName.get(t.value.toLowerCase());
+    if (!field) throw new PqlError(`Unknown field '${t.value}'${suggest(t.value, names)}`, t.start, t.end);
     pos++;
     const o = peek();
     if (!o) throw new PqlError(`An operator is needed after ${field.name}, such as = or IN`, end(), end() + 1);
@@ -424,7 +442,9 @@ export interface Suggestion {
  * What could come next at `cursor`: fields, operators, values or keywords. `values` supplies the
  * known values per field (statuses, usernames, project keys…).
  */
-export function suggestAt(text: string, cursor: number, values: Partial<Record<string, string[]>>): { from: number; to: number; items: Suggestion[] } {
+export function suggestAt(text: string, cursor: number, values: Partial<Record<string, string[]>>, custom: FieldDef[] = []): { from: number; to: number; items: Suggestion[] } {
+  const all = [...FIELDS, ...custom];
+  const byName = new Map(all.map((f) => [f.name.toLowerCase(), f]));
   const before = text.slice(0, cursor);
   const partial = /[A-Za-z0-9_.\-@"']*$/.exec(before)![0];
   const from = cursor - partial.length;
@@ -439,10 +459,10 @@ export function suggestAt(text: string, cursor: number, values: Partial<Record<s
   const matching = (items: Suggestion[]) => items.filter((s) => s.label.toLowerCase().startsWith(word) || (word.length > 1 && s.label.toLowerCase().includes(word))).slice(0, 12);
   const last = tokens[tokens.length - 1];
   const prev = tokens[tokens.length - 2];
-  const fieldItems = () => FIELDS.map((f) => ({ label: f.name, insert: `${f.name} `, detail: f.description }));
+  const fieldItems = () => all.map((f) => ({ label: f.name, insert: `${quote(f.name)} `, detail: f.description }));
   // After a field: its operators.
-  if (last?.type === "word" && FIELD_BY_NAME.has(last.value.toLowerCase()) && !(prev?.type === "op") && !(prev && /^(IN)$/i.test(prev.value))) {
-    const f = FIELD_BY_NAME.get(last.value.toLowerCase())!;
+  if ((last?.type === "word" || last?.type === "string") && byName.has(last.value.toLowerCase()) && !(prev?.type === "op") && !(prev && /^(IN)$/i.test(prev.value))) {
+    const f = byName.get(last.value.toLowerCase())!;
     const ops = [...f.ops.map((o) => ({ label: o, insert: `${o} ` })), ...(f.empty ? [{ label: "IS EMPTY", insert: "IS EMPTY " }, { label: "IS NOT EMPTY", insert: "IS NOT EMPTY " }] : [])];
     if (last.value.toLowerCase() !== "order") return { from, to: cursor, items: matching(ops) };
   }
@@ -458,7 +478,7 @@ export function suggestAt(text: string, cursor: number, values: Partial<Record<s
   if (opIndex >= 0 && (opIndex === tokens.length - 1 || inList || (tokens[tokens.length - 1].type === "lparen" && opIndex === tokens.length - 2))) {
     let fi = opIndex - 1;
     if (/^NOT$/i.test(tokens[fi]?.value ?? "")) fi--;
-    const field = FIELD_BY_NAME.get((tokens[fi]?.value ?? "").toLowerCase());
+    const field = byName.get((tokens[fi]?.value ?? "").toLowerCase());
     if (field) {
       const fns = FUNCTIONS.filter((fn) => fn.kinds.includes(field.kind)).map((fn) => ({ label: `${fn.name}()`, insert: `${fn.name}() `, detail: fn.description }));
       const known = (values[field.name] ?? []).map((v) => ({ label: v, insert: `${quote(v)} ` }));
@@ -467,7 +487,7 @@ export function suggestAt(text: string, cursor: number, values: Partial<Record<s
     }
   }
   // After a complete condition: joiners and ORDER BY.
-  if (last && (last.type === "rparen" || last.type === "string" || last.type === "number" || last.type === "reldate" || (last.type === "word" && !FIELD_BY_NAME.has(last.value.toLowerCase()) && !KEYWORDS.includes(last.value.toUpperCase())) || /^(EMPTY|NULL|ASC|DESC)$/i.test(last.value))) {
+  if (last && (last.type === "rparen" || last.type === "string" || last.type === "number" || last.type === "reldate" || (last.type === "word" && !byName.has(last.value.toLowerCase()) && !KEYWORDS.includes(last.value.toUpperCase())) || /^(EMPTY|NULL|ASC|DESC)$/i.test(last.value))) {
     if (tokens.some((t) => /^ORDER$/i.test(t.value))) return { from, to: cursor, items: matching([{ label: "ASC", insert: "ASC" }, { label: "DESC", insert: "DESC" }, { label: ",", insert: ", " }]) };
     return { from, to: cursor, items: matching([{ label: "AND", insert: "AND " }, { label: "OR", insert: "OR " }, { label: "ORDER BY", insert: "ORDER BY " }]) };
   }

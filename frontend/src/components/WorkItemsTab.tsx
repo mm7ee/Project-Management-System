@@ -18,6 +18,8 @@ import {
   type WorkItemType,
 } from "../data/workitems";
 import { ItemPriority, ItemStatusPill, Rollup, TypeIcon, itemHref } from "./WorkItemBits";
+import { CustomFieldInput } from "./WorkItemExtras";
+import type { CustomField, CustomValue, SecurityLevel } from "../data/admin";
 import type { StatusDef } from "../data/workflows";
 
 interface Props {
@@ -133,6 +135,7 @@ export default function WorkItemsTab({ system, users, now, canCreate, canManage,
       {canCreate && !readOnly && (
         <QuickCreate
           system={system}
+          users={people}
           onCreated={(item) => {
             setCreated(item);
             load();
@@ -325,8 +328,24 @@ function Row({ item: i, assignee, now, systemId }: { item: WorkItemSummary; assi
 }
 
 /** Type and summary, then Enter: the quickest way to add a work item. Sub-tasks also need a parent. */
-function QuickCreate({ system, onCreated }: { system: System; onCreated: (item: WorkItem) => void }) {
+function QuickCreate({ system, users, onCreated }: { system: System; users: User[]; onCreated: (item: WorkItem) => void }) {
   const [type, setType] = useState<WorkItemType>("TASK");
+  // The workspace's custom fields shown on the create form, and the security levels you may give.
+  const [fields, setFields] = useState<CustomField[]>([]);
+  const [levels, setLevels] = useState<SecurityLevel[]>([]);
+  const [values, setValues] = useState<Record<string, CustomValue>>({});
+  const [level, setLevel] = useState("");
+  const [more, setMore] = useState(false);
+  useEffect(() => {
+    api<CustomField[]>(`/custom-fields?workspace=${encodeURIComponent(system.workspace ?? "Projects")}`)
+      .then((f) => setFields(f.filter((x) => x.onCreate)))
+      .catch(() => setFields([]));
+    api<SecurityLevel[]>("/security-levels")
+      .then(setLevels)
+      .catch(() => setLevels([]));
+  }, [system.workspace]);
+  const required = fields.filter((f) => f.required);
+  const missing = required.some((f) => values[f.id] == null || values[f.id] === "" || (Array.isArray(values[f.id]) && !(values[f.id] as string[]).length));
   const [summary, setSummary] = useState("");
   const [parent, setParent] = useState("");
   const [parents, setParents] = useState<WorkItemSummary[]>([]);
@@ -350,8 +369,17 @@ function QuickCreate({ system, onCreated }: { system: System; onCreated: (item: 
     setBusy(true);
     setError("");
     try {
-      const item = await api<WorkItem>("/items", "POST", { systemId: system.id, type, summary: summary.trim(), ...(parent ? { parent } : {}) });
+      const item = await api<WorkItem>("/items", "POST", {
+        systemId: system.id,
+        type,
+        summary: summary.trim(),
+        ...(parent ? { parent } : {}),
+        customFields: Object.fromEntries(Object.entries(values).filter(([, v]) => v !== null && v !== "" && !(Array.isArray(v) && !v.length))),
+        ...(level ? { securityLevel: level } : {}),
+      });
       setSummary("");
+      setValues({});
+      setLevel("");
       onCreated(item);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't create it");
@@ -379,9 +407,41 @@ function QuickCreate({ system, onCreated }: { system: System; onCreated: (item: 
           ))}
         </select>
       )}
-      <button className="btn btn-amber" type="submit" disabled={busy || !summary.trim() || (type === "SUBTASK" && !parent)}>
+      <button className="btn btn-amber" type="submit" disabled={busy || !summary.trim() || (type === "SUBTASK" && !parent) || missing}>
         <Plus size={16} strokeWidth={3} /> Create
       </button>
+      {(fields.length > 0 || levels.length > 0) && (
+        <button type="button" className="btn btn-ghost sm" aria-expanded={more || required.length > 0} onClick={() => setMore(!more)}>
+          {more || required.length ? "Fewer fields" : "More fields"}
+          {required.length ? ` (${required.length} required)` : ""}
+        </button>
+      )}
+      {(more || required.length > 0) && (
+        <div className="wi-quick-more">
+          {fields.map((f) => (
+            <label key={f.id} className="field">
+              <span>
+                {f.name}
+                {f.required ? " (required)" : ""}
+              </span>
+              <CustomFieldInput field={f} users={users} value={values[f.id] ?? null} onChange={(v) => setValues({ ...values, [f.id]: v })} />
+            </label>
+          ))}
+          {levels.length > 0 && (
+            <label className="field">
+              <span>Security level</span>
+              <select value={level} onChange={(e) => setLevel(e.target.value)}>
+                <option value="">Anyone who can see the project</option>
+                {levels.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+      )}
       {error && <p className="form-error">{error}</p>}
     </form>
   );

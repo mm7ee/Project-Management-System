@@ -46,6 +46,7 @@ export default function SearchPage({ users, workspaces, now, canShare, initialPq
   const [error, setError] = useState<{ message: string; start?: number; end?: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [values, setValues] = useState<Values>({});
+  const [custom, setCustom] = useState<FieldDef[]>([]);
   const [filters, setFilters] = useState<SavedFilter[]>([]);
   const [openFilter, setOpenFilter] = useState<SavedFilter | null>(null);
   const [saving, setSaving] = useState(false);
@@ -61,8 +62,11 @@ export default function SearchPage({ users, workspaces, now, canShare, initialPq
     }
   }, []);
   useEffect(() => {
-    api<{ fields: FieldDef[]; values: Values }>("/search/fields")
-      .then((r) => setValues(r.values))
+    api<{ fields: FieldDef[]; custom: FieldDef[]; values: Values }>("/search/fields")
+      .then((r) => {
+        setValues(r.values);
+        setCustom(r.custom ?? []);
+      })
       .catch(() => setValues({}));
     loadFilters();
   }, [loadFilters]);
@@ -107,9 +111,26 @@ export default function SearchPage({ users, workspaces, now, canShare, initialPq
         const s = String(v ?? "");
         return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
       };
+      // Custom fields become extra columns, one per field name found in the results.
+      const customNames = [...new Set(all.flatMap((i) => (i.customFields ?? []).map((f) => f.name)))];
       const rows = [
-        ["Key", "Type", "Summary", "Status", "Priority", "Assignee", "Reporter", "Labels", "Story points", "Due", "Created", "Updated", "Resolved"],
-        ...all.map((i) => [i.key, TYPE_META[i.type].label, i.summary, i.statusName, WORK_PRIORITY_META[i.priority].label, name(i.assignee) ?? "", name(i.reporter) ?? "", i.labels.join(" "), i.storyPoints ?? "", i.dueDate ?? "", i.createdAt.slice(0, 10), i.updatedAt.slice(0, 10), i.resolvedAt?.slice(0, 10) ?? ""]),
+        ["Key", "Type", "Summary", "Status", "Priority", "Assignee", "Reporter", "Labels", "Story points", "Due", "Created", "Updated", "Resolved", ...customNames],
+        ...all.map((i) => [
+          i.key,
+          TYPE_META[i.type].label,
+          i.summary,
+          i.statusName,
+          WORK_PRIORITY_META[i.priority].label,
+          name(i.assignee) ?? "",
+          name(i.reporter) ?? "",
+          i.labels.join(" "),
+          i.storyPoints ?? "",
+          i.dueDate ?? "",
+          i.createdAt.slice(0, 10),
+          i.updatedAt.slice(0, 10),
+          i.resolvedAt?.slice(0, 10) ?? "",
+          ...customNames.map((n) => i.customFields?.find((f) => f.name === n)?.display ?? ""),
+        ]),
       ];
       const blob = new Blob([rows.map((r) => r.map(cell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
       const a = document.createElement("a");
@@ -206,7 +227,7 @@ export default function SearchPage({ users, workspaces, now, canShare, initialPq
               }}
             />
           ) : (
-            <PqlEditor value={pql} onChange={setPql} onRun={() => run(pql)} values={values} error={error} />
+            <PqlEditor value={pql} onChange={setPql} onRun={() => run(pql)} values={values} custom={custom} error={error} />
           )}
           {mode === "advanced" && <AskBox onPql={(q) => setPql(q)} />}
           {error && mode === "basic" && <p className="form-error banner">{error.message}</p>}
@@ -375,12 +396,26 @@ function BasicMode({ values, onRun }: { values: Values; onRun: (pql: string) => 
 }
 
 /** A PQL text box: suggestions as you type (arrow keys and Enter or Tab), errors pointed at where they are. */
-function PqlEditor({ value, onChange, onRun, values, error }: { value: string; onChange: (v: string) => void; onRun: () => void; values: Values; error: { message: string; start?: number; end?: number } | null }) {
+function PqlEditor({
+  value,
+  onChange,
+  onRun,
+  values,
+  custom,
+  error,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onRun: () => void;
+  values: Values;
+  custom: FieldDef[];
+  error: { message: string; start?: number; end?: number } | null;
+}) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const [cursor, setCursor] = useState(value.length);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
-  const sugg = useMemo(() => suggestAt(value, cursor, values), [value, cursor, values]);
+  const sugg = useMemo(() => suggestAt(value, cursor, values, custom), [value, cursor, values, custom]);
   const items: Suggestion[] = open ? sugg.items.slice(0, 8) : [];
   const pick = (s: Suggestion) => {
     const next = value.slice(0, sugg.from) + s.insert + value.slice(sugg.to);

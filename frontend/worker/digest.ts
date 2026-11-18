@@ -57,7 +57,8 @@ async function loadWork(db: D1Database, now: number): Promise<Work> {
     systems: systems.results.map((r) => JSON.parse(r.data) as System),
     people: people.results.map((p) => ({ ...p, projectIds: assignments.results.filter((a) => a.user_id === p.id).map((a) => a.system_id) })),
     assignments: assignments.results,
-    features: features.results.map(toFeature),
+    // Digests and the Monday Briefing go to many people: confidential client requests stay out.
+    features: features.results.filter((f) => !f.security_level).map(toFeature),
     blockers: blockers.results.map((b) => ({
       id: b.id!,
       systemId: b.system_id!,

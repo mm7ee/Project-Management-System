@@ -23,6 +23,11 @@ DELETE FROM work_items WHERE id LIKE 'demo-%';
 DELETE FROM boards WHERE id LIKE 'demo-%';
 DELETE FROM sprints WHERE id LIKE 'demo-%';
 DELETE FROM dashboards WHERE id LIKE 'demo-%';
+DELETE FROM custom_fields WHERE id LIKE 'demo-%';
+DELETE FROM portal_links WHERE id LIKE 'demo-%';
+DELETE FROM api_tokens WHERE id LIKE 'demo-%';
+DELETE FROM notification_optouts WHERE user_id LIKE 'demo-%';
+DELETE FROM security_level_grants WHERE user_id LIKE 'demo-%';
 DELETE FROM saved_filters WHERE id LIKE 'demo-%';
 DELETE FROM blockers WHERE id LIKE 'demo-%';
 DELETE FROM documents WHERE id LIKE 'demo-%';
@@ -595,6 +600,89 @@ links.forEach((l, i) =>
 workLogs.forEach((w, i) =>
   out.push(`INSERT INTO work_logs (id, item_id, user_id, minutes, note, work_date, created_at) VALUES (${q(`demo-wl-${i + 1}`)}, ${q(w.itemId)}, ${q(w.userId)}, ${w.minutes}, ${q(w.note)}, ${q(w.day)}, ${q(`${w.day}T16:00:00.000Z`)});`),
 );
+// ---------- Phase 5: security levels, custom fields, GitHub links, service desk ----------
+// Two open bugs are "Confidential – Managers only"; the demo manager is also given "HR only".
+items
+  .filter((it) => it.type === "BUG" && it.status !== "DONE")
+  .slice(0, 2)
+  .forEach((it) => out.push(`UPDATE work_items SET security_level = 'managers-only' WHERE id = ${q(it.id)};`));
+out.push(`INSERT INTO security_level_grants (level_id, user_id) VALUES ('hr-only', ${q(P.Vimbai)}) ON CONFLICT DO NOTHING;`);
+
+// A "Client tier" select and an "Estimated value" number in the Projects workspace, on some items.
+out.push(
+  `INSERT INTO custom_fields (id, workspace, name, kind, description, required, on_create, on_edit, on_view, on_board, position, created_at, updated_at) VALUES ('demo-cf-tier', 'Projects', 'Client tier (demo)', 'select', 'How important the client is', 0, 1, 1, 1, 1, 90, ${q(ago(30))}, ${q(ago(30))}) ON CONFLICT DO NOTHING;`,
+  `INSERT INTO custom_fields (id, workspace, name, kind, description, required, on_create, on_edit, on_view, on_board, position, created_at, updated_at) VALUES ('demo-cf-value', 'Projects', 'Estimated value (demo)', 'number', 'US$', 0, 1, 1, 1, 0, 91, ${q(ago(30))}, ${q(ago(30))}) ON CONFLICT DO NOTHING;`,
+  `INSERT INTO custom_field_options (id, field_id, label, position) VALUES ('demo-cfo-gold', 'demo-cf-tier', 'Gold', 1), ('demo-cfo-silver', 'demo-cf-tier', 'Silver', 2), ('demo-cfo-bronze', 'demo-cf-tier', 'Bronze', 3) ON CONFLICT DO NOTHING;`,
+);
+const projectsItems = items.filter((it) => WORKSPACE[systems.find((s) => s.id === it.systemId)?.name] !== "HR" && it.type !== "SUBTASK");
+projectsItems.slice(0, 40).forEach((it, i) => {
+  out.push(`INSERT INTO custom_field_values (item_id, field_id, option_id) VALUES (${q(it.id)}, 'demo-cf-tier', ${q(["demo-cfo-gold", "demo-cfo-silver", "demo-cfo-bronze"][i % 3])});`);
+  if (i % 2 === 0) out.push(`INSERT INTO custom_field_values (item_id, field_id, value_number) VALUES (${q(it.id)}, 'demo-cf-value', ${(i + 1) * 750});`);
+});
+
+// Commits, branches and pull requests from GitHub on a few items in progress.
+items
+  .filter((it) => it.status === "IN_PROGRESS" && it.type !== "EPIC")
+  .slice(0, 6)
+  .forEach((it, i) => {
+    const sys = systems.find((s) => s.id === it.systemId);
+    const idx = systems.indexOf(sys);
+    const key = `QQ${String.fromCharCode(65 + Math.floor(idx / 26))}${String.fromCharCode(65 + (idx % 26))}-${it.number}`;
+    const repo = `omnicontact/${slug(sys.name)}`;
+    const sha = (i + 1).toString(16).padStart(2, "0").repeat(20);
+    const at = ago(between(0, 6), 14);
+    out.push(
+      `INSERT INTO dev_links (id, item_id, kind, repo, ref, title, url, author, state, at, created_at, updated_at) VALUES (${q(`demo-dl-${i}-b`)}, ${q(it.id)}, 'branch', ${q(repo)}, ${q(`feature/${key.toLowerCase()}`)}, ${q(`feature/${key.toLowerCase()}`)}, ${q(`https://github.com/${repo}/tree/feature/${key.toLowerCase()}`)}, 'demo', NULL, ${q(at)}, ${q(at)}, ${q(at)});`,
+      `INSERT INTO dev_links (id, item_id, kind, repo, ref, title, url, author, state, at, created_at, updated_at) VALUES (${q(`demo-dl-${i}-c`)}, ${q(it.id)}, 'commit', ${q(repo)}, ${q(sha)}, ${q(`${key}: ${it.summary}`.slice(0, 200))}, ${q(`https://github.com/${repo}/commit/${sha}`)}, ${q(nameOf[it.assignee] ?? "Demo developer")}, NULL, ${q(at)}, ${q(at)}, ${q(at)});`,
+    );
+    if (i % 2 === 0) {
+      out.push(
+        `INSERT INTO dev_links (id, item_id, kind, repo, ref, title, url, author, state, at, created_at, updated_at) VALUES (${q(`demo-dl-${i}-p`)}, ${q(it.id)}, 'pull_request', ${q(repo)}, ${q(String(40 + i))}, ${q(`${key} ${it.summary}`.slice(0, 200))}, ${q(`https://github.com/${repo}/pull/${40 + i}`)}, 'demo', ${q(i === 0 ? "merged" : "open")}, ${q(at)}, ${q(at)}, ${q(at)});`,
+      );
+    }
+  });
+
+// Service desk requests in the first live demo project (the real service desk project is left as it is).
+const SD = systems.find((s) => s.status === "LIVE") ?? systems[0];
+let sdNumber = Math.max(0, ...items.filter((it) => it.systemId === SD.id).map((it) => it.number));
+const REQUESTS_SD = [
+  ["incident", "BUG", "Agents can't log in to the softphone", "HIGHEST", "IN_PROGRESS", 0.2, "Rudo Moyo", "rudo.moyo@example.com", [["Which system is affected?", "Softphone"], ["How many people are affected?", "A whole site or client"]], true],
+  ["incident", "BUG", "Wallboard shows yesterday's figures", "HIGH", "TODO", 1.5, "Farai Ncube", "farai.ncube@example.com", [["Which system is affected?", "Wallboard"], ["How many people are affected?", "My team"]], false],
+  ["service-request", "TASK", "New CRM accounts for five agents", "MEDIUM", "TODO", 0.5, "Tendai Chikwanha", "tendai@example.com", [["What do you need?", "A new account"]], false],
+  ["service-request", "TASK", "Headset for the Bulawayo team lead", "LOW", "DONE", 6, "Nyasha Dube", "nyasha.dube@example.com", [["What do you need?", "Equipment"]], true],
+  ["change", "TASK", "Move the IVR prompts to the new voice", "MEDIUM", "IN_PROGRESS", 3, "Vimbai Mutasa", null, [["System to change", "IVR"], ["Preferred change window", "Saturday 18:00–20:00"], ["How would it be rolled back?", "Switch back to the old prompt set"], ["Risk", "Low"]], true],
+  ["question", "TASK", "Can we export call notes to Excel?", "LOW", "DONE", 4, "Kuda Sibanda", "kuda.sibanda@example.com", [], true],
+];
+REQUESTS_SD.forEach(([typeId, type, summary, priority, status, daysAgo, customer, email, answers, replied], i) => {
+  sdNumber++;
+  const id = `demo-sd-${i + 1}`;
+  const created = new Date(NOW - daysAgo * DAY).toISOString();
+  const done = status === "DONE";
+  const resolved = done ? new Date(Date.parse(created) + 0.6 * daysAgo * DAY).toISOString() : null;
+  const assignee = status === "TODO" ? null : P.Michael;
+  out.push(
+    `INSERT INTO work_items (id, system_id, number, type, summary, description, status, resolution, priority, assignee, reporter, created_at, updated_at, resolved_at, source) VALUES (${[
+      q(id), q(SD.id), sdNumber, q(type), q(summary), q("Raised on the service desk portal."), q(status), q(done ? "DONE" : null), q(priority), q(assignee), q(P.Vimbai), q(created), q(resolved ?? created), q(resolved), "'service_desk'",
+    ].join(", ")});`,
+    `INSERT INTO status_history (item_id, from_status, to_status, changed_by, changed_at) VALUES (${q(id)}, NULL, 'TODO', ${q(P.Vimbai)}, ${q(created)});`,
+    `INSERT INTO sd_requests (item_id, request_type_id, customer_name, customer_email, customer_user_id, portal_link_id, first_response_at, created_at) VALUES (${[
+      q(id), q(typeId), q(customer), q(email), q(email ? null : P.Vimbai), q(email ? "demo-pl-1" : null), q(replied ? new Date(Date.parse(created) + 0.05 * DAY).toISOString() : null), q(created),
+    ].join(", ")});`,
+    ...answers.map(([label, value], k) => `INSERT INTO sd_answers (item_id, field_id, label, value, position) VALUES (${q(id)}, ${q(`demo-q-${k}`)}, ${q(label)}, ${q(value)}, ${k + 1});`),
+  );
+  if (replied) {
+    out.push(
+      `INSERT INTO work_item_comments (id, item_id, author_id, body, created_at, public) VALUES (${q(`demo-sdc-${i + 1}`)}, ${q(id)}, ${q(P.Michael)}, ${q("Thanks, we're on it. We'll update you here.")}, ${q(new Date(Date.parse(created) + 0.05 * DAY).toISOString())}, 1);`,
+    );
+  }
+});
+// A portal link for the demo client (its secret is unknown, so it can't be used) and a revoked API token.
+out.push(
+  `INSERT INTO portal_links (id, token_hash, label, created_by, created_at, expires_at, requests) VALUES ('demo-pl-1', ${q(`demo-${slug("unused portal secret")}`)}, 'Demo client operations (demo)', ${q(P.Vimbai)}, ${q(ago(10))}, ${q(new Date(NOW + 80 * DAY).toISOString())}, 5);`,
+  `INSERT INTO api_tokens (id, user_id, name, token_hash, prefix, scope, created_at, expires_at, revoked_at, revoked_by) VALUES ('demo-tok-1', ${q(P.Tarisai)}, 'Reporting script (demo)', ${q(`demo-${slug("unused token")}`)}, 'pulse_demo00', 'read', ${q(ago(20))}, ${q(new Date(NOW + 10 * DAY).toISOString())}, ${q(ago(2))}, ${q(P.Tarisai)});`,
+  `INSERT INTO notification_optouts (user_id, event) VALUES (${q(P.Michael)}, 'item_updated') ON CONFLICT DO NOTHING;`,
+);
+
 out.push(`UPDATE systems SET item_seq = COALESCE((SELECT MAX(number) FROM work_items w WHERE w.system_id = systems.id), 0) WHERE id LIKE 'demo-%';`);
 if (INFRA) out.push(`UPDATE systems SET workflow_id = 'infra-deploy' WHERE id = ${q(INFRA.id)};`);
 

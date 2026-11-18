@@ -14,6 +14,10 @@ export interface Alert {
   link?: string;
   digest?: Digest;
   dedupe?: string;
+  /** Under the bell (default yes). A notification scheme can turn it off for an event. */
+  bell?: boolean;
+  /** By email, following the person's settings (default yes). A scheme can turn it off. */
+  email?: boolean;
 }
 
 /** What goes to the team's Teams channel: written for the team, not "you". */
@@ -128,18 +132,30 @@ export function emailFor(env: Env, title: string, intro: string, digest?: Digest
  * its email. A failed send never loses the in-app notification. Returns how many were new and emailed.
  */
 export async function raise(env: Env, alerts: Alert[], channel?: ChannelPost): Promise<{ created: number; emailed: number }> {
-  if (!alerts.length) return { created: 0, emailed: 0 };
   const db = env.DB;
+  if (!alerts.length) {
+    if (channel) {
+      const delivery = await readDelivery(db);
+      if (delivery.teams) await postToTeams(env, delivery, channel).catch((e) => noteFailure(db, "Teams", e));
+    }
+    return { created: 0, emailed: 0 };
+  }
   const at = new Date().toISOString();
-  const rows = alerts.map((a) => ({ ...a, id: newToken().slice(0, 16) }));
-  const results = await db.batch(
-    rows.map((a) =>
-      db
-        .prepare("INSERT INTO notifications (id, user_id, kind, title, body, link, digest, dedupe, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING")
-        .bind(a.id, a.userId, a.kind, a.title.slice(0, 200), (a.body ?? "").slice(0, 500), a.link ?? null, a.digest ? JSON.stringify(a.digest) : null, a.dedupe ?? null, at),
-    ),
-  );
-  const fresh = rows.filter((_, i) => results[i].meta.changes);
+  const all = alerts.map((a) => ({ ...a, id: newToken().slice(0, 16) }));
+  // Email-only alerts (a scheme with the bell off) aren't stored; they go straight to email.
+  const rows = all.filter((a) => a.bell !== false);
+  const emailOnly = all.filter((a) => a.bell === false && a.email !== false);
+  const results = rows.length
+    ? await db.batch(
+        rows.map((a) =>
+          db
+            .prepare("INSERT INTO notifications (id, user_id, kind, title, body, link, digest, dedupe, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING")
+            .bind(a.id, a.userId, a.kind, a.title.slice(0, 200), (a.body ?? "").slice(0, 500), a.link ?? null, a.digest ? JSON.stringify(a.digest) : null, a.dedupe ?? null, at),
+        ),
+      )
+    : [];
+  const stored = rows.filter((_, i) => results[i]?.meta.changes);
+  const fresh = [...stored, ...emailOnly];
   if (!fresh.length) return { created: 0, emailed: 0 };
 
   const delivery = await readDelivery(db);
@@ -151,7 +167,7 @@ export async function raise(env: Env, alerts: Alert[], channel?: ChannelPost): P
       .bind(...ids)
       .all<{ id: string; email: string | null; prefs: string }>();
     const byId = new Map(people.results.map((p) => [p.id, p]));
-    for (const a of fresh) {
+    for (const a of fresh.filter((x) => x.email !== false)) {
       const person = byId.get(a.userId);
       if (!person?.email) continue;
       const prefs = cleanPrefs(JSON.parse(person.prefs || "{}"), START_KEYS);
@@ -168,5 +184,5 @@ export async function raise(env: Env, alerts: Alert[], channel?: ChannelPost): P
     }
   }
   if (channel && delivery.teams) await postToTeams(env, delivery, channel).catch((e) => noteFailure(db, "Teams", e));
-  return { created: fresh.length, emailed };
+  return { created: stored.length, emailed };
 }

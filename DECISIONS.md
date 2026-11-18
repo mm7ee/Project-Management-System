@@ -359,3 +359,126 @@ Choices made during the Pulse upgrade that later phases must follow. Newest last
   `GET /api/data`. When a person is removed, the weekday clean-up removes their favourites and subscriptions. Their filters and dashboards stay,
   shown as by "Former user", until someone deletes them.
 - **New bell alerts:** `subscription` (a filter's results) and `automation` (a rule's notify action).
+
+## Phase 5: integrations, admin schemes and Service Desk lite (2026-11-17)
+
+- **One visibility rule.** Who may see a work item is decided in one place, `worker/access.ts`: an SQL fragment
+  and a check on one item. Lists, item pages, boards, the timeline, agile reports, PQL, dashboards, subscriptions,
+  sprint health, notifications, Ask Pulse, view-only links, the API, webhooks and automation all use it. Before
+  this phase, four modules each had their own copy of the developers' rule.
+- **Security levels.** An item with a level is seen by:
+  - administrators
+  - its assignee and reporter
+  - the roles and people the level names
+
+  The assignee and reporter always see it, so nobody is handed work they can't open.
+  - **View-only links** never see items with a level.
+  - **Choosing a level:** you may give an item only a level you belong to. Only people at an item's level (and
+    administrators) may lift it or change it.
+  - **Deleting a level** that items use is refused.
+  - **Two levels are seeded:** "Confidential – Managers only" (the Manager role) and "HR only" (people an
+    administrator adds).
+- **Where a level holds back what's shared:**
+  - **The Monday Briefing** goes to many people, so its sprint figures leave out items with a level.
+  - **The Teams channel** never gets a post about an item with a level, whether from a notification scheme or an
+    automation rule.
+  - **Outbound webhooks** never send items with a level.
+  - **Automation** still acts on every item, with full rights. Its notify action only tells people who may see
+    the item.
+  - **Feature requests** are work items, so a confidential client request is hidden on the Feature requests page,
+    in `GET /api/data`, on its routes and in Ask Pulse. Daily digests and the Monday Briefing leave confidential
+    client requests out. The public /executive page shows totals only, with no titles, so it still counts them.
+- **Notification schemes:**
+  - **Events:** created, assigned, changed, moved status, commented.
+  - **Who:** for each event, an administrator ticks the assignee, reporter, watchers, project lead, @mentioned
+    people and/or everyone with a role.
+  - **How:** bell, email and/or one Teams post.
+  - **Defaults:** the seeded schemes do what Pulse did before.
+  - **Rules for everyone told:** nobody hears about their own change, everyone told must be able to see the
+    item, and each person can opt out of any event in Settings → Notifications. Email still follows each
+    person's own email setting.
+  - **Workflow moves:** a move's own "notify" rule (Phase 2) still tells its people, whatever the scheme.
+- **Custom fields** belong to a workspace, with kinds text, number, date, single select, multi select and person.
+  - **Storage:** values are rows in `custom_field_values`, one per chosen option for a multi select, so they can
+    be searched and reported on.
+  - **Screens:** administrators choose where each field appears (create form, editable on the item, shown on the
+    item, board cards) and whether it's required.
+  - **Required fields** are checked on the create form and on `POST /api/items`. They aren't checked for feature
+    requests, service desk requests or automation sub-tasks, which come from other forms.
+  - **A field's kind can't change** after it's made.
+  - **Changes** are logged as "field:<name>" with before and after values.
+- **Custom fields in PQL** are used by name, in quotes when the name has spaces: `"Customer tier" = Gold`. Fields
+  with the same name in several workspaces are searched together. Select fields compare by choice label. `!=`
+  doesn't match empty, as for the built-in fields. Custom fields can't be used in ORDER BY.
+- **GitHub:**
+  - **The secret** is sealed with MFA_KEY in `integration_secrets`, like the email and Teams keys, and never sent
+    back.
+  - **Checking a call:** Pulse compares the `X-Hub-Signature-256` HMAC in constant time, and counts each
+    delivery id once.
+  - **What it reads:** pushes (commits, and a branch the push created), branch creation and pull requests.
+  - **Finding keys:** any key-shaped text in a commit message, branch name or pull request title or body; branch
+    names may be in lower case.
+  - **Only real items:** links are made only to items that exist.
+- **Personal API tokens:**
+  - **What a token is:** `pulse_` and 64 hex characters, read or read-and-write, expiring after 7 to 365 days, at
+    most 10 live per person.
+  - **Storage:** only the SHA-256 hash is kept, with the first characters to tell tokens apart.
+  - **Who it acts as:** a token is its owner. It has the owner's permissions and visibility, and stops working if
+    the owner's role loses "Use personal API tokens".
+  - **Limits:** read tokens may only GET. Tokens can't touch accounts, sign-in, tokens, view-only links, settings
+    or integrations. Each token may make 120 requests a minute (counted in Postgres per token per minute).
+  - **Logging:** changes made with a token are logged as the owner, with `viaApiToken` naming the token.
+  - **Who sees them:** administrators (manage_users) see and revoke everyone's tokens.
+- **Outbound webhooks:**
+  - **Events:** created, updated, moved status, commented, for every project or one.
+  - **Addresses:** https only, and never local or private addresses.
+  - **Signing:** each webhook has its own secret (`whsec_…`, sealed, shown once), and the body is signed in
+    `X-Pulse-Signature`.
+  - **Retries:** Pulse tries once at once and again 15 seconds later. After that the hourly cron retries after
+    about 1, 2, 4 and 8 hours, and a delivery is marked failed after six tries. An administrator can retry it.
+  - **Sources:** webhooks go out from the same place automation hears about events, so changes made by rules and
+    the portal are sent too.
+- **Service desk:**
+  - **Project:** requests land in one project, chosen in Settings. Choosing it gives that project the new Service
+    desk workflow, but only if its items' statuses fit; otherwise the choice is refused.
+  - **The workflow:** To Do → In Progress ⇄ Waiting for customer → Resolved → Closed, plus Change Approval. The
+    two new statuses are "Waiting for customer" (In Progress category) and "Resolved" (Done).
+  - **Changes** must pass through Phase 2's Change Approval status. Its "Approve change" move needs a Manager and
+    a comment.
+  - **Work items:** requests are work items with source `service_desk`, plus a row in `sd_requests` for the
+    customer and SLA alert stamps. The customer's answers are copied, with the question as it was asked.
+- **The portal:**
+  - **Links** work like view-only links: a secret shown once, kept as a hash, expiring and revocable.
+  - **Who raised what:** a customer's browser keeps a random requester key, kept as a hash, so it can list and
+    open only the requests it raised. Signed-in staff use Service desk → Raise a request and My requests.
+  - **What customers see:** the portal shows only public replies and the customer's own messages, never internal
+    notes, other requests or internal items.
+  - **Who requests are from:** portal requests are reported by the link's maker and logged as "<name> (customer)".
+  - **Limits:** up to 30 requests an hour per link.
+- **Replies and the SLA clock:**
+  - **Replies to the customer:** staff tick "Reply to the customer" on a comment. Only people who work the
+    service desk may.
+  - **First response:** the first reply to the customer stops the first-response clock.
+  - **The customer's reply:** when the customer replies while the request is waiting for them, it moves back to
+    In Progress and the clock runs again.
+  - **Telling the customer:** they hear by email about replies, status changes and resolution, or under the bell
+    for staff customers. These emails have no link into Pulse.
+- **SLAs:**
+  - **Targets:** first response and resolution, per request type and priority, in business minutes. Business
+    hours are Monday to Friday, 08:00 to 17:00 Harare time (a nine-hour day), less the editable public holidays
+    and the time spent waiting for the customer.
+  - **Calculation:** the clock is worked out when it's read (`src/data/servicedesk.ts`, unit tested), not stored.
+  - **Alerts:** the hourly cron warns the assignee at 75% of a target. On a breach it alerts the assignee and
+    everyone who sets up the service desk, once per target.
+  - **Holidays:** Zimbabwe's 2026 and 2027 public holidays are seeded, with Sunday holidays kept on the Monday.
+- **Reports** count first replies and resolutions met against breached, the number of requests by type and week,
+  and the average business time to resolve. They follow the reader's visibility.
+- **New permissions:**
+  - **Use personal API tokens** (`use_api`): every role but Standard user.
+  - **Work the service desk** (`work_service_desk`): every role but Standard user.
+  - **Set up the service desk** (`manage_service_desk`): Admin and Manager.
+  - **Connect GitHub and manage webhooks** (`manage_integrations`): Admin.
+  - **Manage notification schemes, security levels and custom fields** (`manage_schemes`): Admin.
+  - **Raising requests** needs no permission: any signed-in account may.
+- **Documentation:** the API reference is `docs/API.md`, with a short version in Settings (Security & privacy →
+  API tokens, and Integrations). The "Running the System" PDF isn't in the repository and wasn't changed.

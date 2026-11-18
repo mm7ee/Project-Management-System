@@ -3,13 +3,16 @@
 // table and its companions (labels, comments, watchers, links, work logs, status history);
 // client feature requests are work items too, with source "client_request".
 
+import type { CustomField, CustomFieldValue, DevLink } from "./admin";
+import type { RequestInfo } from "./servicedesk";
+
 export type WorkItemType = "EPIC" | "STORY" | "TASK" | "BUG" | "SUBTASK";
 export type WorkPriority = "HIGHEST" | "HIGH" | "MEDIUM" | "LOW" | "LOWEST";
 export type StatusCategory = "TODO" | "IN_PROGRESS" | "DONE";
 /** A status id: Phase 1's four (TODO, IN_PROGRESS, IN_REVIEW, DONE) and any added in Settings → Workflows. */
 export type WorkStatus = string;
 export type Resolution = "DONE" | "WONT_DO";
-export type WorkSource = "internal" | "client_request";
+export type WorkSource = "internal" | "client_request" | "service_desk";
 export type LinkType = "BLOCKS" | "RELATES" | "DUPLICATES" | "CLONES";
 
 export const TYPE_META: Record<WorkItemType, { label: string; tone: string }> = {
@@ -90,6 +93,8 @@ export interface WorkItemSummary {
   updatedAt: string;
   resolvedAt?: string;
   children?: { total: number; done: number }; // epics and anything with sub-tasks
+  securityLevel?: string; // a security level id: only people at that level see it
+  customFields?: CustomFieldValue[]; // in search results and on board cards
 }
 
 export interface WorkItem extends WorkItemSummary {
@@ -109,9 +114,19 @@ export interface WorkItem extends WorkItemSummary {
   workLogs: WorkLog[];
   history: StatusChange[];
   commentCount: number;
-  can: { edit: boolean; delete: boolean; comment: boolean; logTime: boolean; assignOthers: boolean };
+  can: { edit: boolean; delete: boolean; comment: boolean; logTime: boolean; assignOthers: boolean; replyToCustomer: boolean };
   workflowId: string;
   moves: ItemMove[]; // the moves out of its status, with whether you may make each
+  securityLevelName?: string;
+  /** The levels you may give it (you belong to them), for the security level menu. */
+  securityLevels: { id: string; name: string }[];
+  /** Its workspace's custom fields, and its values. */
+  fieldDefs: CustomField[];
+  fieldValues: CustomFieldValue[];
+  /** Commits, branches and pull requests that mention its key. */
+  devLinks: DevLink[];
+  /** For a service desk request: who asked, what they said, and its SLA clock. */
+  request?: RequestInfo;
 }
 
 /** A move a person may (or may not) make from an item's status. */
@@ -166,6 +181,10 @@ export interface WorkComment {
   body: string;
   createdAt: string;
   updatedAt?: string;
+  /** Service desk: a reply the customer sees. */
+  public?: boolean;
+  /** Written by the customer through the service desk portal. */
+  customerName?: string;
 }
 
 /** A page of a list, with the total that match. */

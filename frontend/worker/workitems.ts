@@ -8,7 +8,12 @@
 
 import { newToken } from "./auth";
 import { HttpError, body, json } from "./http";
-import type { Alert } from "./notify";
+import type { Alert, ChannelPost } from "./notify";
+import { canSeeItem, itemAccess, levelsFor, type Viewer } from "./access";
+import { notifyItem } from "./schemes";
+import { customValuesFor, fieldsForSystem, planCustomValues } from "./customfields";
+import { onRequestComment, onRequestMove, requestMoveProblem, requestDetail } from "./servicedesk";
+import { devLinksFor } from "./integrations";
 import type { Permission, Role } from "../src/data/roles";
 import { MAX_DOCUMENT_BYTES, formatBytes } from "../src/data/project";
 import type { FeatureKind, FeatureStatus, Priority } from "../src/data/features";
@@ -58,12 +63,18 @@ export interface ItemContext {
   can: (p: Permission) => boolean;
   /** Developers without manage_features: only items assigned to them or that they reported. */
   ownOnly: boolean;
+  /** Who is asking, for the visibility rule in worker/access.ts (own items and security levels). */
+  viewer: Viewer;
   now: string;
   audit: (action: string, target: string | null, detail: Record<string, unknown>) => Promise<void>;
   /** Raises alerts for others (never the person acting), without holding up the request. */
-  alert: (alerts: Alert[]) => void;
+  alert: (alerts: Alert[], channel?: ChannelPost) => void;
   /** Tells automation what happened (worker/automation.ts). Absent where nothing should react. */
   emit?: (e: ItemEvent) => void;
+  /** The Worker's environment, for email and secrets (service desk customer emails, webhooks). */
+  env?: Env;
+  /** Work to finish after the response (ctx.waitUntil); runs inline where there's no request. */
+  defer?: (p: Promise<unknown>) => void;
 }
 
 /** Something automation rules can react to. */
@@ -103,6 +114,7 @@ export interface ItemRow {
   notes: string | null;
   sprint_id: string | null;
   backlog_rank: number | null;
+  security_level: string | null;
   // joined
   project_key: string;
   project_name: string;
@@ -125,7 +137,6 @@ export const SELECT = `SELECT w.*, st.name AS status_name, st.category AS status
   LEFT JOIN work_items p ON p.id = w.parent_id`;
 
 export const keyOf = (r: { project_key: string; number: number }) => `${r.project_key}-${r.number}`;
-const itemLink = (r: { system_id: string; project_key: string; number: number }) => `#/projects/${r.system_id}/items/${keyOf(r)}`;
 
 export function toSummary(r: ItemRow): WorkItemSummary {
   return {
@@ -154,25 +165,25 @@ export function toSummary(r: ItemRow): WorkItemSummary {
     updatedAt: r.updated_at,
     ...(r.resolved_at ? { resolvedAt: r.resolved_at } : {}),
     ...(r.type === "EPIC" || r.child_total ? { children: { total: Number(r.child_total), done: Number(r.child_done) } } : {}),
+    ...(r.security_level ? { securityLevel: r.security_level } : {}),
   };
 }
 
 // ---------- reading ----------
 
 /** The SQL condition (and its values) that limits rows to what this person may see. */
-function visibility(c: ItemContext): { sql: string; args: unknown[] } {
-  return c.ownOnly ? { sql: "(w.assignee = ? OR w.reporter = ?)", args: [c.me.id, c.me.id] } : { sql: "TRUE", args: [] };
+export function visibility(c: ItemContext, alias = "w"): { sql: string; args: unknown[] } {
+  return itemAccess(c.viewer, alias);
 }
 
-export const canSee = (c: ItemContext, r: { assignee: string | null; reporter: string }) =>
-  !c.ownOnly || r.assignee === c.me.id || r.reporter === c.me.id;
+export const canSee = (c: ItemContext, r: { assignee: string | null; reporter: string; security_level?: string | null }) => canSeeItem(c.db, c.viewer, r);
 
 /** An item by its key (INFRA-12), or 404 when it doesn't exist or this person can't see it. */
 export async function itemByKey(c: ItemContext, key: string): Promise<ItemRow> {
   const m = key.match(ITEM_KEY_PATTERN);
   if (!m) throw new HttpError(404, "Work item not found");
   const row = await c.db.prepare(`${SELECT} WHERE s.key = ? AND w.number = ?`).bind(m[1], Number(m[2])).first<ItemRow>();
-  if (!row || !canSee(c, row)) throw new HttpError(404, "Work item not found");
+  if (!row || !(await canSee(c, row))) throw new HttpError(404, "Work item not found");
   return row;
 }
 
@@ -223,7 +234,7 @@ async function listItems(c: ItemContext, q: URLSearchParams) {
   const component = q.get("component");
   if (component) add("lower(w.component) = lower(?)", component);
   const source = q.get("source");
-  if (source === "client_request" || source === "internal") add("w.source = ?", source);
+  if (source === "client_request" || source === "internal" || source === "service_desk") add("w.source = ?", source);
   const parent = q.get("parent");
   if (parent === "none") add("w.parent_id IS NULL");
   else if (parent) {
@@ -277,12 +288,19 @@ function rights(c: ItemContext, r: ItemRow) {
     comment: !c.guest,
     logTime: !c.guest && c.can("log_time"),
     assignOthers: fullEditor,
+    replyToCustomer: !c.guest && r.source === "service_desk" && c.can("work_service_desk"),
   };
 }
 
 /** The full item page: the item, its family, links, people, files, time and status history. */
 async function detail(c: ItemContext, r: ItemRow): Promise<WorkItem> {
   const vis = visibility(c);
+  const [levels, myLevels, fieldDefs] = await Promise.all([
+    c.db.prepare("SELECT id, name FROM security_levels ORDER BY position, name").all<{ id: string; name: string }>(),
+    levelsFor(c.db, c.viewer),
+    fieldsForSystem(c.db, r.system_id),
+  ]);
+  const levelName = r.security_level ? levels.results.find((l) => l.id === r.security_level)?.name : undefined;
   const [children, parent, links, watchers, attachments, logs, history, comments] = await Promise.all([
     c.db.prepare(`${SELECT} WHERE w.parent_id = ? AND ${vis.sql} ORDER BY w.number`).bind(r.id, ...vis.args).all<ItemRow>(),
     r.parent_id ? c.db.prepare(`${SELECT} WHERE w.id = ?`).bind(r.parent_id).first<ItemRow>() : Promise.resolve(null),
@@ -330,10 +348,10 @@ async function detail(c: ItemContext, r: ItemRow): Promise<WorkItem> {
     loggedMinutes: workLogs.reduce((n, l) => n + l.minutes, 0),
     ...(r.client ? { client: r.client } : {}),
     ...(r.notes ? { notes: r.notes } : {}),
-    ...(parent && canSee(c, parent) ? { parent: toSummary(parent) } : {}),
+    ...(parent && (await canSee(c, parent)) ? { parent: toSummary(parent) } : {}),
     childItems: children.results.map(toSummary),
-    links: links.results
-      .filter((l) => canSee(c, l))
+    links: (await Promise.all(links.results.map(async (l) => ((await canSee(c, l)) ? l : null))))
+      .filter((l): l is NonNullable<typeof l> => !!l)
       .map((l): WorkItemLink => ({ id: l.link_id, type: l.link_type, direction: l.direction, item: toSummary(l) })),
     watchers: watchers.results.map((w) => w.user_id),
     watching: watchers.results.some((w) => w.user_id === c.me.id),
@@ -360,6 +378,12 @@ async function detail(c: ItemContext, r: ItemRow): Promise<WorkItem> {
     commentCount: Number(comments?.n ?? 0),
     can: rights(c, r),
     ...(await movesFor(c, r)),
+    ...(levelName ? { securityLevelName: levelName } : {}),
+    securityLevels: c.guest ? [] : levels.results.filter((l) => myLevels.includes(l.id)),
+    fieldDefs,
+    fieldValues: (await customValuesFor(c.db, [r.id])).get(r.id) ?? [],
+    devLinks: c.guest ? [] : await devLinksFor(c.db, r.id),
+    ...(r.source === "service_desk" ? { request: await requestDetail(c, r) } : {}),
   };
 }
 
@@ -485,7 +509,13 @@ export async function transitionItem(c: ItemContext, r: ItemRow, m: MoveRequest,
     const u = await c.db.prepare("SELECT role FROM users WHERE id = ?").bind(patch.assignee).first<{ role: Role }>();
     if (u?.role !== "developer") delete patch.assignee;
   }
+  // A Change request is resolved only through Change Approval (worker/servicedesk.ts).
+  if (r.source === "service_desk") {
+    const problem = await requestMoveProblem(c, r, r.status, t.to, names.get(t.to)?.category ?? "TODO");
+    if (problem) throw new HttpError(400, problem, "change_approval");
+  }
   const res = await applyChange(c, r, patch, true);
+  if (r.source === "service_desk" && res.changed.includes("status")) await onRequestMove(c, r, res.after);
 
   if (comment) await addComment(c, res.after, comment, { transition: t.name });
   if (log) {
@@ -511,24 +541,8 @@ export async function transitionItem(c: ItemContext, r: ItemRow, m: MoveRequest,
       ids.results.forEach((u) => extra.add(u.id));
     }
   }
-  const watchers = new Set((await c.db.prepare("SELECT user_id FROM work_item_watchers WHERE item_id = ?").bind(r.id).all<{ user_id: string }>()).results.map((w) => w.user_id));
-  const seeAll = await developersSeeAll(c);
-  const roles = new Map(
-    (await c.db.prepare("SELECT id, role FROM users").all<{ id: string; role: Role }>()).results.map((u) => [u.id, u.role]),
-  );
-  c.alert(
-    [...extra]
-      .filter((id) => !watchers.has(id))
-      .filter((id) => roles.get(id) !== "developer" || seeAll || id === res.after.assignee || id === res.after.reporter)
-      .map((id) => ({
-        userId: id,
-        kind: "watching" as const,
-        title: `${keyOf(res.after)} ${res.after.summary}`.slice(0, 200),
-        body: `${t.name}: now ${res.after.status_name}. By ${c.me.name}.`,
-        link: itemLink(res.after),
-      })),
-  );
-  await afterChange(c, res);
+  // The move's own "notify" people are told whatever the scheme says, if they may see the item.
+  await afterChange(c, res, true, [...extra], `${t.name}: now ${res.after.status_name}`);
   if (res.changed.includes("status")) {
     c.emit?.({ type: "item_transitioned", itemId: r.id, from: r.status, to: res.after.status });
     if (res.after.type === "SUBTASK" && res.after.parent_id && res.after.status_category === "DONE") {
@@ -620,6 +634,14 @@ export async function moveFeatureTo(c: ItemContext, r: ItemRow, status: FeatureS
 
 // ---------- validation ----------
 
+/** A security level this person may give an item: one they belong to (administrators: any). "" or null: none. */
+async function checkLevel(c: ItemContext, v: unknown): Promise<string | null> {
+  if (v === undefined || v === null || v === "") return null;
+  const id = String(v);
+  if (!(await levelsFor(c.db, c.viewer)).includes(id)) throw new HttpError(400, "Choose a security level you belong to");
+  return id;
+}
+
 function str(v: unknown, field: string, max: number, required = false): string | null {
   if (v === undefined || v === null || (typeof v === "string" && !v.trim())) {
     if (required) throw new HttpError(400, `${field} is required`);
@@ -682,7 +704,7 @@ async function checkParent(c: ItemContext, v: unknown, type: WorkItemType, syste
   let parent: ItemRow | null = null;
   if (ref) {
     parent = ITEM_KEY_PATTERN.test(ref) ? await itemByKey(c, ref).catch(() => null) : await itemById(c, ref);
-    if (!parent || !canSee(c, parent)) throw new HttpError(400, "That parent work item doesn't exist");
+    if (!parent || !(await canSee(c, parent))) throw new HttpError(400, "That parent work item doesn't exist");
     if (parent.system_id !== systemId) throw new HttpError(400, "The parent must be in the same project");
     if (selfId && parent.id === selfId) throw new HttpError(400, "A work item can't be its own parent");
   }
@@ -693,56 +715,23 @@ async function checkParent(c: ItemContext, v: unknown, type: WorkItemType, syste
 
 // ---------- notifications ----------
 
-/** Whether developers see every work item: only when their role has been given "manage_features". */
-async function developersSeeAll(c: ItemContext): Promise<boolean> {
-  const row = await c.db.prepare("SELECT value FROM settings WHERE key = 'role_permissions'").first<{ value: string }>();
-  const matrix = row ? (JSON.parse(row.value) as Record<string, string[]>) : null;
-  return !!matrix?.developer?.includes("manage_features");
-}
+// Who hears about what is set by the notification schemes (worker/schemes.ts), which also check that
+// each person may see the item and hasn't opted out. Your own changes don't notify you.
 
-/** Tells the item's watchers (who can still see it) what changed. Your own changes don't notify you. */
-async function notifyWatchers(c: ItemContext, r: ItemRow, what: string, skip: string[] = []) {
-  const rows = await c.db
-    .prepare(
-      `SELECT ww.user_id, u.role FROM work_item_watchers ww JOIN users u ON u.id = ww.user_id WHERE ww.item_id = ?`,
-    )
-    .bind(r.id)
-    .all<{ user_id: string; role: Role }>();
-  const seesAll = await developersSeeAll(c);
-  const alerts: Alert[] = rows.results
-    .filter((w) => !skip.includes(w.user_id))
-    // A developer who can't see the item any more (no longer assigned or the reporter) hears nothing.
-    .filter((w) => w.role !== "developer" || seesAll || w.user_id === r.assignee || w.user_id === r.reporter)
-    .map((w) => ({
-      userId: w.user_id,
-      kind: "watching" as const,
-      title: `${keyOf(r)} ${r.summary}`.slice(0, 200),
-      body: `${what} by ${c.me.name}.`,
-      link: itemLink(r),
-    }));
-  c.alert(alerts);
-}
-
-/** People @mentioned in `text` who can see the item: a bell alert each. Returns who was told. */
-async function notifyMentions(c: ItemContext, r: ItemRow, text: string, where: string): Promise<string[]> {
+/** The ids of the people @mentioned in `text`. */
+async function mentionIds(c: ItemContext, text: string): Promise<string[]> {
   const names = mentionsIn(text);
   if (!names.length) return [];
   const people = await c.db
-    .prepare(`SELECT id, role FROM users WHERE lower(username) IN (${names.map(() => "?").join(", ")})`)
+    .prepare(`SELECT id FROM users WHERE lower(username) IN (${names.map(() => "?").join(", ")})`)
     .bind(...names)
-    .all<{ id: string; role: Role }>();
-  const seesAll = await developersSeeAll(c);
-  const told = people.results.filter((p) => p.role !== "developer" || seesAll || p.id === r.assignee || p.id === r.reporter);
-  c.alert(
-    told.map((p) => ({
-      userId: p.id,
-      kind: "mentioned" as const,
-      title: `${c.me.name} mentioned you on ${keyOf(r)}`,
-      body: `${where}: ${r.summary}`.slice(0, 300),
-      link: itemLink(r),
-    })),
-  );
-  return told.map((p) => p.id);
+    .all<{ id: string }>();
+  return people.results.map((p) => p.id);
+}
+
+/** A change other than a field edit or a move (a link, an attachment): the "changed" event. */
+async function notifyWatchers(c: ItemContext, r: ItemRow, what: string, skip: string[] = []) {
+  await notifyItem(c, "item_updated", r, { title: `${keyOf(r)} ${r.summary}`, body: `${what} by ${c.me.name}.`, skip });
 }
 
 // ---------- project progress from work items ----------
@@ -794,6 +783,8 @@ export interface ItemPatch {
   client?: unknown;
   notes?: unknown;
   systemId?: unknown;
+  securityLevel?: unknown; // a level id; "" or null clears
+  customFields?: unknown; // { fieldId: value }
 }
 
 const FIELD_LABEL: Record<string, string> = {
@@ -816,6 +807,7 @@ const FIELD_LABEL: Record<string, string> = {
   client: "Requested by",
   notes: "Notes",
   systemId: "Project",
+  securityLevel: "Security level",
 };
 
 export interface ChangeResult {
@@ -851,6 +843,14 @@ export async function applyChange(c: ItemContext, r: ItemRow, b: ItemPatch, viaT
   if (b.client !== undefined) next.client = str(b.client, "Requested by", 200);
   if (b.notes !== undefined) next.notes = str(b.notes, "Notes", 2000);
   if (b.onHold !== undefined) next.on_hold = b.onHold ? 1 : 0;
+  if (b.securityLevel !== undefined) {
+    const mine = await levelsFor(c.db, c.viewer);
+    // Only people at an item's level (and administrators) may lift it or move it to another.
+    if (r.security_level && !mine.includes(r.security_level) && (b.securityLevel || null) !== r.security_level) {
+      throw new HttpError(403, "Only people at this item's security level can change it");
+    }
+    next.security_level = await checkLevel(c, b.securityLevel);
+  }
   if (next.start_date && next.due_date && next.start_date > next.due_date) throw new HttpError(400, "The start date must be on or before the due date");
 
   // Moving to another project: a new number there; it leaves its parent behind.
@@ -932,6 +932,10 @@ export async function applyChange(c: ItemContext, r: ItemRow, b: ItemPatch, viaT
   track("client", r.client, next.client);
   track("notes", r.notes, next.notes);
   track("systemId", r.system_id, next.system_id);
+  track("securityLevel", r.security_level, next.security_level);
+  // Custom fields: each changed one is logged as "field:<name>".
+  const custom = b.customFields !== undefined ? await planCustomValues(c, r.id, next.system_id, b.customFields, "edit") : null;
+  if (custom) changes.push(...custom.changes);
   if (!changes.length) return { before: r, after: r, changed: [], diff: {} };
   next.updated_at = c.now;
 
@@ -955,7 +959,7 @@ export async function applyChange(c: ItemContext, r: ItemRow, b: ItemPatch, viaT
       .prepare(
         `UPDATE work_items SET type = ?, parent_id = ?, summary = ?, description = ?, status = ?, resolution = ?, on_hold = ?,
            priority = ?, assignee = ?, component = ?, story_points = ?, original_estimate = ?, remaining_estimate = ?,
-           start_date = ?, due_date = ?, client = ?, notes = ?, updated_at = ?, resolved_at = ? WHERE id = ?`,
+           start_date = ?, due_date = ?, client = ?, notes = ?, updated_at = ?, resolved_at = ?, security_level = ? WHERE id = ?`,
       )
       .bind(
         next.type,
@@ -977,9 +981,11 @@ export async function applyChange(c: ItemContext, r: ItemRow, b: ItemPatch, viaT
         next.notes,
         next.updated_at,
         next.resolved_at,
+        next.security_level,
         r.id,
       ),
   );
+  if (custom) stmts.push(...custom.stmts);
   if (changes.some((x) => x[0] === "labels")) {
     stmts.push(db.prepare("DELETE FROM work_item_labels WHERE item_id = ?").bind(r.id));
     for (const l of nextLabels) stmts.push(db.prepare("INSERT INTO work_item_labels (item_id, label) VALUES (?, ?)").bind(r.id, l));
@@ -1005,20 +1011,16 @@ export async function applyChange(c: ItemContext, r: ItemRow, b: ItemPatch, viaT
  * After a change: alerts for a new assignee (unless the caller sends its own) and the watchers,
  * and the project's progress.
  */
-export async function afterChange(c: ItemContext, res: ChangeResult, alertAssignee = true) {
+export async function afterChange(c: ItemContext, res: ChangeResult, alertAssignee = true, extra: string[] = [], moveNote?: string) {
   const { before, after, changed } = res;
   if (!changed.length) return;
   c.emit?.({ type: "field_changed", itemId: after.id, fields: changed });
+  let told: string[] = [];
   if (alertAssignee && changed.includes("assignee") && after.assignee) {
-    c.alert([
-      {
-        userId: after.assignee,
-        kind: "assigned",
-        title: `${keyOf(after)} assigned to you: ${after.summary}`.slice(0, 200),
-        body: `${after.project_name}, ${after.priority.toLowerCase()} priority. From ${c.me.name}.`,
-        link: itemLink(after),
-      },
-    ]);
+    told = await notifyItem(c, "item_assigned", after, {
+      title: `${keyOf(after)} assigned to you: ${after.summary}`,
+      body: `${after.project_name}, ${after.priority.toLowerCase()} priority. From ${c.me.name}.`,
+    });
   }
   const words = changed.map((k) =>
     k === "status"
@@ -1027,9 +1029,17 @@ export async function afterChange(c: ItemContext, res: ChangeResult, alertAssign
         ? after.assignee
           ? "reassigned"
           : "unassigned"
-        : `${FIELD_LABEL[k]?.toLowerCase() ?? k} changed`,
+        : k.startsWith("field:")
+          ? `${k.slice(6)} changed`
+          : `${FIELD_LABEL[k]?.toLowerCase() ?? k} changed`,
   );
-  await notifyWatchers(c, after, `${words.join(", ").replace(/^./, (x) => x.toUpperCase())}`, after.assignee && changed.includes("assignee") ? [after.assignee] : []);
+  const what = moveNote ?? words.join(", ").replace(/^./, (x) => x.toUpperCase());
+  await notifyItem(c, changed.includes("status") ? "item_transitioned" : "item_updated", after, {
+    title: `${keyOf(after)} ${after.summary}`,
+    body: `${what}. By ${c.me.name}.`,
+    skip: [...told, ...(after.assignee && changed.includes("assignee") && alertAssignee ? [after.assignee] : [])],
+    extra,
+  });
   await recomputeProgress(c, after.system_id);
   if (before.system_id !== after.system_id) await recomputeProgress(c, before.system_id);
 }
@@ -1055,6 +1065,8 @@ export interface NewItem {
   dueDate?: unknown;
   client?: unknown;
   notes?: unknown;
+  securityLevel?: unknown;
+  customFields?: unknown;
 }
 
 /** Creates an item with the next number in its project, safely when two arrive at once. */
@@ -1076,6 +1088,9 @@ export async function createItem(c: ItemContext, b: NewItem, source: WorkSource,
   if (start && due && start > due) throw new HttpError(400, "The start date must be on or before the due date");
   const estimate = minutes(b.originalEstimate, "Original estimate");
   const tags = labels(b.labels);
+  const level = await checkLevel(c, b.securityLevel);
+  // Custom fields (and their required ones) are checked when the create form or the API sends them.
+  const custom = b.customFields !== undefined ? await planCustomValues(c, id, sys.id, b.customFields, "create") : null;
   const db = c.db;
   const stmts = [
     db
@@ -1083,8 +1098,8 @@ export async function createItem(c: ItemContext, b: NewItem, source: WorkSource,
         `WITH n AS (UPDATE systems SET item_seq = item_seq + 1 WHERE id = ? RETURNING item_seq)
          INSERT INTO work_items (id, system_id, number, type, parent_id, summary, description, status, resolution, on_hold, priority,
            assignee, reporter, component, story_points, original_estimate, remaining_estimate, start_date, due_date,
-           created_at, updated_at, resolved_at, source, client, notes, backlog_rank)
-         SELECT ?, ?, n.item_seq, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+           created_at, updated_at, resolved_at, source, client, notes, security_level, backlog_rank)
+         SELECT ?, ?, n.item_seq, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
            (SELECT COALESCE(MAX(x.backlog_rank), 0) + 1024 FROM work_items x WHERE x.system_id = ?) FROM n RETURNING number`,
       )
       .bind(
@@ -1113,10 +1128,12 @@ export async function createItem(c: ItemContext, b: NewItem, source: WorkSource,
         source,
         str(b.client, "Requested by", 200),
         str(b.notes, "Notes", 2000),
+        level,
         sys.id,
       ),
     ...tags.map((l) => db.prepare("INSERT INTO work_item_labels (item_id, label) VALUES (?, ?)").bind(id, l)),
     db.prepare("INSERT INTO status_history (item_id, from_status, to_status, changed_by, changed_at) VALUES (?, NULL, ?, ?, ?)").bind(id, status, c.me.id, c.now),
+    ...(custom?.stmts ?? []),
     // The reporter and the assignee watch it.
     ...[...new Set([c.me.id, ...(assignee ? [assignee] : [])])].map((u) =>
       db.prepare("INSERT INTO work_item_watchers (item_id, user_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING").bind(id, u, c.now),
@@ -1124,16 +1141,17 @@ export async function createItem(c: ItemContext, b: NewItem, source: WorkSource,
   ];
   await db.batch(stmts);
   const row = (await itemById(c, id))!;
+  const created = await notifyItem(c, "item_created", row, {
+    title: assignee ? `${keyOf(row)} assigned to you: ${row.summary}` : `New ${row.type.toLowerCase().replace("subtask", "sub-task")} ${keyOf(row)}: ${row.summary}`,
+    body: `${row.project_name}, ${row.priority.toLowerCase()} priority. From ${c.me.name}.`,
+    mentioned: await mentionIds(c, row.description),
+  });
   if (assignee) {
-    c.alert([
-      {
-        userId: assignee,
-        kind: "assigned",
-        title: `${keyOf(row)} assigned to you: ${row.summary}`.slice(0, 200),
-        body: `${row.project_name}, ${row.priority.toLowerCase()} priority. From ${c.me.name}.`,
-        link: itemLink(row),
-      },
-    ]);
+    await notifyItem(c, "item_assigned", row, {
+      title: `${keyOf(row)} assigned to you: ${row.summary}`,
+      body: `${row.project_name}, ${row.priority.toLowerCase()} priority. From ${c.me.name}.`,
+      skip: created,
+    });
   }
   await recomputeProgress(c, row.system_id);
   c.emit?.({ type: "item_created", itemId: row.id });
@@ -1197,8 +1215,12 @@ export async function itemsApi(c: ItemContext, path: string, method: string): Pr
     if (!c.can("edit_work_items") && b.assignee && b.assignee !== c.me.id) {
       throw new HttpError(403, "You can assign a work item to yourself only. Someone who can edit any work item assigns others.");
     }
-    const row = await createItem(c, b, "internal");
+    // The form and the API always run the custom field checks, so required fields are kept.
+    const row = await createItem(c, { ...b, customFields: b.customFields ?? {} }, "internal");
+    const fields = b.customFields && Object.keys(b.customFields as object).length ? ((await customValuesFor(db, [row.id])).get(row.id) ?? []) : [];
     await c.audit("work_item_created", row.system_id, {
+      ...(row.security_level ? { securityLevel: row.security_level } : {}),
+      ...(fields.length ? { customFields: Object.fromEntries(fields.map((f) => [f.name, f.display])) } : {}),
       name: row.project_name,
       key: keyOf(row),
       summary: row.summary,
@@ -1300,7 +1322,15 @@ export async function itemsApi(c: ItemContext, path: string, method: string): Pr
     ]);
     return json({
       comments: rows.results.map(
-        (x): WorkComment => ({ id: x.id!, authorId: x.author_id!, body: x.body!, createdAt: x.created_at!, ...(x.updated_at ? { updatedAt: x.updated_at } : {}) }),
+        (x): WorkComment => ({
+          id: x.id!,
+          authorId: x.author_id!,
+          body: x.body!,
+          createdAt: x.created_at!,
+          ...(x.updated_at ? { updatedAt: x.updated_at } : {}),
+          ...(Number(x.public) ? { public: true } : {}),
+          ...(x.customer_name ? { customerName: x.customer_name } : {}),
+        }),
       ),
       total: Number(total?.n ?? 0),
       offset,
@@ -1309,9 +1339,13 @@ export async function itemsApi(c: ItemContext, path: string, method: string): Pr
   if (m && method === "POST") {
     const r = await itemByKey(c, m[1]);
     if (!rights(c, r).comment) throw new HttpError(403, "This link is view-only");
-    const text = str((await body<{ body?: unknown }>(req)).body, "Comment", MAX_COMMENT, true)!;
-    const id = await addComment(c, r, text);
-    return json({ id, authorId: c.me.id, body: text, createdAt: c.now } satisfies WorkComment, 201);
+    const b = await body<{ body?: unknown; public?: unknown }>(req);
+    const text = str(b.body, "Comment", MAX_COMMENT, true)!;
+    // A reply the customer sees: service desk requests only, by people who work the service desk.
+    const toCustomer = !!b.public && r.source === "service_desk";
+    if (toCustomer && !c.can("work_service_desk")) throw new HttpError(403, "You don't have permission to reply to customers");
+    const id = await addComment(c, r, text, {}, { public: toCustomer });
+    return json({ id, authorId: c.me.id, body: text, createdAt: c.now, ...(toCustomer ? { public: true } : {}) } satisfies WorkComment, 201);
   }
   m = path.match(new RegExp(`^/api/items/${KEY}/comments/([a-z0-9-]{4,40})$`));
   if (m && (method === "PATCH" || method === "DELETE")) {
@@ -1331,7 +1365,14 @@ export async function itemsApi(c: ItemContext, path: string, method: string): Pr
     // Only people newly mentioned in the edit hear about it.
     const before = new Set(mentionsIn(row.body));
     const fresh = mentionsIn(text).filter((u) => !before.has(u));
-    if (fresh.length) await notifyMentions(c, r, fresh.map((u) => `@${u}`).join(" "), "In an edited comment");
+    if (fresh.length) {
+      await notifyItem(c, "item_commented", r, {
+        title: `${keyOf(r)} ${r.summary}`,
+        body: `In an edited comment: ${text.replace(/\s+/g, " ").slice(0, 200)}`,
+        mentioned: await mentionIds(c, fresh.map((u) => `@${u}`).join(" ")),
+        onlyMentioned: true,
+      });
+    }
     return json({ id: row.id, authorId: row.author_id, body: text, createdAt: row.created_at, updatedAt: c.now } satisfies WorkComment);
   }
 
@@ -1485,15 +1526,36 @@ export async function itemsApi(c: ItemContext, path: string, method: string): Pr
 }
 
 /** Adds a comment: logged, mentions told, watchers told, automation told. Returns its id. */
-export async function addComment(c: ItemContext, r: ItemRow, text: string, extra: Record<string, unknown> = {}): Promise<string> {
+export async function addComment(
+  c: ItemContext,
+  r: ItemRow,
+  text: string,
+  extra: Record<string, unknown> = {},
+  opts: { public?: boolean; customerName?: string } = {},
+): Promise<string> {
   const id = newToken().slice(0, 16);
+  // A service desk reply the customer sees is "public"; so is anything the customer writes.
+  const isPublic = r.source === "service_desk" && (!!opts.public || !!opts.customerName);
   await c.db.batch([
-    c.db.prepare("INSERT INTO work_item_comments (id, item_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)").bind(id, r.id, c.me.id, text, c.now),
+    c.db
+      .prepare("INSERT INTO work_item_comments (id, item_id, author_id, body, created_at, public, customer_name) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .bind(id, r.id, c.me.id, text, c.now, isPublic ? 1 : 0, opts.customerName ?? null),
     c.db.prepare("UPDATE work_items SET updated_at = ? WHERE id = ?").bind(c.now, r.id),
   ]);
-  await c.audit("comment_added", r.system_id, { name: r.project_name, key: keyOf(r), summary: r.summary, comment: text.slice(0, 300), ...extra });
-  const mentioned = await notifyMentions(c, r, text, "In a comment");
-  await notifyWatchers(c, r, "New comment", mentioned);
+  await c.audit("comment_added", r.system_id, {
+    name: r.project_name,
+    key: keyOf(r),
+    summary: r.summary,
+    comment: text.slice(0, 300),
+    ...(isPublic ? { toCustomer: !opts.customerName, fromCustomer: opts.customerName ?? undefined } : {}),
+    ...extra,
+  });
+  await notifyItem(c, "item_commented", r, {
+    title: `${keyOf(r)} ${r.summary}`,
+    body: `${opts.customerName ? `${opts.customerName} (customer)` : c.me.name} commented: ${text.replace(/\s+/g, " ").slice(0, 200)}`,
+    mentioned: await mentionIds(c, text),
+  });
+  if (r.source === "service_desk") await onRequestComment(c, r, { public: isPublic, fromCustomer: !!opts.customerName, text });
   c.emit?.({ type: "comment_added", itemId: r.id });
   return id;
 }
@@ -1544,5 +1606,15 @@ export async function askItemLines(c: ItemContext, nameOf: Map<string, string>, 
     );
   }
   if (!rows.results.length) lines.push("none");
+  // Custom field values, and security levels, of the same items.
+  const custom = await customValuesFor(c.db, rows.results.map((r) => r.id));
+  const extra = rows.results
+    .map((r) => {
+      const vals = (custom.get(r.id) ?? []).filter((v) => v.display).map((v) => `${clip(v.name, 40)}: ${clip(v.display, 80)}`);
+      if (r.security_level) vals.push(`security level: ${r.security_level}`);
+      return vals.length ? `${keyOf(r)} | ${vals.join("; ")}` : "";
+    })
+    .filter(Boolean);
+  if (extra.length) lines.push("", "CUSTOM FIELDS AND SECURITY LEVELS OF THOSE ITEMS (key | values)", ...extra);
   return lines;
 }

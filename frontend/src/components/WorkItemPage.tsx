@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { CustomFieldsPanel, DevelopmentPanel, RequestPanel, SecurityLevelField } from "./WorkItemExtras";
 import { ArrowLeft, Copy, Download, Eye, EyeOff, Link2, MessageSquare, Paperclip, Pencil, Plus, Timer, Trash2, Upload, X } from "lucide-react";
 import { api, ApiError } from "../data/api";
 import type { System } from "../data/systems";
@@ -109,7 +110,7 @@ export default function WorkItemPage({ system, itemKey, users, me, now, readOnly
     );
   if (!item) return <p className="lead-none">{error || "Loading…"}</p>;
 
-  const can = readOnly ? { edit: false, delete: false, comment: false, logTime: false, assignOthers: false } : item.can;
+  const can = readOnly ? { edit: false, delete: false, comment: false, logTime: false, assignOthers: false, replyToCustomer: false } : item.can;
   const people = users.filter((u) => u.role !== "viewer" && (item.source !== "client_request" || u.role === "developer")).sort((a, b) => a.name.localeCompare(b.name));
   const assignable = can.assignOthers ? people : people.filter((u) => u.id === me.id);
   const done = isDone(item);
@@ -208,6 +209,12 @@ export default function WorkItemPage({ system, itemKey, users, me, now, readOnly
             </Section>
           )}
 
+          <RequestPanel item={item} />
+
+          <CustomFieldsPanel item={item} users={users} canEdit={can.edit} onSave={(customFields) => save({ customFields })} />
+
+          {!readOnly && <DevelopmentPanel item={item} now={now} />}
+
           {item.type !== "SUBTASK" && (
             <Children item={item} systemId={system.id} nameOf={nameOf} canCreate={canCreate && !readOnly} onAdded={load} />
           )}
@@ -216,7 +223,17 @@ export default function WorkItemPage({ system, itemKey, users, me, now, readOnly
 
           {!readOnly && <Attachments item={item} canUpload={can.comment} canManage={can.assignOthers} me={me} nameOf={nameOf} now={now} run={run} />}
 
-          <Comments item={item} me={me} now={now} nameOf={nameOf} usernames={usernames} canComment={can.comment} onCount={(n) => setItem((i) => (i ? { ...i, commentCount: n } : i))} />
+          <Comments
+            item={item}
+            me={me}
+            now={now}
+            nameOf={nameOf}
+            usernames={usernames}
+            canComment={can.comment}
+            canReplyToCustomer={!!can.replyToCustomer}
+            onCount={(n) => setItem((i) => (i ? { ...i, commentCount: n } : i))}
+            onPublicReply={load}
+          />
 
           <Section title="Status history" icon={<Timer size={16} />}>
             <ol className="timeline">
@@ -354,6 +371,11 @@ export default function WorkItemPage({ system, itemKey, users, me, now, readOnly
             )}
           </Field>
           <Field label="Reporter">{nameOf(item.reporter)}</Field>
+          {!readOnly && (
+            <Field label="Security level">
+              <SecurityLevelField item={item} canEdit={can.edit} busy={busy} onSave={(securityLevel) => save({ securityLevel })} />
+            </Field>
+          )}
           <ParentField item={item} systemId={system.id} canEdit={can.edit} busy={busy} onSave={(parent) => save({ parent })} />
           <Field label="Labels">
             <Labels item={item} canEdit={can.edit} onSave={(labels) => save({ labels })} />
@@ -862,7 +884,9 @@ function Comments({
   nameOf,
   usernames,
   canComment,
+  canReplyToCustomer,
   onCount,
+  onPublicReply,
 }: {
   item: WorkItem;
   me: User;
@@ -870,8 +894,11 @@ function Comments({
   nameOf: (id?: string) => string;
   usernames: string[];
   canComment: boolean;
+  canReplyToCustomer: boolean;
   onCount: (n: number) => void;
+  onPublicReply: () => Promise<void>;
 }) {
+  const [toCustomer, setToCustomer] = useState(false);
   const [comments, setComments] = useState<WorkComment[] | null>(null);
   const [total, setTotal] = useState(0);
   const [draft, setDraft] = useState("");
@@ -908,10 +935,11 @@ function Comments({
         <ol className="wi-comments">
           {comments.map((c) => (
             <li key={c.id}>
-              <span className="avatar">{nameOf(c.authorId).slice(0, 2).toUpperCase()}</span>
-              <div className="wi-comment">
+              <span className="avatar">{(c.customerName ?? nameOf(c.authorId)).slice(0, 2).toUpperCase()}</span>
+              <div className={`wi-comment ${c.public ? "public" : ""}`}>
                 <p className="wi-comment-head">
-                  <b>{nameOf(c.authorId)}</b>{" "}
+                  <b>{c.customerName ? `${c.customerName} (customer)` : nameOf(c.authorId)}</b>{" "}
+                  {c.public && !c.customerName && <span className="cf-chip">To the customer</span>}{" "}
                   <small title={new Date(c.createdAt).toLocaleString("en-GB")}>
                     {timeAgo(c.createdAt, now)}
                     {c.updatedAt ? " · edited" : ""}
@@ -937,7 +965,7 @@ function Comments({
                 ) : (
                   <Markdown text={c.body} usernames={usernames} />
                 )}
-                {c.authorId === me.id && canComment && editing?.id !== c.id && (
+                {c.authorId === me.id && !c.customerName && canComment && editing?.id !== c.id && (
                   <p className="wi-comment-actions">
                     <button className="link-btn" onClick={() => setEditing({ id: c.id, body: c.body })}>
                       Edit
@@ -965,12 +993,28 @@ function Comments({
           className="wi-comment-new"
           onSubmit={async (e) => {
             e.preventDefault();
-            if (await act(() => api(`/items/${item.key}/comments`, "POST", { body: draft }))) setDraft("");
+            const pub = canReplyToCustomer && toCustomer;
+            if (await act(() => api(`/items/${item.key}/comments`, "POST", { body: draft, ...(pub ? { public: true } : {}) }))) {
+              setDraft("");
+              if (pub) await onPublicReply();
+            }
           }}
         >
-          <MarkdownField label="Add a comment" value={draft} onChange={setDraft} rows={3} usernames={usernames} placeholder="Type @ and a username to mention someone; they'll be told if they can see this item." />
+          <MarkdownField
+            label={canReplyToCustomer && toCustomer ? "Reply to the customer" : "Add a comment"}
+            value={draft}
+            onChange={setDraft}
+            rows={3}
+            usernames={usernames}
+            placeholder={canReplyToCustomer && toCustomer ? "The customer sees this on the portal and by email." : "Type @ and a username to mention someone; they'll be told if they can see this item."}
+          />
+          {canReplyToCustomer && (
+            <label className="wi-check">
+              <input type="checkbox" checked={toCustomer} onChange={(e) => setToCustomer(e.target.checked)} /> Reply to the customer (otherwise an internal note)
+            </label>
+          )}
           <button type="submit" className="btn btn-navy sm" disabled={!draft.trim()}>
-            Comment
+            {canReplyToCustomer && toCustomer ? "Send to customer" : "Comment"}
           </button>
         </form>
       )}

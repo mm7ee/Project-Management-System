@@ -31,7 +31,14 @@ const RANK: Record<string, number> = { HIGHEST: 5, HIGH: 4, MEDIUM: 3, LOW: 2, L
 const TYPE_ALIASES: Record<string, string> = { epic: "EPIC", story: "STORY", task: "TASK", bug: "BUG", "sub-task": "SUBTASK", subtask: "SUBTASK" };
 const CATEGORY_ALIASES: Record<string, StatusCategory> = { "to do": "TODO", todo: "TODO", "in progress": "IN_PROGRESS", inprogress: "IN_PROGRESS", in_progress: "IN_PROGRESS", done: "DONE" };
 const RESOLUTION_ALIASES: Record<string, string> = { done: "DONE", "won't do": "WONT_DO", "wont do": "WONT_DO", wont_do: "WONT_DO", "won't_do": "WONT_DO" };
-const SOURCE_ALIASES: Record<string, string> = { "client request": "client_request", client_request: "client_request", client: "client_request", internal: "internal" };
+const SOURCE_ALIASES: Record<string, string> = {
+  "client request": "client_request",
+  client_request: "client_request",
+  client: "client_request",
+  internal: "internal",
+  "service desk": "service_desk",
+  service_desk: "service_desk",
+};
 const SQL_OP: Record<Op, string> = { "=": "=", "!=": "<>", ">": ">", "<": "<", ">=": ">=", "<=": "<=", "~": "ILIKE", IN: "IN", "NOT IN": "NOT IN" };
 
 const DATE_COLUMN: Record<string, { col: string; dateOnly: boolean }> = {
@@ -126,7 +133,7 @@ export function compile(q: Query, lk: Lookup): Compiled {
       }
       case "source": {
         const s = SOURCE_ALIASES[textOf(v, field).toLowerCase()];
-        if (!s) fail(`Unknown source '${textOf(v, field)}': use "client request" or internal`, v);
+        if (!s) fail(`Unknown source '${textOf(v, field)}': use "client request", "service desk" or internal`, v);
         return s;
       }
       case "workspace": {
@@ -156,7 +163,35 @@ export function compile(q: Query, lk: Lookup): Compiled {
     return { value: t, day: true };
   };
 
+  /** A custom field: a match among its value rows. "!=" and NOT IN, as elsewhere, don't match empty. */
+  const customClause = (n: Extract<Node, { type: "clause" }>): string => {
+    const f = n.field;
+    const cf = f.custom!;
+    const neg = n.op === "!=" || n.op === "NOT IN";
+    const op: Op = n.op === "!=" ? "=" : n.op === "NOT IN" ? "IN" : n.op;
+    // Built in reading order, so the parameters line up with their placeholders.
+    const cond = (): string => {
+      switch (cf.kind) {
+        case "text":
+          return op === "~" ? `v.value_text ILIKE ${p(like(textOf(n.values[0], f)))}` : `lower(v.value_text) = lower(${p(textOf(n.values[0], f))})`;
+        case "number":
+          return cmp("v.value_number", op, n.values.map((v) => (v.type === "number" ? v.value : fail(`${f.name} needs a number`, v))));
+        case "date":
+          return `v.value_date ${SQL_OP[op]} ${p(dateValue(n.values[0], true).value)}`;
+        case "user":
+          return cmp("v.value_user", op, n.values.map((v) => resolve({ ...f, name: "assignee" }, v)));
+        default:
+          return `v.option_id IN (SELECT o.id FROM custom_field_options o WHERE o.field_id IN ${list(cf.ids)} AND lower(o.label) IN ${list(n.values.map((v) => textOf(v, f).toLowerCase()))})`;
+      }
+    };
+    const matches = () => `EXISTS (SELECT 1 FROM custom_field_values v WHERE v.item_id = w.id AND v.field_id IN ${list(cf.ids)} AND ${cond()})`;
+    if (!neg) return matches();
+    const any = `EXISTS (SELECT 1 FROM custom_field_values v WHERE v.item_id = w.id AND v.field_id IN ${list(cf.ids)})`;
+    return `(${any} AND NOT ${matches()})`;
+  };
+
   const clause = (n: Extract<Node, { type: "clause" }>): string => {
+    if (n.field.custom) return customClause(n);
     const f = n.field;
     const op = n.op;
     const neg = op === "!=" || op === "NOT IN";
@@ -235,6 +270,10 @@ export function compile(q: Query, lk: Lookup): Compiled {
   };
 
   const empty = (n: Extract<Node, { type: "empty" }>): string => {
+    if (n.field.custom) {
+      const has = `EXISTS (SELECT 1 FROM custom_field_values v WHERE v.item_id = w.id AND v.field_id IN ${list(n.field.custom.ids)})`;
+      return n.negated ? has : `NOT ${has}`;
+    }
     const f = n.field.name;
     const sql: Record<string, string> = {
       assignee: "w.assignee IS NULL",

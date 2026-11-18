@@ -13,7 +13,7 @@ interface Props {
   now: number;
 }
 
-type Kind = "" | "signin" | "failed" | "account" | "systems" | "features" | "items" | "workflows" | "sprints" | "search" | "automation" | "project" | "admin";
+type Kind = "" | "signin" | "failed" | "account" | "systems" | "features" | "items" | "workflows" | "sprints" | "search" | "automation" | "integrations" | "schemes" | "service_desk" | "project" | "admin";
 const KINDS: { key: Kind; label: string }[] = [
   { key: "", label: "Everything" },
   { key: "signin", label: "Sign-ins" },
@@ -25,6 +25,9 @@ const KINDS: { key: Kind; label: string }[] = [
   { key: "sprints", label: "Sprints" },
   { key: "search", label: "Filters & dashboards" },
   { key: "automation", label: "Automation" },
+  { key: "integrations", label: "Integrations & API" },
+  { key: "schemes", label: "Schemes, levels & fields" },
+  { key: "service_desk", label: "Service desk" },
   { key: "project", label: "Documents & blockers" },
   { key: "admin", label: "Users & roles" },
   { key: "account", label: "Own account" },
@@ -302,6 +305,8 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
           const names = d.statusNames as { from: unknown; to: unknown } | undefined;
           return `status ${names ? str(names.from) : itemStatus(c.from)} → ${names ? str(names.to) : itemStatus(c.to)}${d.transition ? ` (${str(d.transition)})` : ""}`;
         }
+        if (f.startsWith("field:")) return `${f.slice(6)} ${str(c.from) || "none"} → ${str(c.to) || "none"}`;
+        if (f === "securityLevel") return `security level ${str(c.from) || "none"} → ${str(c.to) || "none"}`;
         if (f === "priority") return `priority ${itemPriority(c.from)} → ${itemPriority(c.to)}`;
         if (f === "assignee") return `assignee ${c.from ? userName(c.from) : "nobody"} → ${c.to ? userName(c.to) : "nobody"}`;
         if (f === "type") return `type ${itemType(c.from)} → ${itemType(c.to)}`;
@@ -316,6 +321,61 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
       const key = typeof d.key === "string" ? d.key : str((d.key as { to?: unknown } | undefined)?.to);
       return `Updated ${key} "${str(d.summary)}" on ${name}: ${parts.join("; ")}`;
     }
+    case "integration_updated":
+      return `Changed the ${str(d.integration)} integration: ${((d.changed as string[]) ?? []).join(", ")}`;
+    case "api_token_created":
+      return `Made the API token "${str(d.token)}" (${str(d.scope) === "write" ? "read and write" : "read only"}, ${str(d.days)} days)`;
+    case "api_token_revoked":
+      return `Revoked the API token "${str(d.token)}"${d.byAdministrator ? ` belonging to ${str(d.owner)}` : ""}`;
+    case "webhook_created":
+      return `Added the webhook "${str(d.webhook)}" to ${str(d.url)} for ${((d.events as string[]) ?? []).join(", ")}`;
+    case "webhook_updated": {
+      const from = (d.from ?? {}) as Record<string, unknown>;
+      const to = (d.to ?? {}) as Record<string, unknown>;
+      const parts = (["name", "url", "events", "enabled", "project"] as const)
+        .filter((k) => JSON.stringify(from[k]) !== JSON.stringify(to[k]))
+        .map((k) => (k === "enabled" ? (to.enabled ? "turned on" : "turned off") : `${k} ${Array.isArray(from[k]) ? (from[k] as string[]).join(", ") : str(from[k])} → ${Array.isArray(to[k]) ? (to[k] as string[]).join(", ") : str(to[k])}`));
+      return `Edited the webhook "${str(d.webhook)}": ${parts.join("; ") || "no change"}`;
+    }
+    case "webhook_deleted":
+      return `Deleted the webhook "${str(d.webhook)}"`;
+    case "notification_scheme_updated": {
+      const changes = (d.changes ?? {}) as Record<string, { from: string; to: string }>;
+      return `Changed the notification scheme: ${Object.entries(changes).map(([ev, c]) => `${ev.toLowerCase()}: ${c.from} → ${c.to}`).join("; ")}`;
+    }
+    case "notification_optouts_updated":
+      return `Changed which work item notifications they get: off for ${((d.to as string[]) ?? []).join(", ").toLowerCase() || "nothing"}`;
+    case "security_level_created":
+      return `Added the security level "${str(d.level)}" for ${[...((d.roles as string[]) ?? []), ...((d.people as string[]) ?? [])].join(", ") || "administrators only"}`;
+    case "security_level_updated": {
+      const from = (d.from ?? {}) as { roles?: string[]; people?: string[]; name?: string };
+      const to = (d.to ?? {}) as { roles?: string[]; people?: string[]; name?: string };
+      return `Edited the security level "${str(d.level)}": ${[...(from.roles ?? []), ...(from.people ?? [])].join(", ") || "nobody extra"} → ${[...(to.roles ?? []), ...(to.people ?? [])].join(", ") || "nobody extra"}`;
+    }
+    case "security_level_deleted":
+      return `Deleted the security level "${str(d.level)}"`;
+    case "custom_field_created":
+      return `Added the custom field "${str(d.field)}" (${str(d.kind).toLowerCase()}) to ${str(d.workspace)}${d.required ? ", required" : ""}`;
+    case "custom_field_updated":
+      return `Edited the custom field "${str(d.field)}" in ${str(d.workspace)}`;
+    case "custom_field_deleted":
+      return `Deleted the custom field "${str(d.field)}" from ${str(d.workspace)}${d.itemsWithValues ? `; ${str(d.itemsWithValues)} items had a value` : ""}`;
+    case "service_request_raised":
+      return `${str(d.customer)} raised ${str(d.key)}, a ${str(d.requestType).toLowerCase()}${d.viaPortalLink ? " through a portal link" : ""}`;
+    case "service_desk_updated":
+      return `Chose the service desk's project: ${(d.to as { project?: string } | undefined)?.project ? sysName((d.to as { project: string }).project) : "none"}`;
+    case "request_type_created":
+      return `Added the request type "${str(d.requestType)}"`;
+    case "request_type_updated":
+      return `Edited the request type "${str(d.requestType)}"`;
+    case "request_type_deleted":
+      return `Deleted the request type "${str(d.requestType)}"`;
+    case "holidays_updated":
+      return `Changed the public holidays: ${[...((d.added as string[]) ?? []).map((h) => `added ${h}`), ...((d.removed as string[]) ?? []).map((h) => `removed ${h}`)].join("; ") || "no change"}`;
+    case "portal_link_created":
+      return `Made a service desk portal link for ${str(d.label)} (${str(d.days)} days)`;
+    case "portal_link_revoked":
+      return `Turned off the service desk portal link for ${str(d.label)}`;
     case "filter_created":
       return `Saved the filter "${str(d.filter)}" (${str(d.shared).toLowerCase()}): ${str(d.pql) || "everything"}`;
     case "filter_updated": {

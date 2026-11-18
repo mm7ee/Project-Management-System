@@ -1,7 +1,17 @@
 // The clean-up that enforces the retention policy in src/data/retention.ts. Runs each weekday morning
 // with the daily-digest cron; deletes are by date, so a missed run just catches up the next time.
 
-import { AUDIT_DAYS, AUTOMATION_RUN_DAYS, MFA_HELP_DAYS, NOTIFICATION_DAYS, SHARE_LINK_DAYS, SIGNIN_FAILURE_HOURS } from "../src/data/retention";
+import {
+  API_USAGE_HOURS,
+  AUDIT_DAYS,
+  AUTOMATION_RUN_DAYS,
+  EXPIRED_TOKEN_DAYS,
+  MFA_HELP_DAYS,
+  NOTIFICATION_DAYS,
+  SHARE_LINK_DAYS,
+  SIGNIN_FAILURE_HOURS,
+  WEBHOOK_DELIVERY_DAYS,
+} from "../src/data/retention";
 
 const DAY = 86_400_000;
 
@@ -22,12 +32,18 @@ export async function purgeExpired(db: D1Database, now = Date.now()): Promise<Re
     ],
     ["login_failures", db.prepare("DELETE FROM login_failures WHERE at < ?").bind(now - SIGNIN_FAILURE_HOURS * 3_600_000)],
     ["automation_runs", db.prepare("DELETE FROM automation_runs WHERE at < ?").bind(before(AUTOMATION_RUN_DAYS))],
+    ["webhook_deliveries", db.prepare("DELETE FROM webhook_deliveries WHERE created_at < ?").bind(before(WEBHOOK_DELIVERY_DAYS))],
+    ["github_deliveries", db.prepare("DELETE FROM github_deliveries WHERE received_at < ?").bind(before(WEBHOOK_DELIVERY_DAYS))],
+    ["api_token_usage", db.prepare("DELETE FROM api_token_usage WHERE minute < ?").bind(Math.floor((now - API_USAGE_HOURS * 3_600_000) / 60_000))],
+    ["api_tokens", db.prepare("DELETE FROM api_tokens WHERE COALESCE(revoked_at, expires_at) < ?").bind(before(EXPIRED_TOKEN_DAYS))],
+    ["portal_links", db.prepare("DELETE FROM portal_links WHERE COALESCE(revoked_at, expires_at) < ?").bind(before(EXPIRED_TOKEN_DAYS))],
+    ["security_level_grants (removed users)", db.prepare("DELETE FROM security_level_grants WHERE user_id IS NOT NULL AND user_id NOT IN (SELECT id FROM users)")],
     ["sessions", db.prepare("DELETE FROM sessions WHERE expires_at < ?").bind(now)],
     ["mfa_challenges", db.prepare("DELETE FROM mfa_challenges WHERE expires_at < ?").bind(now)],
     ["webauthn_challenges", db.prepare("DELETE FROM webauthn_challenges WHERE expires_at < ?").bind(now)],
     ["mfa_recovery", db.prepare("DELETE FROM mfa_recovery WHERE used_at IS NOT NULL")],
     // Left behind by people removed before every table was cleared on removal.
-    ...(["passkeys", "mfa_help_requests", "notifications", "password_history", "login_failures", "work_item_watchers", "filter_favourites", "filter_subscriptions"] as const).map(
+    ...(["passkeys", "mfa_help_requests", "notifications", "password_history", "login_failures", "work_item_watchers", "filter_favourites", "filter_subscriptions", "notification_optouts", "api_tokens"] as const).map(
       (t): [string, D1PreparedStatement] => [
         `${t} (removed users)`,
         db.prepare(`DELETE FROM ${t} WHERE user_id NOT IN (SELECT id FROM users)`),

@@ -4,6 +4,7 @@ import type { Feature, FeatureKind, FeatureStatus, Priority } from "../src/data/
 
 export interface FeatureRow {
   id: string;
+  security_level?: string | null; // a confidential client request: only people at its level see it
   system_id: string;
   title: string;
   description: string;

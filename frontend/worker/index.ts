@@ -57,6 +57,14 @@ import { sprintHealth, sprintsApi } from "./sprints";
 import { askSearchLines, runSubscriptions, searchApi } from "./search";
 import { askAutomationLines, automationApi, runEvent, runScheduledRules } from "./automation";
 import { dueJobs } from "./schedule";
+import { askIntegrationLines, githubWebhook, integrationsApi, retryWebhooks, tokenAuth } from "./integrations";
+import { askServiceDeskLines, portalApi, runSlaChecks, serviceDeskApi } from "./servicedesk";
+import { customFieldsApi } from "./customfields";
+import { adminApi } from "./admin";
+import { levelsFor } from "./access";
+
+/** Requests made with a personal API token, and the token's name, for the activity log. */
+const VIA_TOKEN = new WeakMap<Request, string>();
 import { EFFECTIVE_WORKFLOW, loadWorkflow } from "./workflowData";
 import type { AppNotification, DeliveryStatus, Digest, NotificationKind } from "../src/data/notifications";
 import {
@@ -528,7 +536,7 @@ async function audit(
         who.name.slice(0, 64),
         action,
         target,
-        JSON.stringify(detail),
+        JSON.stringify(VIA_TOKEN.has(req) ? { ...detail, viaApiToken: VIA_TOKEN.get(req) } : detail),
         req.headers.get("cf-connecting-ip"),
         (req.headers.get("user-agent") ?? "").slice(0, 300),
       )
@@ -565,6 +573,18 @@ const ACTIVITY_KINDS: Record<string, string[]> = {
   workflows: ["workflow_created", "workflow_updated", "workflow_deleted", "workflow_assigned", "status_created", "status_updated", "status_deleted", "work_items_moved", "board_updated"],
   search: ["filter_created", "filter_updated", "filter_deleted", "filter_subscribed", "filter_unsubscribed", "dashboard_created", "dashboard_updated", "dashboard_deleted"],
   automation: ["automation_rule_created", "automation_rule_updated", "automation_rule_deleted", "automation_rule_run"],
+  integrations: ["integration_updated", "api_token_created", "api_token_revoked", "webhook_created", "webhook_updated", "webhook_deleted"],
+  schemes: [
+    "notification_scheme_updated",
+    "notification_optouts_updated",
+    "security_level_created",
+    "security_level_updated",
+    "security_level_deleted",
+    "custom_field_created",
+    "custom_field_updated",
+    "custom_field_deleted",
+  ],
+  service_desk: ["service_request_raised", "service_desk_updated", "request_type_created", "request_type_updated", "request_type_deleted", "holidays_updated", "portal_link_created", "portal_link_revoked"],
   sprints: ["sprint_created", "sprint_updated", "sprint_deleted", "sprint_started", "sprint_completed", "sprint_scope_changed", "backlog_ranked"],
   items: [
     "work_item_created",
@@ -859,6 +879,11 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     return json(showcase, 200, { "cache-control": "public, max-age=60" });
   }
 
+  // GitHub calls this, signed with the shared secret; the customer portal works by its link. No session.
+  if (path === "/api/integrations/github/webhook" && method === "POST") return githubWebhook(env, req);
+  const portal = await portalApi(env, req, path, (p) => ctx.waitUntil(p.catch((e) => console.error("portal background work failed", e))));
+  if (portal) return portal;
+
   if (path === "/api/logout" && method === "POST") {
     const token = cookieToken(req);
     if (token) {
@@ -902,8 +927,15 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
   if (guest && !guestAllowed) {
     throw new HttpError(403, "This link is view-only");
   }
-  const me = guest ? guestUser(guest) : await currentUser(req, db);
+  // A personal API token stands in for its owner, with the owner's permissions (worker/integrations.ts).
+  const apiToken = guest ? null : await tokenAuth(db, req, path);
+  const me = guest
+    ? guestUser(guest)
+    : apiToken
+      ? await db.prepare("SELECT * FROM users WHERE id = ?").bind(apiToken.userId).first<UserRow>()
+      : await currentUser(req, db);
   if (!me) throw new HttpError(401, "Not signed in");
+  if (apiToken) VIA_TOKEN.set(req, apiToken.name);
   if (guest && path === "/api/data") {
     await db.prepare("UPDATE share_links SET views = views + 1, last_used_at = ? WHERE id = ?").bind(new Date().toISOString(), guest.id).run();
   }
@@ -935,10 +967,19 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
   // A view-only link sees everything, including Reports, and may request updates; it changes nothing else.
   const perms: Permission[] = guest ? ["reports", "request_updates"] : permissionsFor(me.role, matrix);
   const can = (p: Permission) => perms.includes(p);
+  if (apiToken && !can("use_api")) throw new HttpError(403, "Your role can no longer use API tokens", "token_not_allowed");
   // Developers (without manage_features) see only the feature requests assigned to them or
   // logged by them: everywhere, including Ask Pulse and project history.
   const ownFeaturesOnly = me.role === "developer" && !can("manage_features");
   const mineOnly = (rows: FeatureRow[]) => (ownFeaturesOnly ? rows.filter((f) => f.assignee === me.id || f.created_by === me.id) : rows);
+  // Feature requests are work items: those with a security level only for people at the level (worker/access.ts).
+  const visibleFeatures = async (rows: FeatureRow[]) => {
+    const own = mineOnly(rows);
+    if (!own.some((f) => f.security_level)) return own;
+    const levels = guest ? [] : me.role === "admin" ? null : await levelsFor(db, { id: me.id, role: me.role, ownOnly: ownFeaturesOnly });
+    return own.filter((f) => !f.security_level || (!guest && (levels === null || levels.includes(f.security_level) || f.assignee === me.id || f.created_by === me.id)));
+  };
+  const seeFeature = async (f: FeatureRow) => (await visibleFeatures([f])).length === 1;
   // Developers (without manage_systems) see only the Concept Notes they wrote or are asked to sign:
   // anyone else's is left off the project, everywhere it's sent, including Ask Pulse.
   const ownPcnsOnly = me.role === "developer" && !can("manage_systems");
@@ -956,7 +997,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
   // don't notify you.
   const alert = (alerts: Alert[], channel?: ChannelPost) => {
     const others = alerts.filter((a) => a.userId !== me.id);
-    if (others.length) ctx.waitUntil(raise(env, others, channel).catch((e) => noteFailure(db, "Notification", e)));
+    if (others.length || channel) ctx.waitUntil(raise(env, others, channel).catch((e) => noteFailure(db, "Notification", e)));
   };
   // Work items (worker/workitems.ts) run with the same person, permissions and visibility rules.
   const itemCtx: ItemContext = {
@@ -966,13 +1007,17 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     guest: !!guest,
     can,
     ownOnly: ownFeaturesOnly,
+    viewer: { id: me.id, role: me.role, ownOnly: ownFeaturesOnly, guest: !!guest },
     now,
     audit: (action, target, detail) => audit(db, req, me, action, target, detail),
-    alert: (alerts) => alert(alerts),
+    alert: (alerts, channel) => alert(alerts, channel),
+    env,
+    defer: (p) => ctx.waitUntil(p.catch((e) => console.error("background work failed", e))),
     // Automation reacts after the response, so a person never waits for a rule.
     emit: guest ? undefined : (e) => ctx.waitUntil(runEvent(env, e).catch((err) => console.error("automation failed", err))),
   };
-  const itemsResponse = (await itemsApi(itemCtx, path, method)) ?? (await workflowsApi(itemCtx, path, method)) ?? (await boardsApi(itemCtx, path, method)) ?? (await sprintsApi(itemCtx, path, method)) ?? (await searchApi(itemCtx, env, path, method)) ?? (await automationApi(itemCtx, env, path, method));
+  const itemsResponse = (await itemsApi(itemCtx, path, method)) ?? (await workflowsApi(itemCtx, path, method)) ?? (await boardsApi(itemCtx, path, method)) ?? (await sprintsApi(itemCtx, path, method)) ?? (await searchApi(itemCtx, env, path, method)) ?? (await automationApi(itemCtx, env, path, method)) ??
+    (await customFieldsApi(itemCtx, path, method)) ?? (await adminApi(itemCtx, path, method)) ?? (await serviceDeskApi(itemCtx, path, method)) ?? (await integrationsApi(itemCtx, env, path, method));
   if (itemsResponse) return itemsResponse;
 
   /**
@@ -1519,7 +1564,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
           }),
         );
       })(),
-      features: mineOnly(features.results).map(toFeature),
+      features: (await visibleFeatures(features.results)).map(toFeature),
       documents: documents.results.map(
         (d): ProjectDocument => ({
           id: String(d.id),
@@ -1601,7 +1646,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     // Developers get a personal work assistant; everyone else the team view.
     const mode: AskMode = me.role === "developer" && !can("manage_features") ? "developer" : "team";
     const allSystems = systems.results.map((r) => pcnFor(JSON.parse(r.data) as System));
-    const visibleFeatures = mineOnly(features.results).map(toFeature);
+    const featuresSeen = (await visibleFeatures(features.results)).map(toFeature);
     const blockerList = blockers.results.map(
       (r): Blocker => ({
         id: r.id!,
@@ -1621,18 +1666,20 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
             systems: allSystems,
             people: people.results,
             assignments: assignments.results,
-            features: visibleFeatures,
+            features: featuresSeen,
             blockers: blockerList,
             updateRequests: updateAsks.results.map((r) => ({ systemId: r.system_id, requestedBy: r.requested_by, message: r.message, createdAt: r.created_at })),
             limits,
           })
         : "";
-    const sprints = await sprintHealth(db, t, ownFeaturesOnly ? { userId: me.id } : undefined);
+    const sprints = await sprintHealth(db, t, itemCtx.viewer);
     const itemLines = [
       ...(await askItemLines(itemCtx, new Map(people.results.map((p) => [p.id, p.name])))),
       ...(await askBoardLines(itemCtx)),
       ...(guest ? [] : await askSearchLines(itemCtx)),
       ...(can("manage_automation") ? await askAutomationLines(db) : []),
+      ...(await askServiceDeskLines(itemCtx)),
+      ...(await askIntegrationLines(itemCtx)),
       ...(sprints.length
         ? [
             "",
@@ -1646,7 +1693,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       systems: allSystems,
       people: people.results,
       assignments: assignments.results,
-      features: visibleFeatures,
+      features: featuresSeen,
       brief: mode === "developer",
       // Only people who manage users can see who is locked out, here as in Settings → People.
       ...(can("manage_users")
@@ -2394,7 +2441,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
   const featMatch = path.match(/^\/api\/features\/([a-z0-9-]+)$/);
   if (featMatch && method === "PATCH") {
     const row = await db.prepare("SELECT * FROM features WHERE id = ?").bind(featMatch[1]).first<FeatureRow>();
-    if (!row) throw new HttpError(404, "Feature request not found");
+    if (!row || !(await seeFeature(row))) throw new HttpError(404, "Feature request not found");
     const b = await body<Partial<Feature>>(req);
     const manager = can("manage_features");
     const logger = !manager && can("log_features") && row.created_by === me.id;
@@ -2467,7 +2514,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
   if (featMatch && method === "DELETE") {
     need("manage_features");
     const row = await db.prepare("SELECT * FROM features WHERE id = ?").bind(featMatch[1]).first<FeatureRow>();
-    if (!row) throw new HttpError(404, "Feature request not found");
+    if (!row || !(await seeFeature(row))) throw new HttpError(404, "Feature request not found");
     await deleteItem(itemCtx, (await itemById(itemCtx, row.id))!);
     const sys = await db.prepare("SELECT data FROM systems WHERE id = ?").bind(row.system_id).first<{ data: string }>();
     await audit(db, req, me, "feature_deleted", row.system_id, { name: sys ? JSON.parse(sys.data).name : row.system_id, title: row.title, key: row.item_key });
@@ -2804,5 +2851,7 @@ export default {
     if (due.mondayBriefing) await runBriefing(env).catch((e) => noteFailure(env.DB, "Monday Briefing", e));
     await runSubscriptions(env).catch((e) => noteFailure(env.DB, "Filter subscriptions", e));
     await runScheduledRules(env).catch((e) => console.error("Scheduled automation failed", e));
+    await runSlaChecks(env).catch((e) => noteFailure(env.DB, "Service desk SLA alerts", e));
+    await retryWebhooks(env).catch((e) => console.error("Webhook retries failed", e));
   },
 };

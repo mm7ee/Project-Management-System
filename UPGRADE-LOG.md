@@ -403,3 +403,115 @@ Everyone signed in can search and keep private filters and dashboards. View-only
 - the dashboard picker, custom dashboards and the dashboard editor
 - Settings → Administration → Automation: the rule list, the rule editor and the run log
 - "Turn this into a search" in Ask Pulse
+
+## Phase 5: integrations, admin schemes and Service Desk lite
+
+**What was built**
+- **GitHub integration:**
+  - A signed inbound webhook. Commits, branches and pull requests that mention a key appear in the item's new
+    **Development** panel.
+  - Setup, with step-by-step instructions, in Settings → Administration → Integrations.
+- **REST API:**
+  - **Personal API tokens** in Settings → Security & privacy. They are read or read-and-write, expire, are shown
+    once and kept as a hash, can be revoked, and allow 120 requests a minute. Administrators see and revoke
+    everyone's.
+  - **Outbound webhooks** for created, updated, moved and commented events, signed with HMAC-SHA256 and retried
+    with backoff, with a deliveries log, a test button and retry.
+  - **Documentation:** `docs/API.md`, and an API reference in Settings.
+- **Notification schemes:** for each event, the recipients (assignee, reporter, watchers, project lead, a role,
+  @mentioned) and the channels (bell, email, Teams). People opt out of events in Settings → Notifications.
+- **Security levels** on work items, enforced everywhere work items appear. Two are seeded.
+- **Custom fields** per workspace (text, number, date, single select, multi select, person):
+  - choice of screens (create, edit, view, board cards) and whether each is required
+  - in PQL (with suggestions), saved filters, CSV export and board cards
+- **Service Desk lite:**
+  - **Request types:** Incident, Service request, Change and Question, each with its own questions.
+  - **A portal:** links for people without an account, plus Raise a request and My requests for staff.
+  - **Queues:** Unassigned, My open requests, SLA at risk, Breached, All open.
+  - **SLA clocks** for first response and resolution, in business hours (Mon–Fri 08:00–17:00 Harare), with
+    editable holidays, paused while waiting for the customer, warning at 75% and alerting on a breach.
+  - **Customers** hear by email.
+  - **Replies:** to the customer, or internal notes.
+  - **Reports:** SLA met against breached, volume by type and by week, and the average time to resolve.
+  - **Changes** go through Change Approval.
+- **Ask Pulse knows:** the service desk queues (people who work them), custom field values and security levels of
+  the items listed, your API tokens, and (for integration managers) GitHub and the webhooks. All of it follows
+  each person's visibility.
+- **Activity log:** "Integrations & API", "Schemes, levels & fields" and "Service desk" filters, with readable
+  descriptions.
+- **Retention:** rules for every new table. Webhook deliveries and GitHub delivery records are kept 30 days;
+  expired tokens and portal links 90 days; API counters 24 hours. A removed person's tokens and opt-outs go with
+  them.
+- **Demo data** (with the `demo-` prefix):
+  - two confidential bugs, and the demo manager in "HR only"
+  - a "Client tier" select and an "Estimated value" number on 40 items
+  - GitHub links on six items
+  - six service desk requests
+  - a portal link, a revoked token and an opt-out
+- **Postman:** 39 new requests. **Unit tests:** 47 (PQL with custom fields, the SLA clock, the cron timetable).
+
+**Migration:** `migrations/0007_integrations_admin_service_desk.sql`.
+- **New tables:**
+  - `security_levels`, `security_level_grants`
+  - `custom_fields`, `custom_field_options`, `custom_field_values`
+  - `integration_secrets`, `dev_links`, `github_deliveries`
+  - `api_tokens`, `api_token_usage`
+  - `webhooks`, `webhook_deliveries`
+  - `notification_schemes`, `notification_optouts`
+  - `service_desk_config`, `request_types`, `request_type_fields`, `request_type_field_options`
+  - `sla_targets`, `public_holidays`, `portal_links`
+  - `sd_requests`, `sd_answers`, `sd_pauses`
+- **New columns:** `work_items.security_level`, `work_item_comments.public` and `work_item_comments.customer_name`.
+  `work_items.source` may now be `service_desk`.
+- **Seeds:**
+  - the statuses "Waiting for customer" and "Resolved"
+  - the Service desk workflow
+  - two security levels and the default notification schemes
+  - four request types with their questions, and SLA targets
+  - Zimbabwe's 2026–2027 public holidays
+- If roles have saved permissions, it adds the new permissions' defaults to them.
+
+**New permissions and their defaults**
+
+| Permission | Admin | Manager | Team Leader | Projects Assistant | Developer | Standard user |
+| --- | --- | --- | --- | --- | --- | --- |
+| Connect GitHub and manage webhooks (`manage_integrations`) | yes | no | no | no | no | no |
+| Use personal API tokens (`use_api`) | yes | yes | yes | yes | yes | no |
+| Manage notification schemes, security levels and custom fields (`manage_schemes`) | yes | no | no | no | no | no |
+| Work the service desk and reply to customers (`work_service_desk`) | yes | yes | yes | yes | yes | no |
+| Set up the service desk (`manage_service_desk`) | yes | yes | no | no | no | no |
+
+**New endpoints**
+- **Security levels:** `GET` and `POST /api/security-levels`; `PUT` and `DELETE /api/security-levels/:id`.
+- **Custom fields:**
+  - `GET` and `POST /api/custom-fields` (`?workspace=`); `PUT` and `DELETE /api/custom-fields/:id`; `PUT
+    /api/custom-fields/order`.
+  - Work items take `customFields` and `securityLevel` on create and edit.
+- **Notifications:** `GET` and `PUT /api/notification-schemes`; `GET` and `PUT /api/me/notification-optouts`.
+- **GitHub:** `GET`, `PUT` and `DELETE /api/integrations/github`. `POST /api/integrations/github/webhook` is called
+  by GitHub, signed.
+- **API tokens:** `GET /api/tokens` (`?all=1` for administrators), `POST /api/tokens`, `DELETE /api/tokens/:id`.
+  Any endpoint takes `Authorization: Bearer pulse_…`.
+- **Webhooks:**
+  - `GET` and `POST /api/webhooks`; `PUT` and `DELETE /api/webhooks/:id`
+  - `GET /api/webhooks/:id/deliveries`, `POST /api/webhooks/:id/test`, `POST /api/webhooks/deliveries/:id/retry`
+- **Service desk:**
+  - **Set-up:** `GET` and `PUT /api/service-desk/config`; `POST`, `PUT` and `DELETE /api/service-desk/types[/:id]`;
+    `PUT /api/service-desk/holidays`; `POST /api/service-desk/portal-links` and `DELETE
+    /api/service-desk/portal-links/:id`.
+  - **Work:** `GET /api/service-desk/queues?queue=` and `GET /api/service-desk/reports?days=`.
+  - **Staff portal:** `POST /api/service-desk/requests`; `GET /api/service-desk/my-requests[/:key]`; `POST
+    /api/service-desk/my-requests/:key/reply`.
+  - **Comments:** `POST /api/items/:key/comments` takes `public` (a reply to the customer).
+- **Customer portal** (by `x-portal-token` and `x-requester-key`): `GET /api/portal`; `GET` and `POST
+  /api/portal/requests`; `GET /api/portal/requests/:key`; `POST /api/portal/requests/:key/reply`.
+
+**New screens:**
+- the Service desk page (queues, raise a request, my requests, reports) in the sidebar
+- the customer portal at `/portal/<link>`
+- Settings → Administration: Integrations, Notification schemes, Security levels, Custom fields, Service desk
+- Settings → Security & privacy: API tokens and the API reference
+- Settings → Notifications: work item notifications
+- on the item page: Security level, More fields, Development, the service desk request, and "Reply to the customer"
+- on the create form: "More fields" (custom fields and the security level)
+- custom fields on board cards

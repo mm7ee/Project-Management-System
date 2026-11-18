@@ -9,6 +9,8 @@
 import { newToken } from "./auth";
 import { HttpError, body, json } from "./http";
 import { toSummary, type ItemContext, type ItemRow } from "./workitems";
+import { itemAccess } from "./access";
+import { customValuesFor } from "./customfields";
 import { EFFECTIVE_WORKFLOW, loadWorkflows, statusCatalogue } from "./workflowData";
 import { SWIMLANES, type Swimlanes } from "../src/data/workflows";
 import type { StatusCategory } from "../src/data/workitems";
@@ -101,9 +103,9 @@ async function columnsOf(db: D1Database, boardId: string) {
 
 /** Items per status in a board's scope, as this person may see them (epics left out). */
 async function statusCounts(c: ItemContext, scopeSql: string, scopeArgs: unknown[]) {
-  const vis = c.ownOnly ? { sql: " AND (w.assignee = ? OR w.reporter = ?)", args: [c.me.id, c.me.id] } : { sql: "", args: [] };
+  const vis = itemAccess(c.viewer);
   const rows = await c.db
-    .prepare(`SELECT w.status, COUNT(*) AS n FROM work_items w JOIN systems s ON s.id = w.system_id WHERE ${scopeSql} AND w.type <> 'EPIC'${vis.sql} GROUP BY w.status`)
+    .prepare(`SELECT w.status, COUNT(*) AS n FROM work_items w JOIN systems s ON s.id = w.system_id WHERE ${scopeSql} AND w.type <> 'EPIC' AND ${vis.sql} GROUP BY w.status`)
     .bind(...scopeArgs, ...vis.args)
     .all<{ status: string; n: number }>();
   return new Map(rows.results.map((r) => [r.status, Number(r.n)]));
@@ -136,10 +138,9 @@ export async function boardsApi(c: ItemContext, path: string, method: string): P
       "(s.agile_mode <> 'scrum' OR w.sprint_id IN (SELECT sp.id FROM sprints sp WHERE sp.system_id = w.system_id AND sp.state = 'ACTIVE'))",
     ];
     const args: unknown[] = [...scope.args, new Date(Date.parse(c.now) - DONE_DAYS * 86_400_000).toISOString()];
-    if (c.ownOnly) {
-      where.push("(w.assignee = ? OR w.reporter = ?)");
-      args.push(c.me.id, c.me.id);
-    }
+    const access = itemAccess(c.viewer);
+    where.push(access.sql);
+    args.push(...access.args);
     if (q.get("mine") === "1") {
       where.push("w.assignee = ?");
       args.push(c.me.id);
@@ -185,12 +186,14 @@ export async function boardsApi(c: ItemContext, path: string, method: string): P
     const epics = epicIds.length
       ? (
           await db
-            .prepare(`SELECT w.id, w.type, w.number, w.summary, s.key FROM work_items w JOIN systems s ON s.id = w.system_id WHERE w.id IN (${epicIds.map(() => "?").join(", ")})`)
-            .bind(...epicIds)
+            .prepare(`SELECT w.id, w.type, w.number, w.summary, s.key FROM work_items w JOIN systems s ON s.id = w.system_id WHERE w.id IN (${epicIds.map(() => "?").join(", ")}) AND ${access.sql}`)
+            .bind(...epicIds, ...access.args)
             .all<{ id: string; type: string; number: number; summary: string; key: string }>()
         ).results.filter((e) => e.type === "EPIC")
       : [];
     const epicOf = new Map(epics.map((e) => [e.id, e]));
+    // Custom fields marked "show on board cards".
+    const onBoard = await customValuesFor(db, cards.map((r) => r.id), true);
     const workflows = await loadWorkflows(db, [...new Set(projectWfs.results.map((p) => p.wf))]);
     const used = new Set(workflows.flatMap((w) => w.statuses.map((s) => s.id)));
     const mapped = new Set(columns.flatMap((col) => col.statuses));
@@ -210,8 +213,10 @@ export async function boardsApi(c: ItemContext, path: string, method: string): P
       unmapped: [...used].filter((st) => !mapped.has(st)),
       cards: cards.map((r) => {
         const epic = epicOf.get((r.parent_type === "EPIC" ? r.parent_id : r.grandparent_id) ?? "");
+        const fields = onBoard.get(r.id);
         return {
           ...toSummary(r),
+          ...(fields?.length ? { customFields: fields } : {}),
           blocked: !!r.blocked_by_link || !!r.on_hold,
           ...(epic ? { epic: { key: `${epic.key}-${epic.number}`, summary: epic.summary } } : {}),
         };

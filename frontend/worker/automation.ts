@@ -8,7 +8,7 @@
 
 import { newToken } from "./auth";
 import { HttpError, body, json } from "./http";
-import { postToTeams, raise, readDelivery, type Alert } from "./notify";
+import { postToTeams, raise, readDelivery, type Alert, type ChannelPost } from "./notify";
 import { filterSql, harare } from "./search";
 import {
   SELECT,
@@ -28,6 +28,8 @@ import {
 import { loadWorkflow, statusCatalogue, workflowIdFor } from "./workflowData";
 import { relativeDate } from "../src/data/pql";
 import { ROLES, type Role } from "../src/data/roles";
+import { canSeeItem, viewersOf, type Viewer } from "./access";
+import { dispatchWebhooks } from "./integrations";
 import { ACTIONS, MAX_AUTOMATION_DEPTH, SETTABLE_FIELDS, TRIGGERS, type ActionKind, type AutomationAction, type AutomationRule, type AutomationRun, type Trigger } from "../src/data/search";
 import { LINK_TYPES, WORK_PRIORITIES, cleanLabel } from "../src/data/workitems";
 import { checkTransition, transitionsFrom } from "../src/data/workflows";
@@ -48,7 +50,7 @@ interface RuleRow {
   last_run_at: string | null;
 }
 
-const AUTOMATION_VIEWER = { id: "automation", role: "admin" as Role, ownOnly: false };
+const AUTOMATION_VIEWER: Viewer = { id: "automation", role: "admin" as Role, ownOnly: false, all: true };
 
 async function loadRules(db: D1Database, where = "TRUE", args: unknown[] = []) {
   const rules = await db.prepare(`SELECT * FROM automation_rules WHERE ${where} ORDER BY name`).bind(...args).all<RuleRow>();
@@ -88,7 +90,7 @@ async function loadRules(db: D1Database, where = "TRUE", args: unknown[] = []) {
 type Loaded = Awaited<ReturnType<typeof loadRules>>[number];
 
 /** The context a rule acts in: full rights, logged as the rule, its alerts and events collected. */
-function ruleContext(env: Env, rule: RuleRow, alerts: Alert[], events: ItemEvent[]): ItemContext {
+function ruleContext(env: Env, rule: RuleRow, alerts: Alert[], events: ItemEvent[], posts: ChannelPost[] = []): ItemContext {
   const name = `Automation: ${rule.name}`.slice(0, 64);
   return {
     db: env.DB,
@@ -97,6 +99,8 @@ function ruleContext(env: Env, rule: RuleRow, alerts: Alert[], events: ItemEvent
     guest: false,
     can: () => true,
     ownOnly: false,
+    viewer: AUTOMATION_VIEWER,
+    env,
     now: new Date().toISOString(),
     audit: async (action, target, detail) => {
       await env.DB
@@ -105,7 +109,10 @@ function ruleContext(env: Env, rule: RuleRow, alerts: Alert[], events: ItemEvent
         .run()
         .catch(() => undefined);
     },
-    alert: (a) => alerts.push(...a),
+    alert: (a, channel) => {
+      alerts.push(...a);
+      if (channel) posts.push(channel);
+    },
     emit: (e) => events.push(e),
   };
 }
@@ -154,7 +161,8 @@ async function execute(env: Env, loaded: Loaded, rows: ItemRow[], trigger: strin
   const { row: rule, rule: r } = loaded;
   const alerts: Alert[] = [];
   const events: ItemEvent[] = [];
-  const c = ruleContext(env, rule, alerts, events);
+  const posts: ChannelPost[] = [];
+  const c = ruleContext(env, rule, alerts, events, posts);
   const touched = new Set<string>();
   const notes: string[] = [];
   const names = new Map((await db.prepare("SELECT id, name FROM users").all<{ id: string; name: string }>()).results.map((u) => [u.id, u.name]));
@@ -177,6 +185,10 @@ async function execute(env: Env, loaded: Loaded, rows: ItemRow[], trigger: strin
     notes.push(e instanceof Error ? e.message : "Something went wrong");
   }
   if (alerts.length) await raise(env, alerts).catch(() => undefined);
+  if (posts.length) {
+    const delivery = await readDelivery(db);
+    if (delivery.teams) for (const p of posts) await postToTeams(env, delivery, p).catch(() => undefined);
+  }
   await logRun(db, rule, {
     trigger,
     itemKey: !bulk && rows[0] ? keyOf(rows[0]) : undefined,
@@ -303,13 +315,17 @@ async function notify(env: Env, c: ItemContext, a: AutomationAction, rows: ItemR
   const channels = String(a.value2 ?? "bell").split(",").map((x) => x.trim());
   const message = String(a.value ?? "{key} {summary}");
   const link = (r: ItemRow) => `#/projects/${r.system_id}/items/${keyOf(r)}`;
+  // The Teams channel is seen by the whole team, so items with a security level never go there.
+  const open = rows.filter((r) => !r.security_level);
   if (who === "teams" || channels.includes("teams")) {
     const delivery = await readDelivery(db);
-    if (delivery.teams) {
-      const first = rows[0];
+    if (!open.length) {
+      if (who === "teams") return "Nothing posted to Teams: the items have a security level";
+    } else if (delivery.teams) {
+      const first = open[0];
       await postToTeams(env, delivery, {
-        title: bulk && rows.length > 1 ? `${message} (${rows.length} items)` : fill(message, first, names),
-        body: rows.slice(0, 15).map((r) => `${keyOf(r)} ${r.summary}`).join("\n"),
+        title: bulk && open.length > 1 ? `${message} (${open.length} items)` : fill(message, first, names),
+        body: open.slice(0, 15).map((r) => `${keyOf(r)} ${r.summary}`).join("\n"),
         link: link(first),
       }).catch(() => undefined);
     } else if (who === "teams") return "Teams isn't connected yet, so nothing was posted";
@@ -317,8 +333,7 @@ async function notify(env: Env, c: ItemContext, a: AutomationAction, rows: ItemR
   }
   if (!channels.includes("bell") && !channels.includes("email")) return "";
   const roles = new Map((await db.prepare("SELECT id, role FROM users").all<{ id: string; role: Role }>()).results.map((u) => [u.id, u.role]));
-  const matrix = await db.prepare("SELECT value FROM settings WHERE key = 'role_permissions'").first<{ value: string }>();
-  const devsSeeAll = !!(matrix && (JSON.parse(matrix.value) as Record<string, string[]>).developer?.includes("manage_features"));
+  const viewers = await viewersOf(db, [...roles.keys()]);
   const recipients = async (r: ItemRow): Promise<string[]> => {
     if (who === "assignee") return r.assignee ? [r.assignee] : [];
     if (who === "reporter") return [r.reporter];
@@ -329,8 +344,9 @@ async function notify(env: Env, c: ItemContext, a: AutomationAction, rows: ItemR
   const byPerson = new Map<string, ItemRow[]>();
   for (const r of rows) {
     for (const id of await recipients(r)) {
-      if (!roles.has(id)) continue;
-      if (roles.get(id) === "developer" && !devsSeeAll && r.assignee !== id && r.reporter !== id) continue;
+      const v = viewers.get(id);
+      // Only about items they may see: their own-items rule and the item's security level.
+      if (!v || !(await canSeeItem(db, v, r))) continue;
       byPerson.set(id, [...(byPerson.get(id) ?? []), r]);
     }
   }
@@ -368,6 +384,16 @@ async function overLimit(db: D1Database, rule: RuleRow): Promise<boolean> {
 
 /** Handles one event: every switched-on rule for it, in scope, whose condition the item meets. */
 export async function runEvent(env: Env, e: ItemEvent, depth = 0): Promise<void> {
+  // Outbound webhooks hear about every event, whoever (or whatever rule) caused it.
+  const hooks = dispatchWebhooks(env, e).catch((err) => console.error("webhook dispatch failed", err));
+  try {
+    await runRules(env, e, depth);
+  } finally {
+    await hooks;
+  }
+}
+
+async function runRules(env: Env, e: ItemEvent, depth: number): Promise<void> {
   const db = env.DB;
   const rules = await loadRules(db, "enabled = 1 AND trigger = ?", [e.type]);
   if (!rules.length) return;

@@ -21,6 +21,11 @@ export type Permission =
   | "manage_sprints" // plan sprints from the backlog, start and complete them
   | "share_searches" // share saved filters and dashboards with a role, a workspace or everyone
   | "manage_automation" // create and change automation rules
+  | "manage_integrations" // connect GitHub and manage outbound webhooks
+  | "use_api" // create personal API tokens for other systems
+  | "manage_schemes" // notification schemes, security levels and custom fields
+  | "work_service_desk" // work the service desk queues and reply to customers
+  | "manage_service_desk" // request types, SLA targets, holidays and portal links
   | "reports" // generate and download reports
   | "manage_users" // create users, assign roles/projects, change permissions
   | "audit_log"; // view the activity log: sign-ins, failed sign-ins and every change
@@ -53,6 +58,11 @@ export const PERMISSIONS: { key: Permission; label: string }[] = [
   { key: "manage_sprints", label: "Plan and run sprints" },
   { key: "share_searches", label: "Share filters and dashboards" },
   { key: "manage_automation", label: "Manage automation rules" },
+  { key: "manage_integrations", label: "Connect GitHub and manage webhooks" },
+  { key: "use_api", label: "Use personal API tokens" },
+  { key: "manage_schemes", label: "Manage notification schemes, security levels and custom fields" },
+  { key: "work_service_desk", label: "Work the service desk and reply to customers" },
+  { key: "manage_service_desk", label: "Set up the service desk" },
   { key: "reports", label: "Generate reports" },
   { key: "manage_users", label: "Manage users, roles and permissions" },
   { key: "audit_log", label: "View the activity log" },
@@ -62,10 +72,10 @@ export type RolePermissions = Record<Role, Permission[]>;
 
 export const DEFAULT_ROLE_PERMISSIONS: RolePermissions = {
   admin: PERMISSIONS.map((p) => p.key),
-  manager: ["request_updates", "propose_projects", "manage_features", "assign_developers", "reports", "create_work_items", "edit_work_items", "delete_work_items", "log_time", "manage_sprints", "share_searches"],
-  team_lead: ["manage_systems", "assign_developers", "request_updates", "propose_projects", "manage_features", "reports", "create_work_items", "edit_work_items", "delete_work_items", "log_time", "manage_workflows", "manage_sprints", "share_searches", "manage_automation"],
-  assistant: ["request_updates", "propose_projects", "reports", "create_work_items", "share_searches"],
-  developer: ["edit_assigned", "propose_projects", "log_features", "create_work_items", "log_time"],
+  manager: ["request_updates", "propose_projects", "manage_features", "assign_developers", "reports", "create_work_items", "edit_work_items", "delete_work_items", "log_time", "manage_sprints", "share_searches", "use_api", "work_service_desk", "manage_service_desk"],
+  team_lead: ["manage_systems", "assign_developers", "request_updates", "propose_projects", "manage_features", "reports", "create_work_items", "edit_work_items", "delete_work_items", "log_time", "manage_workflows", "manage_sprints", "share_searches", "manage_automation", "use_api", "work_service_desk"],
+  assistant: ["request_updates", "propose_projects", "reports", "create_work_items", "share_searches", "use_api", "work_service_desk"],
+  developer: ["edit_assigned", "propose_projects", "log_features", "create_work_items", "log_time", "use_api", "work_service_desk"],
   viewer: [],
 };
 

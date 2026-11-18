@@ -8,6 +8,7 @@ import { WORK_PRIORITY_META, isDone, type ItemMove, type WorkItem, type WorkItem
 import { CATEGORY_META, SWIMLANES, SWIMLANE_LABEL, checkTransition, transitionsFrom, type StatusDef, type Swimlanes, type Workflow } from "../data/workflows";
 import MoveDialog, { type PendingMove } from "./MoveDialog";
 import { ItemPriority, TypeIcon, itemHref } from "./WorkItemBits";
+import { CustomFieldChips } from "./WorkItemExtras";
 
 export interface BoardColumn {
   id: string;
@@ -394,6 +395,7 @@ function CardView({
         {c.summary}
       </a>
       {showEpic && c.epic && <span className="board-epic" title={c.epic.summary}>{c.epic.key}</span>}
+      <CustomFieldChips values={c.customFields} />
       <div className="board-card-foot">
         <ItemPriority priority={c.priority} />
         {c.storyPoints != null && (

@@ -8,8 +8,10 @@ import { compile, loadLookup } from "./pql";
 import { raise, type Alert } from "./notify";
 import { SELECT, keyOf, toSummary, type ItemContext, type ItemRow } from "./workitems";
 import { ASK_MODEL } from "./ask";
-import { FIELDS, FUNCTIONS, PqlError, parse } from "../src/data/pql";
-import { DEFAULT_ROLE_PERMISSIONS, ROLES, permissionsFor, type Role, type RolePermissions } from "../src/data/roles";
+import { FIELDS, FUNCTIONS, PqlError, customFieldDefs, parse } from "../src/data/pql";
+import { customFieldsByName, customValuesFor } from "./customfields";
+import { ROLES, type Role } from "../src/data/roles";
+import { itemAccess, roleMatrix, viewerOfUser, type Viewer } from "./access";
 import { GADGETS, shareLabel, type Dashboard, type Gadget, type GadgetKind, type SavedFilter, type ShareScope } from "../src/data/search";
 import { TYPE_META, WORK_PRIORITY_META } from "../src/data/workitems";
 import { daysLeft } from "../src/data/sprints";
@@ -17,19 +19,15 @@ import { daysLeft } from "../src/data/sprints";
 const SCOPES: ShareScope[] = ["private", "role", "workspace", "everyone"];
 const MAX_PAGE = 100;
 
-/** Who a query runs as. */
-export interface Viewer {
-  id: string;
-  role: Role;
-  ownOnly: boolean;
-}
+export type { Viewer };
 
 /** A PQL query as SQL under this person's visibility: the WHERE clause, its parameters and the ORDER BY. */
 export async function filterSql(db: D1Database, pql: string, viewer: Viewer, now: number) {
-  const q = parse(pql);
+  // Custom fields are fields too: "Customer tier" = Gold.
+  const q = parse(pql, customFieldDefs([...(await customFieldsByName(db)).values()]));
   const compiled = compile(q, await loadLookup(db, q, viewer.id, now));
-  const vis = viewer.ownOnly ? { sql: " AND (w.assignee = ? OR w.reporter = ?)", args: [viewer.id, viewer.id] } : { sql: "", args: [] };
-  return { where: `(${compiled.where})${vis.sql}`, params: [...compiled.params, ...vis.args], orderBy: compiled.orderBy };
+  const vis = itemAccess(viewer);
+  return { where: `(${compiled.where}) AND ${vis.sql}`, params: [...compiled.params, ...vis.args], orderBy: compiled.orderBy };
 }
 
 /** A page of results. */
@@ -56,16 +54,9 @@ function pqlError(e: unknown): never {
   throw e;
 }
 
-/** Whether developers in general see every work item (their role was given manage_features). */
-async function roleMatrix(db: D1Database): Promise<RolePermissions> {
-  const row = await db.prepare("SELECT value FROM settings WHERE key = 'role_permissions'").first<{ value: string }>();
-  return row ? { ...DEFAULT_ROLE_PERMISSIONS, ...JSON.parse(row.value) } : DEFAULT_ROLE_PERMISSIONS;
-}
 export async function viewerFor(db: D1Database, userId: string): Promise<Viewer | null> {
   const u = await db.prepare("SELECT id, role FROM users WHERE id = ?").bind(userId).first<{ id: string; role: Role }>();
-  if (!u) return null;
-  const perms = permissionsFor(u.role, await roleMatrix(db));
-  return { id: u.id, role: u.role, ownOnly: u.role === "developer" && !perms.includes("manage_features") };
+  return u ? viewerOfUser(u, await roleMatrix(db)) : null;
 }
 
 /**
@@ -105,7 +96,7 @@ async function checkShare(c: ItemContext, scope: unknown, value: unknown): Promi
   return { scope: s, value: null };
 }
 
-const viewerOf = (c: ItemContext): Viewer => ({ id: c.me.id, role: c.me.role, ownOnly: c.ownOnly });
+const viewerOf = (c: ItemContext): Viewer => c.viewer;
 const owns = (c: ItemContext, ownerId: string) => ownerId === c.me.id || c.can("manage_users");
 
 interface FilterRow {
@@ -144,7 +135,15 @@ async function fieldValues(c: ItemContext) {
     component: components.results.map((r) => r.component),
     sprint: [...new Set(sprints.results.map((r) => r.name))],
     resolution: ["Done", "Won't do"],
-    source: ["client request", "internal"],
+    source: ["client request", "service desk", "internal"],
+    // Custom fields' choices (select fields), by field name.
+    ...Object.fromEntries(
+      (
+        await c.db
+          .prepare("SELECT f.name, o.label FROM custom_field_options o JOIN custom_fields f ON f.id = o.field_id ORDER BY f.name, o.position")
+          .all<{ name: string; label: string }>()
+      ).results.reduce((m, r) => m.set(r.name, [...(m.get(r.name) ?? []), r.label]), new Map<string, string[]>()),
+    ),
     workspace: ws ? (JSON.parse(ws.value) as string[]) : ["Projects", "HR"],
   };
 }
@@ -316,13 +315,16 @@ export async function searchApi(c: ItemContext, env: Env, path: string, method: 
     const offset = Math.max(0, Number(b.offset) || 0);
     try {
       const r = await runQuery(db, pql, viewerOf(c), now, limit, offset);
-      return json({ items: r.rows.map(toSummary), total: r.total, offset });
+      // Custom field values ride along, for the table and CSV.
+      const custom = await customValuesFor(db, r.rows.map((x) => x.id));
+      return json({ items: r.rows.map((x) => ({ ...toSummary(x), customFields: custom.get(x.id) ?? [] })), total: r.total, offset });
     } catch (e) {
       pqlError(e);
     }
   }
   if (path === "/api/search/fields" && method === "GET") {
-    return json({ fields: FIELDS, functions: FUNCTIONS, values: await fieldValues(c) });
+    const custom = customFieldDefs([...(await customFieldsByName(db)).values()]);
+    return json({ fields: FIELDS, custom, functions: FUNCTIONS, values: await fieldValues(c) });
   }
 
   // ----- saved filters -----

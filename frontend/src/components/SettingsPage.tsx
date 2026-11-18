@@ -33,6 +33,7 @@ import { initials, type System } from "../data/systems";
 import { PERMISSIONS, ROLE_LABEL, type Permission, type Prefs, type User } from "../data/roles";
 import { Choice, Section } from "./SettingsParts";
 import { InstallSection, NotificationPrefs } from "./NotificationSettings";
+import { ApiTokensSection, NotificationOptOuts } from "./AdminSettings";
 import { RETENTION } from "../data/retention";
 
 interface Props {
@@ -383,7 +384,12 @@ export default function SettingsPage({
             </>
           )}
 
-          {shown === "notifications" && <NotificationPrefs prefs={prefs} hasEmail={!!me.email} setPref={setPref} />}
+          {shown === "notifications" && (
+            <>
+              <NotificationPrefs prefs={prefs} hasEmail={!!me.email} setPref={setPref} />
+              <NotificationOptOuts />
+            </>
+          )}
 
           {shown === "security" && (
             <>
@@ -473,6 +479,8 @@ export default function SettingsPage({
                   )}
                 </div>
               </Section>
+
+              <ApiTokensSection canUse={permissions.includes("use_api")} isAdmin={permissions.includes("manage_users")} />
 
               <Section icon={<Archive size={18} />} title="Data retention" sub="How long Pulse keeps each kind of record. Anything older is deleted automatically.">
                 <dl className="retention-list">

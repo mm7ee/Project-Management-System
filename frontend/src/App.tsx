@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { AlertOctagon, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, LockKeyhole, Menu, Zap, Plus, Search, Send, ShieldCheck, Sparkles, Users, Workflow } from "lucide-react";
+import { AlertOctagon, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, LockKeyhole, Menu, Zap, Plug, BellRing, Lock, ListPlus, Headset, Plus, Search, Send, ShieldCheck, Sparkles, Users, Workflow } from "lucide-react";
 import { getSchedule, type System } from "./data/systems";
 import { api, useAppData, type AppData } from "./data/api";
 import { isAssigned, type Permission, type Prefs } from "./data/roles";
@@ -35,6 +35,9 @@ import BoardsPage from "./components/BoardsPage";
 import SearchPage from "./components/SearchPage";
 import CustomDashboards from "./components/CustomDashboards";
 import AutomationSettings from "./components/AutomationSettings";
+import ServiceDeskPage from "./components/ServiceDeskPage";
+import ServiceDeskSettings from "./components/ServiceDeskSettings";
+import { CustomFieldsSection, IntegrationsSection, NotificationSchemesSection, SecurityLevelsSection } from "./components/AdminSettings";
 import WorkflowsSettings from "./components/WorkflowsSettings";
 import { awaitingSignature, type SignoffStatus } from "./data/pcn";
 import { mfaRequiredFor, type User } from "./data/roles";
@@ -594,12 +597,23 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
               ...(can("manage_workflows")
                 ? [{ key: "workflows", label: "Workflows", icon: Workflow, content: <WorkflowsSettings users={users} workspaces={data.workspaces} canEdit={can("manage_workflows")} /> }]
                 : []),
+              ...(can("manage_integrations") ? [{ key: "integrations", label: "Integrations", icon: Plug, content: <IntegrationsSection systems={systems} /> }] : []),
+              ...(can("manage_schemes")
+                ? [
+                    { key: "schemes", label: "Notification schemes", icon: BellRing, content: <NotificationSchemesSection /> },
+                    { key: "levels", label: "Security levels", icon: Lock, content: <SecurityLevelsSection users={users} /> },
+                    { key: "fields", label: "Custom fields", icon: ListPlus, content: <CustomFieldsSection workspaces={data.workspaces} /> },
+                  ]
+                : []),
+              ...(can("manage_service_desk") ? [{ key: "service-desk", label: "Service desk", icon: Headset, content: <ServiceDeskSettings systems={systems} /> }] : []),
               ...(can("manage_automation")
                 ? [{ key: "automation", label: "Automation", icon: Zap, content: <AutomationSettings users={users} systems={systems} workspaces={data.workspaces} now={now} /> }]
                 : []),
               ...(can("audit_log") ? [{ key: "activity", label: "Activity log", icon: History, content: <ActivityPage users={users} systems={systems} now={now} /> }] : []),
             ]}
           />
+        ) : view === "service-desk" && !data.viewOnly ? (
+          <ServiceDeskPage users={users} canWork={can("work_service_desk")} canReports={can("reports") || can("manage_service_desk")} />
         ) : view === "search" && !data.viewOnly ? (
           <SearchPage key={searchFor?.n ?? 0} users={users} workspaces={data.workspaces} now={now} canShare={can("share_searches")} initialPql={searchFor?.pql} />
         ) : view === "boards" ? (

@@ -2,7 +2,7 @@
 // Run with: npm test
 
 import { describe, expect, it } from "vitest";
-import { PqlError, basicToPql, parse, relativeDate, suggestAt, tokenize, weekBounds } from "../src/data/pql";
+import { PqlError, basicToPql, customFieldDefs, parse, relativeDate, suggestAt, tokenize, weekBounds } from "../src/data/pql";
 import { compile, epicKeys, type Lookup } from "../worker/pql";
 
 const NOW = Date.parse("2026-11-18T10:00:00.000Z"); // a Wednesday
@@ -209,5 +209,37 @@ describe("editor helpers", () => {
       'project = INFRA AND status IN ("To Do", Done) AND assignee = currentUser() AND text ~ "login page"',
     );
     expect(parse(basicToPql({ priorities: ["High"], open: true }))).toBeTruthy();
+  });
+});
+
+describe("custom fields", () => {
+  const custom = customFieldDefs([
+    { name: "Customer tier", kind: "select", ids: ["f1", "f2"] },
+    { name: "Budget", kind: "number", ids: ["f3"] },
+    { name: "Owner", kind: "user", ids: ["f4"] },
+  ]);
+  const csql = (text: string) => compile(parse(text, custom), lookup);
+  it("matches a select field's choice by label, across workspaces", () => {
+    const r = csql('"Customer tier" = Gold');
+    expect(r.where).toContain("custom_field_values v");
+    expect(r.where).toContain("custom_field_options o");
+    expect(r.params).toEqual(["f1", "f2", "f1", "f2", "gold"]);
+  });
+  it("compares numbers and people, and treats != like the built-in fields", () => {
+    expect(csql("Budget >= 1000").params).toEqual(["f3", 1000]);
+    expect(csql("Owner = currentUser()").params).toEqual(["f4", "qa-dev"]);
+    const ne = csql("Budget != 5");
+    expect(ne.where).toMatch(/^\(EXISTS .* AND NOT EXISTS/);
+  });
+  it("knows IS EMPTY", () => {
+    expect(csql("Budget IS EMPTY").where).toMatch(/^NOT EXISTS/);
+  });
+  it("is unknown without its definition, with a suggestion", () => {
+    expect(() => parse("Budget = 5")).toThrow(PqlError);
+    expect(() => parse('"Customer tierr" = Gold', custom)).toThrow(/Customer tier/);
+  });
+  it("is suggested, quoted when it has spaces", () => {
+    const s = suggestAt("Cus", 3, {}, custom);
+    expect(s.items.map((i) => i.insert)).toContain('"Customer tier" ');
   });
 });
