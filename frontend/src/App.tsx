@@ -36,6 +36,7 @@ import SearchPage from "./components/SearchPage";
 import CustomDashboards from "./components/CustomDashboards";
 import AutomationSettings from "./components/AutomationSettings";
 import ServiceDeskPage from "./components/ServiceDeskPage";
+import ChatPage, { useChatUnread } from "./components/ChatPage";
 import ServiceDeskSettings from "./components/ServiceDeskSettings";
 import { CustomFieldsSection, IntegrationsSection, NotificationSchemesSection, SecurityLevelsSection } from "./components/AdminSettings";
 import WorkflowsSettings from "./components/WorkflowsSettings";
@@ -70,6 +71,8 @@ const tabInHash = () => window.location.hash.match(PROJECT_ROUTE)?.[2];
 const itemKeyInHash = () => window.location.hash.match(PROJECT_ROUTE)?.[3] ?? undefined;
 // #/projects/<id>/pcn shows that project's Concept Note as a printable document.
 const pcnInHash = () => /^#\/projects\/[a-z0-9-]+\/pcn$/.test(window.location.hash);
+// #/chat/<id> opens a conversation (links in chat notifications).
+const chatInHash = () => window.location.hash.match(/^#\/chat\/([A-Za-z0-9_-]{4,80})$/)?.[1] ?? null;
 
 export default function App() {
   // The public showcase needs no account, so it skips sign-in entirely.
@@ -145,7 +148,10 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
 
   // Sign-in opens the Dashboard, unless someone chose a Projects tab to start on.
   const [signOutJump, setSignOutJump] = useState(0);
-  const [view, setView] = useState<View>(() => (prefs.start === "DASHBOARD" ? "dashboard" : "projects"));
+  const [view, setView] = useState<View>(() => (chatInHash() ? "chat" : prefs.start === "DASHBOARD" ? "dashboard" : "projects"));
+  // Chat: the conversation a link asked for, and the unread count beside "Chat" in the sidebar.
+  const [chatOpen, setChatOpen] = useState<string | null>(chatInHash);
+  const [chatUnread, setChatUnread] = useChatUnread(!data.viewOnly);
   // A search opened from somewhere else (Ask Pulse): the query, and a counter so the same one reruns.
   const [searchFor, setSearchFor] = useState<{ pql: string; n: number } | null>(null);
   const [filter, setFilter] = useState<Filter>(() =>
@@ -187,6 +193,13 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
       setShowBoard(boardInHash());
       setProjectTab(tabInHash());
       setItemKey(itemKeyInHash());
+      const chat = chatInHash();
+      if (chat) {
+        setChatOpen(chat);
+        setView("chat");
+        // Forget the address, so the same link works again later.
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      }
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
@@ -393,6 +406,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
         view={selectedId ? "project" : view}
         counts={counts}
         pcnsToSign={pcnsToSign.length}
+        chatUnread={chatUnread}
         features={{
           count: featureBadge.length,
           urgent: featureBadge.some((f) => f.priority === "CRITICAL" || isLate(f, now)),
@@ -612,6 +626,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
               ...(can("audit_log") ? [{ key: "activity", label: "Activity log", icon: History, content: <ActivityPage users={users} systems={systems} now={now} /> }] : []),
             ]}
           />
+        ) : view === "chat" && !data.viewOnly ? (
+          <ChatPage me={me} users={users} canModerate={can("manage_users")} openId={chatOpen} onUnread={setChatUnread} />
         ) : view === "service-desk" && !data.viewOnly ? (
           <ServiceDeskPage users={users} canWork={can("work_service_desk")} canReports={can("reports") || can("manage_service_desk")} />
         ) : view === "search" && !data.viewOnly ? (

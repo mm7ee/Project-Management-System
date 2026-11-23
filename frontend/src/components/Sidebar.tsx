@@ -1,4 +1,4 @@
-import { Columns3, Eye, Search, Headset, FileBarChart, FileText, FolderKanban, LayoutDashboard, ListChecks, Plus, Settings, X } from "lucide-react";
+import { Columns3, MessagesSquare, Eye, Search, Headset, FileBarChart, FileText, FolderKanban, LayoutDashboard, ListChecks, Plus, Settings, X } from "lucide-react";
 import { initials, type Status } from "../data/systems";
 import { ROLE_LABEL, type User } from "../data/roles";
 import { COMPANY_URL } from "../brand";
@@ -6,7 +6,7 @@ import PulseMark from "./PulseMark";
 import ParticleField from "./ParticleField";
 
 export type Filter = "ALL" | Status | "OVERDUE" | "REQUESTED" | "MAINTENANCE" | "MINE" | "BLOCKED";
-export type View = "dashboard" | "projects" | "project" | "features" | "boards" | "search" | "service-desk" | "pcns" | "reports" | "users" | "activity" | "settings";
+export type View = "dashboard" | "projects" | "project" | "features" | "boards" | "search" | "service-desk" | "chat" | "pcns" | "reports" | "users" | "activity" | "settings";
 
 interface Props {
   me: User;
@@ -14,6 +14,7 @@ interface Props {
   counts: Record<Filter, number>;
   features: { count: number; urgent: boolean }; // open requests to show beside "Feature requests"
   pcnsToSign: number; // Concept Notes waiting for your signature
+  chatUnread: number; // unread chat messages
   open: boolean;
   canAdd: boolean;
   canPropose: boolean; // may propose a project with a Concept Note
@@ -81,6 +82,18 @@ export default function Sidebar(p: Props) {
               <span>
                 <Search size={16} className="nav-icon" /> Search
               </span>
+            </button>
+          )}
+          {!p.viewOnly && (
+            <button className={`nav-item ${p.view === "chat" ? "active" : ""}`} onClick={go(() => p.onView("chat"))}>
+              <span>
+                <MessagesSquare size={16} className="nav-icon" /> Chat
+              </span>
+              {p.chatUnread > 0 && (
+                <span className="nav-count alert" title={`${p.chatUnread} unread`}>
+                  {p.chatUnread > 99 ? "99+" : p.chatUnread}
+                </span>
+              )}
             </button>
           )}
           {!p.viewOnly && (

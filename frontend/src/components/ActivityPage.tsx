@@ -352,6 +352,18 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
       const to = (d.to ?? {}) as { roles?: string[]; people?: string[]; name?: string };
       return `Edited the security level "${str(d.level)}": ${[...(from.roles ?? []), ...(from.people ?? [])].join(", ") || "nobody extra"} → ${[...(to.roles ?? []), ...(to.people ?? [])].join(", ") || "nobody extra"}`;
     }
+    case "chat_group_created":
+      return `Started the group chat "${str(d.group)}" with ${((d.people as string[]) ?? []).join(", ")}`;
+    case "chat_group_renamed":
+      return `Renamed the group chat "${str(d.from)}" to "${str(d.to)}"`;
+    case "chat_members_added":
+      return `Added ${((d.people as string[]) ?? []).join(", ")} to the group chat "${str(d.group)}"`;
+    case "chat_members_removed":
+      return `Removed ${((d.people as string[]) ?? []).join(", ")} from the group chat "${str(d.group)}"`;
+    case "chat_left":
+      return `Left the group chat "${str(d.group)}"`;
+    case "chat_message_removed":
+      return `Removed someone's chat message in ${str(d.where)}`;
     case "security_level_deleted":
       return `Deleted the security level "${str(d.level)}"`;
     case "custom_field_created":

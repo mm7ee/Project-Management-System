@@ -482,3 +482,26 @@ Choices made during the Pulse upgrade that later phases must follow. Newest last
   - **Raising requests** needs no permission: any signed-in account may.
 - **Documentation:** the API reference is `docs/API.md`, with a short version in Settings (Security & privacy →
   API tokens, and Integrations). The "Running the System" PDF isn't in the repository and wasn't changed.
+
+## Chat (2026-11-23)
+
+- **Three kinds of conversation:** direct messages (two people, one per pair, can't be left), group chats (named, up
+  to 50 people) and one channel per project (`chat_conversations.id = 'p-<system id>'`, made the first time anyone
+  needs it). Migration `0008_chat.sql`: `chat_conversations`, `chat_members`, `chat_messages`.
+- **No new permission.** Everyone signed in can chat; view-only links can't. A direct message or group is seen only
+  by its members (anyone else gets 404). A project channel can be read and joined by anyone signed in. Its lead and
+  developers are added when they open Chat (`GET /api/chat?sync=1`), unless they left it before (`left_at` is kept).
+- **Polling, not WebSockets**, to stay within the Workers Free request limit and avoid a Durable Object behind the
+  gateway Worker: the open conversation every 3 s, the list every 15 s, the sidebar badge every 60 s, and nothing while
+  the tab is hidden (`src/data/chat.ts`). A poll returns new messages (`after`), older ones edited or deleted since
+  the last poll (`since`, with 10 s overlap), and read positions. `read=1` marks the conversation read in the same request.
+- **Moderation:** people edit and delete their own messages. Someone with `manage_users` may delete others' messages
+  in groups and channels (never in direct messages) and remove people from a group, as can the group's creator.
+  Deleted messages keep their place with the words removed.
+- **@mentions** raise a bell notification (kind `chat`, linking to `#/chat/<id>`), with no email. Unread messages
+  show as the badge beside Chat.
+- **Activity log:** group creation, renames and membership changes, and moderators' deletions. Messages themselves
+  are never logged.
+- **Endpoints:** `GET /api/chat`, `GET /api/chat/unread`, `GET /api/chat/channels`, `POST /api/chat/projects/:id/join`,
+  `POST /api/chat/direct`, `POST /api/chat/groups`, `GET`/`PUT /api/chat/:id`, `POST /api/chat/:id/members`,
+  `DELETE /api/chat/:id/members/:userId|me`, `GET`/`POST /api/chat/:id/messages`, `PUT`/`DELETE /api/chat/:id/messages/:mid`.
