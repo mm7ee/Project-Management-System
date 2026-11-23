@@ -10,6 +10,7 @@
 import { newToken } from "./auth";
 import { HttpError, body, json } from "./http";
 import type { ItemContext } from "./workitems";
+import type { Alert } from "./notify";
 import { mentionsIn } from "../src/data/workitems";
 import {
   MAX_GROUP_NAME,
@@ -64,6 +65,8 @@ const CONVERSATION_SELECT = `SELECT c.id, c.kind, c.name, c.system_id, c.created
   FROM chat_conversations c LEFT JOIN systems s ON s.id = c.system_id`;
 /** A poll asks for changes since its last answer; this much overlap covers clocks a little apart. */
 const SINCE_OVERLAP_MS = 10_000;
+/** Someone who read a conversation this recently is reading it now (an open one polls every 3 s). */
+const WATCHING_MS = 12_000;
 
 const ID = "[A-Za-z0-9_-]{4,80}";
 const projectChannelId = (systemId: string) => `p-${systemId}`;
@@ -107,7 +110,7 @@ export async function chatApi(c: ItemContext, path: string, method: string): Pro
       : null;
     const member = !!membership && !membership.left_at;
     if (!row || (row.kind !== "project" && !member)) throw new HttpError(404, "Conversation not found");
-    return { row, member };
+    return { row, member, lastReadId: Number(membership?.last_read_id ?? 0) };
   };
 
   /** Adds you to a conversation, or back to one you left. */
@@ -182,28 +185,56 @@ export async function chatApi(c: ItemContext, path: string, method: string): Pro
     ]);
   };
 
-  /** Tells the people @mentioned in a message, if they can see the conversation. */
-  const notifyMentions = async (row: ConversationRow, members: string[], messageId: number, text: string) => {
+  /**
+   * Notifications under the bell for a new message (never by email):
+   * - in a direct message or group, the other members hear once per unread run: the key carries how far
+   *   each has read, so a burst of messages is one notification and the next comes after they catch up.
+   *   Someone reading the conversation right now isn't notified.
+   * - anyone @mentioned hears about that message itself, in a project channel too.
+   */
+  const notifyMessage = async (row: ConversationRow, messageId: number, text: string) => {
     const names = mentionsIn(text);
-    if (!names.length) return;
-    const people = await db
-      .prepare(`SELECT id FROM users WHERE lower(username) IN (${names.map(() => "?").join(", ")})`)
-      .bind(...names)
-      .all<{ id: string }>();
+    const mentioned = names.length
+      ? (
+          await db
+            .prepare(`SELECT id FROM users WHERE lower(username) IN (${names.map(() => "?").join(", ")})`)
+            .bind(...names)
+            .all<{ id: string }>()
+        ).results.map((p) => p.id)
+      : [];
+    const members = (
+      await db
+        .prepare("SELECT user_id, last_read_id, read_at FROM chat_members WHERE conversation_id = ? AND left_at IS NULL AND user_id <> ?")
+        .bind(row.id, me.id)
+        .all<{ user_id: string; last_read_id: number; read_at: string | null }>()
+    ).results;
     const where = row.kind === "direct" ? "a direct message" : row.kind === "project" ? `#${row.system_name ?? "project"}` : row.name;
-    c.alert(
-      people.results
-        .filter((p) => row.kind === "project" || members.includes(p.id))
-        .map((p) => ({
-          userId: p.id,
-          kind: "chat" as const,
-          title: `${me.name} mentioned you in ${where}`,
-          body: text.length > 160 ? `${text.slice(0, 157)}…` : text,
-          link: `#/chat/${row.id}`,
-          dedupe: `chat:${messageId}`,
+    const body = text.length > 160 ? `${text.slice(0, 157)}…` : text;
+    const link = `#/chat/${row.id}`;
+    const watching = (m: { read_at: string | null }) => !!m.read_at && Date.now() - Date.parse(m.read_at) < WATCHING_MS;
+    const alerts: Alert[] = [];
+    // @mentions: members of a direct message or group, anyone for a project channel.
+    for (const id of mentioned) {
+      const m = members.find((x) => x.user_id === id);
+      if (row.kind !== "project" && !m) continue;
+      if (m && watching(m)) continue;
+      alerts.push({ userId: id, kind: "chat", title: `${me.name} mentioned you in ${where}`, body, link, dedupe: `chat:${messageId}`, email: false });
+    }
+    if (row.kind !== "project") {
+      for (const m of members) {
+        if (mentioned.includes(m.user_id) || watching(m)) continue;
+        alerts.push({
+          userId: m.user_id,
+          kind: "chat",
+          title: row.kind === "direct" ? `New message from ${me.name}` : `${me.name} in ${row.name}`,
+          body,
+          link,
+          dedupe: `chat-unread:${row.id}:${Number(m.last_read_id)}`,
           email: false,
-        })),
-    );
+        });
+      }
+    }
+    c.alert(alerts);
   };
 
   // ----- the conversation list and the badge -----
@@ -365,7 +396,7 @@ export async function chatApi(c: ItemContext, path: string, method: string): Pro
   }
 
   if (rest === "/messages" && method === "GET") {
-    const { row, member } = await open(conversationId);
+    const { row, member, lastReadId } = await open(conversationId);
     const q = url.searchParams;
     const before = Number(q.get("before"));
     const afterRaw = q.get("after");
@@ -392,15 +423,18 @@ export async function chatApi(c: ItemContext, path: string, method: string): Pro
       messages = fresh.results;
       changed = edits.results.filter((m) => m.edited_at || m.deleted_at);
     }
-    // Reading the conversation, with the tab in view, marks it read.
+    // Reading the conversation, with the tab in view, marks it read, and its notifications with it.
     if (member && q.get("read") === "1") {
-      await db
+      const read = await db
         .prepare(
-          `UPDATE chat_members SET last_read_id = GREATEST(last_read_id, (SELECT COALESCE(MAX(id), 0) FROM chat_messages WHERE conversation_id = ?))
-           WHERE conversation_id = ? AND user_id = ?`,
+          `UPDATE chat_members SET read_at = ?, last_read_id = GREATEST(last_read_id, (SELECT COALESCE(MAX(id), 0) FROM chat_messages WHERE conversation_id = ?))
+           WHERE conversation_id = ? AND user_id = ? RETURNING last_read_id`,
         )
-        .bind(row.id, row.id, me.id)
-        .run();
+        .bind(c.now, row.id, row.id, me.id)
+        .first<{ last_read_id: number }>();
+      if (read && Number(read.last_read_id) > lastReadId) {
+        await db.prepare("UPDATE notifications SET read_at = ? WHERE user_id = ? AND link = ? AND read_at IS NULL").bind(c.now, me.id, `#/chat/${row.id}`).run();
+      }
     }
     const readers = await db
       .prepare("SELECT user_id, last_read_id FROM chat_members WHERE conversation_id = ? AND left_at IS NULL")
@@ -431,8 +465,7 @@ export async function chatApi(c: ItemContext, path: string, method: string): Pro
       touch(row.id),
       db.prepare("UPDATE chat_members SET last_read_id = GREATEST(last_read_id, ?) WHERE conversation_id = ? AND user_id = ?").bind(saved!.id, row.id, me.id),
     ]);
-    const members = (await memberIds([row.id])).get(row.id) ?? [];
-    c.defer?.(notifyMentions(row, members, Number(saved!.id), text));
+    c.defer?.(notifyMessage(row, Number(saved!.id), text));
     return json(toMessage(saved!), 201);
   }
 

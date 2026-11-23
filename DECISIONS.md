@@ -498,8 +498,13 @@ Choices made during the Pulse upgrade that later phases must follow. Newest last
 - **Moderation:** people edit and delete their own messages. Someone with `manage_users` may delete others' messages
   in groups and channels (never in direct messages) and remove people from a group, as can the group's creator.
   Deleted messages keep their place with the words removed.
-- **@mentions** raise a bell notification (kind `chat`, linking to `#/chat/<id>`), with no email. Unread messages
-  show as the badge beside Chat.
+- **Notifications under the bell** (kind `chat`, linking to `#/chat/<id>`, never email). In a direct message or group,
+  a new message notifies the other members once per unread run: the dedupe key is
+  `chat-unread:<conversation>:<their last_read_id>`, so a burst is one notification and the next comes after they
+  catch up. Anyone who read the conversation in the last 12 seconds (`chat_members.read_at`, migration
+  `0009_chat_read_at.sql`) is reading it now and isn't notified. Project channels notify only @mentions, to keep
+  busy channels off the bell. An @mention gets its own "mentioned you" notification (key `chat:<message id>`).
+  Reading a conversation marks its notifications read. Unread messages also show as the badge beside Chat.
 - **Activity log:** group creation, renames and membership changes, and moderators' deletions. Messages themselves
   are never logged.
 - **Endpoints:** `GET /api/chat`, `GET /api/chat/unread`, `GET /api/chat/channels`, `POST /api/chat/projects/:id/join`,
