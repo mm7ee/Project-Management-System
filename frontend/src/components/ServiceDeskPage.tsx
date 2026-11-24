@@ -201,7 +201,7 @@ function MyRequests() {
   );
 }
 
-function Reports() {
+export function Reports() {
   const [days, setDays] = useState(30);
   const [r, setR] = useState<Report | null>(null);
   const [error, setError] = useState("");

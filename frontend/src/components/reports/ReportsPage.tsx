@@ -10,7 +10,6 @@ import { lastUpdate } from "../SystemCard";
 import { STAGES, STAGE_COLOR, TooltipLayer, stageOf } from "./chartKit";
 import { Donut, TrendChart } from "./DashCharts";
 import Panel from "../Panel";
-import AgileReports from "./AgileReports";
 import CountUp from "../CountUp";
 import { EngagementBars, FeatureStatusBar, PaceChart, PipelineBar, Roadmap, buildBrief, paceOf, type Pace } from "./Charts";
 
@@ -587,7 +586,6 @@ export default function ReportsPage({ systems, users, requests, features, blocke
             </div>
           </Panel>
         )}
-        <AgileReports systems={systems} now={now} />
       </div>
     </TooltipLayer>
   );

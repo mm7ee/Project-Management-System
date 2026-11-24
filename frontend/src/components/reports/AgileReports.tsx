@@ -63,11 +63,14 @@ interface Cycle {
 }
 
 /** The agile reports, for one project (sprints) or a workspace (flow and timing). */
-export default function AgileReports({ systems, now }: { systems: System[]; now: number }) {
+/** `overview` (the Reports → Delivery tab) opens on a whole workspace, created against resolved: is the team keeping up? */
+export default function AgileReports({ systems, now, overview = false }: { systems: System[]; now: number; overview?: boolean }) {
   const workspaces = useMemo(() => [...new Set(systems.map((s) => s.workspace).filter((w): w is string => !!w))], [systems]);
   const scrum = systems.filter((s) => s.agileMode === "scrum");
-  const [scope, setScope] = useState(() => (scrum[0] ? `p:${scrum[0].id}` : systems[0] ? `p:${systems[0].id}` : `w:${workspaces[0] ?? ""}`));
-  const [report, setReport] = useState<Report>(scrum.length ? "burndown" : "flow");
+  const [scope, setScope] = useState(() =>
+    overview && workspaces[0] ? `w:${workspaces[0]}` : scrum[0] ? `p:${scrum[0].id}` : systems[0] ? `p:${systems[0].id}` : `w:${workspaces[0] ?? ""}`,
+  );
+  const [report, setReport] = useState<Report>(overview ? "created" : scrum.length ? "burndown" : "flow");
   const [sprints, setSprints] = useState<Sprint[]>([]);
   const [sprintId, setSprintId] = useState("");
   const [windowDays, setWindowDays] = useState(90);
@@ -299,7 +302,7 @@ export default function AgileReports({ systems, now }: { systems: System[]; now:
   }
 
   return (
-    <Panel title="Agile reports" className="agile-reports" action={<span className="d-hint">from status history and sprint snapshots</span>}>
+    <Panel title={overview ? "Delivery charts" : "Agile reports"} className="agile-reports" action={<span className="d-hint">from status history and sprint snapshots</span>}>
       <div className="agile-toolbar no-print" role="group" aria-label="Agile report options">
         <select className="d-select" value={scope} onChange={(e) => setScope(e.target.value)} aria-label="Project or workspace">
           <optgroup label="Projects">

@@ -19,6 +19,7 @@ interface Props {
   canAdd: boolean;
   canPropose: boolean; // may propose a project with a Concept Note
   canReports: boolean;
+  simple?: boolean; // a manager: Feature requests, Boards, Search and Service desk are reached through Reports
   canUsers: boolean;
   canActivity: boolean;
   onView: (v: View) => void;
@@ -65,7 +66,17 @@ export default function Sidebar(p: Props) {
             <span className="nav-count">{p.counts.ALL}</span>
           </button>
 
+          {p.canReports && p.simple && (
+            <button className={`nav-item ${p.view === "reports" ? "active" : ""}`} onClick={go(() => p.onView("reports"))}>
+              <span>
+                <FileBarChart size={16} className="nav-icon" /> Reports
+              </span>
+            </button>
+          )}
+
           <div className="nav-section">Workspace</div>
+          {!p.simple && (
+            <>
           <button className={`nav-item ${p.view === "features" ? "active" : ""}`} onClick={go(() => p.onView("features"))}>
             <span>
               <ListChecks size={16} className="nav-icon" /> Feature requests
@@ -77,7 +88,9 @@ export default function Sidebar(p: Props) {
               <Columns3 size={16} className="nav-icon" /> Boards
             </span>
           </button>
-          {!p.viewOnly && (
+            </>
+          )}
+          {!p.viewOnly && !p.simple && (
             <button className={`nav-item ${p.view === "search" ? "active" : ""}`} onClick={go(() => p.onView("search"))}>
               <span>
                 <Search size={16} className="nav-icon" /> Search
@@ -96,7 +109,7 @@ export default function Sidebar(p: Props) {
               )}
             </button>
           )}
-          {!p.viewOnly && (
+          {!p.viewOnly && !p.simple && (
             <button className={`nav-item ${p.view === "service-desk" ? "active" : ""}`} onClick={go(() => p.onView("service-desk"))}>
               <span>
                 <Headset size={16} className="nav-icon" /> Service desk
@@ -113,7 +126,7 @@ export default function Sidebar(p: Props) {
               </span>
             )}
           </button>
-          {p.canReports && (
+          {p.canReports && !p.simple && (
             <button className={`nav-item ${p.view === "reports" ? "active" : ""}`} onClick={go(() => p.onView("reports"))}>
               <span>
                 <FileBarChart size={16} className="nav-icon" /> Reports

@@ -2741,3 +2741,8 @@ span.backlog-points { border-color: transparent; background: var(--track); }
 .request-channel-hint { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
 .request-via { display: block; margin-top: 2px; font-size: 12px; opacity: .85; }
 .request-sent { margin: 0 0 8px; padding: 9px 12px; border-radius: 10px; background: var(--tint-cyan); color: var(--text); font-size: 13.5px; line-height: 1.45; }
+
+/* Reports: one tab bar over the projects, feature request, delivery and service desk reports. */
+.reports-tabs { margin-bottom: 16px; }
+.reports-tabs .seg { flex-wrap: wrap; }
+.reports-tabs .seg svg { vertical-align: -2px; }

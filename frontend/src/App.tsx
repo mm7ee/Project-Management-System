@@ -15,13 +15,13 @@ import AddSystemModal from "./components/AddSystemModal";
 import SettingsPage from "./components/SettingsPage";
 import { DeliverySection } from "./components/NotificationSettings";
 import ForcePasswordChange from "./components/ForcePasswordChange";
+import ReportsHub from "./components/reports/ReportsHub";
 import type { RequestDelivery } from "./data/updateRequests";
 import ForceMfaSetup from "./components/ForceMfaSetup";
 import ExecutivePage from "./components/ExecutivePage";
 import ActivityPage from "./components/ActivityPage";
 import Login from "./components/Login";
 import UsersPage from "./components/UsersPage";
-import ReportsPage from "./components/reports/ReportsPage";
 import UpdateBanner from "./components/UpdateBanner";
 import FeaturesPage from "./components/FeaturesPage";
 import FeatureModal from "./components/FeatureModal";
@@ -416,6 +416,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
         canAdd={can("manage_systems")}
         canPropose={can("propose_projects")}
         canReports={can("reports")}
+        // Managers get the high-level menu: the day-to-day pages' analysis lives under Reports.
+        simple={me.role === "manager" && can("reports")}
         canUsers={can("manage_users")}
         canActivity={can("audit_log")}
         onView={(v) => {
@@ -672,7 +674,10 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             onNew={() => setFeatureEdit({ feature: null })}
           />
         ) : view === "reports" && can("reports") ? (
-          <ReportsPage
+          <ReportsHub
+            workspaces={data.workspaces}
+            onOpenFeature={(feature) => setFeatureEdit({ feature })}
+            serviceDesk={can("reports") || can("manage_service_desk")}
             systems={systems}
             users={users}
             requests={requests}

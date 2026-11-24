@@ -561,3 +561,14 @@ Choices made during the Pulse upgrade that later phases must follow. Newest last
 - **Teams** posts to the connected channel; the reply says if Teams refused it.
 - `requests.via` (migration `0011_request_channels.sql`) records the choice; the request card and activity log show
   it. A client that sends no choice gets the old behaviour (bell, plus Teams when connected).
+
+## Managers: a high-level menu, with the analysis under Reports (2026-11-25)
+
+- **Reports is one hub with tabs:** Projects (the projects report as before), Feature requests (the Insights view),
+  Delivery (the agile charts, opening on created-vs-resolved across a workspace rather than a sprint burndown),
+  and Service desk (its reports). Everyone with Reports gets the tabs; the last tab used is remembered per browser.
+- **Managers' sidebar** (role `manager` with the Reports permission): Dashboard, Projects, Reports, then Chat,
+  Concept Notes and Settings. Feature requests, Boards, Search and Service desk are left out of their menu: they
+  see that work through Reports and the project pages instead of the day-to-day lists. Their permissions are
+  unchanged, so links (notifications, a project's work items, a feature request) still open as before.
+- Other roles' menus are unchanged.
