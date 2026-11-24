@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BarChart3, CalendarX2, Grid3x3, History, Inbox, LineChart as LineIcon, ListFilter, Pencil, PieChart, Plus, RefreshCw, Timer, Trash2, X, type LucideIcon } from "lucide-react";
 import { api } from "../data/api";
 import { ROLES, ROLE_LABEL, type ActivityEntry, type User } from "../data/roles";
 import type { System } from "../data/systems";
@@ -14,7 +14,43 @@ import { describe } from "./ActivityPage";
 
 const OVERVIEW = "overview";
 const PICK_KEY = "pulse:dashboard";
-const SLICE_COLORS = ["var(--st-wip)", "var(--st-live)", "var(--st-deploy)", "var(--st-testing)", "var(--st-overdue)", "var(--st-done)", "var(--st-not)", "var(--navy)"];
+const OVERVIEW_DESC = "Projects, delivery and team workload across Pulse, as of now.";
+// The categorical chart palette (styles.css --cat-*), in its fixed order. Status colours are kept for meaning.
+const CAT = ["var(--cat-1)", "var(--cat-2)", "var(--cat-3)", "var(--cat-4)", "var(--cat-5)", "var(--cat-6)", "var(--cat-7)", "var(--cat-8)"];
+const OTHER = "var(--cat-other)";
+const GADGET_ICON: Record<GadgetKind, LucideIcon> = {
+  filter_results: ListFilter,
+  pie: PieChart,
+  created_resolved: LineIcon,
+  sprint_health: Timer,
+  workload: BarChart3,
+  overdue: CalendarX2,
+  two_d: Grid3x3,
+  activity: History,
+};
+
+/** More slices than palette slots fold into "Other", so no colour is ever generated or reused. */
+function foldSlices(slices: { label: string; count: number }[]) {
+  // The smallest slices fold; the rest keep the server's order, so a colour follows its value, not its rank.
+  const big = new Set(
+    slices.length > CAT.length
+      ? [...slices]
+          .sort((a, b) => b.count - a.count)
+          .slice(0, CAT.length - 1)
+          .map((s) => s.label)
+      : slices.map((s) => s.label),
+  );
+  const keep = slices.filter((s) => big.has(s.label));
+  const rest = slices.filter((s) => !big.has(s.label));
+  const rows = keep.map((s, i) => ({ ...s, color: CAT[i] }));
+  if (rest.length)
+    rows.push({
+      label: `Other (${rest.length})`,
+      count: rest.reduce((n, s) => n + s.count, 0),
+      color: OTHER,
+    });
+  return rows;
+}
 
 interface Props {
   overview: ReactNode; // the built-in "Pulse overview"
@@ -70,35 +106,50 @@ export default function CustomDashboards({ overview, users, systems, workspaces,
     setEditing(d);
   };
 
-  if (!enabled) return <>{overview}</>;
+  const overviewHead = <DashHead title="Pulse overview" description={OVERVIEW_DESC} />;
+  if (!enabled)
+    return (
+      <>
+        {overviewHead}
+        {overview}
+      </>
+    );
   const current = list.find((d) => d.id === pick);
   const showing = current ?? null;
+  const actions = (
+    <div className="dash-actions no-print">
+      <label>
+        <span className="sr-only">Dashboard</span>
+        <select value={showing ? showing.id : OVERVIEW} onChange={(e) => choose(e.target.value)} aria-label="Choose a dashboard">
+          <option value={OVERVIEW}>Pulse overview</option>
+          {list.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.name}
+              {d.mine ? "" : ` (${d.ownerName})`}
+            </option>
+          ))}
+        </select>
+      </label>
+      {showing?.mine && (
+        <button className="btn btn-ghost sm" onClick={() => startEdit(showing)}>
+          <Pencil size={14} aria-hidden="true" /> Edit
+        </button>
+      )}
+      <button className="btn btn-ghost sm" onClick={() => startEdit("new")}>
+        <Plus size={14} aria-hidden="true" /> New dashboard
+      </button>
+      {error && <span className="form-error">{error}</span>}
+    </div>
+  );
 
   return (
     <>
-      <div className="dash-picker no-print">
-        <label>
-          <span className="sr-only">Dashboard</span>
-          <select value={showing ? showing.id : OVERVIEW} onChange={(e) => choose(e.target.value)} aria-label="Choose a dashboard">
-            <option value={OVERVIEW}>Pulse overview</option>
-            {list.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-                {d.mine ? "" : ` (${d.ownerName})`}
-              </option>
-            ))}
-          </select>
-        </label>
-        {showing?.mine && (
-          <button className="btn btn-ghost sm" onClick={() => startEdit(showing)}>
-            <Pencil size={14} /> Edit
-          </button>
-        )}
-        <button className="btn btn-ghost sm" onClick={() => startEdit("new")}>
-          <Plus size={14} /> New dashboard
-        </button>
-        {error && <span className="form-error">{error}</span>}
-      </div>
+      {!editing &&
+        (showing ? (
+          <DashHead title={showing.name} description={`${showing.mine ? shareLabel(showing.shareScope, showing.shareValue) : `Shared by ${showing.ownerName}`} · each gadget shows only the work items you can see.`} actions={actions} />
+        ) : (
+          <DashHead title="Pulse overview" description={OVERVIEW_DESC} actions={actions} />
+        ))}
       {editing ? (
         <DashboardEditor
           dashboard={editing === "new" ? null : editing}
@@ -113,7 +164,7 @@ export default function CustomDashboards({ overview, users, systems, workspaces,
           }}
         />
       ) : showing ? (
-        <DashboardBoard dashboard={showing} users={users} systems={systems} now={now} />
+        <DashboardBoard dashboard={showing} users={users} systems={systems} now={now} onEdit={showing.mine ? () => startEdit(showing) : undefined} />
       ) : (
         overview
       )}
@@ -121,28 +172,43 @@ export default function CustomDashboards({ overview, users, systems, workspaces,
   );
 }
 
-function DashboardBoard({ dashboard, users, systems, now }: { dashboard: Dashboard; users: User[]; systems: System[]; now: number }) {
+/** The page header: the dashboard's name and a line about it, with its actions grouped on the right. */
+function DashHead({ title, description, actions }: { title: string; description: string; actions?: ReactNode }) {
+  return (
+    <header className="dash-head">
+      <div>
+        <h2>{title}</h2>
+        <p>{description}</p>
+      </div>
+      {actions}
+    </header>
+  );
+}
+
+function DashboardBoard({ dashboard, users, systems, now, onEdit }: { dashboard: Dashboard; users: User[]; systems: System[]; now: number; onEdit?: () => void }) {
   const cols = dashboard.layout === "one" ? 1 : dashboard.layout === "two" ? 2 : 3;
   const columns = Array.from({ length: cols }, (_, i) => dashboard.gadgets.filter((g) => Math.min(g.column, cols - 1) === i));
   return (
     <TooltipLayer>
       <div className="page custom-dash">
-        <header className="page-head">
-          <div>
-            <h2>{dashboard.name}</h2>
-            <p>
-              {dashboard.mine ? shareLabel(dashboard.shareScope, dashboard.shareValue) : `Shared by ${dashboard.ownerName}`} · each gadget shows only the work items you can see.
-            </p>
-          </div>
-        </header>
         {!dashboard.gadgets.length ? (
-          <div className="empty">This dashboard has no gadgets yet.</div>
+          <div className="gadget gadget-state">
+            <span className="gadget-state-icon" aria-hidden="true">
+              <Inbox size={18} />
+            </span>
+            <p>This dashboard has no gadgets yet.</p>
+            {onEdit && (
+              <button className="btn btn-ghost sm" onClick={onEdit}>
+                <Plus size={14} aria-hidden="true" /> Add a gadget
+              </button>
+            )}
+          </div>
         ) : (
           <div className={`gadget-grid cols-${cols}`}>
             {columns.map((list, i) => (
               <div key={i} className="gadget-col">
                 {list.map((g) => (
-                  <GadgetCard key={g.id} dashboardId={dashboard.id} gadget={g} users={users} systems={systems} now={now} />
+                  <GadgetCard key={g.id} dashboardId={dashboard.id} gadget={g} users={users} systems={systems} now={now} onEdit={onEdit} />
                 ))}
               </div>
             ))}
@@ -162,51 +228,143 @@ type GadgetResult = {
   days?: string[];
   created?: number[];
   resolved?: number[];
-  sprints?: { name: string; project: string; endDate: string; daysLeft: number; scope: number; done: number; items: number; doneItems: number }[];
+  sprints?: {
+    name: string;
+    project: string;
+    endDate: string;
+    daysLeft: number;
+    scope: number;
+    done: number;
+    items: number;
+    doneItems: number;
+  }[];
   people?: { name: string; open: number; points: number; late: number }[];
   entries?: ActivityEntry[];
 };
 
-function GadgetCard({ dashboardId, gadget, users, systems, now }: { dashboardId: string; gadget: Gadget; users: User[]; systems: System[]; now: number }) {
+function GadgetCard({ dashboardId, gadget, users, systems, now, onEdit }: { dashboardId: string; gadget: Gadget; users: User[]; systems: System[]; now: number; onEdit?: () => void }) {
   const [data, setData] = useState<GadgetResult | null>(null);
   const [error, setError] = useState("");
+  const [loadedAt, setLoadedAt] = useState<string | null>(null);
+  const [busy, setBusy] = useState(true);
   const load = useCallback(async () => {
     setError("");
+    setBusy(true);
     try {
       setData(await api<GadgetResult>(`/dashboards/${dashboardId}/gadgets/${gadget.id}`));
+      setLoadedAt(new Date().toISOString());
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't load this gadget");
+    } finally {
+      setBusy(false);
     }
   }, [dashboardId, gadget.id]);
   useEffect(() => {
     load();
   }, [load]);
   const title = gadget.title || GADGETS[gadget.kind].label;
+  const Icon = GADGET_ICON[gadget.kind];
   const name = (id?: string) => users.find((u) => u.id === id)?.name;
   return (
-    <section className="gadget" aria-label={title}>
-      <header>
-        <h3>{title}</h3>
-        <button className="icon-link" onClick={load} aria-label={`Refresh ${title}`}>
-          <RefreshCw size={13} />
-        </button>
+    <section className="gadget" aria-label={title} aria-busy={busy}>
+      <header className="gadget-head">
+        <span className="card-title">
+          <span className="card-icon" aria-hidden="true">
+            <Icon size={16} />
+          </span>
+          <span>
+            <h3>{title}</h3>
+            {gadget.filterName && <small title={`Filter: ${gadget.filterName}`}>Filter: {gadget.filterName}</small>}
+          </span>
+        </span>
+        <span className="card-actions">
+          <button className="icon-link" onClick={load} disabled={busy} aria-label={`Refresh ${title}`} title="Refresh">
+            <RefreshCw size={13} aria-hidden="true" />
+          </button>
+        </span>
       </header>
-      {gadget.filterName && <p className="gadget-sub">Filter: {gadget.filterName}</p>}
-      {error ? (
-        <p className="form-error">{error}</p>
-      ) : !data ? (
-        <p className="muted">Loading…</p>
-      ) : data.empty ? (
-        <p className="muted">{data.empty}</p>
-      ) : (
-        <GadgetBody kind={gadget.kind} data={data} name={name} users={users} systems={systems} now={now} field={gadget.field} field2={gadget.field2} />
+      <div className="gadget-body">
+        {error ? (
+          <GadgetState
+            tone="error"
+            icon={AlertTriangle}
+            text={error}
+            action={
+              <button className="btn btn-ghost sm" onClick={load}>
+                <RefreshCw size={13} aria-hidden="true" /> Retry
+              </button>
+            }
+          />
+        ) : !data ? (
+          <GadgetSkeleton kind={gadget.kind} title={title} />
+        ) : data.empty ? (
+          <GadgetState
+            icon={Icon}
+            text={data.empty}
+            action={
+              onEdit && (
+                <button className="btn btn-ghost sm" onClick={onEdit}>
+                  <Pencil size={13} aria-hidden="true" /> Edit dashboard
+                </button>
+              )
+            }
+          />
+        ) : (
+          <GadgetBody kind={gadget.kind} data={data} name={name} users={users} systems={systems} now={now} field={gadget.field} field2={gadget.field2} />
+        )}
+      </div>
+      {loadedAt && !error && (
+        <footer className="card-foot">
+          <span>Updated {timeAgo(loadedAt, Math.max(now, Date.now()))}</span>
+        </footer>
       )}
     </section>
   );
 }
 
+/** Empty or error: an icon, one line, and an action where one fits. */
+function GadgetState({ icon: Icon, text, action, tone }: { icon: LucideIcon; text: string; action?: ReactNode; tone?: "error" }) {
+  return (
+    <div className={`gadget-state ${tone ?? ""}`} role={tone === "error" ? "alert" : undefined}>
+      <span className="gadget-state-icon" aria-hidden="true">
+        <Icon size={18} />
+      </span>
+      <p>{text}</p>
+      {action}
+    </div>
+  );
+}
+
+/** A placeholder in the shape of what's coming, so the card doesn't jump when the data lands. */
+function GadgetSkeleton({ kind, title }: { kind: GadgetKind; title: string }) {
+  const lines = (n: number) => (
+    <span className="skel-stack">
+      {Array.from({ length: n }, (_, i) => (
+        <span key={i} className="skel skel-line" />
+      ))}
+    </span>
+  );
+  return (
+    <div role="status">
+      <span className="sr-only">Loading {title}…</span>
+      <div aria-hidden="true">
+        {kind === "pie" ? (
+          <div className="skel-row">
+            <span className="skel skel-circle" />
+            {lines(4)}
+          </div>
+        ) : kind === "created_resolved" ? (
+          <span className="skel skel-chart" />
+        ) : (
+          lines(5)
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ItemList({ items, name }: { items: WorkItemSummary[]; name: (id?: string) => string | undefined }) {
-  if (!items.length) return <p className="muted">Nothing here.</p>;
+  if (!items.length) return <GadgetState icon={Inbox} text="No work items match this filter." />;
   return (
     <ul className="gadget-items">
       {items.map((i) => (
@@ -230,43 +388,69 @@ function GadgetBody({ kind, data, name, users, systems, now, field, field2 }: { 
       return (
         <>
           <ItemList items={data.items ?? []} name={name} />
-          {(data.total ?? 0) > (data.items?.length ?? 0) && <p className="gadget-foot muted">Showing {data.items?.length} of {data.total}</p>}
+          {(data.total ?? 0) > (data.items?.length ?? 0) && (
+            <p className="gadget-note">
+              Showing {data.items?.length} of {data.total}
+            </p>
+          )}
         </>
       );
     case "overdue":
       return <ItemList items={data.items ?? []} name={name} />;
     case "pie": {
-      const slices = data.slices ?? [];
-      if (!slices.length) return <p className="muted">No work items match.</p>;
+      const slices = foldSlices(data.slices ?? []);
+      if (!slices.length) return <GadgetState icon={PieChart} text="No work items match this filter." />;
       const total = slices.reduce((n, s) => n + s.count, 0);
       return (
         <div className="gadget-pie">
-          <Donut slices={slices.map((s, i) => ({ key: s.label, label: s.label, color: SLICE_COLORS[i % SLICE_COLORS.length], value: s.count }))} centre="items" />
-          <table className="gadget-table">
-            <caption className="sr-only">Work items by {GROUP_FIELDS[field ?? "status"]?.toLowerCase()}</caption>
-            <tbody>
-              {slices.map((s, i) => (
-                <tr key={s.label}>
-                  <th scope="row">
-                    <i className="dot" style={{ background: SLICE_COLORS[i % SLICE_COLORS.length] }} /> {s.label}
+          <Donut
+            slices={slices.map((s) => ({
+              key: s.label,
+              label: s.label,
+              color: s.color,
+              value: s.count,
+            }))}
+            centre="items"
+          />
+          <div className="gadget-scroll">
+            <table className="gadget-table">
+              <caption className="sr-only">Work items by {GROUP_FIELDS[field ?? "status"]?.toLowerCase()}</caption>
+              <thead>
+                <tr>
+                  <th scope="col">{GROUP_FIELDS[field ?? "status"]}</th>
+                  <th scope="col" className="num">
+                    Items
                   </th>
-                  <td>{s.count}</td>
-                  <td className="muted">{Math.round((s.count / total) * 100)}%</td>
+                  <th scope="col" className="num">
+                    Share
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {slices.map((s) => (
+                  <tr key={s.label}>
+                    <th scope="row">
+                      <i className="dot" style={{ background: s.color }} aria-hidden="true" />
+                      {s.label}
+                    </th>
+                    <td className="num">{s.count}</td>
+                    <td className="num muted">{Math.round((s.count / total) * 100)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       );
     }
     case "two_d": {
       const cells = data.cells ?? [];
-      if (!cells.length) return <p className="muted">No work items match.</p>;
+      if (!cells.length) return <GadgetState icon={Grid3x3} text="No work items match this filter." />;
       const rows = [...new Set(cells.map((c) => c.row))].sort();
       const cols = [...new Set(cells.map((c) => c.col))].sort();
       const at = (r: string, c: string) => cells.find((x) => x.row === r && x.col === c)?.count ?? 0;
       return (
-        <div className="table-wrap">
+        <div className="gadget-scroll">
           <table className="gadget-table two-d">
             <caption className="sr-only">
               {GROUP_FIELDS[field ?? "status"]} by {GROUP_FIELDS[field2 ?? "assignee"]}
@@ -275,11 +459,13 @@ function GadgetBody({ kind, data, name, users, systems, now, field, field2 }: { 
               <tr>
                 <th scope="col">{GROUP_FIELDS[field ?? "status"]}</th>
                 {cols.map((c) => (
-                  <th key={c} scope="col">
+                  <th key={c} scope="col" className="num">
                     {c}
                   </th>
                 ))}
-                <th scope="col">Total</th>
+                <th scope="col" className="num">
+                  Total
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -308,12 +494,22 @@ function GadgetBody({ kind, data, name, users, systems, now, field, field2 }: { 
           <LineChart
             labels={days.map((d) => formatDate(d).replace(/ \d{4}$/, ""))}
             series={[
-              { key: "c", label: "Created", color: "var(--st-overdue)", values: created },
-              { key: "r", label: "Resolved", color: "var(--st-live)", values: resolved },
+              {
+                key: "c",
+                label: "Created",
+                color: "var(--cat-1)",
+                values: created,
+              },
+              {
+                key: "r",
+                label: "Resolved",
+                color: "var(--cat-2)",
+                values: resolved,
+              },
             ]}
             unit=" items"
           />
-          <p className="gadget-foot muted">
+          <p className="gadget-note">
             Last 30 days: {created.reduce((a, b) => a + b, 0)} created, {resolved.reduce((a, b) => a + b, 0)} resolved.
           </p>
         </>
@@ -321,7 +517,7 @@ function GadgetBody({ kind, data, name, users, systems, now, field, field2 }: { 
     }
     case "sprint_health": {
       const sprints = data.sprints ?? [];
-      if (!sprints.length) return <p className="muted">No running sprint has this filter's items.</p>;
+      if (!sprints.length) return <GadgetState icon={Timer} text="No running sprint has this filter's items." />;
       return (
         <ul className="gadget-sprints">
           {sprints.map((s) => {
@@ -335,8 +531,7 @@ function GadgetBody({ kind, data, name, users, systems, now, field, field2 }: { 
                   <span style={{ width: `${pct}%` }} />
                 </div>
                 <small>
-                  {s.done} of {s.scope} points · {s.doneItems} of {s.items} items done ·{" "}
-                  <span className={s.daysLeft < 0 ? "late" : ""}>{s.daysLeft < 0 ? `${-s.daysLeft} days over` : `${s.daysLeft} days left`}</span>
+                  {s.done} of {s.scope} points · {s.doneItems} of {s.items} items done · <span className={s.daysLeft < 0 ? "late" : ""}>{s.daysLeft < 0 ? `${-s.daysLeft} days over` : `${s.daysLeft} days left`}</span>
                 </small>
               </li>
             );
@@ -346,40 +541,48 @@ function GadgetBody({ kind, data, name, users, systems, now, field, field2 }: { 
     }
     case "workload": {
       const people = data.people ?? [];
-      if (!people.length) return <p className="muted">No open work items match.</p>;
+      if (!people.length) return <GadgetState icon={BarChart3} text="No open work items match this filter." />;
       const max = Math.max(...people.map((p) => p.open));
       return (
-        <table className="gadget-table">
-          <caption className="sr-only">Open work items per person</caption>
-          <thead>
-            <tr>
-              <th scope="col">Person</th>
-              <th scope="col">Open</th>
-              <th scope="col">Points</th>
-              <th scope="col">Late</th>
-            </tr>
-          </thead>
-          <tbody>
-            {people.map((p) => (
-              <tr key={p.name}>
-                <th scope="row">{p.name}</th>
-                <td>
-                  <span className="bar-cell">
-                    <i style={{ width: `${(p.open / max) * 100}%` }} />
-                    {p.open}
-                  </span>
-                </td>
-                <td>{p.points}</td>
-                <td className={p.late ? "late" : "muted"}>{p.late}</td>
+        <div className="gadget-scroll">
+          <table className="gadget-table">
+            <caption className="sr-only">Open work items per person</caption>
+            <thead>
+              <tr>
+                <th scope="col">Person</th>
+                <th scope="col" className="num">
+                  Open
+                </th>
+                <th scope="col" className="num">
+                  Points
+                </th>
+                <th scope="col" className="num">
+                  Late
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {people.map((p) => (
+                <tr key={p.name}>
+                  <th scope="row">{p.name}</th>
+                  <td className="num">
+                    <span className="bar-cell">
+                      <i style={{ width: `${(p.open / max) * 64}px` }} aria-hidden="true" />
+                      <b>{p.open}</b>
+                    </span>
+                  </td>
+                  <td className="num">{p.points}</td>
+                  <td className={`num ${p.late ? "late" : "muted"}`}>{p.late}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       );
     }
     case "activity": {
       const entries = data.entries ?? [];
-      if (!entries.length) return <p className="muted">No recent changes.</p>;
+      if (!entries.length) return <GadgetState icon={History} text="No recent changes to this filter's items." />;
       return (
         <ul className="gadget-activity">
           {entries.map((e) => (
@@ -413,7 +616,18 @@ function DashboardEditor({ dashboard, filters, workspaces, canShare, onCancel, o
       [next[i], next[j]] = [next[j], next[i]];
       return next;
     });
-  const add = () => setGadgets((list) => [...list, { key: `n${Date.now()}`, kind: "filter_results", title: "", column: list.length % cols, maxRows: 10, filterId: filters[0]?.id }]);
+  const add = () =>
+    setGadgets((list) => [
+      ...list,
+      {
+        key: `n${Date.now()}`,
+        kind: "filter_results",
+        title: "",
+        column: list.length % cols,
+        maxRows: 10,
+        filterId: filters[0]?.id,
+      },
+    ]);
 
   const save = async () => {
     setError("");
@@ -424,7 +638,16 @@ function DashboardEditor({ dashboard, filters, workspaces, canShare, onCancel, o
         layout,
         shareScope: scope,
         shareValue: scope === "role" || scope === "workspace" ? value : null,
-        gadgets: gadgets.map((g) => ({ id: g.id, kind: g.kind, filterId: g.filterId ?? null, title: g.title, column: Math.min(g.column, cols - 1), field: g.field ?? null, field2: g.field2 ?? null, maxRows: g.maxRows })),
+        gadgets: gadgets.map((g) => ({
+          id: g.id,
+          kind: g.kind,
+          filterId: g.filterId ?? null,
+          title: g.title,
+          column: Math.min(g.column, cols - 1),
+          field: g.field ?? null,
+          field2: g.field2 ?? null,
+          maxRows: g.maxRows,
+        })),
       };
       const d = dashboard ? await api<Dashboard>(`/dashboards/${dashboard.id}`, "PUT", body) : await api<Dashboard>("/dashboards", "POST", body);
       await onSaved(d);

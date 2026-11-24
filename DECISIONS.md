@@ -592,3 +592,25 @@ Choices made during the Pulse upgrade that later phases must follow. Newest last
   when it was generated and what it was filtered to. Paper always gets the light palette, whatever the screen theme;
   the slicer and filter chips stay on screen (the letterhead names the filters). Page 1 holds the figures and six
   charts, page 2 the portfolio map.
+
+## Dashboard design system (2026-11-25)
+
+- **Use the tokens.** New styles take spacing, type, radius, elevation, semantic and chart colours from the tokens
+  at the top of `src/styles.css` (`--sp-*`, `--fs-*`, `--r-*`, `--e-*`, `--success/warning/danger/info/neutral`,
+  `--cat-*`, `--focus`). A theme changes values only, never names.
+- **Omni Contact colours:** Penn Blue #011f5b (sidebar, sign-in, buttons, headings, avatars), royal blue #0039a6
+  (links, focus, information), sky #1ba9e1 and gold #f2a900 as accents, the signature red #ed0000 for the heartbeat.
+  Omni Contact's site refuses automated reads, so these come from what Pulse already used; swap in official hex
+  codes if they differ.
+- **Chart colour by job:** series identity uses `--cat-1…8` in that fixed order (never cycled; a ninth series
+  folds into "Other"). Status colours (`--st-*`, `--danger` etc.) are for meaning only and always come with a word
+  or an icon. Both palettes were checked with the dataviz validator (colour-blind separation of neighbours, light
+  on #ffffff, dark on #13163a); re-run it if a value changes.
+- **One card:** header (icon, title, actions) → body → optional footer ("Updated …", "View all"). Gadgets always
+  have a skeleton, an empty state and an inline error with Retry.
+- **Layout:** a 12-column grid. Saved custom dashboards keep their column choice (12, 6 or 4 spans) so nobody's
+  dashboard reorders.
+- **Focus is always visible:** never `outline: 0` without a replacement (`box-shadow: var(--ring)` or the global
+  ring). Small text must reach 4.5:1 in both themes.
+- **Themes:** there are two, light and dark (`data-theme="futuristic"`, shown as "Dark"). Dark keeps a restrained
+  glow (card hairline, hover glow), never at the cost of contrast.

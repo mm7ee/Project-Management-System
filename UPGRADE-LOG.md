@@ -515,3 +515,38 @@ Everyone signed in can search and keep private filters and dashboards. View-only
 - on the item page: Security level, More fields, Development, the service desk request, and "Reply to the customer"
 - on the create form: "More fields" (custom fields and the security level)
 - custom fields on board cards
+
+## Dashboard design pass (2026-11-25)
+
+**Why:** the owner asked for a visual upgrade of the home dashboard and the custom dashboards, in Omni Contact's
+colours, with no change to behaviour, data or permissions.
+
+**What changed**
+- **Design tokens** at the top of `src/styles.css`, with the same names in light and dark: a 4px spacing scale
+  (`--sp-*`), a type scale (`--fs-page`, `--fs-section`, `--fs-gadget`, `--fs-body`, `--fs-small`, `--fs-caption`,
+  `--fs-kpi`), radii (`--r-sm/md/lg/pill`), three elevations (`--e-1/2/3`), semantic colours
+  (`--success/warning/danger/info/neutral` with `-ink` and `-tint`), a categorical chart palette (`--cat-1…8`,
+  `--cat-other`), a focus colour (`--focus`, `--ring`) and motion (`--dur`, `--ease`).
+- **One card style** for overview panels and gadgets: header (icon, title, actions), body, optional footer.
+  `Panel` takes optional `icon` and `footer`; Reports cards pick up the same look.
+- **Page header** for every dashboard: name, one line about it, and the picker, Edit and New dashboard grouped on
+  the right. The old breadcrumb is gone.
+- **Overview:** a full-width KPI row (In progress, Due this week, Need attention, Live). Each tile leads with its
+  number, names itself with an icon, and states its trend in words with an icon. "Due this week" replaced the
+  Projects total, which the stage donut still shows. "View all" on Needs attention, Upcoming deadlines and Your
+  projects opens the matching Projects tab.
+- **12-column grid:** the overview's rows are 8 + 4 and 4 + 4 + 4 (6 + 6 + 12 under 1100px, one column under
+  700px). Custom dashboards keep their saved one, two or three columns, drawn as 12, 6 or 4 spans.
+- **Gadgets:** a skeleton while loading, an empty state (icon, a line, and "Edit dashboard" for its owner), an
+  inline error with Retry, and an "Updated …" footer. Pie slices beyond eight fold into "Other".
+- **Charts and tables:** series use the categorical palette; status colours are kept for meaning (stage, schedule,
+  overdue, late). Numbers are right-aligned in tabular figures, headers stick when a table scrolls, rows highlight
+  on hover.
+- **Accessibility:** a visible focus ring on every control in both themes; `--faint` darkened to #676c85 (AA on
+  cards and the canvas); `--gold-ink` to #8a6000; gadget titles use `--heading` (they failed AA in dark);
+  red text uses `--danger-ink`; timeline entries with nothing to open are text, not buttons.
+- **Dark theme:** a sky-to-royal hairline on each card and a soft glow on hover; the same contrast as before.
+- Removed dead CSS (`.dash-hero`, `.dash-kpis`, `.dash-kpi`, `.dash-list`, `.dash-deadline`, `.dash-picker`).
+
+Files: `src/styles.css`, `src/components/DashboardPage.tsx`, `src/components/CustomDashboards.tsx`,
+`src/components/Panel.tsx`. No API, query, permission or route changed.

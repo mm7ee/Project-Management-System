@@ -1,14 +1,23 @@
 import type { ReactNode } from "react";
+import type { LucideIcon } from "lucide-react";
 
-/** A card with its title on the left, an optional control on the right and a rule under both. */
-export default function Panel({ title, action, children, className = "" }: { title: string; action?: ReactNode; children: ReactNode; className?: string }) {
+/** A card: a header (optional icon, title, a control on the right), a body, and an optional footer. */
+export default function Panel({ title, icon: Icon, action, footer, children, className = "" }: { title: string; icon?: LucideIcon; action?: ReactNode; footer?: ReactNode; children: ReactNode; className?: string }) {
   return (
     <section className={`d-card ${className}`}>
       <header className="d-card-head">
-        <h3>{title}</h3>
+        <span className="card-title">
+          {Icon && (
+            <span className="card-icon" aria-hidden="true">
+              <Icon size={16} />
+            </span>
+          )}
+          <h3>{title}</h3>
+        </span>
         {action}
       </header>
       <div className="d-card-body">{children}</div>
+      {footer && <footer className="card-foot">{footer}</footer>}
     </section>
   );
 }

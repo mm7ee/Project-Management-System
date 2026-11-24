@@ -1,18 +1,5 @@
 import { useState, type ReactNode } from "react";
-import {
-  Activity,
-  AlertOctagon,
-  AlertTriangle,
-  CalendarClock,
-  CheckCircle2,
-  ChevronRight,
-  FileText,
-  FolderKanban,
-  ListChecks,
-  Radio,
-  TrendingUp,
-  Upload,
-} from "lucide-react";
+import { Activity, AlertOctagon, AlertTriangle, ArrowRight, BarChart3, CalendarCheck, CalendarClock, CheckCircle2, FileText, FolderKanban, History, ListChecks, PieChart, Radio, TrendingUp, Upload, Users } from "lucide-react";
 import { SCHEDULE_META, daysUntil, getSchedule, initials, type Schedule, type System } from "../data/systems";
 import type { UpdateRequest, User } from "../data/roles";
 import { isOpen, type Feature } from "../data/features";
@@ -73,20 +60,63 @@ export default function DashboardPage({ systems, users, features, blockers, docu
   const startedThisYear = systems.filter((s) => inYear(s.startedAt) && new Date(s.startedAt).getTime() <= now).length;
   const deliveredThisYear = systems.filter((s) => inYear(s.finishedAt)).length;
 
-  const kpis = [
-    { label: "Projects", value: systems.length, delta: `+${startedThisYear} started in ${year}`, good: true, icon: FolderKanban, tone: "cyan", tab: "ALL" as Filter },
-    { label: "Live", value: live.length, delta: `${plural(deliveredThisYear, "project")} delivered in ${year}`, good: true, icon: Radio, tone: "green", tab: "LIVE" as Filter },
-    { label: "In progress", value: active.length, delta: `${avg}% average progress`, good: avg >= 50, icon: TrendingUp, tone: "violet", tab: "WIP" as Filter },
+  // Due in the next 7 days (today included), not yet finished.
+  const dueThisWeek = systems.filter((s) => !s.finishedAt && s.dueAt && daysUntil(s.dueAt, now) >= 0 && daysUntil(s.dueAt, now) <= 7).sort((a, b) => a.dueAt!.localeCompare(b.dueAt!));
+
+  // trend: "up" good news, "down" needs action, "flat" information. Each carries an icon and words, never colour alone.
+  type Kpi = {
+    label: string;
+    value: number;
+    delta: string;
+    trend: "up" | "down" | "flat";
+    icon: typeof Activity;
+    tone: string;
+    tab: Filter;
+    title: string;
+  };
+  const kpis: Kpi[] = [
+    {
+      label: "In progress",
+      value: active.length,
+      delta: `${avg}% average progress · ${startedThisYear} started in ${year}`,
+      trend: avg >= 50 ? "up" : "flat",
+      icon: TrendingUp,
+      tone: "cyan",
+      tab: "WIP",
+      title: "Show projects in progress",
+    },
+    {
+      label: "Due this week",
+      value: dueThisWeek.length,
+      delta: dueThisWeek.length ? `Next: ${dueThisWeek[0].name}, ${formatDate(dueThisWeek[0].dueAt!)}` : "Nothing due in the next 7 days",
+      trend: "flat",
+      icon: CalendarClock,
+      tone: "amber",
+      tab: "ALL",
+      title: "Show all projects",
+    },
     {
       label: "Need attention",
       value: attentionIds.size,
       delta: attentionIds.size ? `${blockedOrStalled.length} blocked or stalled · ${overdue.length} overdue` : "Nothing overdue, blocked or stalled",
-      good: !attentionIds.size,
+      trend: attentionIds.size ? "down" : "up",
       icon: AlertTriangle,
       tone: "red",
       tab: (blockedOrStalled.length ? "BLOCKED" : "OVERDUE") as Filter,
+      title: "Show the projects that need attention",
+    },
+    {
+      label: "Live",
+      value: live.length,
+      delta: `${plural(deliveredThisYear, "project")} delivered in ${year}`,
+      trend: "up",
+      icon: Radio,
+      tone: "green",
+      tab: "LIVE",
+      title: "Show live projects",
     },
   ];
+  const TREND_ICON = { up: CheckCircle2, down: AlertOctagon, flat: ArrowRight };
 
   // ---- monthly trend ----
   const buckets =
@@ -96,29 +126,55 @@ export default function DashboardPage({ systems, users, features, blockers, docu
           const d = new Date(now);
           d.setDate(1);
           d.setMonth(d.getMonth() - 11 + k);
-          return { label: MONTHS[d.getMonth()], y: d.getFullYear(), m: d.getMonth() };
+          return {
+            label: MONTHS[d.getMonth()],
+            y: d.getFullYear(),
+            m: d.getMonth(),
+          };
         });
   const countIn = (dates: (string | undefined)[]) =>
-    buckets.map((b) =>
-      dates.filter((iso) => {
-        if (!iso) return false;
-        const d = new Date(iso);
-        return d.getFullYear() === b.y && d.getMonth() === b.m && d.getTime() <= now;
-      }).length,
+    buckets.map(
+      (b) =>
+        dates.filter((iso) => {
+          if (!iso) return false;
+          const d = new Date(iso);
+          return d.getFullYear() === b.y && d.getMonth() === b.m && d.getTime() <= now;
+        }).length,
     );
   const trend = [
-    { key: "started", label: "Projects started", color: "var(--st-wip)", values: countIn(systems.map((s) => s.startedAt)) },
-    { key: "delivered", label: "Projects delivered", color: "var(--st-live)", values: countIn(systems.map((s) => s.finishedAt)) },
-    { key: "requests", label: "Client requests", color: "var(--st-deploy)", values: countIn(features.map((f) => f.createdAt)) },
+    // Series identity, not status: the categorical chart palette.
+    {
+      key: "started",
+      label: "Projects started",
+      color: "var(--cat-1)",
+      values: countIn(systems.map((s) => s.startedAt)),
+    },
+    {
+      key: "delivered",
+      label: "Projects delivered",
+      color: "var(--cat-7)",
+      values: countIn(systems.map((s) => s.finishedAt)),
+    },
+    {
+      key: "requests",
+      label: "Client requests",
+      color: "var(--cat-2)",
+      values: countIn(features.map((f) => f.createdAt)),
+    },
   ];
   const sum = (v: number[]) => v.reduce((n, x) => n + x, 0);
-  // Card sparklines over the same months as the trend.
-  const running = (v: number[]) => v.map((_, i) => sum(v.slice(0, i + 1)));
+  // Card sparklines over the same months as the trend, in the same series colours.
   const sparks: Record<string, { values: number[]; color: string; label: string }> = {
-    Projects: { values: running(trend[0].values), color: "var(--cyan)", label: "Projects started, running total" },
-    Live: { values: trend[1].values, color: "var(--st-live)", label: "Projects delivered per month" },
-    "In progress": { values: trend[0].values, color: "var(--violet)", label: "Projects started per month" },
-    "Need attention": { values: trend[2].values, color: "var(--red)", label: "Client requests per month" },
+    "In progress": {
+      values: trend[0].values,
+      color: "var(--cat-1)",
+      label: "Projects started per month",
+    },
+    Live: {
+      values: trend[1].values,
+      color: "var(--cat-7)",
+      label: "Projects delivered per month",
+    },
   };
 
   // ---- projects by stage ----
@@ -150,16 +206,36 @@ export default function DashboardPage({ systems, users, features, blockers, docu
     .slice(0, 6);
 
   // ---- recent activity, from what everyone can already see ----
-  const events: { at: string; icon: typeof Activity; tone: string; text: ReactNode; id?: string }[] = [
+  const events: {
+    at: string;
+    icon: typeof Activity;
+    tone: string;
+    text: ReactNode;
+    id?: string;
+  }[] = [
     ...systems
       .filter((s) => s.updatedAt && new Date(s.updatedAt).getTime() <= now)
-      .map((s) => ({ at: s.updatedAt!, icon: TrendingUp, tone: "cyan", id: s.id, text: <><b>{s.name}</b> updated to {s.progress}% ({s.updatedBy})</> })),
+      .map((s) => ({
+        at: s.updatedAt!,
+        icon: TrendingUp,
+        tone: "cyan",
+        id: s.id,
+        text: (
+          <>
+            <b>{s.name}</b> updated to {s.progress}% ({s.updatedBy})
+          </>
+        ),
+      })),
     ...features.map((f) => ({
       at: f.createdAt,
       icon: ListChecks,
       tone: "amber",
       id: f.systemId,
-      text: <><b>{name(f.createdBy) ?? "Someone"}</b> logged a client request "{f.title}" on {sysName(f.systemId)}</>,
+      text: (
+        <>
+          <b>{name(f.createdBy) ?? "Someone"}</b> logged a client request "{f.title}" on {sysName(f.systemId)}
+        </>
+      ),
     })),
     ...blockers.map((b) => ({
       at: b.resolvedAt ?? b.raisedAt,
@@ -167,9 +243,13 @@ export default function DashboardPage({ systems, users, features, blockers, docu
       tone: b.resolvedAt ? "green" : "red",
       id: b.systemId,
       text: b.resolvedAt ? (
-        <><b>{name(b.resolvedBy) ?? "Someone"}</b> resolved a blocker on {sysName(b.systemId)}</>
+        <>
+          <b>{name(b.resolvedBy) ?? "Someone"}</b> resolved a blocker on {sysName(b.systemId)}
+        </>
       ) : (
-        <><b>{name(b.raisedBy) ?? "Someone"}</b> raised a blocker on {sysName(b.systemId)}: "{b.text}"</>
+        <>
+          <b>{name(b.raisedBy) ?? "Someone"}</b> raised a blocker on {sysName(b.systemId)}: "{b.text}"
+        </>
       ),
     })),
     ...documents.map((d) => ({
@@ -177,11 +257,25 @@ export default function DashboardPage({ systems, users, features, blockers, docu
       icon: Upload,
       tone: "violet",
       id: d.systemId,
-      text: <><b>{name(d.uploadedBy) ?? "Someone"}</b> added "{d.name}" to {sysName(d.systemId)}</>,
+      text: (
+        <>
+          <b>{name(d.uploadedBy) ?? "Someone"}</b> added "{d.name}" to {sysName(d.systemId)}
+        </>
+      ),
     })),
     ...systems
       .filter((s) => s.pcn)
-      .map((s) => ({ at: `${s.pcn!.date}T08:00:00`, icon: FileText, tone: "navy", id: s.id, text: <><b>{s.pcn!.originator || "Someone"}</b> proposed "{s.pcn!.title}"</> })),
+      .map((s) => ({
+        at: `${s.pcn!.date}T08:00:00`,
+        icon: FileText,
+        tone: "navy",
+        id: s.id,
+        text: (
+          <>
+            <b>{s.pcn!.originator || "Someone"}</b> proposed "{s.pcn!.title}"
+          </>
+        ),
+      })),
   ]
     .filter((e) => new Date(e.at).getTime() <= now)
     .sort((a, b) => b.at.localeCompare(a.at))
@@ -197,10 +291,16 @@ export default function DashboardPage({ systems, users, features, blockers, docu
       const why = b
         ? { bad: true, text: `Blocked: ${b.text}` }
         : sched === "OVERDUE"
-          ? { bad: true, text: `Overdue by ${plural(-daysUntil(s.dueAt!, now), "day")}` }
+          ? {
+              bad: true,
+              text: `Overdue by ${plural(-daysUntil(s.dueAt!, now), "day")}`,
+            }
           : st !== null
             ? { bad: false, text: `No progress update for ${st} days` }
-            : { bad: false, text: `Due ${formatDate(s.dueAt!)} at ${s.progress}%` };
+            : {
+                bad: false,
+                text: `Due ${formatDate(s.dueAt!)} at ${s.progress}%`,
+              };
       return { s, why };
     })
     .sort((a, b) => Number(b.why.bad) - Number(a.why.bad));
@@ -212,7 +312,11 @@ export default function DashboardPage({ systems, users, features, blockers, docu
     .filter((u) => u.role === "developer")
     .map((u) => {
       const w = workloadOf(u, systems, features, limits, now);
-      return { name: u.name, projects: w.projects, openRequests: w.openFeatures };
+      return {
+        name: u.name,
+        projects: w.projects,
+        openRequests: w.openFeatures,
+      };
     })
     .sort((a, b) => b.projects - a.projects || a.name.localeCompare(b.name));
   const mine = systems.filter(isMine);
@@ -221,33 +325,33 @@ export default function DashboardPage({ systems, users, features, blockers, docu
   return (
     <TooltipLayer>
       <div className="dash d-style">
-        <header className="d-pagehead">
-          <h2>Dashboard</h2>
-          <nav aria-label="Breadcrumb" className="d-crumbs">
-            Pulse <ChevronRight size={14} /> <b>Dashboard</b>
-          </nav>
-        </header>
+        <section className="d-kpis dash-kpi-row" aria-label="Key figures">
+          {kpis.map((k, i) => {
+            const Trend = TREND_ICON[k.trend];
+            return (
+              <button key={k.label} className="d-kpi" style={{ ["--i" as string]: i }} onClick={() => onTab(k.tab)} title={k.title} aria-label={`${k.label}: ${k.value}. ${k.delta}. ${k.title}`}>
+                <span className="d-kpi-label">{k.label}</span>
+                <span className="d-kpi-value">
+                  <CountUp value={k.value} />
+                </span>
+                <span className={`d-kpi-delta ${k.trend}`}>
+                  <Trend size={13} aria-hidden="true" />
+                  {k.delta}
+                </span>
+                {sparks[k.label] && <Sparkline {...sparks[k.label]} />}
+                <span className={`d-kpi-icon tone-${k.tone}`} aria-hidden="true">
+                  <k.icon size={18} />
+                </span>
+              </button>
+            );
+          })}
+        </section>
 
         <div className="d-top">
           <div className="d-top-main">
-            <section className="d-kpis" aria-label="Key figures">
-              {kpis.map((k) => (
-                <button key={k.label} className="d-kpi" style={{ ["--i" as string]: kpis.indexOf(k) }} onClick={() => onTab(k.tab)} title="Show these on the Projects page">
-                  <span className="d-kpi-label">{k.label}</span>
-                  <span className="d-kpi-value">
-                    <CountUp value={k.value} />
-                  </span>
-                  <span className={`d-kpi-delta ${k.good ? "up" : "down"}`}>{k.delta}</span>
-                  {sparks[k.label] && <Sparkline {...sparks[k.label]} />}
-                  <span className={`d-kpi-icon tone-${k.tone}`}>
-                    <k.icon size={18} />
-                  </span>
-                </button>
-              ))}
-            </section>
-
             <Panel
               title="Project activity"
+              icon={Activity}
               action={
                 <select className="d-select" value={range} onChange={(e) => setRange(e.target.value as "year" | "12m")} aria-label="Period">
                   <option value="year">This year</option>
@@ -269,6 +373,7 @@ export default function DashboardPage({ systems, users, features, blockers, docu
 
           <Panel
             title="Projects by stage"
+            icon={PieChart}
             className="d-side"
             action={
               <select className="d-select" value={stageScope} onChange={(e) => setStageScope(e.target.value as "all" | "mine")} aria-label="Whose projects">
@@ -294,10 +399,10 @@ export default function DashboardPage({ systems, users, features, blockers, docu
             <table className="d-table">
               <thead>
                 <tr>
-                  <th>Stage</th>
-                  <th>Projects</th>
-                  <th>Share</th>
-                  <th>Avg %</th>
+                  <th scope="col">Stage</th>
+                  <th scope="col">Projects</th>
+                  <th scope="col">Share</th>
+                  <th scope="col">Avg %</th>
                 </tr>
               </thead>
               <tbody>
@@ -315,7 +420,7 @@ export default function DashboardPage({ systems, users, features, blockers, docu
         </div>
 
         <div className="d-row3">
-          <Panel title="Project leads" action={<span className="d-hint">by projects led</span>}>
+          <Panel title="Project leads" icon={Users} action={<span className="d-hint">by projects led</span>}>
             {leads.length ? (
               <ul className="d-leads">
                 {leads.map(({ user, items }) => {
@@ -339,22 +444,30 @@ export default function DashboardPage({ systems, users, features, blockers, docu
             )}
           </Panel>
 
-          <Panel title="Delivery health" action={<span className="d-hint">by schedule</span>}>
+          <Panel title="Delivery health" icon={CalendarCheck} action={<span className="d-hint">by schedule</span>}>
             <Columns bars={health} />
           </Panel>
 
-          <Panel title="Recent activity">
+          <Panel title="Recent activity" icon={History}>
             {events.length ? (
               <ol className="d-timeline">
                 {events.map((e, i) => (
                   <li key={i}>
-                    <span className={`d-tl-icon tone-${e.tone}`}>
+                    <span className={`d-tl-icon tone-${e.tone}`} aria-hidden="true">
                       <e.icon size={14} />
                     </span>
-                    <button className="d-tl-text" onClick={() => e.id && onOpen(e.id)}>
-                      <span>{e.text}</span>
-                      <small>{timeAgo(e.at, now)}</small>
-                    </button>
+                    {e.id ? (
+                      <button className="d-tl-text" onClick={() => onOpen(e.id!)}>
+                        <span>{e.text}</span>
+                        <small>{timeAgo(e.at, now)}</small>
+                      </button>
+                    ) : (
+                      // Nothing to open: plain text, so it takes no keyboard stop.
+                      <span className="d-tl-text static">
+                        <span>{e.text}</span>
+                        <small>{timeAgo(e.at, now)}</small>
+                      </span>
+                    )}
                   </li>
                 ))}
               </ol>
@@ -365,7 +478,25 @@ export default function DashboardPage({ systems, users, features, blockers, docu
         </div>
 
         <div className="d-row3">
-          <Panel title="Needs attention" action={<span className={`d-badge ${attention.length ? "red" : ""}`}>{attention.length}</span>}>
+          <Panel
+            title="Needs attention"
+            icon={AlertTriangle}
+            action={
+              <span className={`d-badge ${attention.length ? "red" : ""}`} aria-label={`${attention.length} need attention`}>
+                {attention.length}
+              </span>
+            }
+            footer={
+              attention.length > 0 && (
+                <>
+                  <span>{attention.length > 6 ? `Showing 6 of ${attention.length}` : `${plural(attention.length, "project")}`}</span>
+                  <button className="card-link" onClick={() => onTab(blockedOrStalled.length ? "BLOCKED" : "OVERDUE")}>
+                    View all <ArrowRight size={13} aria-hidden="true" />
+                  </button>
+                </>
+              )
+            }
+          >
             {attention.length ? (
               <ul className="d-mini-list">
                 {attention.slice(0, 6).map(({ s, why }) => (
@@ -386,7 +517,20 @@ export default function DashboardPage({ systems, users, features, blockers, docu
             )}
           </Panel>
 
-          <Panel title="Upcoming deadlines">
+          <Panel
+            title="Upcoming deadlines"
+            icon={CalendarClock}
+            footer={
+              deadlines.length > 0 && (
+                <>
+                  <span>Next {plural(deadlines.length, "due date")}</span>
+                  <button className="card-link" onClick={() => onTab("ALL")}>
+                    View all <ArrowRight size={13} aria-hidden="true" />
+                  </button>
+                </>
+              )
+            }
+          >
             {deadlines.length ? (
               <ul className="d-mini-list">
                 {deadlines.map((s) => {
@@ -414,7 +558,15 @@ export default function DashboardPage({ systems, users, features, blockers, docu
             )}
           </Panel>
 
-          <Panel title="Team workload" action={<span className="d-hint">limit {limits.projects} each · {openFeatures} open requests</span>}>
+          <Panel
+            title="Team workload"
+            icon={BarChart3}
+            action={
+              <span className="d-hint">
+                limit {limits.projects} each · {openFeatures} open requests
+              </span>
+            }
+          >
             <WorkloadBars rows={workload} limit={limits.projects} />
           </Panel>
         </div>
@@ -422,7 +574,16 @@ export default function DashboardPage({ systems, users, features, blockers, docu
         {showMyWork && <MyWork systems={systems} now={now} />}
 
         {mine.length > 0 && (
-          <Panel title="Your projects" action={<span className="d-hint">projects you're on or lead</span>}>
+          <Panel
+            title="Your projects"
+            icon={FolderKanban}
+            action={<span className="d-hint">projects you're on or lead</span>}
+            footer={
+              <button className="card-link" onClick={() => onTab("MINE")}>
+                View all <ArrowRight size={13} aria-hidden="true" />
+              </button>
+            }
+          >
             <ul className="dash-mine">
               {mine.map((s) => {
                 const sched = SCHEDULE_META[getSchedule(s, now)];
