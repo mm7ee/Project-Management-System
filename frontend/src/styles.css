@@ -2700,3 +2700,8 @@ span.backlog-points { border-color: transparent; background: var(--track); }
   .chat-back { display: grid; }
   .chat-msg-tools { display: flex; position: static; align-self: flex-start; border: 0; box-shadow: none; background: none; }
 }
+
+/* Settings → Users: search above the list. */
+.users-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 4px 0 12px; font-size: 13.5px; }
+.users-search { width: min(420px, 100%); }
+.users-none { text-align: center; padding: 22px 12px; }

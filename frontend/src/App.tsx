@@ -599,7 +599,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             adminPages={[
               ...(can("manage_users")
                 ? [
-                    { key: "people", label: "People", icon: Users, content: <UsersPage section="people" {...usersPageProps} /> },
+                    { key: "people", label: "Users", icon: Users, content: <UsersPage section="people" {...usersPageProps} /> },
                     { key: "roles", label: "Roles & permissions", icon: ShieldCheck, content: <UsersPage section="roles" {...usersPageProps} /> },
                     { key: "twostep", label: "Two-step rules", icon: Fingerprint, content: <UsersPage section="twostep" {...usersPageProps} /> },
                     { key: "signin", label: "Sign-in security", icon: LockKeyhole, content: <UsersPage section="signin" {...usersPageProps} /> },

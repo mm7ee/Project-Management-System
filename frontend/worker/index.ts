@@ -367,7 +367,7 @@ async function lockIfNeeded(env: Env, ctx: ExecutionContext, req: Request, row: 
       userId: u.id,
       kind: "account_locked" as const,
       title: `${row.name}'s account is locked`,
-      body: `${failures} failed sign-ins in ${SIGNIN_WINDOW_MINUTES} minutes. It unlocks itself in ${minutes} minutes, or you can unlock it now in Settings → People.`,
+      body: `${failures} failed sign-ins in ${SIGNIN_WINDOW_MINUTES} minutes. It unlocks itself in ${minutes} minutes, or you can unlock it now in Settings → Users.`,
       link: "view:users",
       dedupe: `locked:${row.id}:${until}`,
     }));
@@ -922,7 +922,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
           userId: u.id,
           kind: "account_locked" as const,
           title: `${row.name} forgot their password`,
-          body: `They asked for a reset at sign-in, but ${row.email ? "email isn't connected yet" : "they have no email address in Pulse"}, so no link could be sent. Confirm it's really them, then give them a temporary password in Settings → People.`,
+          body: `They asked for a reset at sign-in, but ${row.email ? "email isn't connected yet" : "they have no email address in Pulse"}, so no link could be sent. Confirm it's really them, then give them a temporary password in Settings → Users.`,
           link: "view:users",
           dedupe: `pwreset:${row.id}:${new Date(at).toISOString().slice(0, 10)}`,
         }));
@@ -1816,7 +1816,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       assignments: assignments.results,
       features: featuresSeen,
       brief: mode === "developer",
-      // Only people who manage users can see who is locked out, here as in Settings → People.
+      // Only people who manage users can see who is locked out, here as in Settings → Users.
       ...(can("manage_users")
         ? {
             lockedAccounts: people.results

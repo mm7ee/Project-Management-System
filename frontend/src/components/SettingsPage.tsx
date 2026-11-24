@@ -137,7 +137,7 @@ export default function SettingsPage({
       // Remembering the page is only a convenience.
     }
   };
-  // Another part of Pulse asked for a page (e.g. the dashboard's Rebalance banner opens People).
+  // Another part of Pulse asked for a page (e.g. the dashboard's Rebalance banner opens Users).
   useEffect(() => {
     if (openPage) setPage(openPage);
   }, [openPage]);

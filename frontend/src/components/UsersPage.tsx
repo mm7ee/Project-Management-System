@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertOctagon, Check, Copy, Fingerprint, KeyRound, LifeBuoy, Lock, LockOpen, Pencil, Plus, ShieldCheck, ShieldOff, Smartphone, Trash2, X } from "lucide-react";
+import { AlertOctagon, Check, Copy, Fingerprint, KeyRound, LifeBuoy, Lock, LockOpen, Pencil, Plus, Search, ShieldCheck, ShieldOff, Smartphone, Trash2, X } from "lucide-react";
 import { api, type MfaHelpRequest } from "../data/api";
 import { initials, type System } from "../data/systems";
 import { timeAgo } from "../time";
@@ -47,10 +47,19 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaP
   const [resetting, setResetting] = useState<string | null>(null);
   const [issued, setIssued] = useState<{ name: string; password: string } | null>(null);
   const [error, setError] = useState("");
+  // Search the user list by name, username, email, job title, phone, role or assigned project.
+  const [query, setQuery] = useState("");
   const locked = users.filter((u) => u.lockedUntil && Date.parse(u.lockedUntil) > now);
   const lockedTime = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
   const projectNames = (ids: string[] = []) =>
     ids.map((id) => systems.find((s) => s.id === id)?.name).filter(Boolean).join(", ");
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = terms.length
+    ? users.filter((u) => {
+        const hay = [u.name, u.username, u.email, u.title, u.phone, ROLE_LABEL[u.role], projectNames(u.projectIds)].filter(Boolean).join(" ").toLowerCase();
+        return terms.every((t) => hay.includes(t));
+      })
+    : users;
 
   const run = async (fn: () => Promise<unknown>) => {
     setError("");
@@ -69,8 +78,8 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaP
       {section === "people" && (
       <header className="page-head">
         <div>
-          <h2>People</h2>
-          <p>{users.length} people can sign in. Developers can be on up to {limits.projects} projects each.</p>
+          <h2>Users</h2>
+          <p>{users.length} {users.length === 1 ? "user" : "users"} can sign in. Developers can be on up to {limits.projects} projects each.</p>
         </div>
         <button className="btn btn-amber" onClick={() => setEditing("new")}>
           <Plus size={17} strokeWidth={3} /> Add user
@@ -167,6 +176,25 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaP
         </section>
       )}
 
+      <div className="users-toolbar">
+        <label className="search sm users-search">
+          <Search size={16} />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === "Escape" && setQuery("")}
+            placeholder="Search users by name, username, email, role or project"
+            aria-label="Search users"
+          />
+        </label>
+        {terms.length > 0 && (
+          <span className="muted" role="status">
+            {shown.length} of {users.length} {users.length === 1 ? "user" : "users"}
+          </span>
+        )}
+      </div>
+
       <div className="table-wrap">
         <table className="table">
           <thead>
@@ -181,7 +209,17 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaP
             </tr>
           </thead>
           <tbody>
-            {users.map((u) => (
+            {shown.length === 0 && (
+              <tr>
+                <td colSpan={showLastLogin ? 7 : 6} className="muted users-none">
+                  No users match "{query.trim()}".{" "}
+                  <button type="button" className="btn btn-ghost sm" onClick={() => setQuery("")}>
+                    Clear search
+                  </button>
+                </td>
+              </tr>
+            )}
+            {shown.map((u) => (
               <tr key={u.id}>
                 <td>
                   <span className="user-cell">
@@ -474,7 +512,7 @@ function SigninRulesEditor({ rules, onSave }: { rules: SigninRules; onSave: (r: 
       </header>
       <div className="limits-grid set-card">
         {field("attempts", "Wrong passwords before an account locks", `Counted over ${SIGNIN_WINDOW_MINUTES} minutes. Wrong two-step codes count too.`)}
-        {field("lockMinutes", "Minutes an account stays locked", "It unlocks itself after this. You can unlock it sooner in People.")}
+        {field("lockMinutes", "Minutes an account stays locked", "It unlocks itself after this. You can unlock it sooner in Users.")}
         {field("ipAttempts", "Failed sign-ins from one address before it's refused", `Counted over ${SIGNIN_WINDOW_MINUTES} minutes, across every account.`)}
       </div>
       <p className="set-note">

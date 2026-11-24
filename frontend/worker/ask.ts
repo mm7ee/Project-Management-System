@@ -135,7 +135,7 @@ export function buildSnapshot(input: {
   );
   if (lockedAccounts) {
     watch(
-      "LOCKED ACCOUNTS (too many wrong passwords; each unlocks itself at the time shown, or an administrator can unlock it in Settings → People)",
+      "LOCKED ACCOUNTS (too many wrong passwords; each unlocks itself at the time shown, or an administrator can unlock it in Settings → Users)",
       lockedAccounts.map((a) => `${clean(a.name)}: until ${a.until.slice(11, 16)} UTC on ${day(a.until)}`),
     );
   }
