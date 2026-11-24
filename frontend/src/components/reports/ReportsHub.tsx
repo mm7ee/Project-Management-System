@@ -1,11 +1,24 @@
 import { useState, type ComponentProps } from "react";
-import { BarChart3, Gauge, Headset, LayoutDashboard, ListChecks } from "lucide-react";
+import { BarChart3, Gauge, Headset, LayoutDashboard, ListChecks, Printer } from "lucide-react";
 import BiDashboard from "./BiDashboard";
 import type { Feature } from "../../data/features";
 import ReportsPage from "./ReportsPage";
 import AgileReports from "./AgileReports";
 import FeatureInsights from "../FeatureInsights";
 import { Reports as ServiceDeskReports } from "../ServiceDeskPage";
+
+/** Prints the Overview on A4 landscape: the page size is set only for this print, so other pages print as before. */
+function printLandscape() {
+  const style = document.createElement("style");
+  style.textContent = "@page { size: A4 landscape; margin: 10mm; }";
+  document.head.appendChild(style);
+  const done = () => {
+    style.remove();
+    window.removeEventListener("afterprint", done);
+  };
+  window.addEventListener("afterprint", done);
+  window.print();
+}
 
 type Tab = "overview" | "projects" | "features" | "delivery" | "service";
 /** This browser remembers the last tab, so Reports opens where you left it. */
@@ -58,12 +71,15 @@ export default function ReportsHub({
         </div>
       </div>
       {tab === "overview" && (
-        <div className="page">
-          <header className="page-head">
+        <div className="page bi-page">
+          <header className="page-head no-print">
             <div>
               <h2>Overview</h2>
               <p>The portfolio at a glance. Every chart filters the others: click to drill in.</p>
             </div>
+            <button className="btn btn-navy" onClick={printLandscape} title="Print, or save as PDF from the print dialog">
+              <Printer size={16} /> Print / PDF
+            </button>
           </header>
           <BiDashboard systems={projects.systems} features={projects.features} blockers={projects.blockers} users={projects.users} workspaces={workspaces} now={projects.now} />
         </div>

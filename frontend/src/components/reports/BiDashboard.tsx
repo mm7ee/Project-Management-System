@@ -23,6 +23,7 @@ import {
   type Stage,
 } from "../../data/bi";
 import { Legend, TipRows, TooltipLayer, useTip, useWidth } from "./chartKit";
+import PulseMark from "../PulseMark";
 
 const STAGES: { key: Stage; label: string; color: string }[] = [
   { key: "NOT_STARTED", label: "Not started", color: "var(--st-not)" },
@@ -124,6 +125,21 @@ export default function BiDashboard({ systems, features, blockers, users, worksp
   return (
     <TooltipLayer>
       <div className="bi">
+        {/* On paper only: the letterhead, and what the page was filtered to. */}
+        <header className="bi-print-head print-only">
+          <div className="bi-print-brand">
+            <img src="/omni-logo.png" alt="Omni Contact" />
+            <PulseMark tone="dark" />
+          </div>
+          <div className="bi-print-title">
+            <h1>Portfolio overview</h1>
+            <p>
+              Generated {new Date(now).toLocaleString("en-GB", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+              {" · "}
+              {chips.length ? `Filtered to ${chips.map((c) => `${DIM_LABEL[c.dim].toLowerCase()}: ${chipLabel(c.dim, c.v)}`).join("; ")}` : "All projects and feature requests"}
+            </p>
+          </div>
+        </header>
         <section className="bi-card bi-slicer" aria-label="Workspace slicer">
           <span className="bi-slicer-title">Workspace</span>
           <div className="bi-tiles">
@@ -144,7 +160,7 @@ export default function BiDashboard({ systems, features, blockers, users, worksp
           </div>
         </section>
 
-        <div className="bi-filterbar" role="status">
+        <div className="bi-filterbar no-print" role="status">
           {chips.length ? (
             <>
               {chips.map((c) => (
@@ -233,7 +249,7 @@ export default function BiDashboard({ systems, features, blockers, users, worksp
             <MonthColumns rows={monthly} />
           </Card>
           <Card title="Portfolio map" dim="project" f={f} onClear={() => setF({ ...f, project: [] })} wide>
-            <p className="bi-sub">Each project is a tile, sized by its open feature requests and coloured by schedule. Click one to focus the page on it.</p>
+            <p className="bi-sub">Each project is a tile, sized by its open feature requests and coloured by schedule.<span className="no-print"> Click one to focus the page on it.</span></p>
             <Legend items={SCHEDULES.map((s) => ({ label: SCHEDULE_META[s.key].label, color: s.color }))} />
             <Treemap tiles={tiles} now={now} dimmed={(v) => dimmed("project", v)} onPick={(v) => pick("project", v)} />
           </Card>
@@ -259,7 +275,7 @@ function Card({ title, children, dim, f, onClear, wide = false }: { title: strin
       <header className="bi-card-head">
         <h3>{title}</h3>
         {n > 0 && onClear && (
-          <button type="button" className="bi-clear" onClick={onClear} title="Clear this chart's filter">
+          <button type="button" className="bi-clear no-print" onClick={onClear} title="Clear this chart's filter">
             <FilterX size={14} /> {n}
           </button>
         )}
@@ -369,7 +385,7 @@ function StackBars({
   return (
     <div ref={ref}>
       {width > 0 && (
-        <svg width={width} height={shown.length * ROW} className="viz-svg" role="group">
+        <svg width={width} height={shown.length * ROW} viewBox={`0 0 ${width} ${shown.length * ROW}`} className="viz-svg" role="group">
           {shown.map((r, i) => {
             const y = i * ROW;
             const total = r.segs.reduce((n, s) => n + s.n, 0);
@@ -428,7 +444,7 @@ function LeadBars({ rows, dimmed, onPick }: { rows: { key: string; label: string
     <div ref={ref}>
       <p className="bi-sub">Average progress of each lead's projects still in flight (bar), and how many projects they lead.</p>
       {width > 0 && (
-        <svg width={width} height={rows.length * ROW} className="viz-svg" role="group">
+        <svg width={width} height={rows.length * ROW} viewBox={`0 0 ${width} ${rows.length * ROW}`} className="viz-svg" role="group">
           {rows.map((r, i) => {
             const y = i * ROW;
             return (
@@ -472,7 +488,7 @@ function MonthColumns({ rows }: { rows: { key: string; created: number; delivere
   return (
     <div ref={ref}>
       {width > 0 && (
-        <svg width={width} height={H} className="viz-svg" role="group" aria-label="Feature requests each month">
+        <svg width={width} height={H} viewBox={`0 0 ${width} ${H}`} className="viz-svg" role="group" aria-label="Feature requests each month">
           {[0, Math.round(max / 2), max].map((t) => (
             <g key={t}>
               <line x1={PAD.l} x2={width} y1={y(t)} y2={y(t)} className="viz-grid" />
@@ -516,7 +532,7 @@ function Treemap({ tiles, now, dimmed, onPick }: { tiles: { key: string; value: 
   return (
     <div ref={ref}>
       {width > 0 && (
-        <svg width={width} height={H} className="viz-svg" role="group" aria-label="Projects sized by open requests">
+        <svg width={width} height={H} viewBox={`0 0 ${width} ${H}`} className="viz-svg" role="group" aria-label="Projects sized by open requests">
           {laid.map((t) => {
             const s = tiles.find((x) => x.key === t.key)!.s;
             const sched = getSchedule(s, now);

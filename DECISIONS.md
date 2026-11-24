@@ -587,3 +587,8 @@ Choices made during the Pulse upgrade that later phases must follow. Newest last
   (tested), charts in `src/components/reports/BiDashboard.tsx`.
 - Priority is ordinal, so it's one hue stepped light to strong (towards white on dark themes so the low end stays
   visible), not four unrelated colours. Schedule uses the reserved status colours with a legend.
+- **Printing (added 2026-11-25):** Print / PDF on the Overview prints A4 landscape (the page size is set only for
+  that print, so other pages print as before) with a letterhead: the Omni Contact logo, the Pulse name, the title,
+  when it was generated and what it was filtered to. Paper always gets the light palette, whatever the screen theme;
+  the slicer and filter chips stay on screen (the letterhead names the filters). Page 1 holds the figures and six
+  charts, page 2 the portfolio map.
