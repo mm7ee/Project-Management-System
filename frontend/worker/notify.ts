@@ -92,6 +92,22 @@ export async function sendEmail(env: Env, delivery: Delivery, to: string, subjec
   }
 }
 
+/**
+ * An account-security email (password reset, password changed): always sent, whatever the
+ * person's email settings, with an optional button. `url` is a full address.
+ */
+export function securityEmail(title: string, lines: string[], button?: { label: string; url: string }) {
+  const html = `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14.5px;line-height:1.5;color:#1c2b45;background:#ffffff;padding:24px;border-radius:12px;max-width:600px">
+<p style="margin:0 0 14px;font-weight:800;font-size:13px;letter-spacing:.08em;color:#ed0000">PULSE</p>
+<h2 style="margin:0 0 10px;font-size:20px;color:#101553">${esc(title)}</h2>
+${lines.map((l) => `<p style="margin:0 0 10px">${esc(l)}</p>`).join("")}
+${button ? `<p style="margin:22px 0"><a href="${esc(button.url)}" style="background:#2c3280;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">${esc(button.label)}</a></p>` : ""}
+<p style="margin:0;font-size:12px;color:#6b7a90">Sent by Pulse, Omni Contact's project tracker, about your account's security. Nobody from Pulse will ever ask for your password.</p>
+</div>`;
+  const text = [title, ...lines, ...(button ? [`${button.label}: ${button.url}`] : [])].join("\n\n");
+  return { subject: `Pulse: ${title}`, html, text };
+}
+
 /** Posts an Adaptive Card to a Teams "Workflows" webhook. Square brackets are dropped so typed text can't become links. */
 export async function postToTeams(env: Env, delivery: Delivery, post: ChannelPost) {
   if (!delivery.teams || !env.MFA_KEY) throw new Error("Teams isn't connected yet");

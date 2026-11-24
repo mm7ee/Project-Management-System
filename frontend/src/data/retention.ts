@@ -55,6 +55,7 @@ export const RETENTION: RetentionRule[] = [
   { what: "Notifications and digests", kept: `${NOTIFICATION_DAYS} days` },
   { what: "Expired or revoked share links", kept: `${SHARE_LINK_DAYS} days` },
   { what: "Handled two-step verification help requests", kept: `${MFA_HELP_DAYS} days` },
+  { what: "Forgot-password requests (what was typed, the IP address, and the reset link's hash)", kept: "24 hours" },
   { what: "Sign-in sessions", kept: `${SESSION_DAYS} days, or until you sign out` },
   { what: "Failed sign-in counters (username tried, IP address) behind the lockout", kept: `${SIGNIN_FAILURE_HOURS} hours` },
   { what: "Used recovery codes, expired sign-in and passkey challenges", kept: "Removed the next weekday morning" },

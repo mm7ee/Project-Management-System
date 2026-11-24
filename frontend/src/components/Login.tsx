@@ -4,6 +4,8 @@ import { ApiError, api } from "../data/api";
 import { passkeysSupported, signWithPasskey } from "../data/passkeys";
 import { COMPANY_URL } from "../brand";
 import PulseMark from "./PulseMark";
+import { ForgotPassword, ResetPassword } from "./PasswordReset";
+import { resetTokenIn } from "../data/passwordReset";
 import "./landing.css";
 
 // The lifecycle as one heartbeat trace: each beat is stronger as a project comes to life.
@@ -70,6 +72,28 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
   // Set once the password checked out for an account with two-step verification.
   const [ticket, setTicket] = useState<string | null>(null);
   const [methods, setMethods] = useState<Methods>({ app: true, passkey: false });
+  // Forgot password: the request form, or the screen an emailed link opens.
+  const [forgot, setForgot] = useState(false);
+  const [resetToken, setResetToken] = useState(() => resetTokenIn(window.location.hash));
+  const [notice, setNotice] = useState("");
+  useEffect(() => {
+    // A reset link opened in a tab that already shows the sign-in page.
+    const onHash = () => {
+      const t = resetTokenIn(window.location.hash);
+      if (t) setResetToken(t);
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  const leaveReset = (message = "", done = false) => {
+    // The link's secret shouldn't linger in the address bar or history.
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+    setResetToken(null);
+    setForgot(false);
+    setPassword("");
+    setError(done ? "" : message);
+    setNotice(done ? message : "");
+  };
 
   const backToPassword = (message = "") => {
     setTicket(null);
@@ -142,7 +166,15 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
             <i />
           </div>
 
-          {ticket ? (
+          {resetToken ? (
+            <ResetPassword
+              token={resetToken}
+              onDone={() => leaveReset("Your password has been changed and every device signed out. Sign in with your new password.", true)}
+              onBack={(m) => leaveReset(m)}
+            />
+          ) : forgot ? (
+            <ForgotPassword initial={username} onBack={() => leaveReset()} />
+          ) : ticket ? (
             <SecondStep ticket={ticket} methods={methods} onSignedIn={onSignedIn} onBack={backToPassword} />
           ) : (
           <form
@@ -151,6 +183,7 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
               e.preventDefault();
               setBusy(true);
               setError("");
+              setNotice("");
               try {
                 const r = await api<{ ok?: boolean; mfa?: boolean; ticket?: string; methods?: Methods }>("/login", "POST", { username, password });
                 if (r.mfa && r.ticket) {
@@ -204,6 +237,11 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
                 />
               </span>
             </label>
+            {notice && (
+              <p className="lp-ok" role="status">
+                {notice}
+              </p>
+            )}
             {error && (
               <p className="lp-error" role="alert">
                 {error}
@@ -211,6 +249,9 @@ export default function Login({ onSignedIn }: { onSignedIn: () => void }) {
             )}
             <button type="submit" className="lp-submit" disabled={busy}>
               {busy ? "Signing in…" : "Sign in"} {!busy && <ArrowRight size={18} />}
+            </button>
+            <button type="button" className="lp-link" onClick={() => { setError(""); setNotice(""); setForgot(true); }}>
+              Forgot your password?
             </button>
             <p className="lp-help">
               Need an account? Ask your Pulse administrator. Never share your password, including with the IT helpdesk.

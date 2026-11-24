@@ -176,6 +176,8 @@
 .lp-link { display: inline-flex; align-items: center; gap: 6px; }
 .lp-input textarea { flex: 1; min-width: 0; resize: vertical; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; font-size: 14.5px; padding: 10px 0; }
 .lp-help-strong { color: #e8f1fb; font-size: 14px; line-height: 1.55; }
+/* A good outcome on the sign-in card, such as a password just reset. */
+.lp-ok { margin: 0; padding: 10px 12px; border-radius: 10px; font-size: 13.5px; line-height: 1.5; color: #c9f7e6; background: rgba(46, 230, 166, 0.12); border: 1px solid rgba(46, 230, 166, 0.35); }
 
 /* ---------- The pulse: ECG paper, the headline's beat ---------- */
 .lp-paper {

@@ -154,6 +154,16 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
       return "Changed their password";
     case "password_set_after_reset":
       return "Set a new password after a reset";
+    case "password_reset_requested":
+      return d.outcome === "emailed"
+        ? "Asked for a password reset link (emailed)"
+        : d.outcome === "admins_told"
+          ? "Asked for a password reset (no email to send to, so administrators were told)"
+          : d.outcome === "limited"
+            ? "Asked for a password reset (too many requests, nothing sent)"
+            : `Asked for a password reset for "${str(d.login)}", which isn't an account`;
+    case "password_reset_by_email":
+      return `Reset their password with an emailed link${d.unlocked ? ", which also unlocked the account" : ""}`;
     case "profile_updated":
       return `Updated their ${(d.fields as string[] | undefined)?.join(" and ") ?? "contact details"}`;
     case "system_created":

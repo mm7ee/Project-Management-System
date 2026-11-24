@@ -25,6 +25,7 @@ import {
 import { DEFAULT_LIMITS, DEFAULT_WORKSPACES, MAX_DOCUMENT_BYTES, formatBytes, type Blocker, type Limits, type ProjectDocument } from "../src/data/project";
 import { buildShowcase } from "../src/data/showcase";
 import { PASSWORD_HISTORY, passwordProblem } from "../src/data/password";
+import { RESET_ADDRESS_MINUTES, RESET_KEEP_HOURS, RESET_LINK_MINUTES, RESET_REPLY, resetOutcome } from "../src/data/passwordReset";
 import { SESSION_DAYS, SIGNIN_FAILURE_HOURS } from "../src/data/retention";
 import { DEFAULT_SIGNIN_RULES, SIGNIN_WINDOW_MINUTES, cleanSigninRules, lockMinutesFor, signinRefusal, type SigninRules } from "../src/data/signin";
 import { purgeExpired } from "./retention";
@@ -32,7 +33,7 @@ import type { ProjectTemplate } from "../src/data/templates";
 import { awaitingSignature, cleanPcn, pcnStatus, type Pcn, type Signatory } from "../src/data/pcn";
 import { MAX_QUESTION, askStream, buildSnapshot, buildWorkFocus, type AskMode, type AskPerson, type AskTurn } from "./ask";
 import { newChallenge, readClientData, verifyAssertion, verifyRegistration } from "./webauthn";
-import { noteFailure, postToTeams, raise, readDelivery, sendEmail, emailFor, type Alert, type ChannelPost, type Delivery } from "./notify";
+import { noteFailure, postToTeams, raise, readDelivery, securityEmail, sendEmail, emailFor, type Alert, type ChannelPost, type Delivery } from "./notify";
 import { runBriefing, runDailyDigests } from "./digest";
 import { toFeature, type FeatureRow } from "./rows";
 import { pgDatabase } from "./pg";
@@ -568,7 +569,7 @@ const ITEM_ACTIONS = new Set([
 const ACTIVITY_KINDS: Record<string, string[]> = {
   signin: ["login", "logout", "logout_all"],
   failed: ["login_failed", "account_locked", "signin_ip_blocked"],
-  account: ["password_changed", "password_set_after_reset", "profile_updated", "mfa_enabled", "mfa_disabled", "mfa_recovery_regenerated"],
+  account: ["password_changed", "password_set_after_reset", "password_reset_requested", "password_reset_by_email", "profile_updated", "mfa_enabled", "mfa_disabled", "mfa_recovery_regenerated"],
   systems: ["system_created", "system_progress", "system_updated", "system_developers", "system_deleted", "request_created", "request_dismissed", "template_created", "template_deleted", "pcn_updated", "pcn_signed"],
   features: ["feature_created", "feature_updated", "feature_deleted"],
   workflows: ["workflow_created", "workflow_updated", "workflow_deleted", "workflow_assigned", "status_created", "status_updated", "status_deleted", "work_items_moved", "board_updated"],
@@ -855,6 +856,125 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
         .run();
     }
     await audit(db, req, row, "mfa_help_requested", row.id, { name: row.name, ...(message ? { message } : {}) });
+    return json({ ok: true });
+  }
+
+  // ---------- forgot password (src/data/passwordReset.ts) ----------
+  // Same reply whatever happened, and the slow work (email) runs after it, so neither the words nor
+  // the timing say whether an account exists.
+  if (path === "/api/password/forgot" && method === "POST") {
+    const b = await body<{ login?: string }>(req);
+    const login = String(b.login ?? "").trim().slice(0, 120);
+    if (!login) throw new HttpError(400, "Enter your username or email address");
+    const at = Date.now();
+    const ip = req.headers.get("cf-connecting-ip");
+    const fromAddress = ip
+      ? (await db
+          .prepare("SELECT COUNT(*) AS n FROM password_resets WHERE ip = ? AND created_at > ?")
+          .bind(ip, at - RESET_ADDRESS_MINUTES * 60_000)
+          .first<{ n: number }>())!.n
+      : 0;
+    // A username, or an email address that belongs to exactly one person.
+    const matches = await db
+      .prepare("SELECT * FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?) LIMIT 2")
+      .bind(login, login)
+      .all<UserRow>();
+    const row = matches.results.find((u) => u.username.toLowerCase() === login.toLowerCase()) ?? (matches.results.length === 1 ? matches.results[0] : null);
+    const sentToAccount = row
+      ? (await db
+          .prepare("SELECT COUNT(*) AS n FROM password_resets WHERE user_id = ? AND outcome IN ('emailed', 'admins_told') AND created_at > ?")
+          .bind(row.id, at - 3_600_000)
+          .first<{ n: number }>())!.n
+      : 0;
+    const delivery = await readDelivery(db);
+    const canEmail = !!(row?.email && delivery.resendKey && delivery.from && env.MFA_KEY);
+    const outcome = resetOutcome({ found: !!row, fromAddress, sentToAccount, canEmail });
+    const token = outcome === "emailed" ? newToken() : null;
+    await db.batch([
+      // A new link replaces any earlier one still unused.
+      ...(token && row ? [db.prepare("UPDATE password_resets SET expires_at = ? WHERE user_id = ? AND used_at IS NULL AND expires_at > ?").bind(at, row.id, at)] : []),
+      db
+        .prepare("INSERT INTO password_resets (id, created_at, login, user_id, ip, outcome, token_hash, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(newToken().slice(0, 16), at, login.toLowerCase(), row?.id ?? null, ip, outcome, token ? await tokenHash(token) : null, token ? at + RESET_LINK_MINUTES * 60_000 : null),
+      db.prepare("DELETE FROM password_resets WHERE created_at < ?").bind(at - RESET_KEEP_HOURS * 3_600_000),
+    ]);
+    await audit(db, req, { id: row?.id ?? null, name: row?.name ?? login.slice(0, 64) }, "password_reset_requested", row?.id ?? null, {
+      login: login.slice(0, 64),
+      outcome,
+    });
+    if (row && token) {
+      const url = `${env.PUBLIC_URL ?? new URL(req.url).origin}/#/reset-password/${token}`;
+      const mail = securityEmail(
+        "Reset your password",
+        [
+          `Hi ${row.name}, someone (hopefully you) asked to reset the password for your Pulse account, ${row.username}.`,
+          `The link below works once, for the next ${RESET_LINK_MINUTES} minutes. If you didn't ask for this, ignore this email: your password stays as it is.`,
+        ],
+        { label: "Choose a new password", url },
+      );
+      ctx.waitUntil(sendEmail(env, delivery, row.email!, mail.subject, mail.html, mail.text).catch((e) => noteFailure(db, "Email", e)));
+    } else if (row && outcome === "admins_told") {
+      const matrix = await roleMatrix(db);
+      const people = await db.prepare("SELECT id, role FROM users").all<{ id: string; role: Role }>();
+      const alerts: Alert[] = people.results
+        .filter((u) => u.id !== row.id && permissionsFor(u.role, matrix).includes("manage_users"))
+        .map((u) => ({
+          userId: u.id,
+          kind: "account_locked" as const,
+          title: `${row.name} forgot their password`,
+          body: `They asked for a reset at sign-in, but ${row.email ? "email isn't connected yet" : "they have no email address in Pulse"}, so no link could be sent. Confirm it's really them, then give them a temporary password in Settings → People.`,
+          link: "view:users",
+          dedupe: `pwreset:${row.id}:${new Date(at).toISOString().slice(0, 10)}`,
+        }));
+      ctx.waitUntil(raise(env, alerts).catch((e) => noteFailure(db, "Notification", e)));
+    }
+    return json({ ok: true, message: RESET_REPLY });
+  }
+
+  // A reset link: who it's for (so the screen can check "not your name"), while it still works.
+  const resetLink = async (token: unknown) => {
+    const row = await db
+      .prepare(
+        `SELECT pr.id AS reset_id, u.* FROM password_resets pr JOIN users u ON u.id = pr.user_id
+         WHERE pr.token_hash = ? AND pr.used_at IS NULL AND pr.expires_at > ?`,
+      )
+      .bind(await tokenHash(String(token ?? "")), Date.now())
+      .first<UserRow & { reset_id: string }>();
+    if (!row) throw new HttpError(400, "This reset link has expired or has already been used. Ask for a new one from the sign-in page.", "reset_invalid");
+    return row;
+  };
+
+  if (path === "/api/password/reset/check" && method === "POST") {
+    const row = await resetLink((await body<{ token?: string }>(req)).token);
+    return json({ name: row.name, username: row.username });
+  }
+
+  if (path === "/api/password/reset" && method === "POST") {
+    const b = await body<{ token?: string; password?: string }>(req);
+    const row = await resetLink(b.token);
+    const fresh = checkPassword(b.password, row);
+    await checkNotReused(db, row.id, fresh, row.password_hash);
+    const at = Date.now();
+    // The link works once, even if it's submitted twice at the same moment.
+    const claimed = await db.prepare("UPDATE password_resets SET used_at = ? WHERE id = ? AND used_at IS NULL").bind(at, row.reset_id).run();
+    if (!claimed.meta.changes) throw new HttpError(400, "This reset link has already been used.", "reset_invalid");
+    await db.batch([
+      // Proving they hold the email address lifts any sign-in lock. Two-step verification still applies.
+      db.prepare("UPDATE users SET password_hash = ?, must_change_password = 0, locked_until = NULL, locked_at = NULL WHERE id = ?").bind(await hashPassword(fresh), row.id),
+      ...rememberPassword(db, row.id, row.password_hash, new Date(at).toISOString()),
+      db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(row.id),
+      db.prepare("DELETE FROM login_failures WHERE user_id = ?").bind(row.id),
+      db.prepare("UPDATE password_resets SET expires_at = ? WHERE user_id = ? AND used_at IS NULL AND expires_at > ?").bind(at, row.id, at),
+    ]);
+    await audit(db, req, row, "password_reset_by_email", row.id, { name: row.name, ...(isLocked(row, at) ? { unlocked: true } : {}) });
+    const delivery = await readDelivery(db);
+    if (row.email && delivery.resendKey) {
+      const mail = securityEmail("Your password was changed", [
+        `Hi ${row.name}, the password for your Pulse account, ${row.username}, was just changed using a reset link, and every device was signed out.`,
+        "If this was you, there's nothing more to do. If it wasn't, contact your Pulse administrator straight away.",
+      ]);
+      ctx.waitUntil(sendEmail(env, delivery, row.email, mail.subject, mail.html, mail.text).catch((e) => noteFailure(db, "Email", e)));
+    }
     return json({ ok: true });
   }
 
@@ -2711,6 +2831,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       db.prepare("DELETE FROM webauthn_challenges WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM passkeys WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM mfa_help_requests WHERE user_id = ?").bind(userMatch[1]),
+      db.prepare("DELETE FROM password_resets WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM requests WHERE requested_by = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM assignments WHERE user_id = ?").bind(userMatch[1]),
       db.prepare("DELETE FROM notifications WHERE user_id = ?").bind(userMatch[1]),

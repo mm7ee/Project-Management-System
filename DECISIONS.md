@@ -510,3 +510,22 @@ Choices made during the Pulse upgrade that later phases must follow. Newest last
 - **Endpoints:** `GET /api/chat`, `GET /api/chat/unread`, `GET /api/chat/channels`, `POST /api/chat/projects/:id/join`,
   `POST /api/chat/direct`, `POST /api/chat/groups`, `GET`/`PUT /api/chat/:id`, `POST /api/chat/:id/members`,
   `DELETE /api/chat/:id/members/:userId|me`, `GET`/`POST /api/chat/:id/messages`, `PUT`/`DELETE /api/chat/:id/messages/:mid`.
+
+## Self-service password reset (2026-11-24)
+
+- **Flow:** "Forgot your password?" on the sign-in card takes a username or email address (an email counts only when
+  exactly one person has it). Pulse emails a link, `#/reset-password/<token>`, which works once and only for 30
+  minutes. The token sits in the hash, so it never reaches a server log or a Referer header, and the page drops it
+  from the address bar once used. Only its SHA-256 is stored (`password_resets`, migration `0010_password_resets.sql`).
+- **No enumeration:** the reply is the same sentence whether or not the account exists, was emailed or hit a limit,
+  and the email is sent after the reply (`ctx.waitUntil`), so timing doesn't tell either.
+- **No email to send to** (no address on the account, or email not connected in Settings): administrators get a
+  bell notification ("X forgot their password", at most one per person per day) to confirm it's them and issue a
+  temporary password in Settings → People, as before.
+- **Limits:** 5 requests per IP address per 15 minutes, and 3 sends per account per hour; over either, nothing is
+  sent and the reply doesn't change. Requests are kept 24 hours, then removed (retention clean-up).
+- **The new password** follows the usual policy and can't be one of the last 5. Saving it signs out every device,
+  clears any sign-in lock (holding the email proves enough), cancels other unused links, and emails a "your password
+  was changed" notice. It does not sign you in, and two-step verification still applies at the next sign-in.
+- **Activity log:** `password_reset_requested` (with the outcome) and `password_reset_by_email`.
+- **Endpoints (no sign-in):** `POST /api/password/forgot`, `POST /api/password/reset/check`, `POST /api/password/reset`.

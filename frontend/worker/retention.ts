@@ -12,6 +12,7 @@ import {
   SIGNIN_FAILURE_HOURS,
   WEBHOOK_DELIVERY_DAYS,
 } from "../src/data/retention";
+import { RESET_KEEP_HOURS } from "../src/data/passwordReset";
 
 const DAY = 86_400_000;
 
@@ -31,6 +32,7 @@ export async function purgeExpired(db: D1Database, now = Date.now()): Promise<Re
       db.prepare("DELETE FROM mfa_help_requests WHERE status != 'OPEN' AND handled_at < ?").bind(before(MFA_HELP_DAYS)),
     ],
     ["login_failures", db.prepare("DELETE FROM login_failures WHERE at < ?").bind(now - SIGNIN_FAILURE_HOURS * 3_600_000)],
+    ["password_resets", db.prepare("DELETE FROM password_resets WHERE created_at < ?").bind(now - RESET_KEEP_HOURS * 3_600_000)],
     ["automation_runs", db.prepare("DELETE FROM automation_runs WHERE at < ?").bind(before(AUTOMATION_RUN_DAYS))],
     ["webhook_deliveries", db.prepare("DELETE FROM webhook_deliveries WHERE created_at < ?").bind(before(WEBHOOK_DELIVERY_DAYS))],
     ["github_deliveries", db.prepare("DELETE FROM github_deliveries WHERE received_at < ?").bind(before(WEBHOOK_DELIVERY_DAYS))],
