@@ -1,7 +1,10 @@
-import { useState, type ComponentProps } from "react";
+import { useState } from "react";
 import { BarChart3, Gauge, Headset, LayoutDashboard, ListChecks, Printer } from "lucide-react";
 import BiDashboard from "./BiDashboard";
 import type { Feature } from "../../data/features";
+import type { System } from "../../data/systems";
+import type { UpdateRequest, User } from "../../data/roles";
+import type { Blocker, Limits } from "../../data/project";
 import ReportsPage from "./ReportsPage";
 import AgileReports from "./AgileReports";
 import FeatureInsights from "../FeatureInsights";
@@ -28,12 +31,24 @@ const SAVED = "pulse:reports-tab";
  * Reports, in one place: projects, feature requests, delivery (boards and sprints) and the service desk.
  * Managers reach the analysis here instead of the day-to-day pages behind it.
  */
-export default function ReportsHub({
-  workspaces,
-  onOpenFeature,
-  serviceDesk,
-  ...projects
-}: ComponentProps<typeof ReportsPage> & { workspaces: string[]; onOpenFeature: (f: Feature) => void; serviceDesk: boolean }) {
+interface Props {
+  me: User;
+  systems: System[];
+  users: User[];
+  requests: UpdateRequest[];
+  features: Feature[];
+  blockers: Blocker[];
+  limits: Limits;
+  now: number;
+  workspaces: string[];
+  onOpenFeature: (f: Feature) => void;
+  serviceDesk: boolean;
+}
+
+/** A link to #/reports/projects?… opens the Projects tab with its filters. */
+const projectsInHash = () => typeof window !== "undefined" && window.location.hash.startsWith("#/reports/projects");
+
+export default function ReportsHub({ me, workspaces, onOpenFeature, serviceDesk, ...projects }: Props) {
   const tabs: { key: Tab; label: string; icon: typeof BarChart3 }[] = [
     { key: "overview", label: "Overview", icon: LayoutDashboard },
     { key: "projects", label: "Projects", icon: BarChart3 },
@@ -42,6 +57,7 @@ export default function ReportsHub({
     ...(serviceDesk ? [{ key: "service" as const, label: "Service desk", icon: Headset }] : []),
   ];
   const [tab, setTab] = useState<Tab>(() => {
+    if (projectsInHash()) return "projects";
     try {
       const t = localStorage.getItem(SAVED) as Tab | null;
       if (t && tabs.some((x) => x.key === t)) return t;
@@ -52,6 +68,8 @@ export default function ReportsHub({
   });
   const pick = (t: Tab) => {
     setTab(t);
+    // Only the Projects tab keeps its filters in the address.
+    if (t !== "projects" && projectsInHash()) window.history.replaceState(null, "", window.location.pathname + window.location.search);
     try {
       localStorage.setItem(SAVED, t);
     } catch {
@@ -84,7 +102,7 @@ export default function ReportsHub({
           <BiDashboard systems={projects.systems} features={projects.features} blockers={projects.blockers} users={projects.users} workspaces={workspaces} now={projects.now} />
         </div>
       )}
-      {tab === "projects" && <ReportsPage {...projects} />}
+      {tab === "projects" && <ReportsPage me={me} users={projects.users} workspaces={workspaces} now={projects.now} />}
       {tab === "features" && (
         <div className="page">
           <header className="page-head">

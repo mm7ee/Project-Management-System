@@ -27,6 +27,7 @@ import FeaturesPage from "./components/FeaturesPage";
 import FeatureModal from "./components/FeatureModal";
 import { isLate, isOpen, type Feature } from "./data/features";
 import { stalledDays, suggestDevelopers, workloadOf } from "./data/project";
+import { needsAttention } from "./data/projectHealth";
 import RebalanceModal from "./components/Rebalance";
 import { PcnDocument } from "./components/Pcn";
 import ConceptNotesPage from "./components/ConceptNotesPage";
@@ -73,6 +74,7 @@ const itemKeyInHash = () => window.location.hash.match(PROJECT_ROUTE)?.[3] ?? un
 // #/projects/<id>/pcn shows that project's Concept Note as a printable document.
 const pcnInHash = () => /^#\/projects\/[a-z0-9-]+\/pcn$/.test(window.location.hash);
 // #/chat/<id> opens a conversation (links in chat notifications).
+const reportsInHash = () => window.location.hash.startsWith("#/reports");
 const chatInHash = () => window.location.hash.match(/^#\/chat\/([A-Za-z0-9_-]{4,80})$/)?.[1] ?? null;
 
 export default function App() {
@@ -149,7 +151,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
 
   // Sign-in opens the Dashboard, unless someone chose a Projects tab to start on.
   const [signOutJump, setSignOutJump] = useState(0);
-  const [view, setView] = useState<View>(() => (chatInHash() ? "chat" : prefs.start === "DASHBOARD" ? "dashboard" : "projects"));
+  const [view, setView] = useState<View>(() => (chatInHash() ? "chat" : reportsInHash() ? "reports" : prefs.start === "DASHBOARD" ? "dashboard" : "projects"));
   // Chat: the conversation a link asked for, and the unread count beside "Chat" in the sidebar.
   const [chatOpen, setChatOpen] = useState<string | null>(chatInHash);
   const [chatUnread, setChatUnread] = useChatUnread(!data.viewOnly);
@@ -194,6 +196,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
       setShowBoard(boardInHash());
       setProjectTab(tabInHash());
       setItemKey(itemKeyInHash());
+      if (reportsInHash()) setView("reports");
       const chat = chatInHash();
       if (chat) {
         setChatOpen(chat);
@@ -236,7 +239,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
   const openBlockersFor = (id: string) => blockers.filter((b) => b.systemId === id && !b.resolvedAt);
   const isBlocked = (s: System) => openBlockersFor(s.id).length > 0 || stalledDays(s, now, limits) !== null;
   // Needing attention, the same way the Dashboard counts it: blocked, stalled, overdue or at risk.
-  const attention = systems.filter((s) => isBlocked(s) || ["OVERDUE", "AT_RISK"].includes(getSchedule(s, now)));
+  const attention = systems.filter((s) => needsAttention(s, openBlockersFor(s.id).length > 0, now, limits));
   // Why a developer has too much on; empty when they don't.
   const overloaded = (u: User) => (u.role === "developer" ? workloadOf(u, systems, features, limits, now).reasons : []);
   // Admins and managers can add and remove developers, and are told when someone has too much on.
@@ -675,6 +678,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
           />
         ) : view === "reports" && can("reports") ? (
           <ReportsHub
+            me={me}
             workspaces={data.workspaces}
             onOpenFeature={(feature) => setFeatureEdit({ feature })}
             serviceDesk={can("reports") || can("manage_service_desk")}

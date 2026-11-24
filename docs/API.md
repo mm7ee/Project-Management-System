@@ -75,6 +75,39 @@ Errors come back as JSON, `{"error": "…"}`, with a 4xx status:
   - Custom fields are searched by name, in quotes when the name has spaces: `"Customer tier" = Gold`.
 - **`GET /api/search/fields`** returns the fields (built-in and custom), functions and known values.
 
+## Reports: Projects
+
+For people signed in with "Generate reports" (Admin, Manager, Team Leader, Projects Assistant). View-only links
+and API tokens without that permission get `403`. Work items are counted with the caller's access rule, so
+items under a security level they can't see are never counted.
+
+All three take the same filters, any of which can be left out:
+
+| Filter | Values | Default |
+|---|---|---|
+| `from`, `to` | `YYYY-MM-DD` | the last 90 days |
+| `stage` | `NOT_STARTED`, `WIP`, `TESTING`, `TO_DEPLOY`, `LIVE`, `COMPLETED` | all |
+| `schedule` | `ON_TRACK`, `AT_RISK`, `OVERDUE`, `DONE`, `UNSCHEDULED` | all |
+| `rag` | `RED`, `AMBER`, `GREEN`, `NONE` (not rated) | all |
+| `lead` | a user id | all |
+| `workspace` | a workspace name | all |
+
+Values that make no sense are ignored. The screen keeps the same filters in its address:
+`#/reports/projects?from=2026-06-01&rag=RED`.
+
+- **`GET /api/reports/projects/summary`** returns `{ generatedAt, filters, totals, rows, developers }`:
+  - `totals`: projects by stage, schedule and health; average progress; open blockers; open and overdue update
+    requests; needs attention; open and overdue work items; developers over the workload limit.
+  - `rows`: one per project, worst health first, each with its `rag` and the `reasons` for it.
+  - `developers`: everyone assigned to a project in the report, with `overloaded` and its `reasons`.
+- **`GET /api/reports/projects/trends`** returns `{ weeks, throughput }`:
+  - `weeks`: one per Monday in the period, with average progress, items created and resolved, hours logged
+    and the burn-up (`scope`, `done`).
+  - `throughput`: items resolved and hours logged per project.
+- **`GET /api/reports/projects/export.xlsx`** downloads the same report as an Excel workbook, with sheets
+  Summary, Projects, Resourcing, Trends by week, Throughput and Work items (one row per item). Each export is
+  written to the activity log (`report_exported`).
+
 ## Service desk
 
 - **`GET /api/service-desk/queues?queue=…`** returns open requests, most urgent first, each with its two SLA

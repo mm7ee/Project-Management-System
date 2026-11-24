@@ -3247,3 +3247,137 @@ span.backlog-points { border-color: transparent; background: var(--track); }
   .chat-msg-tools .chat-quick { display: none; }
   .chat-pop { left: -8px; }
 }
+
+/* ======================= Reports → Projects (2026-11-25) ======================= */
+/* RAG health: always an icon and a word, never colour alone. */
+.rag-pill {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px var(--sp-2); border-radius: var(--r-pill);
+  font-size: var(--fs-caption); font-weight: 700; white-space: nowrap; border: 1px solid transparent;
+}
+.rag-pill.rag-red { background: var(--danger-tint); color: var(--danger-ink); border-color: color-mix(in srgb, var(--danger) 35%, transparent); }
+.rag-pill.rag-amber { background: var(--warning-tint); color: var(--warning-ink); border-color: color-mix(in srgb, var(--warning) 40%, transparent); }
+.rag-pill.rag-green { background: var(--success-tint); color: var(--success-ink); border-color: color-mix(in srgb, var(--success) 35%, transparent); }
+.rag-pill.rag-none { background: var(--neutral-tint); color: var(--muted); border-color: var(--border); }
+.rag-pill[title] { cursor: help; }
+
+/* Filters: one row of labelled controls */
+.pr-filters { flex-direction: row; flex-wrap: wrap; align-items: flex-end; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-4); }
+.pr-filters label { display: flex; flex-direction: column; gap: 4px; min-width: 130px; flex: 1 1 130px; }
+.pr-filters label span { font-size: var(--fs-caption); font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: var(--muted); }
+.pr-filters input, .pr-filters select {
+  height: 34px; padding: 0 var(--sp-2); border: 1px solid var(--input-line); border-radius: var(--r-sm);
+  background: var(--input-bg); color: var(--text); font-size: var(--fs-small);
+}
+.pr-filters .btn { height: 34px; display: inline-flex; align-items: center; gap: var(--sp-1); }
+
+/* Figures: six tiles */
+.pr-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; margin-bottom: var(--sp-4); }
+.pr-kpis .d-kpi .skel-line:first-child { width: 60%; }
+.pr-kpi-error { grid-column: 1 / -1; }
+
+/* Charts: a 12-column grid */
+.pr-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--sp-4); margin-bottom: var(--sp-4); }
+.pr-grid > .pr-span-4 { grid-column: span 4; }
+.pr-grid > .pr-span-6 { grid-column: span 6; }
+.pr-block { margin-bottom: var(--sp-4); }
+.pr-rag-bar { display: flex; height: 14px; gap: 2px; border-radius: var(--r-pill); overflow: hidden; background: var(--track); margin-bottom: var(--sp-3); }
+.pr-rag-bar span { min-width: 6px; }
+.pr-rag-list { list-style: none; margin: 0 0 var(--sp-3); padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
+.pr-rag-list button {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-2);
+  border: 1px solid var(--border); border-radius: var(--r-md); background: var(--card); cursor: pointer; font: inherit;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.pr-rag-list button:hover, .pr-rag-list button.on { border-color: var(--cyan); }
+.pr-rag-list button.on { box-shadow: inset 0 0 0 1px var(--cyan); }
+.pr-rag-list b { font-size: 20px; font-weight: 800; color: var(--heading); font-variant-numeric: tabular-nums; }
+.pr-donut { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: var(--sp-3); align-items: center; }
+.pr-donut .viz-legend { flex-direction: column; align-items: flex-start; margin: 0; }
+.pr-donut .viz-legend b { margin-left: auto; padding-left: var(--sp-2); color: var(--heading); font-variant-numeric: tabular-nums; }
+.pr-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--sp-2); }
+.pr-bars li { display: grid; grid-template-columns: minmax(90px, 32%) minmax(0, 1fr) 3ch 7ch; align-items: center; gap: var(--sp-2); font-size: var(--fs-small); }
+.pr-bar-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.pr-bar-track { height: 10px; border-radius: var(--r-pill); background: var(--track); overflow: hidden; }
+.pr-bar-track i { display: block; height: 100%; min-width: 2px; border-radius: inherit; background: var(--cat-1); }
+.pr-bars b { text-align: right; color: var(--heading); font-variant-numeric: tabular-nums; }
+.pr-bars small { text-align: right; color: var(--faint); font-variant-numeric: tabular-nums; }
+
+/* The table: sortable headers, a search box, progress with its expected mark */
+.pr-search { display: flex; align-items: center; gap: var(--sp-1); padding: 0 var(--sp-2); height: 32px; border: 1px solid var(--input-line); border-radius: var(--r-sm); background: var(--input-bg); color: var(--muted); }
+.pr-search input { border: 0; outline: 0; background: none; color: var(--text); font-size: var(--fs-small); width: 220px; max-width: 40vw; }
+.pr-table-scroll { max-height: 560px; }
+.pr-table th, .pr-table td { white-space: nowrap; }
+.pr-table th[scope="row"] a { color: var(--heading); font-weight: 700; text-decoration: none; }
+.pr-table th[scope="row"] a:hover { text-decoration: underline; }
+.pr-sort {
+  display: inline-flex; align-items: center; gap: 4px; padding: 0; border: 0; background: none; cursor: pointer;
+  font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit;
+}
+.pr-sort svg { opacity: 0.55; }
+th[aria-sort="ascending"] .pr-sort, th[aria-sort="descending"] .pr-sort { color: var(--heading); }
+th[aria-sort="ascending"] .pr-sort svg, th[aria-sort="descending"] .pr-sort svg { opacity: 1; }
+.pr-progress { position: relative; display: inline-block; width: 64px; height: 6px; margin-right: var(--sp-2); vertical-align: middle; border-radius: var(--r-pill); background: var(--track); }
+.pr-progress i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--cat-1); }
+.pr-progress em { position: absolute; top: -3px; width: 2px; height: 12px; margin-left: -1px; background: var(--heading); border-radius: 1px; }
+
+@media (max-width: 1280px) {
+  .pr-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+  .pr-grid > .pr-span-4 { grid-column: span 6; }
+  .pr-grid > .pr-span-4:nth-child(3) { grid-column: span 12; }
+}
+@media (max-width: 900px) {
+  .pr-grid > .pr-span-4, .pr-grid > .pr-span-6, .pr-grid > .pr-span-4:nth-child(3) { grid-column: span 12; }
+}
+@media (max-width: 700px) {
+  .pr-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .pr-filters label { flex-basis: 45%; }
+  .pr-search input { width: 140px; }
+  .pr-donut { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+}
+@media (max-width: 480px) {
+  .pr-kpis { grid-template-columns: minmax(0, 1fr) !important; }
+  .pr-filters label { flex-basis: 100%; }
+}
+
+/* ---------- PDF (print): cover, light palette on paper, no scroll boxes ---------- */
+.pr-cover, .pr-filter-line { display: none; }
+@media print {
+  body.printing-project-report .project-report {
+    --card: #ffffff; --canvas: #ffffff; --border: #d9deea; --track: #eceff6; --grid: #eef0f6; --input-bg: #fff; --input-line: #d5daea;
+    --text: #121427; --muted: #464b66; --faint: #676c85; --heading: #011f5b; --shadow: none; --e-1: none; --e-2: none; --card-accent: none;
+    --cyan: #0039a6; --cyan-ink: #0039a6; --tint-cyan: #e8edf9;
+    --green: #0e8a6b; --amber: #e09a00; --red: #c8102e;
+    --success: #0e8a6b; --success-ink: #0b6e55; --success-tint: #e7f5f0;
+    --warning: #e09a00; --warning-ink: #7a5600; --warning-tint: #fdf3d8;
+    --danger: #c8102e; --danger-ink: #b00d27; --danger-tint: #fdf0f1;
+    --neutral-tint: #eceff6; --info-tint: #e8edf9; --info-ink: #0039a6;
+    --st-not: #bfc4d6; --st-wip: #0039a6; --st-testing: #5b5fc7; --st-deploy: #c98a00; --st-live: #0e8a6b; --st-done: #2c3280; --st-overdue: #c8102e;
+    --cat-1: #2d63c8; --cat-2: #eba300; --cat-3: #d6336c; --cat-4: #18a0d8; --cat-5: #e36a2a; --cat-6: #7d55d6; --cat-7: #0e9f6e; --cat-8: #c06bd0;
+    color: #121427; background: #fff;
+  }
+  body.printing-project-report .project-report * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body.printing-project-report .project-report .text-shadow, body.printing-project-report .d-kpi-value { text-shadow: none !important; }
+  body.printing-project-report .pr-cover {
+    display: flex; flex-direction: column; justify-content: center; gap: 10px; min-height: 175mm; padding: 0 12mm;
+    break-after: page; border-left: 8px solid #011f5b;
+  }
+  .pr-cover-logo { width: 150px; height: auto; margin-bottom: 18px; }
+  .pr-cover-kicker { margin: 0; font-size: 12pt; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #0039a6; }
+  .pr-cover h1 { margin: 0; font-size: 34pt; font-weight: 800; color: #011f5b; }
+  .pr-cover-period { margin: 0 0 18px; font-size: 16pt; color: #121427; }
+  .pr-cover dl { display: grid; grid-template-columns: 40mm 1fr; gap: 6px 12px; margin: 0; font-size: 11pt; }
+  .pr-cover dt { font-weight: 700; color: #464b66; }
+  .pr-cover dd { margin: 0; color: #121427; }
+  .pr-cover-note { margin-top: 24px; font-size: 9pt; color: #676c85; }
+  body.printing-project-report .pr-filter-line { display: block; margin: 0 0 8px; font-size: 9pt; color: #464b66; }
+  body.printing-project-report .pr-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; }
+  body.printing-project-report .pr-grid > .pr-span-4 { grid-column: span 4; }
+  body.printing-project-report .pr-grid > .pr-span-6 { grid-column: span 6; }
+  body.printing-project-report .project-report .d-card, body.printing-project-report .project-report .d-kpi { break-inside: avoid; box-shadow: none; }
+  body.printing-project-report .pr-table-card { break-before: page; break-inside: auto; }
+  body.printing-project-report .gadget-scroll, body.printing-project-report .pr-table-scroll { max-height: none; overflow: visible; }
+  body.printing-project-report .pr-table thead { display: table-header-group; }
+  body.printing-project-report .pr-table tr { break-inside: avoid; }
+  body.printing-project-report .pr-table th, body.printing-project-report .pr-table td { padding: 4px 6px; font-size: 8.5pt; }
+  body.printing-project-report .pr-sort svg { display: none; }
+}

@@ -5735,6 +5735,267 @@
           }
         },
         {
+          "name": "Projects report: summary",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const r = pm.response.json();",
+                  "pm.test(\"totals by stage, schedule and health\", () => { pm.expect(r.totals.byRag).to.have.all.keys(\"RED\", \"AMBER\", \"GREEN\", \"NONE\"); pm.expect(r.totals.projects).to.eql(r.rows.length); });",
+                  "pm.test(\"worst health first, every row explained\", () => { const rank = { RED: 3, AMBER: 2, GREEN: 1, NONE: 0 }; r.rows.forEach((x, i) => { pm.expect(x.reasons.length).to.be.above(0); if (i) pm.expect(rank[r.rows[i - 1].rag]).to.be.at.least(rank[x.rag]); }); });",
+                  "pm.test(\"totals add up from the rows\", () => pm.expect(r.totals.openItems).to.eql(r.rows.reduce((n, x) => n + x.openItems, 0)));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/projects/summary?from=2020-01-01",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "projects",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Projects report: health filter",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"only off-track projects\", () => pm.response.json().rows.forEach((x) => pm.expect(x.rag).to.eql(\"RED\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/projects/summary?from=2020-01-01&rag=RED",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "projects",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2020-01-01"
+                },
+                {
+                  "key": "rag",
+                  "value": "RED"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Projects report: nonsense filters are ignored",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"filters fall back to their defaults\", () => { const f = pm.response.json().filters; pm.expect(f.stage).to.eql(\"\"); pm.expect(f.rag).to.eql(\"\"); pm.expect(f.from).to.match(/^d{4}-d{2}-d{2}$/); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/projects/summary?stage=NOPE&rag=PURPLE&from=x",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "projects",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "stage",
+                  "value": "NOPE"
+                },
+                {
+                  "key": "rag",
+                  "value": "PURPLE"
+                },
+                {
+                  "key": "from",
+                  "value": "x"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Projects report: trends",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"weeks start on Monday and carry every series\", () => pm.response.json().weeks.forEach((w) => { pm.expect(new Date(w.week + \"T00:00:00Z\").getUTCDay()).to.eql(1); pm.expect(w).to.include.keys(\"created\", \"resolved\", \"hours\", \"scope\", \"done\", \"avgProgress\"); }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/projects/trends?from=2026-06-01",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "projects",
+                "trends"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-06-01"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Projects report: Excel export",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"an .xlsx attachment\", () => { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"spreadsheetml\"); pm.expect(pm.response.headers.get(\"Content-Disposition\")).to.match(/attachment; filename=\"pulse-projects-report-.*.xlsx\"/); });",
+                  "pm.test(\"a ZIP file\", () => pm.expect(pm.response.stream.slice(0, 2).toString()).to.eql(\"PK\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/projects/export.xlsx?from=2026-06-01",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "projects",
+                "export.xlsx"
+              ],
+              "query": [
+                {
+                  "key": "from",
+                  "value": "2026-06-01"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Projects report: refused without 'Generate reports'",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{devToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/reports/projects/summary",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reports",
+                "projects",
+                "summary"
+              ]
+            }
+          }
+        },
+        {
           "name": "Sprints: sprint report",
           "event": [
             {

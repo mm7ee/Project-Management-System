@@ -4,6 +4,7 @@ import { SCHEDULE_META, daysUntil, getSchedule, initials, type Schedule, type Sy
 import type { UpdateRequest, User } from "../data/roles";
 import { isOpen, type Feature } from "../data/features";
 import { isActive, stalledDays, workloadOf, type Blocker, type Limits, type ProjectDocument } from "../data/project";
+import { needsAttention } from "../data/projectHealth";
 import type { Filter } from "./Sidebar";
 import { formatDate, plural, timeAgo } from "../time";
 import CountUp from "./CountUp";
@@ -54,8 +55,8 @@ export default function DashboardPage({ systems, users, features, blockers, docu
   const openBlockers = (s: System) => blockers.filter((b) => b.systemId === s.id && !b.resolvedAt);
   const blockedOrStalled = systems.filter((s) => openBlockers(s).length || stalledDays(s, now, limits) !== null);
   const overdue = systems.filter((s) => getSchedule(s, now) === "OVERDUE");
-  const atRisk = systems.filter((s) => getSchedule(s, now) === "AT_RISK");
-  const attentionIds = new Set([...blockedOrStalled, ...overdue, ...atRisk].map((s) => s.id));
+  // The shared rule (src/data/projectHealth.ts): the same on the executive page and in Reports.
+  const attentionIds = new Set(systems.filter((s) => needsAttention(s, openBlockers(s).length > 0, now, limits)).map((s) => s.id));
   const live = systems.filter((s) => s.status === "LIVE");
   const startedThisYear = systems.filter((s) => inYear(s.startedAt) && new Date(s.startedAt).getTime() <= now).length;
   const deliveredThisYear = systems.filter((s) => inYear(s.finishedAt)).length;

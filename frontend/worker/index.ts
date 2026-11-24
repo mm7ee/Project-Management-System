@@ -64,6 +64,7 @@ import { askServiceDeskLines, portalApi, runSlaChecks, serviceDeskApi } from "./
 import { customFieldsApi } from "./customfields";
 import { adminApi } from "./admin";
 import { chatApi } from "./chat";
+import { projectReportsApi } from "./projectReports";
 import { levelsFor } from "./access";
 
 /** Requests made with a personal API token, and the token's name, for the activity log. */
@@ -1142,7 +1143,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
     emit: guest ? undefined : (e) => ctx.waitUntil(runEvent(env, e).catch((err) => console.error("automation failed", err))),
   };
   const itemsResponse = (await itemsApi(itemCtx, path, method)) ?? (await workflowsApi(itemCtx, path, method)) ?? (await boardsApi(itemCtx, path, method)) ?? (await sprintsApi(itemCtx, path, method)) ?? (await searchApi(itemCtx, env, path, method)) ?? (await automationApi(itemCtx, env, path, method)) ??
-    (await customFieldsApi(itemCtx, path, method)) ?? (await adminApi(itemCtx, path, method)) ?? (await serviceDeskApi(itemCtx, path, method)) ?? (await integrationsApi(itemCtx, env, path, method)) ?? (await chatApi(itemCtx, path, method));
+    (await customFieldsApi(itemCtx, path, method)) ?? (await adminApi(itemCtx, path, method)) ?? (await serviceDeskApi(itemCtx, path, method)) ?? (await integrationsApi(itemCtx, env, path, method)) ?? (await chatApi(itemCtx, path, method)) ?? (await projectReportsApi(itemCtx, path, method));
   if (itemsResponse) return itemsResponse;
 
   /**

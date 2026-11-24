@@ -2,6 +2,7 @@ import { AlertOctagon, BellRing, ChevronRight, Clock, Mail, Wrench } from "lucid
 import { SCHEDULE_META, STATUS_META, daysUntil, getSchedule, initials, type System } from "../data/systems";
 import { formatShort, plural, timeAgo } from "../time";
 import type { User } from "../data/roles";
+import { lastUpdateOf } from "../data/project";
 import CountUp from "./CountUp";
 
 interface Props {
@@ -73,7 +74,7 @@ export function ProgressBar({ value }: { value: number }) {
   );
 }
 
-export const lastUpdate = (s: System) => s.updatedAt ?? s.finishedAt ?? s.startedAt;
+export const lastUpdate = lastUpdateOf;
 
 /** "Updated 2d ago", or "No updates yet" for a project whose start date is still ahead. */
 export function updatedText(s: System, now: number): string {

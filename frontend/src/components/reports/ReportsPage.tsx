@@ -1,176 +1,197 @@
-import { useMemo, useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronRight, ClipboardCopy, Download, FolderKanban, Info, Printer, TrendingDown, TrendingUp } from "lucide-react";
-import { SCHEDULE_META, STATUS_META, getSchedule, type System } from "../../data/systems";
-import type { UpdateRequest, User } from "../../data/roles";
-import { FEATURE_STATUS_META, KIND_META, PRIORITY_META, byUrgency, isLate, isOpen, type Feature } from "../../data/features";
-import { FeatureStatusPill, PriorityBadge } from "../FeatureModal";
-import { isActive, stalledDays, workloadOf, type Blocker, type Limits } from "../../data/project";
-import { formatDate } from "../../time";
-import { lastUpdate } from "../SystemCard";
-import { STAGES, STAGE_COLOR, TooltipLayer, stageOf } from "./chartKit";
-import { Donut, TrendChart } from "./DashCharts";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  AlertOctagon,
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  BarChart3,
+  CheckCircle2,
+  CircleDashed,
+  FileSpreadsheet,
+  FolderKanban,
+  Gauge,
+  Inbox,
+  Link2,
+  LineChart as LineIcon,
+  ListChecks,
+  MailWarning,
+  PieChart,
+  Printer,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
+import { api } from "../../data/api";
+import type { User } from "../../data/roles";
+import { SCHEDULE_META, type Schedule } from "../../data/systems";
+import { RAG_META, RAG_RULES, type Rag } from "../../data/projectHealth";
+import {
+  RAG_KEYS,
+  SCHEDULE_KEYS,
+  STAGE_KEYS,
+  STAGE_LABEL,
+  defaultFilters,
+  describeFilters,
+  filtersToQuery,
+  parseFilters,
+  type ProjectReport,
+  type ProjectReportFilters,
+  type ProjectRow,
+  type ProjectTrends,
+} from "../../data/projectReport";
+import { STAGE_COLOR, TooltipLayer } from "./chartKit";
+import { Columns, Donut } from "./DashCharts";
+import { LineChart } from "./AgileCharts";
 import Panel from "../Panel";
 import CountUp from "../CountUp";
-import { EngagementBars, FeatureStatusBar, PaceChart, PipelineBar, Roadmap, buildBrief, paceOf, type Pace } from "./Charts";
 
 interface Props {
-  systems: System[];
+  me: User;
   users: User[];
-  requests: UpdateRequest[];
-  features: Feature[];
-  blockers: Blocker[];
-  limits: Limits;
+  workspaces: string[];
   now: number;
 }
 
-type Scope = "all" | "active" | "delivered" | "planned";
-const SCOPES: { key: Scope; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "active", label: "In flight" },
-  { key: "delivered", label: "Delivered" },
-  { key: "planned", label: "Not started" },
-];
+const HASH = "#/reports/projects";
+const RAG_ICON: Record<Rag, LucideIcon> = { RED: AlertOctagon, AMBER: AlertTriangle, GREEN: CheckCircle2, NONE: CircleDashed };
+const RAG_COLOR: Record<Rag, string> = { RED: "var(--danger)", AMBER: "var(--warning)", GREEN: "var(--success)", NONE: "var(--st-not)" };
 
-const csvCell = (v: unknown) => {
-  const s = String(v ?? "");
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+/** The filters in the address, so a filtered report can be bookmarked and shared. */
+const readHash = (now: number) => parseFilters(new URLSearchParams(window.location.hash.startsWith(HASH) ? (window.location.hash.split("?")[1] ?? "") : ""), now);
+
+function useLoad<T>(path: string) {
+  const [state, setState] = useState<{ data: T | null; error: string; loading: boolean }>({ data: null, error: "", loading: true });
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    let live = true;
+    setState((s) => ({ ...s, loading: true, error: "" }));
+    api<T>(path)
+      .then((data) => live && setState({ data, error: "", loading: false }))
+      .catch((e) => live && setState((s) => ({ ...s, error: e instanceof Error ? e.message : "Couldn't load the report", loading: false })));
+    return () => {
+      live = false;
+    };
+  }, [path, tick]);
+  return { ...state, retry: () => setTick((t) => t + 1) };
+}
+
+/** Loading, error and empty states for every chart and table, the same way everywhere. */
+function State({ loading, error, empty, onRetry, children, lines = 5 }: { loading: boolean; error: string; empty?: string | false | null; onRetry: () => void; children: ReactNode; lines?: number }) {
+  if (error)
+    return (
+      <div className="gadget-state error" role="alert">
+        <span className="gadget-state-icon" aria-hidden="true">
+          <AlertTriangle size={18} />
+        </span>
+        <p>{error}</p>
+        <button className="btn btn-ghost sm" onClick={onRetry}>
+          <RefreshCw size={13} aria-hidden="true" /> Retry
+        </button>
+      </div>
+    );
+  if (loading)
+    return (
+      <div role="status">
+        <span className="sr-only">Loading…</span>
+        <span className="skel-stack" aria-hidden="true">
+          {Array.from({ length: lines }, (_, i) => (
+            <span key={i} className="skel skel-line" />
+          ))}
+        </span>
+      </div>
+    );
+  if (empty)
+    return (
+      <div className="gadget-state">
+        <span className="gadget-state-icon" aria-hidden="true">
+          <Inbox size={18} />
+        </span>
+        <p>{empty}</p>
+      </div>
+    );
+  return <>{children}</>;
+}
+
+export function RagPill({ rag, reasons }: { rag: Rag; reasons?: string[] }) {
+  const Icon = RAG_ICON[rag];
+  const why = reasons?.length ? reasons.join("; ") : RAG_META[rag].label;
+  return (
+    <span className={`rag-pill rag-${rag.toLowerCase()}`} title={why}>
+      <Icon size={13} aria-hidden="true" />
+      {RAG_META[rag].label}
+      <span className="sr-only">: {why}</span>
+    </span>
+  );
+}
+
+type SortKey = "name" | "stage" | "schedule" | "rag" | "progress" | "lead" | "developers" | "openItems" | "overdueItems" | "openBlockers" | "lastUpdate" | "daysSinceUpdate";
+const COLUMNS: { key: SortKey; label: string; num?: boolean }[] = [
+  { key: "name", label: "Project" },
+  { key: "stage", label: "Stage" },
+  { key: "schedule", label: "Schedule" },
+  { key: "rag", label: "Health" },
+  { key: "progress", label: "Progress", num: true },
+  { key: "lead", label: "Lead" },
+  { key: "developers", label: "Devs", num: true },
+  { key: "openItems", label: "Open items", num: true },
+  { key: "overdueItems", label: "Overdue", num: true },
+  { key: "openBlockers", label: "Blockers", num: true },
+  { key: "lastUpdate", label: "Last update" },
+  { key: "daysSinceUpdate", label: "Days since", num: true },
+];
+const sortValue = (r: ProjectRow, k: SortKey): string | number => {
+  if (k === "rag") return RAG_META[r.rag].rank;
+  if (k === "stage") return STAGE_KEYS.indexOf(r.stage);
+  if (k === "schedule") return SCHEDULE_KEYS.indexOf(r.schedule);
+  const v = r[k];
+  return v === null ? -1 : v;
 };
 
-const TONE_ICON = { good: CheckCircle2, warn: TrendingDown, bad: AlertTriangle, info: Info };
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-export default function ReportsPage({ systems, users, requests, features, blockers, limits, now }: Props) {
-  const [scope, setScope] = useState<Scope>("all");
-  const [lead, setLead] = useState("");
+/** Reports → Projects: how every project is doing, worked out by the Worker (src/data/projectReport.ts). */
+export default function ReportsPage({ me, users, workspaces, now }: Props) {
+  const [filters, setFilters] = useState<ProjectReportFilters>(() => readHash(now));
+  const query = filtersToQuery(filters, now);
+  const summary = useLoad<ProjectReport>(`/reports/projects/summary?${query}`);
+  const trends = useLoad<ProjectTrends>(`/reports/projects/trends?${query}`);
+  const report = summary.data;
+  const [q, setQ] = useState("");
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "rag", dir: -1 });
   const [copied, setCopied] = useState(false);
 
-  // One filter row scopes every chart, the brief and the table.
-  const view = useMemo(
-    () =>
-      systems.filter((s) => {
-        const planned = s.status === "IDEA" || (s.status === "UPCOMING" && new Date(s.startedAt).getTime() > now);
-        const inScope =
-          scope === "all" ||
-          (scope === "delivered" && !!s.finishedAt) ||
-          (scope === "planned" && planned && !s.finishedAt) ||
-          (scope === "active" && !s.finishedAt && !planned);
-        return inScope && (!lead || s.lead === lead);
-      }),
-    [systems, scope, lead, now],
-  );
-  const ids = new Set(view.map((s) => s.id));
-  const viewRequests = requests.filter((r) => ids.has(r.systemId));
-  const viewFeatures = features.filter((f) => ids.has(f.systemId));
-  const openFeatures = viewFeatures.filter(isOpen).sort(byUrgency);
-  const lateFeatures = openFeatures.filter((f) => isLate(f, now)).length;
-  const cancelled = viewFeatures.filter((f) => f.status === "CANCELLED").length;
-  const unassigned = openFeatures.filter((f) => !f.assignee).length;
-  // One row per developer on a system in scope or with a request in scope, busiest first.
-  // The overload flag counts all their work, not just what this filter shows.
-  const workload = users
-    .filter((u) => u.role === "developer" && (viewFeatures.some((f) => f.assignee === u.id) || u.projectIds?.some((id) => ids.has(id))))
-    .map((u) => {
-      const mine = viewFeatures.filter((f) => f.assignee === u.id);
-      const open = mine.filter(isOpen);
-      return {
-        user: u,
-        load: workloadOf(u, systems, features, limits, now),
-        open: open.length,
-        critical: open.filter((f) => f.priority === "CRITICAL").length,
-        high: open.filter((f) => f.priority === "HIGH").length,
-        late: open.filter((f) => isLate(f, now)).length,
-        completed: mine.filter((f) => f.status === "COMPLETED").length,
-        next: open.map((f) => f.dueAt).filter((d): d is string => !!d).sort()[0],
-      };
-    })
-    .sort((a, b) => Number(b.load.overloaded) - Number(a.load.overloaded) || b.load.projects - a.load.projects || b.open - a.open);
-  // Systems that are blocked or have stopped moving.
-  const stuck = view
-    .map((s) => ({
-      system: s,
-      open: blockers.filter((b) => b.systemId === s.id && !b.resolvedAt),
-      stalled: stalledDays(s, now, limits),
-    }))
-    .filter((x) => x.open.length || x.stalled !== null)
-    .sort((a, b) => b.open.length - a.open.length || (b.stalled ?? 0) - (a.stalled ?? 0));
-  const brief = buildBrief(view, users, viewRequests.length, now);
+  // The address follows the filters (without adding history entries, so Back leaves Reports).
+  useEffect(() => {
+    const next = `${HASH}${query ? `?${query}` : ""}`;
+    if (window.location.hash !== next) window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${next}`);
+  }, [query]);
+  useEffect(() => {
+    const onHash = () => window.location.hash.startsWith(HASH) && setFilters(readHash(Date.now()));
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
-  // ---- figure cards ----
-  const inFlight = view.filter((s) => isActive(s, now));
-  const avgInFlight = inFlight.length ? Math.round(inFlight.reduce((n, s) => n + s.progress, 0) / inFlight.length) : 0;
-  const attention = new Set([
-    ...view.filter((s) => ["AT_RISK", "OVERDUE"].includes(getSchedule(s, now))).map((s) => s.id),
-    ...stuck.map((x) => x.system.id),
-  ]).size;
-  const kpis = [
-    { label: "Systems in report", value: view.length, delta: `${systems.length} in the portfolio`, good: true, icon: FolderKanban, tone: "cyan" },
-    { label: "Delivered", value: brief.delivered, delta: `${view.length ? Math.round((brief.delivered / view.length) * 100) : 0}% of this report`, good: true, icon: CheckCircle2, tone: "green" },
-    {
-      label: "In flight",
-      value: brief.active,
-      delta: inFlight.length ? `${avgInFlight}% average progress` : "None in this report",
-      good: !inFlight.length || avgInFlight >= 50,
-      icon: TrendingUp,
-      tone: "violet",
-    },
-    {
-      label: "Need attention",
-      value: attention,
-      delta: attention ? `${stuck.length} blocked or stalled · ${openFeatures.length} open requests` : "Nothing at risk, overdue or stuck",
-      good: !attention,
-      icon: AlertTriangle,
-      tone: "red",
-    },
-  ];
+  const set = <K extends keyof ProjectReportFilters>(k: K, v: ProjectReportFilters[K]) => setFilters((f) => ({ ...f, [k]: v }));
+  const nameOf = useCallback((id: string) => users.find((u) => u.id === id)?.name ?? id, [users]);
+  const leads = useMemo(() => users.filter((u) => ["admin", "manager", "team_lead", "developer", "assistant"].includes(u.role)).sort((a, b) => a.name.localeCompare(b.name)), [users]);
+  const filterWords = describeFilters(filters, nameOf);
+  const generated = report ? new Date(report.generatedAt).toLocaleString("en-GB", { dateStyle: "long", timeStyle: "short" }) : "";
+  const isDefault = filtersToQuery(filters, now) === filtersToQuery(defaultFilters(now), now);
 
-  // ---- monthly trend ----
-  const [range, setRange] = useState<"year" | "12m">("12m");
-  const year = new Date(now).getFullYear();
-  const buckets =
-    range === "year"
-      ? MONTHS.map((m, i) => ({ label: m, y: year, m: i }))
-      : Array.from({ length: 12 }, (_, k) => {
-          const d = new Date(now);
-          d.setDate(1);
-          d.setMonth(d.getMonth() - 11 + k);
-          return { label: MONTHS[d.getMonth()], y: d.getFullYear(), m: d.getMonth() };
-        });
-  const countIn = (dates: (string | undefined)[]) =>
-    buckets.map((b) =>
-      dates.filter((iso) => {
-        if (!iso) return false;
-        const d = new Date(iso);
-        return d.getFullYear() === b.y && d.getMonth() === b.m && d.getTime() <= now;
-      }).length,
-    );
-  const trend = [
-    { key: "started", label: "Projects started", color: "var(--st-wip)", values: countIn(view.map((s) => s.startedAt)) },
-    { key: "delivered", label: "Projects delivered", color: "var(--st-live)", values: countIn(view.map((s) => s.finishedAt)) },
-    { key: "requests", label: "Client requests", color: "var(--st-deploy)", values: countIn(viewFeatures.map((f) => f.createdAt)) },
-  ];
+  const rows = useMemo(() => {
+    const words = q.trim().toLowerCase();
+    const list = (report?.rows ?? []).filter((r) => !words || `${r.name} ${r.lead} ${r.workspace}`.toLowerCase().includes(words));
+    return [...list].sort((a, b) => {
+      const x = sortValue(a, sort.key);
+      const y = sortValue(b, sort.key);
+      return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y))) * sort.dir || a.name.localeCompare(b.name);
+    });
+  }, [report, q, sort]);
 
-  // ---- projects by stage ----
-  const stageRows = STAGES.map((st) => {
-    const items = view.filter((s) => stageOf(s.status) === st.key);
-    return {
-      key: st.key,
-      label: st.label,
-      color: STAGE_COLOR[st.key],
-      value: items.length,
-      avg: items.length ? Math.round(items.reduce((n, s) => n + s.progress, 0) / items.length) : 0,
-    };
-  });
-  const paces = view.map((s) => paceOf(s, now)).filter((p): p is Pace => !!p);
-  const leads = users.filter((u) => systems.some((s) => s.lead === u.id));
-  const userName = (id?: string) => users.find((u) => u.id === id)?.name ?? "";
-  const devs = (id: string) => users.filter((u) => u.role === "developer" && u.projectIds?.includes(id)).map((u) => u.name);
-  const generated = new Date(now).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
-  const scopeText = `${SCOPES.find((s) => s.key === scope)!.label}${lead ? ` · lead: ${userName(lead)}` : ""}`;
-
-  const copyBrief = async () => {
-    const text = [`Pulse brief (${generated}, ${scopeText})`, ...brief.lines.map((l) => `• ${l.text}`)].join("\n");
+  const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(text);
+      await navigator.clipboard.writeText(window.location.href);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -178,414 +199,410 @@ export default function ReportsPage({ systems, users, requests, features, blocke
     }
   };
 
-  const downloadCsv = () => {
-    const header = ["System", "Status", "Progress %", "Expected % by today", "Schedule", "Started", "Due", "Delivered", "Project lead", "Developers", "Last update", "Visits (30 days)", "Open update requests"];
-    const lines = view.map((s) => {
-      const pace = paceOf(s, now);
-      return [
-        s.name,
-        STATUS_META[s.status].label,
-        s.progress,
-        pace?.expected ?? "",
-        SCHEDULE_META[getSchedule(s, now)].label,
-        s.startedAt.slice(0, 10),
-        s.dueAt?.slice(0, 10) ?? "",
-        s.finishedAt?.slice(0, 10) ?? "",
-        userName(s.lead),
-        devs(s.id).join(", "),
-        lastUpdate(s).slice(0, 10),
-        s.engagement,
-        viewRequests.filter((r) => r.systemId === s.id).length,
-      ]
-        .map(csvCell)
-        .join(",");
-    });
-    const blob = new Blob([[header.join(","), ...lines].join("\r\n")], { type: "text/csv;charset=utf-8" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `pulse-report-${new Date(now).toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+  const printPdf = () => {
+    // A4 landscape, page numbers in the footer; only for this print.
+    const style = document.createElement("style");
+    style.textContent = `@page { size: A4 landscape; margin: 12mm 12mm 16mm; @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9pt Inter, sans-serif; color: #464b66; } @bottom-left { content: "Omni Contact · Pulse · Projects report"; font: 9pt Inter, sans-serif; color: #464b66; } }`;
+    document.head.appendChild(style);
+    document.body.classList.add("printing-project-report");
+    const done = () => {
+      style.remove();
+      document.body.classList.remove("printing-project-report");
+      window.removeEventListener("afterprint", done);
+    };
+    window.addEventListener("afterprint", done);
+    window.print();
   };
 
-  const downloadFeaturesCsv = () => {
-    const header = ["Feature", "Type", "Project", "Requested by", "Priority", "Status", "Developer", "Expected delivery", "Delivered", "Past due", "Developer notes", "Logged"];
-    const lines = [...viewFeatures]
-      .sort((a, b) => Number(!isOpen(a)) - Number(!isOpen(b)) || byUrgency(a, b))
-      .map((f) =>
-        [
-          f.title,
-          KIND_META[f.kind],
-          systems.find((s) => s.id === f.systemId)?.name ?? "",
-          f.client,
-          PRIORITY_META[f.priority].label,
-          FEATURE_STATUS_META[f.status].label,
-          userName(f.assignee),
-          f.dueAt ?? "",
-          f.completedAt?.slice(0, 10) ?? "",
-          isLate(f, now) ? "Yes" : "",
-          f.notes ?? "",
-          f.createdAt.slice(0, 10),
-        ]
-          .map(csvCell)
-          .join(","),
-      );
-    const blob = new Blob([[header.join(","), ...lines].join("\r\n")], { type: "text/csv;charset=utf-8" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `pulse-feature-requests-${new Date(now).toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
+  const t = report?.totals;
+  const kpis: { label: string; value: number; suffix?: string; note: string; icon: LucideIcon; tone: string; trend: "up" | "down" | "flat" }[] = t
+    ? [
+        { label: "Projects", value: t.projects, note: `${t.portfolio} in the portfolio · ${t.needsAttention} need attention`, icon: FolderKanban, tone: "cyan", trend: "flat" },
+        { label: "Off track", value: t.byRag.RED, note: `${t.byRag.AMBER} at risk · ${t.byRag.GREEN} on track`, icon: AlertOctagon, tone: "red", trend: t.byRag.RED ? "down" : "up" },
+        { label: "Average progress", value: t.averageProgress, suffix: "%", note: `Across ${t.byRag.RED + t.byRag.AMBER + t.byRag.GREEN} projects being built`, icon: Gauge, tone: "green", trend: "flat" },
+        { label: "Open blockers", value: t.openBlockers, note: `${t.overdueItems} of ${t.openItems} open work items overdue`, icon: AlertTriangle, tone: "amber", trend: t.openBlockers ? "down" : "up" },
+        { label: "Overdue update requests", value: t.overdueRequests, note: `${t.openRequests} open · overdue after ${RAG_RULES.requestOverdueWorkingDays} working days`, icon: MailWarning, tone: "violet", trend: t.overdueRequests ? "down" : "up" },
+        { label: "Over the workload limit", value: t.overloadedDevelopers, note: `${report!.developers.length} developers on these projects`, icon: Users, tone: "cyan", trend: t.overloadedDevelopers ? "down" : "up" },
+      ]
+    : [];
+  const TREND_ICON = { up: CheckCircle2, down: AlertTriangle, flat: ListChecks };
+
+  const weekLabels = (trends.data?.weeks ?? []).map((w) => new Date(`${w.week}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }));
+  const noItems = !!trends.data && trends.data.weeks.every((w) => !w.created && !w.resolved && !w.scope);
 
   return (
     <TooltipLayer>
-      <div className="page report d-style">
-        <header className="d-pagehead">
+      <div className="page report d-style project-report">
+        {/* Printed first: the cover. */}
+        <section className="pr-cover" aria-hidden="true">
+          <img src="/omni-logo.png" alt="" className="pr-cover-logo" />
+          <p className="pr-cover-kicker">Pulse · Omni Contact</p>
+          <h1>Projects report</h1>
+          <p className="pr-cover-period">
+            {filters.from} to {filters.to}
+          </p>
+          <dl>
+            <dt>Filters</dt>
+            <dd>{filterWords.slice(1).join(" · ") || "None: the whole portfolio"}</dd>
+            <dt>Generated by</dt>
+            <dd>{me.name}</dd>
+            <dt>Generated at</dt>
+            <dd>{generated}</dd>
+          </dl>
+          <p className="pr-cover-note">Health (RAG) follows the rule in DECISIONS.md. Figures count only the work items {me.name.split(" ")[0]} may see.</p>
+        </section>
+
+        <header className="dash-head no-print">
           <div>
             <h2>Projects report</h2>
-            <p className="d-sub">
-              Generated {generated} · {scopeText}
-            </p>
+            <p>How every project is doing: health, progress, blockers and who's on them. {generated && `Generated ${generated}.`}</p>
           </div>
-          <nav aria-label="Breadcrumb" className="d-crumbs">
-            Pulse <ChevronRight size={14} /> <b>Reports</b>
-          </nav>
+          <div className="dash-actions">
+            <button className="btn btn-ghost sm" onClick={copyLink} title="Copy a link to this report with its filters">
+              <Link2 size={14} aria-hidden="true" /> {copied ? "Link copied" : "Copy link"}
+            </button>
+            <a className="btn btn-ghost sm" href={`/api/reports/projects/export.xlsx?${query}`} download>
+              <FileSpreadsheet size={14} aria-hidden="true" /> Excel
+            </a>
+            <button className="btn btn-navy sm" onClick={printPdf} disabled={!report} title="Opens the print dialog: choose Save as PDF">
+              <Printer size={14} aria-hidden="true" /> PDF
+            </button>
+          </div>
         </header>
 
-        <section className="d-card d-toolbar no-print" role="group" aria-label="Report filters">
-          <div className="seg" role="radiogroup" aria-label="Scope">
-            {SCOPES.map((s) => (
-              <button key={s.key} role="radio" aria-checked={scope === s.key} className={scope === s.key ? "on" : ""} onClick={() => setScope(s.key)}>
-                {s.label}
-              </button>
-            ))}
-          </div>
-          <select className="d-select" value={lead} onChange={(e) => setLead(e.target.value)} aria-label="Project lead">
-            <option value="">All leads</option>
-            {leads.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
-            ))}
-          </select>
-          <span className="viz-count">
-            {view.length} of {systems.length} systems
-          </span>
-          <div className="page-actions d-toolbar-actions">
-            <button className="btn btn-ghost sm" onClick={copyBrief}>
-              <ClipboardCopy size={15} /> {copied ? "Copied" : "Copy brief"}
-            </button>
-            <button className="btn btn-ghost sm" onClick={downloadCsv}>
-              <Download size={15} /> Systems CSV
-            </button>
-            {viewFeatures.length > 0 && (
-              <button className="btn btn-ghost sm" onClick={downloadFeaturesCsv}>
-                <Download size={15} /> Requests CSV
-              </button>
-            )}
-            <button className="btn btn-navy sm" onClick={() => window.print()}>
-              <Printer size={15} /> Print / PDF
-            </button>
-          </div>
-        </section>
-
-        <section className="d-kpis d-kpis-report" aria-label="Key figures">
-          {kpis.map((k) => (
-            <div key={k.label} className="d-kpi static">
-              <span className="d-kpi-label">{k.label}</span>
-              <span className="d-kpi-value">
-                <CountUp value={k.value} />
-              </span>
-              <span className={`d-kpi-delta ${k.good ? "up" : "down"}`}>{k.delta}</span>
-              <span className={`d-kpi-icon tone-${k.tone}`}>
-                <k.icon size={18} />
-              </span>
-            </div>
-          ))}
-        </section>
-
-        <div className="d-top">
-          <div className="d-top-main">
-            <Panel
-              title="Project activity"
-              action={
-                <select className="d-select no-print" value={range} onChange={(e) => setRange(e.target.value as "year" | "12m")} aria-label="Period">
-                  <option value="year">This year</option>
-                  <option value="12m">Last 12 months</option>
-                </select>
-              }
-            >
-              <div className="d-trend-totals">
-                {trend.map((s) => (
-                  <span key={s.key}>
-                    <i style={{ background: s.color }} />
-                    <b>{s.values.reduce((n, x) => n + x, 0)}</b> {s.label.toLowerCase()}
-                  </span>
-                ))}
-              </div>
-              <TrendChart months={buckets.map((b) => b.label)} series={trend} legend={false} />
-            </Panel>
-            <Panel title="Summary" action={<span className="d-hint">for this report's systems</span>}>
-              <ul className="brief-lines">
-                {brief.lines.map((l, i) => {
-                  const Icon = TONE_ICON[l.tone];
-                  return (
-                    <li key={i} className={`tone-${l.tone}`}>
-                      <Icon size={17} aria-hidden="true" />
-                      <span>{l.text}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </Panel>
-          </div>
-          <Panel title="Projects by stage" className="d-side">
-            <div className="d-donut-wrap">
-              <Donut slices={stageRows} centre="in report" />
-            </div>
-            <ul className="viz-legend d-donut-legend">
-              {stageRows.map((r) => (
-                <li key={r.key}>
-                  <i className="viz-key rect" style={{ background: r.color }} />
-                  {r.label}
-                </li>
+        <section className="d-card pr-filters no-print" role="group" aria-label="Report filters">
+          <label>
+            <span>From</span>
+            <input type="date" value={filters.from} max={filters.to} onChange={(e) => e.target.value && set("from", e.target.value)} />
+          </label>
+          <label>
+            <span>To</span>
+            <input type="date" value={filters.to} min={filters.from} onChange={(e) => e.target.value && set("to", e.target.value)} />
+          </label>
+          <label>
+            <span>Stage</span>
+            <select value={filters.stage} onChange={(e) => set("stage", e.target.value as ProjectReportFilters["stage"])}>
+              <option value="">All stages</option>
+              {STAGE_KEYS.map((k) => (
+                <option key={k} value={k}>
+                  {STAGE_LABEL[k]}
+                </option>
               ))}
-            </ul>
-            <p className="d-range">
-              {scopeText} · {formatDate(new Date(now).toISOString())}
-            </p>
-            <table className="d-table">
-              <thead>
-                <tr>
-                  <th>Stage</th>
-                  <th>Projects</th>
-                  <th>Share</th>
-                  <th>Avg %</th>
-                </tr>
-              </thead>
-              <tbody>
-                {stageRows.map((r) => (
-                  <tr key={r.key}>
-                    <td>{r.label}</td>
-                    <td>{r.value}</td>
-                    <td>{view.length ? Math.round((r.value / view.length) * 100) : 0}%</td>
-                    <td>{r.value ? `${r.avg}%` : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Panel>
-        </div>
+            </select>
+          </label>
+          <label>
+            <span>Schedule</span>
+            <select value={filters.schedule} onChange={(e) => set("schedule", e.target.value as Schedule | "")}>
+              <option value="">Any schedule</option>
+              {SCHEDULE_KEYS.map((k) => (
+                <option key={k} value={k}>
+                  {SCHEDULE_META[k].label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Health</span>
+            <select value={filters.rag} onChange={(e) => set("rag", e.target.value as Rag | "")}>
+              <option value="">Any health</option>
+              {RAG_KEYS.map((k) => (
+                <option key={k} value={k}>
+                  {RAG_META[k].label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Lead</span>
+            <select value={filters.lead} onChange={(e) => set("lead", e.target.value)}>
+              <option value="">Any lead</option>
+              {leads.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Workspace</span>
+            <select value={filters.workspace} onChange={(e) => set("workspace", e.target.value)}>
+              <option value="">All workspaces</option>
+              {workspaces.map((w) => (
+                <option key={w} value={w}>
+                  {w}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="btn btn-ghost sm" onClick={() => setFilters(defaultFilters(now))} disabled={isDefault}>
+            <RotateCcw size={13} aria-hidden="true" /> Reset
+          </button>
+        </section>
+        <p className="pr-filter-line">{filterWords.join(" · ")}</p>
 
-        <Panel title="Blocked & stalled">
-          <p className="viz-sub">
-            Systems with an open blocker, or still being built with no progress update for {limits.stallDays}+ days.
-          </p>
-          {stuck.length ? (
-            <div className="table-wrap flat">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>System</th>
-                    <th>Blocker</th>
-                    <th>Raised</th>
-                    <th>Last progress update</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {stuck.map(({ system, open, stalled }) => (
-                    <tr key={system.id}>
-                      <td>
-                        <b>{system.name}</b>
-                      </td>
-                      <td className="notes-cell">
-                        {open.length ? open.map((b) => <div key={b.id}>{b.text}</div>) : <i className="muted">None recorded</i>}
-                      </td>
-                      <td>{open.length ? open.map((b) => <div key={b.id}>{formatDate(b.raisedAt)} · {userName(b.raisedBy)}</div>) : "—"}</td>
-                      <td className={stalled !== null ? "text-red" : ""}>
-                        {formatDate(lastUpdate(system))}
-                        {stalled !== null && ` (${stalled} days ago)`}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {/* 1. Figures */}
+        <section className="d-kpis pr-kpis" aria-label="Key figures" aria-busy={summary.loading}>
+          {summary.error ? (
+            <div className="d-card pr-kpi-error">
+              <State loading={false} error={summary.error} onRetry={summary.retry}>
+                {null}
+              </State>
             </div>
+          ) : !t ? (
+            Array.from({ length: 6 }, (_, i) => (
+              <div key={i} className="d-kpi static" aria-hidden="true">
+                <span className="skel skel-line" />
+                <span className="skel skel-line" />
+              </div>
+            ))
           ) : (
-            <p className="lead-none">Nothing is blocked or stalled.</p>
+            kpis.map((k) => {
+              const Trend = TREND_ICON[k.trend];
+              return (
+                <div key={k.label} className="d-kpi static">
+                  <span className="d-kpi-label">{k.label}</span>
+                  <span className="d-kpi-value">
+                    <CountUp value={k.value} />
+                    {k.suffix}
+                  </span>
+                  <span className={`d-kpi-delta ${k.trend}`}>
+                    <Trend size={13} aria-hidden="true" />
+                    {k.note}
+                  </span>
+                  <span className={`d-kpi-icon tone-${k.tone}`} aria-hidden="true">
+                    <k.icon size={18} />
+                  </span>
+                </div>
+              );
+            })
           )}
-        </Panel>
+        </section>
 
-        <Panel title="Pipeline">
-          <p className="viz-sub">Where every system sits in its lifecycle.</p>
-          <PipelineBar systems={view} />
-        </Panel>
-
-        <Panel title="Delivery roadmap">
-          <p className="viz-sub">
-            Solid bars show time spent so far (or start to delivery); pale bars show the time left until the due date.
-          </p>
-          <Roadmap systems={view} now={now} />
-        </Panel>
-
-        <div className="dash-pair d-pair">
-          <Panel title="Pace check">
-            <p className="viz-sub">Progress against the share of planned time already used. Behind-pace projects are listed first.</p>
-            <PaceChart paces={paces} now={now} />
+        {/* 2. Charts */}
+        <div className="pr-grid">
+          <Panel title="Health" icon={AlertOctagon} className="pr-span-4">
+            <State loading={summary.loading && !report} error={summary.error} onRetry={summary.retry} empty={report && !report.rows.length && "No projects match these filters."}>
+              {report && (
+                <>
+                  <div className="pr-rag-bar" role="img" aria-label={RAG_KEYS.map((k) => `${RAG_META[k].label}: ${report.totals.byRag[k]}`).join(", ")}>
+                    {RAG_KEYS.filter((k) => report.totals.byRag[k]).map((k) => (
+                      <span key={k} style={{ flexGrow: report.totals.byRag[k], background: RAG_COLOR[k] }} title={`${RAG_META[k].label}: ${report.totals.byRag[k]}`} />
+                    ))}
+                  </div>
+                  <ul className="pr-rag-list">
+                    {RAG_KEYS.map((k) => (
+                      <li key={k}>
+                        <button className={filters.rag === k ? "on" : ""} onClick={() => set("rag", filters.rag === k ? "" : k)} aria-pressed={filters.rag === k} title={`Show only "${RAG_META[k].label}"`}>
+                          <RagPill rag={k} />
+                          <b>{report.totals.byRag[k]}</b>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="d-hint">Off track and at risk are worked out from due dates, blockers, updates, pace and overdue work. Hover a project's health in the table for its reasons.</p>
+                </>
+              )}
+            </State>
           </Panel>
-          <Panel title="Engagement">
-            <p className="viz-sub">Visits in the last 30 days.</p>
-            <EngagementBars systems={view} />
+
+          <Panel title="By stage" icon={PieChart} className="pr-span-4">
+            <State loading={summary.loading && !report} error={summary.error} onRetry={summary.retry} empty={report && !report.rows.length && "No projects match these filters."}>
+              {report && (
+                <div className="pr-donut">
+                  <Donut slices={STAGE_KEYS.map((k) => ({ key: k, label: STAGE_LABEL[k], color: STAGE_COLOR[k], value: report.totals.byStage[k] }))} centre="projects" />
+                  <ul className="viz-legend">
+                    {STAGE_KEYS.filter((k) => report.totals.byStage[k]).map((k) => (
+                      <li key={k}>
+                        <i className="viz-key rect" style={{ background: STAGE_COLOR[k] }} />
+                        {STAGE_LABEL[k]} <b>{report.totals.byStage[k]}</b>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </State>
+          </Panel>
+
+          <Panel title="By schedule" icon={BarChart3} className="pr-span-4">
+            <State loading={summary.loading && !report} error={summary.error} onRetry={summary.retry} empty={report && !report.rows.length && "No projects match these filters."}>
+              {report && <Columns bars={SCHEDULE_KEYS.map((k) => ({ key: k, label: SCHEDULE_META[k].label, color: `var(--st-${{ ON_TRACK: "live", AT_RISK: "deploy", OVERDUE: "overdue", DONE: "done", UNSCHEDULED: "not" }[k]})`, value: report.totals.bySchedule[k] }))} />}
+            </State>
+          </Panel>
+
+          <Panel title="Progress over time" icon={LineIcon} className="pr-span-6" action={<span className="d-hint">average of projects under way, weekly</span>}>
+            <State loading={trends.loading && !trends.data} error={trends.error} onRetry={trends.retry} empty={trends.data && trends.data.weeks.every((w) => w.avgProgress === null) && "No projects were under way in this period."}>
+              {trends.data && <LineChart labels={weekLabels} series={[{ key: "p", label: "Average progress", color: "var(--cat-1)", values: trends.data.weeks.map((w) => w.avgProgress) }]} unit="%" />}
+            </State>
+          </Panel>
+
+          <Panel title="Work items created vs resolved" icon={ListChecks} className="pr-span-6" action={<span className="d-hint">weekly, items you can see</span>}>
+            <State loading={trends.loading && !trends.data} error={trends.error} onRetry={trends.retry} empty={noItems && "These projects have no work items in this period."}>
+              {trends.data && (
+                <LineChart
+                  labels={weekLabels}
+                  series={[
+                    { key: "c", label: "Created", color: "var(--cat-1)", values: trends.data.weeks.map((w) => w.created) },
+                    { key: "r", label: "Resolved", color: "var(--cat-2)", values: trends.data.weeks.map((w) => w.resolved) },
+                  ]}
+                  unit=" items"
+                />
+              )}
+            </State>
+          </Panel>
+
+          <Panel title="Burn-up" icon={LineIcon} className="pr-span-6" action={<span className="d-hint">all items vs done, cumulative</span>}>
+            <State loading={trends.loading && !trends.data} error={trends.error} onRetry={trends.retry} empty={noItems && "These projects have no work items in this period."}>
+              {trends.data && (
+                <LineChart
+                  labels={weekLabels}
+                  series={[
+                    { key: "s", label: "All items", color: "var(--cat-4)", values: trends.data.weeks.map((w) => w.scope) },
+                    { key: "d", label: "Done", color: "var(--cat-7)", values: trends.data.weeks.map((w) => w.done) },
+                  ]}
+                  unit=" items"
+                />
+              )}
+            </State>
+          </Panel>
+
+          <Panel title="Throughput by project" icon={BarChart3} className="pr-span-6" action={<span className="d-hint">items resolved and hours logged in the period</span>}>
+            <State loading={trends.loading && !trends.data} error={trends.error} onRetry={trends.retry} empty={trends.data && !trends.data.throughput.length && "Nothing was resolved or logged in this period."}>
+              {trends.data && (
+                <ul className="pr-bars">
+                  {trends.data.throughput.slice(0, 10).map((x) => {
+                    const max = Math.max(...trends.data!.throughput.map((y) => y.resolved), 1);
+                    return (
+                      <li key={x.id} title={`${x.name}: ${x.resolved} resolved, ${x.hours} hours logged`}>
+                        <span className="pr-bar-name">{x.name}</span>
+                        <span className="pr-bar-track">
+                          <i style={{ width: `${(x.resolved / max) * 100}%` }} />
+                        </span>
+                        <b>{x.resolved}</b>
+                        <small>{x.hours} h</small>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </State>
           </Panel>
         </div>
 
-        <Panel title="Data table">
-          <div className="table-wrap flat">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>System</th>
-                  <th>Status</th>
-                  <th>Progress</th>
-                  <th>Expected by today</th>
-                  <th>Schedule</th>
-                  <th>Due / delivered</th>
-                  <th>Lead</th>
-                  <th>Last update</th>
-                  <th>Visits</th>
-                </tr>
-              </thead>
-              <tbody>
-                {view.map((s) => {
-                  const schedule = getSchedule(s, now);
-                  const n = viewRequests.filter((r) => r.systemId === s.id).length;
-                  return (
-                    <tr key={s.id}>
+        {/* 3. Resourcing */}
+        <Panel title="Resourcing" icon={Users} className="pr-block" action={<span className="d-hint">developers on these projects; the limit counts all their projects</span>}>
+          <State loading={summary.loading && !report} error={summary.error} onRetry={summary.retry} empty={report && !report.developers.length && "No developers are assigned to these projects."}>
+            {report && (
+              <div className="gadget-scroll">
+                <table className="gadget-table">
+                  <caption className="sr-only">Developer allocation across the projects in this report</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col">Developer</th>
+                      <th scope="col" className="num">
+                        Projects
+                      </th>
+                      <th scope="col" className="num">
+                        Open requests
+                      </th>
+                      <th scope="col">Workload</th>
+                      <th scope="col">On these projects</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.developers.map((d) => (
+                      <tr key={d.id}>
+                        <th scope="row">{d.name}</th>
+                        <td className="num">{d.projects}</td>
+                        <td className="num">{d.openFeatures}</td>
+                        <td>
+                          {d.overloaded ? (
+                            <span className="rag-pill rag-red" title={d.reasons.join("; ")}>
+                              <AlertOctagon size={13} aria-hidden="true" /> Over the limit<span className="sr-only">: {d.reasons.join("; ")}</span>
+                            </span>
+                          ) : (
+                            <span className="rag-pill rag-green">
+                              <CheckCircle2 size={13} aria-hidden="true" /> Within limit
+                            </span>
+                          )}
+                        </td>
+                        <td>{d.projectsInReport.join(", ")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </State>
+        </Panel>
+
+        {/* 4. The table */}
+        <Panel
+          title="Projects"
+          icon={FolderKanban}
+          className="pr-block pr-table-card"
+          action={
+            <label className="pr-search no-print">
+              <Search size={14} aria-hidden="true" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find a project, lead or workspace" aria-label="Find a project" />
+            </label>
+          }
+          footer={report && <span>{rows.length === report.rows.length ? `${rows.length} projects` : `${rows.length} of ${report.rows.length} projects`}</span>}
+        >
+          <State loading={summary.loading && !report} error={summary.error} onRetry={summary.retry} lines={8} empty={report && !rows.length && (q ? "No project matches that search." : "No projects match these filters.")}>
+            <div className="gadget-scroll pr-table-scroll">
+              <table className="gadget-table pr-table">
+                <caption className="sr-only">Projects in this report. Column headers sort the table.</caption>
+                <thead>
+                  <tr>
+                    {COLUMNS.map((c) => {
+                      const on = sort.key === c.key;
+                      const Icon = on ? (sort.dir === 1 ? ArrowUp : ArrowDown) : ArrowUpDown;
+                      return (
+                        <th key={c.key} scope="col" className={c.num ? "num" : ""} aria-sort={on ? (sort.dir === 1 ? "ascending" : "descending") : "none"}>
+                          <button className="pr-sort" onClick={() => setSort((s) => ({ key: c.key, dir: s.key === c.key ? ((-s.dir) as 1 | -1) : c.num || c.key === "rag" ? -1 : 1 }))}>
+                            {c.label}
+                            <Icon size={12} aria-hidden="true" />
+                          </button>
+                        </th>
+                      );
+                    })}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.id}>
+                      <th scope="row">
+                        <a href={`#/projects/${r.id}`}>{r.name}</a>
+                        {r.workspace && <small className="muted"> · {r.workspace}</small>}
+                      </th>
+                      <td>{r.stageLabel}</td>
+                      <td>{r.scheduleLabel}</td>
                       <td>
-                        <b>{s.name}</b>
-                        {n > 0 && <small className="text-red"> · {n} request{n > 1 ? "s" : ""}</small>}
+                        <RagPill rag={r.rag} reasons={r.reasons} />
                       </td>
-                      <td>{STATUS_META[s.status].label}</td>
-                      <td className="num">{s.progress}%</td>
-                      <td className="num">{paceOf(s, now) ? `${paceOf(s, now)!.expected}%` : "—"}</td>
-                      <td>
-                        <span className={`chip line-${SCHEDULE_META[schedule].tone}`}>
-                          <i />
-                          {SCHEDULE_META[schedule].label}
+                      <td className="num">
+                        <span className="pr-progress" title={r.expected !== null ? `${r.progress}% done, ${r.expected}% expected by today` : `${r.progress}% done`}>
+                          <i style={{ width: `${r.progress}%` }} />
+                          {r.expected !== null && <em style={{ left: `${r.expected}%` }} aria-hidden="true" />}
                         </span>
+                        {r.progress}%
                       </td>
-                      <td>{s.finishedAt ? formatDate(s.finishedAt) : s.dueAt ? formatDate(s.dueAt) : "—"}</td>
-                      <td>{userName(s.lead) || "—"}</td>
-                      <td>{!s.updatedAt && new Date(lastUpdate(s)).getTime() > now ? "—" : formatDate(lastUpdate(s))}</td>
-                      <td className="num">{s.engagement.toLocaleString()}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </Panel>
-
-        <Panel title="Feature requests">
-          <p className="viz-sub">
-            Client requests on the systems above: {openFeatures.length} open
-            {lateFeatures > 0 && `, ${lateFeatures} past their delivery date`}
-            {unassigned > 0 && `, ${unassigned} not yet assigned`}
-            {cancelled > 0 && `. ${cancelled} cancelled, not shown in the bar`}.
-          </p>
-          {viewFeatures.length ? <FeatureStatusBar features={viewFeatures} /> : <p className="lead-none">No feature requests on these systems.</p>}
-        </Panel>
-
-        {workload.length > 0 && (
-          <Panel title="Developer workload">
-            <p className="viz-sub">
-              Projects and feature requests per developer. Flagged when above {limits.projects} projects or {limits.features} open requests.
-            </p>
-            <div className="table-wrap flat">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Developer</th>
-                    <th>Projects</th>
-                    <th>Open requests</th>
-                    <th>Critical</th>
-                    <th>High</th>
-                    <th>Past due</th>
-                    <th>Completed</th>
-                    <th>Next delivery</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {workload.map((w) => (
-                    <tr key={w.user.id}>
-                      <td>
-                        <b>{w.user.name}</b>
-                        {w.load.overloaded && (
-                          <span className="flag flag-overload" title={w.load.reasons.join("; ")}>
-                            Overloaded
-                          </span>
-                        )}
+                      <td>{r.lead || <span className="muted">—</span>}</td>
+                      <td className="num" title={r.developerNames.join(", ")}>
+                        {r.developers}
                       </td>
-                      <td className={`num ${w.load.projects > limits.projects ? "text-red" : ""}`}>{w.load.projects}</td>
-                      <td className="num">{w.open}</td>
-                      <td className={`num ${w.critical ? "text-red" : ""}`}>{w.critical}</td>
-                      <td className="num">{w.high}</td>
-                      <td className={`num ${w.late ? "text-red" : ""}`}>{w.late}</td>
-                      <td className="num">{w.completed}</td>
-                      <td>{w.next ? formatDate(w.next) : "—"}</td>
+                      <td className="num">{r.openItems}</td>
+                      <td className={`num ${r.overdueItems ? "late" : ""}`}>{r.overdueItems}</td>
+                      <td className={`num ${r.openBlockers ? "late" : ""}`}>{r.openBlockers}</td>
+                      <td>{r.lastUpdate}</td>
+                      <td className="num">{r.daysSinceUpdate ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </Panel>
-        )}
-
-        {openFeatures.length > 0 && (
-          <Panel title="Open feature requests">
-            <p className="viz-sub">Most urgent first: by priority, then expected delivery.</p>
-            <div className="table-wrap flat">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Feature</th>
-                    <th>Project</th>
-                    <th>Priority</th>
-                    <th>Status</th>
-                    <th>Developer</th>
-                    <th>Expected delivery</th>
-                    <th>Developer notes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {openFeatures.map((f) => (
-                    <tr key={f.id}>
-                      <td>
-                        <b>{f.title}</b>
-                        <small className="muted">
-                          {" "}
-                          · {KIND_META[f.kind]}
-                          {f.client ? ` for ${f.client}` : ""}
-                        </small>
-                      </td>
-                      <td>{systems.find((s) => s.id === f.systemId)?.name}</td>
-                      <td>
-                        <PriorityBadge priority={f.priority} />
-                      </td>
-                      <td>
-                        <FeatureStatusPill status={f.status} />
-                      </td>
-                      <td>{userName(f.assignee) || <i className="muted">Unassigned</i>}</td>
-                      <td className={isLate(f, now) ? "text-red" : ""}>{f.dueAt ? formatDate(f.dueAt) : "—"}</td>
-                      <td className="notes-cell">{f.notes || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Panel>
-        )}
+          </State>
+        </Panel>
       </div>
     </TooltipLayer>
   );

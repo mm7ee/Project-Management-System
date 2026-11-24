@@ -5,6 +5,7 @@ import { SCHEDULE_META, getSchedule, type Schedule, type System } from "./system
 import type { User } from "./roles";
 import { isLate, isOpen, type Feature, type Priority } from "./features";
 import { isActive, stalledDays, workloadOf, type Limits } from "./project";
+import { needsAttention } from "./projectHealth";
 
 export type Stage = "NOT_STARTED" | "WIP" | "TESTING" | "TO_DEPLOY" | "LIVE" | "COMPLETED";
 
@@ -20,7 +21,7 @@ export interface Showcase {
   schedule: Record<Schedule, number>;
   blocked: number;
   stalled: number;
-  needsAttention: number; // overdue, blocked or stalled (each system counted once)
+  needsAttention: number; // overdue, due soon, blocked or stalled (each system counted once; projectHealth.ts)
   developers: number;
   overloadedDevelopers: number;
   requests: { open: number; completed: number; late: number; byPriority: Record<Priority, number> };
@@ -46,9 +47,8 @@ export function buildShowcase(
     schedule[getSchedule(s, now)]++;
   });
   const stalled = systems.filter((s) => stalledDays(s, now, limits) !== null);
-  const attention = systems.filter(
-    (s) => getSchedule(s, now) === "OVERDUE" || openBlockerSystems.has(s.id) || stalledDays(s, now, limits) !== null,
-  );
+  // The shared rule (src/data/projectHealth.ts), so the dashboard, this page and Reports agree.
+  const attention = systems.filter((s) => needsAttention(s, openBlockerSystems.has(s.id), now, limits));
   const developers = users.filter((u) => u.role === "developer");
   const open = features.filter(isOpen);
   return {

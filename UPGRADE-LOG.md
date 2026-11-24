@@ -576,3 +576,36 @@ Files: `src/styles.css`, `src/components/DashboardPage.tsx`, `src/components/Cus
 **Migration:** `0012_chat_rich.sql`. Run `npm run db:migrate` before deploying.
 
 **Tests:** `tests/chatRich.test.ts` (emoji-only reactions, GIPHY-only GIFs, sticker ids, previews).
+
+## Reports → Projects, rebuilt (2026-11-25)
+
+**Why:** the owner asked for a Projects report that shows quickly how every project is doing, with exports
+managers can present.
+
+**What was built**
+- **Server-side figures:** new endpoints `GET /api/reports/projects/summary`, `/trends` and `/export.xlsx`.
+  Before, the page added everything up in the browser from `/api/data`, so the `reports` permission wasn't
+  enforced and work items weren't counted at all.
+- **Health (RAG)** for every project being built, with its reasons on hover. The rule is in DECISIONS.md.
+- **Layout:** six figures, then charts (health, stage, schedule, progress over time, items created vs resolved,
+  burn-up, throughput by project), then resourcing (developers over the workload limit flagged), then a sortable,
+  searchable project table with progress against the expected pace.
+- **Filters** for period, stage, schedule, health, lead and workspace, kept in the address
+  (`#/reports/projects?…`) so a filtered report can be bookmarked and shared.
+- **Exports:** an Excel workbook (6 sheets, including every visible work item) and a branded PDF via the print
+  dialog. They replace the two CSVs and the plain print.
+- **One "needs attention" rule** for the dashboard, top bar, executive page and Reports.
+- Every chart and table has loading, empty and error states (with Retry).
+
+**Files**
+- New: `src/data/projectHealth.ts`, `src/data/projectReport.ts`, `worker/projectReports.ts`, `worker/xlsx.ts`,
+  `tests/projectReport.test.ts`.
+- Rewritten: `src/components/reports/ReportsPage.tsx`.
+- Changed:
+  - `src/components/reports/ReportsHub.tsx`, `src/App.tsx`: the route and the signed-in user.
+  - `src/components/DashboardPage.tsx`, `src/data/showcase.ts`: the shared attention rule.
+  - `src/data/project.ts`, `src/components/SystemCard.tsx`: `lastUpdateOf`, shared with the Worker.
+  - `src/components/reports/Charts.tsx`: charts used only by the old page removed.
+  - `src/styles.css`, `worker/index.ts`, `docs/API.md`, `postman/Pulse.postman_collection.json`.
+
+**No migration.**

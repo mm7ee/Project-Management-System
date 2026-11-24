@@ -50,6 +50,9 @@ export function isActive(s: System, now: number): boolean {
   return new Date(s.startedAt).getTime() <= now;
 }
 
+/** When the project last moved: its last progress update, else when it was delivered or started. */
+export const lastUpdateOf = (s: Pick<System, "updatedAt" | "finishedAt" | "startedAt">) => s.updatedAt ?? s.finishedAt ?? s.startedAt;
+
 /** Days since the last progress update on an active project, once that reaches the limit; else null. */
 export function stalledDays(s: System, now: number, limits: Limits): number | null {
   if (!isActive(s, now)) return null;
