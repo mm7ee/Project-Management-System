@@ -8,9 +8,11 @@
   "compatibility_date": "2026-10-06",
   // The Postgres driver needs Node's Buffer and sockets.
   "compatibility_flags": ["nodejs_compat"],
-  // The database is in Singapore (Neon, aws-ap-southeast-1). Smart Placement runs the Worker near it, so a
-  // page's several database calls are each a short hop; only the one trip from the browser is long.
-  "placement": { "mode": "smart" },
+  // The database is in Singapore (Neon, aws-ap-southeast-1). The Worker is pinned there, so a page's several
+  // database calls are each a short hop; only the one trip from the browser is long. Smart Placement was
+  // tried first but kept the Worker in Johannesburg (Cf-Placement: local-JNB), where each query took ~0.8 s
+  // and signing in ~5 s. If the database ever moves, move this region with it.
+  "placement": { "mode": "targeted", "region": "aws:ap-southeast-1" },
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
