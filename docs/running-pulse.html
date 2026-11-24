@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Running Pulse</title>
+<!-- The source of "Pulse - Running the System.pdf". Print it with:
+     msedge --headless --no-pdf-header-footer --print-to-pdf="Pulse - Running the System.pdf" docs/running-pulse.html -->
+<style>
+  @page {
+    size: A4;
+    margin: 18mm 16mm 20mm;
+    @bottom-left { content: "Pulse: running the system and viewing the backend"; font: 9pt "Segoe UI", Arial, sans-serif; color: #6b7a90; }
+    @bottom-right { content: "Page " counter(page); font: 9pt "Segoe UI", Arial, sans-serif; color: #6b7a90; }
+  }
+  body { font: 10.5pt/1.5 "Segoe UI", Arial, sans-serif; color: #1c2b45; margin: 0; }
+  h1 { font-size: 26pt; color: #0d3b7a; margin: 0 0 6px; }
+  h2 { font-size: 15pt; color: #0d3b7a; margin: 22px 0 8px; break-after: avoid; }
+  h3 { font-size: 11.5pt; color: #1a6fc4; margin: 16px 0 6px; break-after: avoid; }
+  p { margin: 0 0 8px; }
+  .lead { color: #4a5a75; }
+  code { font: 9pt Consolas, "Courier New", monospace; background: #eef1f6; padding: 1px 4px; border-radius: 3px; }
+  pre { font: 9pt Consolas, "Courier New", monospace; background: #eef1f6; border-left: 3px solid #1a8fd8; padding: 8px 12px; margin: 6px 0 10px; white-space: pre-wrap; break-inside: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 12px; font-size: 9.5pt; break-inside: auto; }
+  th { background: #0d3b7a; color: #fff; text-align: left; padding: 6px 8px; font-weight: 600; }
+  td { padding: 6px 8px; border-bottom: 1px solid #d5dbe6; vertical-align: top; }
+  tr { break-inside: avoid; }
+  td.c, th.c { text-align: center; }
+  ul, ol { margin: 0 0 8px; padding-left: 20px; }
+  li { margin: 2px 0; }
+  .warn { border: 1px solid #e0a9a9; background: #fdf1f1; border-radius: 6px; padding: 9px 12px; margin: 10px 0; break-inside: avoid; }
+  .note { border: 1px solid #e8c77a; background: #fdf7e6; border-radius: 6px; padding: 9px 12px; margin: 10px 0; break-inside: avoid; }
+  .tip { border: 1px solid #a9c8e8; background: #eef5fc; border-radius: 6px; padding: 9px 12px; margin: 10px 0; break-inside: avoid; }
+  .page-break { break-before: page; }
+  .small { font-size: 9pt; color: #4a5a75; }
+</style>
+</head>
+<body>
+
+<h1>Running Pulse</h1>
+<p class="lead">How to run the system on your computer from VS Code, how to look at its backend, how changes reach the live site, and what each part of Pulse does. Pulse was previously called OmniTrack. This edition covers the move to Postgres and upgrade Phases 0 to 5 (November 2026).</p>
+
+<h2>1. How the system is put together</h2>
+<p>Pulse has three parts. The code for all of them lives in the <code>frontend</code> folder of the project.</p>
+<table>
+  <tr><th style="width:20%">Part</th><th>What it does</th><th style="width:33%">Where it is</th></tr>
+  <tr><td>Screens (frontend)</td><td>What people see in the browser: dashboard, projects, work items, boards, backlog and timeline, search, the service desk, feature requests, Concept Notes, reports and settings. Built with React and TypeScript.</td><td><code>frontend/src/</code></td></tr>
+  <tr><td>API (backend)</td><td>Handles every request under <code>/api</code>. All permission and visibility checks happen here. Runs as a Cloudflare Worker, with an hourly scheduled job.</td><td><code>frontend/worker/</code> (section 8 lists the files)</td></tr>
+  <tr><td>Database</td><td>Postgres on Neon (project <code>wild-sunset-31993352</code>). The branch <code>production</code> is the live database; the branch <code>dev</code> is for testing on your computer. The Worker reaches it through Cloudflare Hyperdrive (config <code>pulse-db</code>).</td><td><code>frontend/migrations/</code> (table structure, numbered in order)</td></tr>
+</table>
+<p><b>Live site:</b> https://pulse.utsa--wanza--ortfolio.workers.dev</p>
+<p>The old address (omni-tracker.utsa--wanza--ortfolio.workers.dev) redirects there, keeping view-only links and project pages.</p>
+<p>When you run the system on your computer, it uses the Neon <code>dev</code> branch, never the live database. Nothing you do locally changes the live site or its users. One exception: Ask Pulse always uses Cloudflare's live AI service, even locally, and that usage counts towards the account.</p>
+
+<h3>The two Cloudflare Workers</h3>
+<table>
+  <tr><th style="width:18%">Worker</th><th>What it does</th><th style="width:33%">How it is deployed</th></tr>
+  <tr><td><code>pulse</code></td><td>Provides the web address and passes every request to the app Worker. It holds nothing else.</td><td>By hand, rarely:<br><code>npx wrangler@4 deploy --config gateway/wrangler.jsonc</code></td></tr>
+  <tr><td><code>omni-tracker</code></td><td>The app itself: screens, API, the database connection, AI, the hourly job and the <code>MFA_KEY</code> secret. It keeps its old name on purpose. Smart Placement runs it close to the database.</td><td>Automatically, on every push to the main branch, after the unit tests pass.</td></tr>
+</table>
+<div class="warn"><b>Do not rename, delete or replace the <code>omni-tracker</code> Worker, and do not change its <code>MFA_KEY</code> secret.</b> The key encrypts everyone's authenticator-app codes, and it also seals the email key, the Teams webhook, the GitHub secret and every outbound webhook's signing secret. None of these can be read back. If the key is lost, every authenticator-app user needs an administrator reset, and email, Teams, GitHub and webhooks must all be set up again.</div>
+<p class="small">The old Cloudflare D1 database is still attached to the Worker as <code>D1</code>, read-only, as history. Pulse stopped using it when it moved to Postgres.</p>
+
+<h3>The hourly job</h3>
+<p>The Worker has one scheduled trigger, every hour on the hour (<code>0 * * * *</code>). The Cloudflare account is on Workers Free, which allows only five cron triggers across all its Workers, so Pulse uses one and works out what is due (<code>frontend/worker/schedule.ts</code>):</p>
+<table>
+  <tr><th style="width:32%">When (Harare time)</th><th>What runs</th></tr>
+  <tr><td>Every hour</td><td>Saved-filter email subscriptions, scheduled automation rules, service desk SLA warnings and breach alerts, and retries of failed outbound webhooks.</td></tr>
+  <tr><td>Weekdays at 07:00</td><td>The data retention clean-up and the daily digests.</td></tr>
+  <tr><td>Mondays at 08:00</td><td>The Monday Briefing.</td></tr>
+</table>
+
+<h2>2. Before you start (one time only)</h2>
+<ol>
+  <li>Install Node.js (version 22 or newer) from nodejs.org. To check it worked, open a terminal and run:<pre>node -v</pre></li>
+  <li>Install VS Code and open the project folder (File &gt; Open Folder, then pick the Omni Tracker folder).</li>
+  <li>Open the terminal in VS Code: press Ctrl + ` (the backtick key, left of 1), or use Terminal &gt; New Terminal. Then install the packages:<pre>cd frontend
+npm install</pre></li>
+  <li>Create a file called <code>frontend/.dev.vars</code> with these lines. It is never committed, and its values are never printed or shared:
+    <table>
+      <tr><th style="width:24%">Line</th><th>What it is</th></tr>
+      <tr><td><code>PG_DEV=</code></td><td>The connection string of the Neon <code>dev</code> branch (Neon console &gt; the project &gt; branch dev &gt; Connect). Used by <code>npm run dev:api</code>.</td></tr>
+      <tr><td><code>PG_MAIN=</code></td><td>The connection string of the Neon <code>production</code> branch. Only needed by whoever applies migrations or takes backups of the live database.</td></tr>
+      <tr><td><code>MFA_KEY=</code></td><td>Any long random text, for your local copy only. Without it, two-step verification and sealed secrets won't work locally.</td></tr>
+      <tr><td><code>QA_PASSWORD=</code></td><td>The password of the test accounts on the dev branch (<code>qa-admin</code>, <code>qa-dev</code>, <code>qa-viewer</code>), for Postman and the checks.</td></tr>
+    </table>
+  </li>
+</ol>
+<p>Run <code>npm install</code> again only if the packages change (for example after pulling someone else's work).</p>
+
+<h2>3. Run the system: quick way</h2>
+<p>Use this when you just want to use or demonstrate the system.</p>
+<ol>
+  <li>In the VS Code terminal, run:<pre>cd frontend
+npm run dev:api</pre></li>
+  <li>This builds the app, applies any new migrations to the Neon <code>dev</code> branch, and starts the backend. Wait until the terminal says it is Ready.</li>
+  <li>Open http://localhost:8787 in your browser and sign in.</li>
+</ol>
+<p>This mode doesn't pick up code changes while it's running. Stop it and run it again to see your edits.</p>
+<p class="small">To try the hourly job locally, start it with <code>npm run dev:api -- --test-scheduled</code>, then trigger a run from another terminal:<br><code>curl -X POST "http://127.0.0.1:8787/cdn-cgi/local/explorer/api/local/scheduled?worker=omni-tracker" -H "content-type: application/json" -d "{\"cron\":\"0 * * * *\"}"</code></p>
+
+<h2>4. Run the system: development way</h2>
+<p>Use this when you are changing the code. Screen changes show up the moment you save a file. You need two terminals: click the + or the split button in the terminal panel to open the second one.</p>
+<table>
+  <tr><th style="width:16%"></th><th>Terminal 1: backend</th><th>Terminal 2: screens</th></tr>
+  <tr><td>Run</td><td><code>cd frontend</code><br><code>npm run dev:api</code></td><td><code>cd frontend</code><br><code>npm run dev</code></td></tr>
+  <tr><td>Then</td><td>Leave it running.</td><td>Open http://localhost:5173</td></tr>
+  <tr><td>After a change</td><td>Changes to <code>worker/</code> reload by themselves; restart if they don't.</td><td>Changes to <code>src/</code> appear automatically.</td></tr>
+</table>
+<p>The screens on port 5173 pass every <code>/api</code> request to the backend on port 8787, so both terminals must be running.</p>
+<div class="note">Locally, every database query travels to Neon in Singapore, so pages are much slower than on the live site (where the Worker runs next to the database). Creating a work item can take 20 to 30 seconds locally. That's normal.</div>
+
+<h2>5. Stopping and signing in</h2>
+<p><b>To stop:</b> click into the terminal and press Ctrl + C. Do this in each terminal you started. On Windows a background <code>workerd</code> process can survive; if port 8787 stays busy, close VS Code completely, or end <code>workerd.exe</code> in Task Manager.</p>
+<p><b>Signing in locally:</b> the dev branch has its own accounts, including the test accounts <code>qa-admin</code>, <code>qa-dev</code> and <code>qa-viewer</code> (password in <code>QA_PASSWORD</code>). Their passwords may differ from the live site.</p>
+<p><b>Passkeys</b> belong to the web address they were added on. A passkey added on the live site doesn't work locally, and the other way round.</p>
+
+<h2>6. What Pulse does</h2>
+<p>Pulse began as a project tracker (projects, feature requests, Concept Notes, reports, digests and Ask Pulse). The upgrade added Jira's core work management in six phases. UPGRADE-LOG.md and DECISIONS.md at the top of the repository describe each phase in full.</p>
+<table>
+  <tr><th style="width:17%">Phase</th><th>What it added</th><th style="width:30%">Where to find it</th></tr>
+  <tr><td>Postgres move</td><td>The database moved from Cloudflare D1 to Postgres on Neon, through Hyperdrive. Backups and migrations run from <code>scripts/db.mjs</code>.</td><td>Section 8 and 9 below</td></tr>
+  <tr><td>0. Sign-in lockout</td><td>Accounts lock after too many wrong passwords, with limits per address; administrators unlock them and set the rules.</td><td>Settings &gt; Administration &gt; Sign-in security; People</td></tr>
+  <tr><td>1. Work items</td><td>Work items numbered per project (INFRA-12): epics, stories, tasks, bugs and sub-tasks; comments with @mentions, watchers, links, attachments, time logs and status history. Feature requests are work items too.</td><td>A project's Work items tab; My work on the Dashboard</td></tr>
+  <tr><td>2. Workflows and boards</td><td>Configurable statuses and workflows (with conditions, validators and post-functions), per workspace or project; Kanban boards with columns, swimlanes and WIP limits.</td><td>Boards in the sidebar; a project's Board tab; Settings &gt; Administration &gt; Workflows</td></tr>
+  <tr><td>3. Sprints and reports</td><td>Optional Scrum per project: backlog, sprint planning, start and complete; a timeline with dependencies; burndown, burnup, velocity, sprint report, cumulative flow, control chart and lead/cycle time.</td><td>A project's Backlog and Timeline tabs; Reports &gt; Agile reports</td></tr>
+  <tr><td>4. Search, dashboards and automation</td><td>PQL search (like Jira's JQL) with suggestions; saved filters, favourites and email subscriptions; configurable dashboards with eight gadget kinds; automation rules (when, if, then).</td><td>Search in the sidebar; the Dashboard picker; Settings &gt; Administration &gt; Automation</td></tr>
+  <tr><td>5. Integrations, schemes and service desk</td><td>GitHub development links; personal API tokens and outbound webhooks; notification schemes; security levels; custom fields; Service Desk lite with a customer portal, queues, SLAs in business hours and reports.</td><td>Service desk in the sidebar; Settings &gt; Administration; Settings &gt; Security &amp; privacy &gt; API tokens</td></tr>
+</table>
+
+<h3>Who sees what</h3>
+<p>One rule decides who may see a work item, everywhere it appears: lists, item pages, boards, the timeline, reports, search, dashboards, subscriptions, digests, notifications, Ask Pulse, view-only links, the API, webhooks and automation (<code>frontend/worker/access.ts</code>).</p>
+<ul>
+  <li><b>Developers</b> without "Log and assign feature requests" see only the items and feature requests assigned to them or that they reported, and only their own Concept Notes.</li>
+  <li><b>Security levels:</b> an item with a level (such as "Confidential – Managers only" or "HR only") is seen only by administrators, its assignee and reporter, and the roles and people the level names.</li>
+  <li><b>View-only links</b> are read-only, never see contact details, documents or items with a security level, and can't use search, the service desk or the API.</li>
+  <li><b>The service desk portal</b> shows customers only their own requests and the replies marked for them; never internal notes or other items.</li>
+</ul>
+
+<h3>Roles and permissions</h3>
+<p>Administrators change these in Settings &gt; Administration &gt; Roles &amp; permissions. Administrators always have every permission. The defaults are:</p>
+<table>
+  <tr><th>Permission</th><th class="c">Admin</th><th class="c">Manager</th><th class="c">Team Leader</th><th class="c">Projects Assistant</th><th class="c">Developer</th><th class="c">Standard user</th></tr>
+  <tr><td>Update their assigned projects</td><td class="c">yes</td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c">yes</td><td class="c"></td></tr>
+  <tr><td>Add, delete and edit systems</td><td class="c">yes</td><td class="c"></td><td class="c">yes</td><td class="c"></td><td class="c"></td><td class="c"></td></tr>
+  <tr><td>Add and remove developers on projects</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c"></td><td class="c"></td><td class="c"></td></tr>
+  <tr><td>Request updates</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c"></td><td class="c"></td></tr>
+  <tr><td>Propose projects with a Concept Note</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c"></td></tr>
+  <tr><td>Log feature requests (own)</td><td class="c">yes</td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c">yes</td><td class="c"></td></tr>
+  <tr><td>Log and assign feature requests</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c"></td><td class="c"></td><td class="c"></td></tr>
+  <tr><td>Create work items</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c"></td></tr>
+  <tr><td>Edit and assign any work item</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c"></td><td class="c"></td><td class="c"></td></tr>
+  <tr><td>Delete work items</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c"></td><td class="c"></td><td class="c"></td></tr>
+  <tr><td>Log time on work items</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c"></td><td class="c">yes</td><td class="c"></td></tr>
+  <tr><td>Edit workflows</td><td class="c">yes</td><td class="c"></td><td class="c">yes</td><td class="c"></td><td class="c"></td><td class="c"></td></tr>
+  <tr><td>Plan and run sprints</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c"></td><td class="c"></td><td class="c"></td></tr>
+  <tr><td>Share filters and dashboards</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c"></td><td class="c"></td></tr>
+  <tr><td>Manage automation rules</td><td class="c">yes</td><td class="c"></td><td class="c">yes</td><td class="c"></td><td class="c"></td><td class="c"></td></tr>
+  <tr><td>Connect GitHub and manage webhooks</td><td class="c">yes</td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"></td></tr>
+  <tr><td>Use personal API tokens</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c"></td></tr>
+  <tr><td>Manage notification schemes, security levels and custom fields</td><td class="c">yes</td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"></td></tr>
+  <tr><td>Work the service desk and reply to customers</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c"></td></tr>
+  <tr><td>Set up the service desk</td><td class="c">yes</td><td class="c">yes</td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"></td></tr>
+  <tr><td>Generate reports</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c">yes</td><td class="c"></td><td class="c"></td></tr>
+  <tr><td>Manage users, roles and permissions</td><td class="c">yes</td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"></td></tr>
+  <tr><td>View the activity log</td><td class="c">yes</td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"></td><td class="c"></td></tr>
+</table>
+<p class="small">Anyone signed in can search, keep private filters and dashboards, and raise service desk requests. "Update any project" is for administrators only by default.</p>
+
+<h3>Settings pages, at a glance</h3>
+<table>
+  <tr><th style="width:34%">Page</th><th>What it's for</th></tr>
+  <tr><td>Profile, Appearance, Phone app</td><td>Your details, theme (Light or Dark), motion, density and start page; adding Pulse to a phone.</td></tr>
+  <tr><td>Notifications</td><td>Whether alerts and summaries are emailed to you, and which work item events you hear about.</td></tr>
+  <tr><td>Security &amp; privacy</td><td>Password, two-step verification and passkeys, signed-in devices, API tokens with the API reference, and the data retention policy.</td></tr>
+  <tr><td>Administration &gt; People, Roles &amp; permissions, Two-step rules, Sign-in security, Workload limits, View-only links, Email &amp; Teams</td><td>Accounts and access (administrators).</td></tr>
+  <tr><td>Administration &gt; Workflows</td><td>Statuses, workflows and which workspace or project uses each.</td></tr>
+  <tr><td>Administration &gt; Integrations</td><td>GitHub (with step-by-step setup) and outbound webhooks.</td></tr>
+  <tr><td>Administration &gt; Notification schemes, Security levels, Custom fields</td><td>Who hears about each event and how; who may see confidential items; extra fields per workspace.</td></tr>
+  <tr><td>Administration &gt; Service desk</td><td>The project requests land in, request types with their questions and SLA targets, public holidays, and portal links.</td></tr>
+  <tr><td>Administration &gt; Automation</td><td>Automation rules, their run logs and "Run now".</td></tr>
+  <tr><td>Administration &gt; Activity log</td><td>Sign-ins, failed sign-ins and every change, with filters by kind.</td></tr>
+</table>
+
+<h3>Setting up the service desk</h3>
+<ol>
+  <li>In Settings &gt; Administration &gt; Service desk, choose the project requests land in. An empty project is best: it takes the Service desk workflow (To Do, In Progress, Waiting for customer, Change Approval, Resolved, Closed), and the choice is refused if the project has items in other statuses. Until a project is chosen, the portal is closed.</li>
+  <li>Check the request types (Incident, Service request, Change, Question), their questions and SLA targets, and the public holidays (Zimbabwe's 2026 and 2027 are filled in; add each new year's).</li>
+  <li>Make a portal link for each client or site, and send it to them. Staff raise requests from Service desk &gt; Raise a request.</li>
+  <li>Customers hear about replies and status changes by email once email is connected in Email &amp; Teams.</li>
+</ol>
+<p class="small">SLA clocks count business hours: Monday to Friday, 08:00 to 17:00 Harare time, less holidays and time spent waiting for the customer. They warn at 75% of a target and alert on a breach. A Change can only be resolved through Change Approval, which a Manager approves.</p>
+
+<h3>Connecting other systems</h3>
+<ul>
+  <li><b>GitHub:</b> Settings &gt; Administration &gt; Integrations has the steps. Commits, branches and pull requests that mention a key appear in the item's Development panel.</li>
+  <li><b>The API:</b> each person makes their own token in Settings &gt; Security &amp; privacy &gt; API tokens. A token acts as its owner. The full reference is <code>docs/API.md</code>.</li>
+  <li><b>Webhooks:</b> Pulse can post work item events to another system, signed with HMAC-SHA256. Set them up in Integrations.</li>
+</ul>
+
+<h2>7. Testing</h2>
+<table>
+  <tr><th style="width:36%">Test</th><th>How to run it</th></tr>
+  <tr><td>Unit tests (PQL, the SLA clock, the hourly timetable)</td><td><code>npm test</code> from <code>frontend</code>. The deploy runs them too and stops if one fails.</td></tr>
+  <tr><td>Type checks and build</td><td><code>npm run build</code></td></tr>
+  <tr><td>The API, end to end</td><td>The Postman collection in <code>postman/</code>, with the Local environment, against <code>npm run dev:api</code>. Run it on its own (it creates and deletes its own test project, and signs its accounts out at the end):<pre>npx -y newman@6 run postman/Pulse.postman_collection.json -e postman/Local.postman_environment.json --env-var "qaPassword=…" --timeout-request 120000</pre>Only the "Public" folder is safe against the live site.</td></tr>
+  <tr><td>Demo data</td><td><code>npm run demo:seed</code> and <code>npm run demo:remove</code> load and remove the demo records (every id starts with <code>demo-</code>). These work on the <b>live</b> database. To try them on dev instead:<pre>node scripts/demo-data.mjs seed &gt; demo-data.sql
+node scripts/db.mjs exec dev demo-data.sql</pre></td></tr>
+</table>
+<div class="note">A full Postman run takes 45 to 60 minutes locally because of the distance to the database. If the link to Neon drops during a run, you'll see <code>CONNECTION_CLOSED</code> or <code>CONNECT_TIMEOUT</code> in the dev:api terminal, and the requests after it fail one after another. That's the network, not the code: restart dev:api, delete the left-over "QA Test System" project, and run again.</div>
+
+<h2>8. Viewing the backend</h2>
+<p>There is no separate backend server to log into. You can look at the backend in four ways.</p>
+<h3>A. The code (in VS Code)</h3>
+<table>
+  <tr><th style="width:38%">File</th><th>What is in it</th></tr>
+  <tr><td><code>worker/index.ts</code></td><td>Sign-in, accounts, projects, feature requests, Concept Notes, settings, Ask Pulse's snapshot, the activity log, and the routing to everything below. Search for a path such as <code>/api/systems</code> to find the code behind it.</td></tr>
+  <tr><td><code>worker/access.ts</code></td><td>The one visibility rule: own items for developers, and security levels.</td></tr>
+  <tr><td><code>worker/workitems.ts</code></td><td>Work items: create, edit, workflow moves, comments, links, attachments, time logs.</td></tr>
+  <tr><td><code>worker/workflows.ts</code>, <code>workflowData.ts</code>, <code>boards.ts</code></td><td>Statuses, workflows and boards.</td></tr>
+  <tr><td><code>worker/sprints.ts</code></td><td>Backlog, sprints, the timeline and the agile reports.</td></tr>
+  <tr><td><code>worker/pql.ts</code>, <code>search.ts</code></td><td>PQL to SQL, search, saved filters, subscriptions and dashboards.</td></tr>
+  <tr><td><code>worker/automation.ts</code></td><td>Automation rules, and the events every change sends.</td></tr>
+  <tr><td><code>worker/integrations.ts</code></td><td>GitHub, API tokens (and their rate limit), outbound webhooks.</td></tr>
+  <tr><td><code>worker/schemes.ts</code>, <code>admin.ts</code>, <code>customfields.ts</code></td><td>Notification schemes, opt-outs, security levels and custom fields.</td></tr>
+  <tr><td><code>worker/servicedesk.ts</code></td><td>The service desk: queues, the portal, SLA clocks and alerts, reports.</td></tr>
+  <tr><td><code>worker/notify.ts</code>, <code>digest.ts</code>, <code>ask.ts</code></td><td>The bell, email and Teams; the daily digests and Monday Briefing; Ask Pulse.</td></tr>
+  <tr><td><code>worker/auth.ts</code>, <code>webauthn.ts</code></td><td>Password hashing, tokens, sealed secrets, authenticator codes; passkeys.</td></tr>
+  <tr><td><code>worker/retention.ts</code>, <code>schedule.ts</code>, <code>pg.ts</code></td><td>The retention clean-up; the hourly timetable; the Postgres adapter.</td></tr>
+  <tr><td><code>migrations/*.sql</code></td><td>The tables and columns, in the order they were added (0001 to 0007).</td></tr>
+  <tr><td><code>src/data/roles.ts</code></td><td>Roles, permissions and their defaults (shared by screens and API).</td></tr>
+  <tr><td><code>src/data/retention.ts</code></td><td>How long each kind of record is kept (shown in Settings).</td></tr>
+  <tr><td><code>scripts/db.mjs</code></td><td>The database tool: migrate, status, exec, backup.</td></tr>
+  <tr><td><code>docs/API.md</code></td><td>The API reference for other systems.</td></tr>
+</table>
+<p class="small">All paths are inside <code>frontend/</code> except <code>docs/</code>.</p>
+
+<h3>B. The live system (dashboards)</h3>
+<table>
+  <tr><th style="width:38%">Where</th><th>What you can see</th></tr>
+  <tr><td>dash.cloudflare.com &gt; Workers &amp; Pages &gt; omni-tracker</td><td>Requests, errors and usage. Open Logs to watch requests live. Settings &gt; Triggers shows the hourly schedule.</td></tr>
+  <tr><td>console.neon.tech &gt; the project &gt; Tables or SQL Editor</td><td>Browse the tables and run queries. Choose the branch first: <code>production</code> is live.</td></tr>
+  <tr><td>github.com &gt; the repository &gt; Actions</td><td>Each deploy, its unit tests and its log.</td></tr>
+</table>
+<div class="note">Be careful in the Neon SQL Editor on the <code>production</code> branch. Edits and deletes change the live data immediately. Use it for looking (SELECT queries) unless you are sure, and take a backup first (section 9).</div>
+
+<h3>C. From the terminal</h3>
+<p>From the <code>frontend</code> folder:</p>
+<pre>npm run db:status                      which migrations are applied on live, and row counts
+node scripts/db.mjs status dev         the same for the dev branch
+node scripts/db.mjs exec dev file.sql  run a .sql file on dev, in one transaction</pre>
+
+<h3>D. Inside the app</h3>
+<p>Settings &gt; Administration &gt; Activity log shows who signed in, failed sign-ins and every change, filtered by kind (sign-ins, work items, workflows, sprints, filters and dashboards, automation, integrations and API, schemes, service desk, and more). Changes made with an API token are marked with the token's name; changes made by automation or through the portal are named as such.</p>
+
+<h2>9. Putting changes live</h2>
+<ol>
+  <li>Make and test your change locally (sections 4 and 7).</li>
+  <li>If the change adds a file to <code>frontend/migrations/</code>, release in this order:
+    <ol type="a">
+      <li>Back up the live database to a file, and check it isn't empty:<pre>node scripts/db.mjs backup main ../backup-before-&lt;change&gt;.sql</pre></li>
+      <li>Make a restore point in Neon: a branch of <code>production</code> called <code>backup-before-&lt;change&gt;</code> (Neon console &gt; Branches &gt; New branch, or the Neon CLI with <code>--no-compute</code>).</li>
+      <li>Apply the migration to the live database:<pre>npm run db:migrate</pre></li>
+    </ol>
+  </li>
+  <li>Commit and push to the main branch:<pre>git add .
+git commit -m "Describe the change"
+git push</pre></li>
+  <li>GitHub Actions runs the unit tests, builds the app and deploys it, usually within two minutes. Watch the Actions tab until it shows a green tick, then check the live site.</li>
+</ol>
+<div class="note"><b>Migrations come first.</b> The automatic deploy doesn't apply them, and the live site fails on a new column until it's applied. Backup files (<code>backup-*.sql</code>), <code>.dev.vars</code>, <code>.env*</code> and <code>.neon</code> must never be committed; <code>.gitignore</code> already leaves them out.</div>
+<p><b>If something fails,</b> stop and don't try fixes on the live database. The restore points are the backup file (restore by migrating an empty database and running the file) and the Neon branch (Neon can restore <code>production</code> from it). The restore points so far are <code>backup-before-phase-0</code> to <code>backup-before-phase-5</code>.</p>
+<p><b>If an automatic deploy fails</b> with a Cloudflare error, run it again from the Actions tab. If it keeps failing, deploy from your computer from the <code>frontend</code> folder with <code>npm run deploy</code>.</p>
+<p><b>Adding a cron trigger:</b> don't. The account is at the Workers Free limit of five cron triggers; add new scheduled work to <code>worker/schedule.ts</code> and the hourly job instead.</p>
+
+<h2>10. Troubleshooting</h2>
+<table>
+  <tr><th style="width:36%">Problem</th><th>What to do</th></tr>
+  <tr><td>The page shows with no styling (plain text and buttons)</td><td>A deploy was probably in progress when the page loaded. Reload with Ctrl + Shift + R.</td></tr>
+  <tr><td>npm or node is not recognised</td><td>Node.js is not installed, or VS Code was open while it installed. Install it, then close and reopen VS Code.</td></tr>
+  <tr><td>localhost:8787 shows an old version, new routes return 404, or the port is in use</td><td>An earlier run is still going in the background and is answering instead. Stop every terminal, end any <code>workerd.exe</code> left in Task Manager, and start again.</td></tr>
+  <tr><td>"PG_DEV isn't in .dev.vars"</td><td>Add the dev branch's connection string (section 2).</td></tr>
+  <tr><td>Locally, <code>CONNECTION_CLOSED</code> or <code>CONNECT_TIMEOUT</code></td><td>The link to Neon dropped. Restart dev:api. If it keeps happening, check your network or VPN.</td></tr>
+  <tr><td>"Not signed in" or the sign-in page keeps coming back locally</td><td>Your local session expired or the account doesn't exist on the dev branch. Sign in again, or ask an administrator to reset it.</td></tr>
+  <tr><td>The live site errors after a push</td><td>Check the Actions tab for a failed deploy, and whether a migration was missed (<code>npm run db:status</code>).</td></tr>
+  <tr><td>A deploy fails with "reached the Workers Free limit of 5 cron triggers"</td><td>Someone added a cron trigger. Remove it from <code>wrangler.jsonc</code> and use the hourly job (section 9).</td></tr>
+  <tr><td>Someone is locked out after wrong passwords</td><td>The lock ends by itself, or an administrator unlocks them in Settings &gt; Administration &gt; People.</td></tr>
+  <tr><td>Someone has lost their phone</td><td>They can use a recovery code or a passkey at sign-in. If they have neither, they choose "Ask an administrator" there, and an administrator resets them in People after confirming who they are.</td></tr>
+  <tr><td>Someone can't see a work item they expect to</td><td>Check its security level, and whether they're a developer who only sees their own items (section 6).</td></tr>
+  <tr><td>The service desk portal says it isn't open</td><td>No project is chosen in Settings &gt; Administration &gt; Service desk.</td></tr>
+  <tr><td>A portal link doesn't work</td><td>It has expired or been turned off; make a new one in the same place.</td></tr>
+  <tr><td>Customers don't get emails</td><td>Email isn't connected in Email &amp; Teams, or the last failure is shown there.</td></tr>
+  <tr><td>Commits don't appear on a work item</td><td>Check Integrations &gt; GitHub &gt; Recent events: the secret must match GitHub's, and the key (INFRA-12) must be in the commit message, branch name or pull request title.</td></tr>
+  <tr><td>A webhook isn't arriving</td><td>Open the webhook's Deliveries in Integrations: each shows the response or error, the next try, and a Retry button. Items with a security level are never sent.</td></tr>
+  <tr><td>An API client gets 401, 403 or 429</td><td>401: the token expired or was revoked. 403: a read token tried to change something, or the path isn't open to tokens. 429: over 120 requests a minute; wait a minute.</td></tr>
+  <tr><td>Ask Pulse says it isn't switched on, or doesn't respond</td><td>Check the Workers AI line in <code>frontend/wrangler.jsonc</code>, then the Logs for the omni-tracker Worker. Usage limits apply per person (or per view-only link).</td></tr>
+</table>
+
+</body>
+</html>
