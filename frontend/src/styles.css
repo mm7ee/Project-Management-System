@@ -2847,11 +2847,11 @@ span.backlog-points { border-color: transparent; background: var(--track); }
 }
 
 /* ---------- Sidebar: the sign-in page's colours ----------
-   The same deep navy gradient, ECG grid and sky-cyan accents as the landing page, so signing in and the
+   The same #2c3280 blue, ECG grid and sky-cyan accents as the landing page, so signing in and the
    app feel like one place. */
 .sidebar {
   --cyan: #8fdcfb; --tint-cyan: rgba(27, 169, 225, 0.16); --cyan-ink: #8fdcfb;
-  background: radial-gradient(170% 90% at 20% 0%, #0d3268 0%, #0a2550 42%, #061634 100%);
+  background: radial-gradient(170% 90% at 20% 0%, #353c95 0%, #2c3280 45%, #262b72 100%);
   border-right: 1px solid rgba(140, 200, 240, 0.12);
   color: #e8f1fb;
 }
