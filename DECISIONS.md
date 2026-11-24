@@ -529,3 +529,20 @@ Choices made during the Pulse upgrade that later phases must follow. Newest last
   was changed" notice. It does not sign you in, and two-step verification still applies at the next sign-in.
 - **Activity log:** `password_reset_requested` (with the outcome) and `password_reset_by_email`.
 - **Endpoints (no sign-in):** `POST /api/password/forgot`, `POST /api/password/reset/check`, `POST /api/password/reset`.
+
+## Feature request insights for managers (2026-11-25)
+
+- **Where:** Feature requests → **Insights** (a List / Insights switch in the page header), for anyone with the
+  `reports` permission (managers and administrators by default). Built from the requests the page already has:
+  nothing new is fetched, no migration. The maths is in `src/data/featureInsights.ts` (tested); the charts in
+  `src/components/FeatureInsights.tsx`, using the reports chart kit's validated colours, tooltips and legends.
+- **The reading:** plain sentences (backlog grew or shrank, typical delivery time against the period before, how
+  many are past the promised date, the oldest critical/high request, a client holding 40%+ of the backlog) and five
+  tiles, each compared with the period before by arrow and words, not colour alone. Periods: 4 weeks, quarter,
+  6 months; optional workspace.
+- **Charts:** weekly flow as mirrored bars (in above the line, delivered and cancelled below) with the open backlog
+  as a separate strip on the same weeks (never a second axis); an ageing dot plot of every open request by age
+  (square-root scale) in priority lanes, coloured by schedule (late / dated / no date), click to open; requests per
+  client (delivered, open, open-and-late) with on-time rate; delivery time per type as median and 80th percentile.
+- **Definitions:** a cancelled request leaves the backlog at its last update; "on time" means delivered on or before
+  the expected date (the day itself counts); lead time is request to delivery.

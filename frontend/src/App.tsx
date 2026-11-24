@@ -664,6 +664,7 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
             now={now}
             canManage={can("manage_features") || can("log_features")}
             ownOnly={me.role === "developer" && !can("manage_features")}
+            insights={can("reports")}
             onOpen={(feature) => setFeatureEdit({ feature })}
             onNew={() => setFeatureEdit({ feature: null })}
           />

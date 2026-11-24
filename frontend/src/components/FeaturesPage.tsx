@@ -1,10 +1,11 @@
 import { useMemo, useRef, useState } from "react";
-import { CalendarClock, Plus, Search, StickyNote, X } from "lucide-react";
+import { BarChart3, CalendarClock, ListChecks, Plus, Search, StickyNote, X } from "lucide-react";
 import type { System } from "../data/systems";
 import type { User } from "../data/roles";
 import { FEATURE_KINDS, KIND_META, PRIORITIES, PRIORITY_META, byUrgency, isLate, isOpen, type Feature, type FeatureKind } from "../data/features";
 import { formatDate } from "../time";
 import CountUp from "./CountUp";
+import FeatureInsights from "./FeatureInsights";
 import { FeatureStatusPill, PriorityBadge } from "./FeatureModal";
 
 interface Props {
@@ -18,6 +19,8 @@ interface Props {
   workspaces: string[]; // projects are grouped by workspace in the project filter // a developer: the server sends only requests assigned to or logged by them
   onOpen: (f: Feature) => void;
   onNew: () => void;
+  /** Managers (anyone who can see reports) also get the Insights view. */
+  insights?: boolean;
 }
 
 type Who = "mine" | "all";
@@ -34,7 +37,8 @@ const SEARCH_IN: { key: SearchIn; label: string; hint: string }[] = [
 ];
 const UNASSIGNED = "__none";
 
-export default function FeaturesPage({ features, systems, users, me, now, canManage, ownOnly = false, workspaces, onOpen, onNew }: Props) {
+export default function FeaturesPage({ features, systems, users, me, now, canManage, ownOnly = false, workspaces, onOpen, onNew, insights = false }: Props) {
+  const [mode, setMode] = useState<"list" | "insights">("list");
   const mineCount = features.filter((f) => f.assignee === me.id).length;
   const [who, setWho] = useState<Who>(mineCount && !ownOnly ? "mine" : "all");
   const [state, setState] = useState<State>("open");
@@ -160,13 +164,29 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
               : "Modules, changes and fixes clients ask for, on projects in progress or already delivered."}
           </p>
         </div>
-        {canManage && (
-          <button className="btn btn-amber" onClick={onNew} disabled={!systems.length}>
-            <Plus size={17} strokeWidth={3} /> Log feature request
-          </button>
-        )}
+        <div className="page-actions">
+          {insights && (
+            <div className="seg" role="tablist" aria-label="List or insights">
+              <button role="tab" aria-selected={mode === "list"} className={mode === "list" ? "on" : ""} onClick={() => setMode("list")}>
+                <ListChecks size={15} /> List
+              </button>
+              <button role="tab" aria-selected={mode === "insights"} className={mode === "insights" ? "on" : ""} onClick={() => setMode("insights")}>
+                <BarChart3 size={15} /> Insights
+              </button>
+            </div>
+          )}
+          {canManage && (
+            <button className="btn btn-amber" onClick={onNew} disabled={!systems.length}>
+              <Plus size={17} strokeWidth={3} /> Log feature request
+            </button>
+          )}
+        </div>
       </header>
 
+      {mode === "insights" && insights ? (
+        <FeatureInsights features={features} systems={systems} workspaces={workspaces} now={now} onOpen={onOpen} />
+      ) : (
+      <>
       <section className="stats">
         {stats.map((c) => (
           <button
@@ -378,6 +398,8 @@ export default function FeaturesPage({ features, systems, users, me, now, canMan
                 ? "No feature requests yet. Log the first one when a client asks for something."
                 : "No feature requests yet."}
         </div>
+      )}
+      </>
       )}
     </div>
   );

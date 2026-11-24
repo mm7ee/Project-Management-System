@@ -2705,3 +2705,27 @@ span.backlog-points { border-color: transparent; background: var(--track); }
 .users-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 4px 0 12px; font-size: 13.5px; }
 .users-search { width: min(420px, 100%); }
 .users-none { text-align: center; padding: 22px 12px; }
+
+/* Feature requests → Insights (managers). */
+.fi-reading-title { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; color: var(--heading); }
+.fi-sentences { margin: 0 0 14px; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; font-size: 14.5px; line-height: 1.5; color: var(--text); }
+.fi-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.fi-tile { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--canvas, transparent); }
+.fi-tile-label { font-size: 12.5px; color: var(--muted); }
+.fi-tile-value { font-size: 26px; font-weight: 800; color: var(--heading); font-variant-numeric: tabular-nums; }
+.fi-tile-delta { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; color: var(--faint); }
+.fi-tile-delta.good { color: var(--st-live); font-weight: 600; }
+.fi-tile-delta.bad { color: var(--st-overdue); font-weight: 600; }
+.fi-zero { stroke: var(--faint); stroke-width: 1; }
+.fi-strip { margin-top: 10px; border-top: 1px solid var(--grid); padding-top: 8px; }
+.fi-strip-title { margin: 0 0 2px; font-size: 13px; color: var(--muted); }
+.fi-area { opacity: .12; }
+.fi-dot { cursor: pointer; }
+.fi-dot:focus-visible circle:last-child, .fi-dot:hover circle:last-child { stroke: var(--text); }
+.fi-median { stroke-width: 3; stroke-linecap: round; }
+.fi-table { margin-top: 10px; font-size: 13px; }
+.fi-table summary { cursor: pointer; color: var(--cyan); font-weight: 600; }
+.fi-table .table { margin-top: 8px; }
+.viz-card h3 { margin: 0; }
+@media (max-width: 860px) { .viz-pair { grid-template-columns: minmax(0, 1fr); } }
+.seg button svg { vertical-align: -2px; margin-right: 2px; }
