@@ -120,15 +120,15 @@
 .lp-submit {
   position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; gap: 8px;
   margin-top: 4px; padding: 13px; border: 0; border-radius: 12px; cursor: pointer;
-  background: linear-gradient(135deg, #ffc233, #f2a900); color: #071a3d; font-size: 16px; font-weight: 800;
-  box-shadow: 0 10px 30px rgba(242, 169, 0, 0.3); transition: transform .15s, box-shadow .15s;
+  background: linear-gradient(135deg, #1ba9e1, #0a5fb4); color: #fff; font-size: 16px; font-weight: 800;
+  box-shadow: 0 10px 30px rgba(27, 169, 225, 0.3); transition: transform .15s, box-shadow .15s;
 }
 .lp-submit::after {
   content: ""; position: absolute; top: 0; left: -60%; width: 40%; height: 100%;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.35), transparent);
   transform: skewX(-20deg); animation: lp-shine 3.8s ease-in-out infinite;
 }
-.lp-submit:hover { transform: translateY(-1px); box-shadow: 0 14px 36px rgba(242, 169, 0, 0.42); }
+.lp-submit:hover { transform: translateY(-1px); box-shadow: 0 14px 36px rgba(27, 169, 225, 0.45); }
 .lp-submit:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; filter: grayscale(.6); }
 .lp-submit svg { transition: transform .2s; }
 .lp-submit:hover svg { transform: translateX(3px); }
