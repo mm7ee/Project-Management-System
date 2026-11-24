@@ -1,6 +1,6 @@
-# Pulse
+# Project Management System (Pulse)
 
-Omni Contact's projects tracker. Pulse follows every project from idea to live: progress, feature requests from
+Omni Contact's project management system, known in the app as **Pulse**. It follows every project from idea to live: progress, feature requests from
 clients, work items on boards and sprints, blockers, documents, Concept Notes and sign-offs, a service desk, and
 team chat. Managers get reports and insights on top of it all, and **Ask Pulse** answers questions about the live
 data in plain English.
@@ -64,9 +64,10 @@ UPGRADE-LOG.md         what each upgrade phase built
 
 You need Node 22 and access to the Neon project.
 
-1. Install dependencies:
+1. Clone the repository and install dependencies:
    ```sh
-   cd frontend
+   git clone https://github.com/mm7ee/Project-Management-System.git "Project Management System"
+   cd "Project Management System/frontend"
    npm install
    ```
 2. Create `frontend/.dev.vars` with these values. Ask the project owner for them; never commit this file.
@@ -90,7 +91,8 @@ You need Node 22 and access to the Neon project.
 ## Deploying
 
 Every push to `main` deploys. GitHub Actions (`.github/workflows/deploy.yml`) runs `npm ci`, `npm test`, then
-`wrangler deploy` for the `omni-tracker` Worker. It needs the repository secrets `CLOUDFLARE_API_TOKEN` and
+`wrangler deploy` for the `omni-tracker` Worker (it keeps its original name: renaming the repository didn't change
+it, and the two-step verification key is stored on it). It needs the repository secrets `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_ACCOUNT_ID`.
 
 The pipeline does **not** touch the database. When a change adds a migration, release it in this order:
