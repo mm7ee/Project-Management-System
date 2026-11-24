@@ -705,7 +705,8 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
               isMine={isMine}
               onOpen={openProject}
               onTab={showTab}
-              showMyWork={!data.viewOnly}
+              // Managers oversee the work rather than hold it, so the dashboard skips their (empty) list.
+              showMyWork={!data.viewOnly && me.role !== "manager"}
             />
               }
             />
