@@ -67,7 +67,7 @@ export default function PortalPage() {
   return (
     <div className="portal">
       <header className="portal-head">
-        <PulseMark />
+        <PulseMark tone="dark" />
         <div>
           <h1>
             <Headset size={20} aria-hidden="true" /> Omni Contact service desk

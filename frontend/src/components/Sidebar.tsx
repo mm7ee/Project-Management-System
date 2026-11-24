@@ -38,8 +38,8 @@ export default function Sidebar(p: Props) {
     <>
       <div className={`sidebar-scrim ${p.open ? "show" : ""}`} onClick={p.onClose} />
       <aside className={`sidebar ${p.open ? "open" : ""}`}>
-        {/* The drifting web, inside the menu too: light indigo on the navy. */}
-        <ParticleField className="sidebar-web" palette="sidebar" />
+        {/* The sign-in page's look: its navy, its ECG grid and its cyan and amber web. */}
+        <ParticleField className="sidebar-web" palette="dark" />
         <button className="sidebar-close" onClick={p.onClose} aria-label="Close menu">
           <X size={18} />
         </button>

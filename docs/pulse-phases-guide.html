@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>What's new in Pulse</title>
+<!-- The source of "Pulse - What's New, Phases 0 to 5.pdf". Screenshots are in img/phases/. Print with:
+     msedge --headless --no-pdf-header-footer --print-to-pdf="Pulse - What's New, Phases 0 to 5.pdf" docs/pulse-phases-guide.html -->
+<style>
+  @page {
+    size: A4;
+    margin: 16mm 15mm 18mm;
+    @bottom-left { content: "Pulse: what's new, Phases 0 to 5"; font: 9pt "Segoe UI", Arial, sans-serif; color: #6b7a90; }
+    @bottom-right { content: "Page " counter(page); font: 9pt "Segoe UI", Arial, sans-serif; color: #6b7a90; }
+  }
+  body { font: 10.5pt/1.5 "Segoe UI", Arial, sans-serif; color: #1c2b45; margin: 0; }
+  h1 { font-size: 26pt; color: #0d3b7a; margin: 0 0 6px; }
+  h2 { font-size: 16pt; color: #0d3b7a; margin: 26px 0 6px; padding-top: 6px; border-top: 3px solid #e8edf5; break-after: avoid; }
+  h3 { font-size: 11.5pt; color: #1a6fc4; margin: 14px 0 4px; break-after: avoid; }
+  p { margin: 0 0 8px; }
+  .lead { color: #4a5a75; }
+  .phase-tag { display: inline-block; background: #0d3b7a; color: #fff; font-size: 9pt; font-weight: 700; padding: 2px 8px; border-radius: 99px; margin-right: 6px; vertical-align: middle; }
+  code { font: 9pt Consolas, "Courier New", monospace; background: #eef1f6; padding: 1px 4px; border-radius: 3px; }
+  ul { margin: 0 0 8px; padding-left: 20px; }
+  li { margin: 2px 0; }
+  figure { margin: 10px 0 14px; break-inside: avoid; }
+  figure img { width: 100%; border: 1px solid #d5dbe6; border-radius: 6px; display: block; }
+  figure.half img { width: 70%; }
+  figcaption { font-size: 9pt; color: #4a5a75; margin-top: 4px; }
+  figcaption b { color: #1c2b45; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 12px; font-size: 9.5pt; }
+  th { background: #0d3b7a; color: #fff; text-align: left; padding: 6px 8px; font-weight: 600; }
+  td { padding: 6px 8px; border-bottom: 1px solid #d5dbe6; vertical-align: top; }
+  tr { break-inside: avoid; }
+  .changed { border: 1px solid #a9c8e8; background: #eef5fc; border-radius: 6px; padding: 8px 12px; margin: 8px 0 12px; break-inside: avoid; }
+  .changed b:first-child { color: #0d3b7a; }
+  .note { border: 1px solid #e8c77a; background: #fdf7e6; border-radius: 6px; padding: 8px 12px; margin: 8px 0 12px; break-inside: avoid; }
+  .small { font-size: 9pt; color: #4a5a75; }
+</style>
+</head>
+<body>
+
+<h1>What's new in Pulse</h1>
+<p class="lead">Pulse was upgraded in November 2026 in six phases, adding Jira's core work management to Omni Contact's project tracker. This guide explains each phase: what it added, what changed for you, and where to find it, with screenshots from the system.</p>
+<p class="small">The screenshots show demo data (names ending in "(demo)", and made-up clients and customers) on a test copy of Pulse. What you see depends on your role: the menus and pages only show what your role may use.</p>
+
+<table>
+  <tr><th style="width:20%">Phase</th><th>In one line</th></tr>
+  <tr><td>Before Phase 0</td><td>Pulse's database moved to Postgres: faster, backed up before every change, and ready for the phases below.</td></tr>
+  <tr><td>0. Sign-in lockout</td><td>Accounts lock after too many wrong passwords.</td></tr>
+  <tr><td>1. Work items</td><td>Projects are broken into numbered work items (epics, stories, tasks, bugs, sub-tasks).</td></tr>
+  <tr><td>2. Workflows and boards</td><td>Each team can define its own statuses and steps, and work on Kanban boards.</td></tr>
+  <tr><td>3. Sprints and reports</td><td>Teams can plan in sprints, see a timeline, and read agile reports.</td></tr>
+  <tr><td>4. Search, dashboards, automation</td><td>Find anything with PQL, save searches, build your own dashboards, and let rules do routine work.</td></tr>
+  <tr><td>5. Integrations, admin, service desk</td><td>GitHub links, an API, notification and security rules, custom fields, and a service desk with SLAs.</td></tr>
+</table>
+
+<!-- ======================================================= -->
+<h2><span class="phase-tag">Before Phase 0</span>A new database</h2>
+<p>Pulse's data moved from Cloudflare D1 to Postgres on Neon. You won't see a screen for this. It made the later phases possible (they need a database that handles many related records and reports), and every release since has been backed up first, with a restore point kept in Neon.</p>
+<div class="changed"><b>What changed for you:</b> nothing to learn. Pulse kept every project, request, Concept Note, user and setting.</div>
+
+<!-- ======================================================= -->
+<h2><span class="phase-tag">Phase 0</span>Sign-in lockout</h2>
+<p>Pulse now stops people guessing passwords. Too many wrong passwords on one account within 15 minutes locks that account for a while; too many failed sign-ins from one internet address refuses that address. Both see the same message as a wrong password, so nobody can tell which usernames exist.</p>
+<figure>
+  <img src="img/phases/p0-signin-security.png" alt="Settings, Sign-in security page">
+  <figcaption><b>Settings &gt; Administration &gt; Sign-in security.</b> Administrators choose how many wrong passwords lock an account, how long it stays locked, and how many failures from one address are allowed.</figcaption>
+</figure>
+<div class="changed"><b>What changed for you:</b> if you mistype your password several times, wait for the lock to end (15 minutes by default) or ask an administrator, who can unlock you at once in Settings &gt; Administration &gt; People. Locks and unlocks are in the activity log, and administrators are told under the bell.</div>
+
+<!-- ======================================================= -->
+<h2><span class="phase-tag">Phase 1</span>Work items</h2>
+<p>A project is now more than a progress bar. Its work is broken into <b>work items</b>, each with a key made of the project's key and a number (for example <code>CCC-9</code>), so anyone can refer to it in a message, a commit or a meeting.</p>
+<ul>
+  <li><b>Five types:</b> Epic (a large piece of work), Story, Task, Bug, and Sub-task (part of a story, task or bug).</li>
+  <li><b>Each item has</b> a summary, a description (with formatting), status, priority, assignee, reporter, labels, component, story points, dates and time estimates.</li>
+  <li><b>Collaboration:</b> comments with @mentions, watchers, links between items ("blocks", "relates to"…), file attachments, time logs, and a full status history.</li>
+  <li><b>Feature requests are work items too:</b> each client request appears both on the Feature requests page and as a work item.</li>
+</ul>
+<figure>
+  <img src="img/phases/p1-items-list.png" alt="A project's Work items tab">
+  <figcaption><b>A project's Work items tab.</b> Create an item by typing its summary and pressing Enter; filter by status, type, priority or person; sort by any column. The project key (CCC) is set here once.</figcaption>
+</figure>
+<figure>
+  <img src="img/phases/p1-item-page.png" alt="A work item page">
+  <figcaption><b>A work item.</b> The description and its sections on the left; status, type, priority, assignee and other details on the right. Everything you change is saved at once and recorded with before and after values.</figcaption>
+</figure>
+<div class="changed"><b>What changed for you:</b> projects have a Work items tab, and the Dashboard shows <b>My work</b>. Developers still see only the items assigned to them or that they reported, as with feature requests. A project can take its progress from its work items (the share that are done) instead of being updated by hand.</div>
+
+<!-- ======================================================= -->
+<h2><span class="phase-tag">Phase 2</span>Workflows and boards</h2>
+<p>Teams work differently, so statuses are no longer fixed. A <b>workflow</b> is the list of statuses a work item goes through and the moves allowed between them. Each move can have rules:</p>
+<ul>
+  <li><b>Conditions:</b> who may make the move (for example, only a Manager may deploy).</li>
+  <li><b>Validators:</b> what must be true first (a comment, an assignee, a filled-in field, finished sub-tasks).</li>
+  <li><b>Post-functions:</b> what happens after (assign someone, set the resolution, notify people).</li>
+</ul>
+<p>Each workspace uses a workflow, and a project can use a different one. Two are provided: <b>Default</b> (To Do, In Progress, In Review, Done) and <b>Infrastructure deployment</b> (with Testing and a Change Approval step).</p>
+<figure>
+  <img src="img/phases/p2-workflows.png" alt="Settings, Workflows page">
+  <figcaption><b>Settings &gt; Administration &gt; Workflows.</b> Choose which workflow each workspace and project uses, and edit statuses, moves and their rules.</figcaption>
+</figure>
+<p>Every project, and every workspace, has a <b>Kanban board</b>: a column per status (or group of statuses), with cards you move by dragging or with the Move menu.</p>
+<figure>
+  <img src="img/phases/p2-board.png" alt="A project's Kanban board">
+  <figcaption><b>A project's Board tab.</b> Quick filters at the top (Only my items, Bugs, Due this week, Blocked, Label), swimlanes by person, epic or priority, and work-in-progress limits per column (Columns).</figcaption>
+</figure>
+<div class="changed"><b>What changed for you:</b> moving an item goes through its workflow, so you may be asked for a comment or a field before a move is allowed. There's a new <b>Boards</b> page in the sidebar for workspace boards. WIP limits show in Settings &gt; Administration &gt; Workload limits.</div>
+
+<!-- ======================================================= -->
+<h2><span class="phase-tag">Phase 3</span>Sprints, timeline and reports</h2>
+<h3>Sprints (Scrum)</h3>
+<p>A project can choose to plan in <b>sprints</b> (tick "Plan in sprints" on its Work items tab). It then gets a <b>Backlog</b> tab: the running and planned sprints at the top, the ranked backlog below. Drag items into a sprint (or use Move to…), type story points in place, then start the sprint. Completing it moves unfinished work to the backlog or the next sprint, and keeps a snapshot of what was committed, completed, added and removed.</p>
+<figure>
+  <img src="img/phases/p3-backlog.png" alt="A project's Backlog tab with sprints">
+  <figcaption><b>The Backlog tab.</b> The running sprint (with its goal, dates, days left and points), the next planned sprint with a capacity hint from past velocity, and the backlog. Only one sprint runs per project at a time.</figcaption>
+</figure>
+<h3>Timeline</h3>
+<p>The <b>Timeline</b> tab shows epics and their items as bars between their start and due dates. Drag a bar to move it, or its ends to change dates; drag from a bar's dot onto another to say it blocks that one. Pulse warns when a blocker ends after the item it blocks starts.</p>
+<figure>
+  <img src="img/phases/p3-timeline.png" alt="A project's Timeline tab">
+  <figcaption><b>The Timeline tab.</b> Striped bars are epics; the red line is today. The yellow warnings point out dependencies that don't fit. Weeks, months or quarters, and print to PDF.</figcaption>
+</figure>
+<h3>Agile reports</h3>
+<p>Reports gained an <b>Agile reports</b> panel: burndown, burnup, velocity, sprint report, cumulative flow, control chart and lead and cycle time, for a project or a whole workspace. Each explains what to look for, and can be exported to CSV or printed.</p>
+<figure>
+  <img src="img/phases/p3-agile-reports.png" alt="Agile reports, burndown">
+  <figcaption><b>Reports &gt; Agile reports: a burndown.</b> The remaining points against the ideal line. A flat stretch means work isn't being finished.</figcaption>
+</figure>
+<div class="changed"><b>What changed for you:</b> Scrum is optional, project by project; Kanban projects carry on as before. Sprint health (days left, points done, behind or not) is in the Monday Briefing and Ask Pulse. "Plan and run sprints" is a new permission for Admins, Managers and Team Leaders.</div>
+
+<!-- ======================================================= -->
+<h2><span class="phase-tag">Phase 4</span>Search, dashboards and automation</h2>
+<h3>Search and PQL</h3>
+<p>The new <b>Search</b> page finds work items across every project you can see. Use <b>Basic</b> mode (choose from lists) or <b>PQL</b>, Pulse's query language, which works like Jira's JQL:</p>
+<p><code>project = CCC AND status != Done AND assignee = currentUser() ORDER BY priority DESC</code></p>
+<p>Pulse suggests fields, values and functions as you type, and points at mistakes ("did you mean status?"). Results can be sorted and exported to CSV.</p>
+<figure>
+  <img src="img/phases/p4-search.png" alt="The Search page">
+  <figcaption><b>The Search page.</b> Basic mode builds the PQL for you (shown under the lists). Saved filters are on the left: star your favourites, or subscribe to get the results by email every day or week.</figcaption>
+</figure>
+<h3>Saved filters and dashboards</h3>
+<p>Save any search as a <b>filter</b>, keep it private or share it with a role, a workspace or everyone. Filters feed <b>dashboards</b>: choose a dashboard at the top of the Dashboard page, or make your own with up to twenty gadgets in one to three columns. The eight gadget kinds are a list of items, pie chart, created vs resolved, sprint health, workload by person, overdue items, a two-way table, and recent activity. The original dashboard stays as <b>Pulse overview</b>, the default.</p>
+<figure>
+  <img src="img/phases/p4-dashboard.png" alt="A custom dashboard">
+  <figcaption><b>A shared dashboard ("Delivery").</b> Each gadget reads a saved filter, and shows each viewer only the work items they're allowed to see.</figcaption>
+</figure>
+<h3>Automation</h3>
+<p>An <b>automation rule</b> does routine work: <i>when</i> something happens (an item is created, moves, changes, gets a comment, its sub-tasks are done, a sprint starts or ends, or at a set time), <i>if</i> it matches a PQL condition, <i>then</i> act (move it, assign it, set a field, comment, notify people, create a sub-task, link it). Three example rules come switched off.</p>
+<figure>
+  <img src="img/phases/p4-automation.png" alt="Settings, Automation rules">
+  <figcaption><b>Settings &gt; Administration &gt; Automation.</b> Turn rules on or off, edit them, run them now, and see each rule's run log. Rules can't loop forever: they stop three levels deep and have a limit of runs a minute.</figcaption>
+</figure>
+<div class="changed"><b>What changed for you:</b> new <b>Search</b> in the sidebar; a dashboard picker on the Dashboard; Ask Pulse can turn a question into a search ("Turn this into a search"). Changes made by a rule appear in history as "Automation: rule name". Sharing filters and dashboards, and managing automation, are new permissions.</div>
+
+<!-- ======================================================= -->
+<h2><span class="phase-tag">Phase 5</span>Integrations, administration and service desk</h2>
+
+<h3>GitHub</h3>
+<p>Once GitHub is connected, commits, branches and pull requests that mention a work item's key (for example <code>LP-1</code> in a commit message or a branch called <code>feature/lp-1</code>) appear in a <b>Development</b> panel on that item.</p>
+<figure class="half">
+  <img src="img/phases/p5-development-panel.png" alt="The Development panel on a work item">
+  <figcaption><b>The Development panel</b> on a work item: a merged pull request, its branch and a commit, each linking to GitHub.</figcaption>
+</figure>
+<figure>
+  <img src="img/phases/p5-integrations.png" alt="Settings, Integrations">
+  <figcaption><b>Settings &gt; Administration &gt; Integrations.</b> Step-by-step GitHub setup (a secret sealed by Pulse, never shown again), and outbound webhooks. On the live site, step 4 shows the live address.</figcaption>
+</figure>
+
+<h3>The API, tokens and webhooks</h3>
+<p>Other systems can use Pulse's API with a <b>personal API token</b>, made in Settings &gt; Security &amp; privacy. A token acts as you, with your permissions; it can be read-only or read-and-write, expires, is shown once, and can be revoked at any time. Administrators can see and revoke everyone's. <b>Outbound webhooks</b> tell another system when work items are created, changed, moved or commented on.</p>
+<figure class="half">
+  <img src="img/phases/p5-api-tokens.png" alt="API tokens in Security and privacy">
+  <figcaption><b>Settings &gt; Security &amp; privacy &gt; API tokens</b>, with a short API reference. The full reference is in <code>docs/API.md</code>.</figcaption>
+</figure>
+
+<h3>Notification schemes</h3>
+<p>Administrators decide, for each work item event, <b>who</b> is told (assignee, reporter, watchers, project lead, @mentioned people, everyone with a role) and <b>how</b> (bell, email, Teams). The defaults do what Pulse did before. Each person can still opt out of any event in Settings &gt; Notifications.</p>
+<figure>
+  <img src="img/phases/p5-schemes.png" alt="Settings, Notification schemes">
+  <figcaption><b>Settings &gt; Administration &gt; Notification schemes.</b> People are only ever told about items they can see, and never about their own changes.</figcaption>
+</figure>
+
+<h3>Security levels</h3>
+<p>A work item can be marked confidential with a <b>security level</b>, such as "Confidential – Managers only" or "HR only". Only administrators, the item's assignee and reporter, and the roles and people the level names can see it, everywhere in Pulse (lists, boards, reports, search, dashboards, notifications, Ask Pulse, the API). View-only links never see these items.</p>
+<figure>
+  <img src="img/phases/p5-levels.png" alt="Settings, Security levels">
+  <figcaption><b>Settings &gt; Administration &gt; Security levels.</b> Choose which roles and people may see each level. On a work item, the level is set in the details on the right.</figcaption>
+</figure>
+
+<h3>Custom fields</h3>
+<p>Each workspace can have its own <b>custom fields</b> (text, number, date, single or multi select, person). Administrators choose where each appears (create form, item page, board cards) and whether it's required. Custom fields can be searched in PQL (<code>"Client tier" = Gold</code>), saved in filters and exported to CSV.</p>
+<figure>
+  <img src="img/phases/p5-fields.png" alt="Settings, Custom fields">
+  <figcaption><b>Settings &gt; Administration &gt; Custom fields</b>, per workspace.</figcaption>
+</figure>
+<figure class="half">
+  <img src="img/phases/p5-custom-fields-panel.png" alt="More fields on a work item">
+  <figcaption><b>"More fields"</b> on a work item shows its custom fields; Edit fields changes them.</figcaption>
+</figure>
+
+<h3>Service desk</h3>
+<p>Pulse now has a <b>service desk</b> for incidents, service requests, changes and questions, from staff and from people without a Pulse account.</p>
+<ul>
+  <li><b>The portal:</b> a link (like a view-only link, expiring and revocable) for a client or site. People raise requests there and follow their own; they never see internal notes or other items. Staff raise requests from Service desk &gt; Raise a request.</li>
+  <li><b>Queues:</b> Unassigned, My open requests, SLA at risk, Breached and All open, most urgent first.</li>
+  <li><b>SLAs:</b> first-response and resolution targets per request type and priority, counted in business hours (Monday to Friday, 08:00 to 17:00 Harare time, less public holidays). The clock stops while a request waits for the customer. Pulse warns at 75% of a target and alerts on a breach.</li>
+  <li><b>Replies:</b> tick "Reply to the customer" on a comment and the customer sees it on the portal and by email; anything else is an internal note.</li>
+  <li><b>Changes</b> must go through Change Approval, which a Manager approves.</li>
+</ul>
+<figure>
+  <img src="img/phases/p5-portal.png" alt="The customer portal">
+  <figcaption><b>The customer portal</b> (no sign-in): choose what you need, answer the questions for that type, and send. The customer gets an email and can follow the request on the same link.</figcaption>
+</figure>
+<figure>
+  <img src="img/phases/p5-service-desk-queues.png" alt="Service desk queues">
+  <figcaption><b>Service desk &gt; Queues.</b> Each request shows its customer and both SLA clocks; here one has breached its first-reply target and is at risk on resolution.</figcaption>
+</figure>
+<figure>
+  <img src="img/phases/p5-request-item.png" alt="A service desk request as a work item">
+  <figcaption><b>A request is a work item</b> with a service desk panel: the SLA clocks, the customer (and their email, for staff only), and their answers.</figcaption>
+</figure>
+<figure>
+  <img src="img/phases/p5-service-desk-reports.png" alt="Service desk reports">
+  <figcaption><b>Service desk &gt; Reports:</b> SLA met against breached, volume by type and by week, and the average time to resolve.</figcaption>
+</figure>
+<figure>
+  <img src="img/phases/p5-sd-settings.png" alt="Settings, Service desk">
+  <figcaption><b>Settings &gt; Administration &gt; Service desk:</b> the project requests land in, request types with their questions and SLA targets, public holidays, and portal links.</figcaption>
+</figure>
+<div class="changed"><b>What changed for you:</b> new <b>Service desk</b> in the sidebar; new Settings pages for integrations, notification schemes, security levels, custom fields, the service desk and API tokens; "Reply to the customer" on service desk items; and an opt-out list in Settings &gt; Notifications. Five new permissions control who can do what (see below).</div>
+
+<!-- ======================================================= -->
+<h2>Who can do what</h2>
+<p>Each phase added permissions. Administrators can change any of these in Settings &gt; Administration &gt; Roles &amp; permissions; these are the defaults.</p>
+<table>
+  <tr><th>New permission</th><th style="width:9%">Phase</th><th>Given by default to</th></tr>
+  <tr><td>Create work items</td><td>1</td><td>Admin, Manager, Team Leader, Projects Assistant, Developer</td></tr>
+  <tr><td>Edit and assign any work item; Delete work items</td><td>1</td><td>Admin, Manager, Team Leader</td></tr>
+  <tr><td>Log time on work items</td><td>1</td><td>Admin, Manager, Team Leader, Developer</td></tr>
+  <tr><td>Edit workflows</td><td>2</td><td>Admin, Team Leader</td></tr>
+  <tr><td>Plan and run sprints</td><td>3</td><td>Admin, Manager, Team Leader</td></tr>
+  <tr><td>Share filters and dashboards</td><td>4</td><td>Admin, Manager, Team Leader, Projects Assistant</td></tr>
+  <tr><td>Manage automation rules</td><td>4</td><td>Admin, Team Leader</td></tr>
+  <tr><td>Use personal API tokens; Work the service desk</td><td>5</td><td>Every role except Standard user</td></tr>
+  <tr><td>Set up the service desk</td><td>5</td><td>Admin, Manager</td></tr>
+  <tr><td>Connect GitHub and manage webhooks; Manage notification schemes, security levels and custom fields</td><td>5</td><td>Admin</td></tr>
+</table>
+<p class="small">Anyone signed in can search, keep private filters and dashboards, and raise service desk requests. The rules that were already there still hold everywhere: developers see only their own items, feature requests and Concept Notes, and view-only links are read-only and never see contact details, documents or confidential items. Ask Pulse follows the same rules.</p>
+
+<h2>Where to read more</h2>
+<ul>
+  <li><b>Pulse - Running the System.pdf:</b> how to run Pulse, release changes and troubleshoot.</li>
+  <li><b>UPGRADE-LOG.md</b> and <b>DECISIONS.md</b> in the repository: each phase's full details and the choices made.</li>
+  <li><b>docs/API.md:</b> the API reference for other systems.</li>
+</ul>
+
+</body>
+</html>

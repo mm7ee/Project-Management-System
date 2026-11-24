@@ -263,9 +263,10 @@ export function Reports() {
               <tbody>
                 {r.byType.map((t) => (
                   <tr key={t.name}>
-                    <th scope="row">
-                      {t.name} <small className="muted">{REQUEST_KINDS[t.kind]}</small>
-                    </th>
+                    <td>
+                      <b>{t.name}</b>
+                      {t.name !== REQUEST_KINDS[t.kind] && <small className="muted"> {REQUEST_KINDS[t.kind]}</small>}
+                    </td>
                     <td>{t.count}</td>
                     <td>{t.resolved}</td>
                     <td>{t.averageResolveMinutes == null ? "—" : formatBusinessMinutes(t.averageResolveMinutes)}</td>
