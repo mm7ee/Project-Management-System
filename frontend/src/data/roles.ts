@@ -180,4 +180,5 @@ export interface UpdateRequest {
   requestedByName?: string; // set for requests made through a view-only link
   message: string;
   createdAt: string;
+  via?: import("./updateRequests").RequestChannel[]; // how the team was reached, besides the bell
 }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { channelList, cleanChannels } from "../data/updateRequests";
 import { AlertTriangle, Download, LogIn, RefreshCw, Search } from "lucide-react";
 import { api } from "../data/api";
 import { STATUS_META, initials, type Status, type System } from "../data/systems";
@@ -231,7 +232,7 @@ export function describe(e: ActivityEntry, users: User[], systems: System[]): st
     case "system_deleted":
       return `Deleted system ${name}`;
     case "request_created":
-      return `Requested an update on ${name}${d.message ? `: "${str(d.message)}"` : ""}`;
+      return `Requested an update on ${name}${Array.isArray(d.via) && d.via.length ? ` by ${channelList(cleanChannels(d.via))}` : ""}${d.message ? `: "${str(d.message)}"` : ""}`;
     case "feature_created":
       return `Logged feature request "${str(d.title)}" on ${name} (${prioLabel(d.priority)}${d.client ? `, for ${str(d.client)}` : ""}${
         d.assignee ? `, assigned to ${userName(d.assignee)}` : ""

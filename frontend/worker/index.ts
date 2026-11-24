@@ -25,6 +25,7 @@ import {
 import { DEFAULT_LIMITS, DEFAULT_WORKSPACES, MAX_DOCUMENT_BYTES, formatBytes, type Blocker, type Limits, type ProjectDocument } from "../src/data/project";
 import { buildShowcase } from "../src/data/showcase";
 import { PASSWORD_HISTORY, passwordProblem } from "../src/data/password";
+import { CHANNEL_LABEL, cleanChannels, type ChannelAvailability, type RequestChannel, type RequestDelivery } from "../src/data/updateRequests";
 import { RESET_ADDRESS_MINUTES, RESET_KEEP_HOURS, RESET_LINK_MINUTES, RESET_REPLY, resetOutcome } from "../src/data/passwordReset";
 import { SESSION_DAYS, SIGNIN_FAILURE_HOURS } from "../src/data/retention";
 import { DEFAULT_SIGNIN_RULES, SIGNIN_WINDOW_MINUTES, cleanSigninRules, lockMinutesFor, signinRefusal, type SigninRules } from "../src/data/signin";
@@ -33,7 +34,7 @@ import type { ProjectTemplate } from "../src/data/templates";
 import { awaitingSignature, cleanPcn, pcnStatus, type Pcn, type Signatory } from "../src/data/pcn";
 import { MAX_QUESTION, askStream, buildSnapshot, buildWorkFocus, type AskMode, type AskPerson, type AskTurn } from "./ask";
 import { newChallenge, readClientData, verifyAssertion, verifyRegistration } from "./webauthn";
-import { noteFailure, postToTeams, raise, readDelivery, securityEmail, sendEmail, emailFor, type Alert, type ChannelPost, type Delivery } from "./notify";
+import { noteFailure, pause, postToTeams, raise, readDelivery, securityEmail, sendEmail, emailFor, type Alert, type ChannelPost, type Delivery } from "./notify";
 import { runBriefing, runDailyDigests } from "./digest";
 import { toFeature, type FeatureRow } from "./rows";
 import { pgDatabase } from "./pg";
@@ -609,6 +610,9 @@ const ACTIVITY_KINDS: Record<string, string[]> = {
 };
 
 // ---------- email and Teams settings ----------
+
+/** Which ways a "Request update" can go: chat needs a real account; email and Teams need connecting. */
+const requestChannels = (d: Delivery, guest: boolean): ChannelAvailability => ({ chat: !guest, email: !!(d.resendKey && d.from), teams: !!d.teams });
 
 const TEAMS_HOSTS = [".logic.azure.com", ".powerplatform.com", ".powerautomate.com"];
 
@@ -1682,6 +1686,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
             ...(labels.has(r.requested_by) ? { requestedByName: labels.get(r.requested_by) } : {}),
             message: r.message,
             createdAt: r.created_at,
+            ...(r.via ? { via: cleanChannels(r.via.split(",")) } : {}),
           }),
         );
       })(),
@@ -1712,6 +1717,7 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
       ),
       limits,
       workspaces: await workspaceList(db),
+      requestChannels: requestChannels(await readDelivery(db), !!guest),
       ...(guest ? { viewOnly: { label: guest.label, expiresAt: guest.expires_at } } : {}),
       mfaPolicy: policy,
       ...(can("manage_users") ? { signinRules: await signinRules(db) } : {}),
@@ -2257,28 +2263,97 @@ async function api(req: Request, env: Env, path: string, ctx: ExecutionContext):
         .first<{ n: number }>();
       if ((recent?.n ?? 0) >= 10) throw new HttpError(429, "This link has made 10 update requests in the last hour. Try again later.");
     }
-    const b = await body<{ systemId?: string; message?: string }>(req);
+    const b = await body<{ systemId?: string; message?: string; via?: unknown }>(req);
     const system = await getSystem(db, String(b.systemId ?? ""));
+    const asked = text(b.message, "Message") ?? "";
+    // How to reach the team, as chosen (older clients send nothing: the bell and Teams, as before).
+    const delivery = await readDelivery(db);
+    const available = requestChannels(delivery, !!guest);
+    const via = b.via === undefined ? (available.teams ? (["teams"] as RequestChannel[]) : []) : cleanChannels(b.via);
+    if (b.via !== undefined && !via.length) throw new HttpError(400, "Choose how to send it: Pulse chat, email or Teams");
+    const off = via.find((c) => !available[c]);
+    if (off) {
+      throw new HttpError(
+        400,
+        off === "chat" ? "A view-only link can't post in Pulse chat. Choose email or Teams." : `${CHANNEL_LABEL[off]} isn't connected yet: an administrator can set it up in Settings → Notifications.`,
+      );
+    }
     const id = newToken().slice(0, 16);
     await db
-      .prepare("INSERT INTO requests (id, system_id, requested_by, message, created_at) VALUES (?, ?, ?, ?, ?)")
-      .bind(id, system.id, me.id, text(b.message, "Message") ?? "", now)
+      .prepare("INSERT INTO requests (id, system_id, requested_by, message, created_at, via) VALUES (?, ?, ?, ?, ?, ?)")
+      .bind(id, system.id, me.id, asked, now, via.join(",") || null)
       .run();
-    const asked = text(b.message, "Message") ?? "";
-    await audit(db, req, me, "request_created", system.id, { name: system.name, message: asked });
-    // Everyone working on the project hears: its developers and its lead.
-    const team = (await db.prepare("SELECT user_id FROM assignments WHERE system_id = ?").bind(system.id).all<{ user_id: string }>()).results.map((r) => r.user_id);
+    await audit(db, req, me, "request_created", system.id, { name: system.name, message: asked, via });
+    // Everyone working on the project: its developers and its lead.
+    const team = [
+      ...new Set([
+        ...(await db.prepare("SELECT user_id FROM assignments WHERE system_id = ?").bind(system.id).all<{ user_id: string }>()).results.map((r) => r.user_id),
+        ...(system.lead ? [system.lead] : []),
+      ]),
+    ].filter((u) => u !== me.id);
+    const people = team.length
+      ? (await db.prepare(`SELECT id, name, username, email FROM users WHERE id IN (${team.map(() => "?").join(", ")})`).bind(...team).all<{ id: string; name: string; username: string; email: string | null }>()).results
+      : [];
+    const title = `${me.name} asked for an update on ${system.name}`;
+    const sent: RequestDelivery = {};
+
+    // Pulse chat: a message in the project's channel, @mentioning the team, from the person asking.
+    if (via.includes("chat")) {
+      const conversationId = `p-${system.id}`;
+      const mentions = people.map((p) => `@${p.username}`).join(" ");
+      const message = `Update request for ${system.name}${mentions ? ` ${mentions}` : ""}: ${asked || "could you post an update on where this stands?"}`;
+      await db.batch([
+        db.prepare("INSERT INTO chat_conversations (id, kind, system_id, created_at) VALUES (?, 'project', ?, ?) ON CONFLICT DO NOTHING").bind(conversationId, system.id, now),
+        db
+          .prepare("INSERT INTO chat_members (conversation_id, user_id, joined_at) VALUES (?, ?, ?) ON CONFLICT (conversation_id, user_id) DO UPDATE SET left_at = NULL")
+          .bind(conversationId, me.id, now),
+        ...people.map((p) =>
+          db.prepare("INSERT INTO chat_members (conversation_id, user_id, joined_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING").bind(conversationId, p.id, now),
+        ),
+        db.prepare("INSERT INTO chat_messages (conversation_id, user_id, kind, body, created_at, updated_at) VALUES (?, ?, 'text', ?, ?, ?)").bind(conversationId, me.id, message.slice(0, 4000), now, now),
+        db.prepare("UPDATE chat_conversations SET last_message_at = ? WHERE id = ?").bind(now, conversationId),
+      ]);
+      sent.chat = { conversationId };
+    }
+
+    // The bell, always; it opens the chat message when there is one, the project otherwise.
     alert(
-      [...new Set([...team, ...(system.lead ? [system.lead] : [])])].map((userId) => ({
-        userId,
+      people.map((p) => ({
+        userId: p.id,
         kind: "update_requested" as const,
-        title: `${me.name} asked for an update on ${system.name}`,
+        title,
         body: asked,
-        link: `#/projects/${system.id}`,
+        link: sent.chat ? `#/chat/${sent.chat.conversationId}` : `#/projects/${system.id}`,
+        email: false,
       })),
-      { title: `${me.name} asked for an update on ${system.name}`, body: asked, link: `#/projects/${system.id}` },
     );
-    return json({ ok: true }, 201);
+
+    // Email: straight to each of them, since the person asking chose it. Sent after the reply.
+    if (via.includes("email")) {
+      const withAddress = people.filter((p) => p.email);
+      sent.email = { sent: withAddress.length, noAddress: people.filter((p) => !p.email).map((p) => p.name) };
+      const mail = emailFor(env, title, asked ? `"${asked}"` : "They'd like to know where the project stands.", undefined, `#/projects/${system.id}`);
+      ctx.waitUntil(
+        (async () => {
+          for (const p of withAddress) {
+            await sendEmail(env, delivery, p.email!, mail.subject, mail.html, mail.text).catch((e) => noteFailure(db, "Email", e));
+            if (withAddress.length > 1) await pause(550);
+          }
+        })(),
+      );
+    }
+
+    // Teams: the connected channel, written for the team.
+    if (via.includes("teams")) {
+      try {
+        await postToTeams(env, delivery, { title, body: asked, link: `#/projects/${system.id}` });
+        sent.teams = { ok: true };
+      } catch (e) {
+        await noteFailure(db, "Teams", e);
+        sent.teams = { ok: false };
+      }
+    }
+    return json({ ok: true, via, sent }, 201);
   }
 
   const reqMatch = path.match(/^\/api\/requests\/([a-f0-9]+)$/);

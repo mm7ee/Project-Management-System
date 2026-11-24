@@ -74,6 +74,7 @@ export interface AppData {
   blockers: Blocker[];
   limits: Limits;
   workspaces: string[]; // the workspace list projects are grouped by
+  requestChannels?: import("./updateRequests").ChannelAvailability; // how "Request update" can reach a team
   mfaPolicy: MfaPolicy;
   signinRules?: SigninRules; // the lockout rules (administrators only)
   recoveryCodesLeft: number; // your unused two-step recovery codes

@@ -15,6 +15,7 @@ import AddSystemModal from "./components/AddSystemModal";
 import SettingsPage from "./components/SettingsPage";
 import { DeliverySection } from "./components/NotificationSettings";
 import ForcePasswordChange from "./components/ForcePasswordChange";
+import type { RequestDelivery } from "./data/updateRequests";
 import ForceMfaSetup from "./components/ForceMfaSetup";
 import ExecutivePage from "./components/ExecutivePage";
 import ActivityPage from "./components/ActivityPage";
@@ -553,9 +554,11 @@ function Dashboard({ data, reload }: { data: AppData; reload: () => Promise<void
                 closeProject();
                 await reload();
               }}
-              onRequest={async (id, message) => {
-                await api("/requests", "POST", { systemId: id, message });
+              requestChannels={data.requestChannels}
+              onRequest={async (id, message, via) => {
+                const r = await api<{ sent: RequestDelivery }>("/requests", "POST", { systemId: id, message, via });
                 await reload();
+                return r.sent;
               }}
               onDismiss={async (requestId) => {
                 await api(`/requests/${requestId}`, "DELETE");

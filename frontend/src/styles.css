@@ -2729,3 +2729,15 @@ span.backlog-points { border-color: transparent; background: var(--track); }
 .viz-card h3 { margin: 0; }
 @media (max-width: 860px) { .viz-pair { grid-template-columns: minmax(0, 1fr); } }
 .seg button svg { vertical-align: -2px; margin-right: 2px; }
+
+/* Request update: how to send it. */
+.request-channels { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.request-channels legend { padding: 0; margin-bottom: 6px; font-size: 13px; font-weight: 700; color: var(--text); }
+.request-channel-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.request-channel { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 99px; border: 1.5px solid var(--border); background: var(--card); color: var(--text); font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.request-channel:hover:not(:disabled) { border-color: var(--cyan); }
+.request-channel.on { background: var(--navy); border-color: var(--navy); color: #fff; }
+.request-channel:disabled { opacity: .5; cursor: not-allowed; }
+.request-channel-hint { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.request-via { display: block; margin-top: 2px; font-size: 12px; opacity: .85; }
+.request-sent { margin: 0 0 8px; padding: 9px 12px; border-radius: 10px; background: var(--tint-cyan); color: var(--text); font-size: 13.5px; line-height: 1.45; }

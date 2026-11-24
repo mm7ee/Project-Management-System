@@ -33,6 +33,8 @@ import { describe } from "./ActivityPage";
 import { DeveloperSearch } from "./DeveloperPicker";
 import { FeatureStatusPill, PriorityBadge } from "./FeatureModal";
 import LeadContact from "./LeadContact";
+import RequestChannels, { deliveryNote, savedChannels } from "./RequestChannels";
+import { channelList, type ChannelAvailability, type RequestChannel, type RequestDelivery } from "../data/updateRequests";
 import WorkItemsTab from "./WorkItemsTab";
 import WorkItemPage from "./WorkItemPage";
 import BoardView from "./BoardView";
@@ -66,7 +68,8 @@ interface Props {
   workspaces: string[];
   onChangeWorkspace: (id: string, workspace: string) => Promise<void>;
   onChangeDevelopers: (id: string, developers: string[]) => Promise<void>;
-  onRequest: (id: string, message: string) => Promise<void>;
+  onRequest: (id: string, message: string, via: RequestChannel[]) => Promise<RequestDelivery>;
+  requestChannels?: ChannelAvailability;
   onDismiss: (requestId: string) => Promise<void>;
   onOpenFeature: (f: Feature) => void;
   onNewFeature: () => void;
@@ -100,6 +103,8 @@ export default function ProjectPage(p: Props) {
   const [confirming, setConfirming] = useState(false);
   const [asking, setAsking] = useState(false);
   const [message, setMessage] = useState("");
+  const [via, setVia] = useState<RequestChannel[]>(() => savedChannels(p.requestChannels));
+  const [sentNote, setSentNote] = useState<{ text: string; chatId?: string } | null>(null);
   const [saving, setSaving] = useState(false); // a developer change is on its way to the server
   const [error, setError] = useState("");
   const [history, setHistory] = useState<ActivityEntry[] | null>(null);
@@ -497,6 +502,7 @@ export default function ProjectPage(p: Props) {
                     <b>
                       {r.requestedByName ?? nameOf(r.requestedBy)} requested an update · {timeAgo(r.createdAt, now)}
                     </b>
+                    {r.via?.length ? <small className="request-via">Sent by {channelList(r.via)}</small> : null}
                     {r.message && <p>“{r.message}”</p>}
                   </div>
                   {(r.requestedBy === me.id || me.projectIds?.includes(system.id) || p.canManage) && (
@@ -513,26 +519,41 @@ export default function ProjectPage(p: Props) {
                     onSubmit={(e) => {
                       e.preventDefault();
                       attempt(async () => {
-                        await p.onRequest(system.id, message.trim());
+                        const sent = await p.onRequest(system.id, message.trim(), via);
+                        setSentNote(deliveryNote(sent));
                         setAsking(false);
                         setMessage("");
                       });
                     }}
                   >
                     <textarea rows={2} autoFocus value={message} onChange={(e) => setMessage(e.target.value)} placeholder="What do you need to know? (optional)" />
+                    <RequestChannels available={p.requestChannels} value={via} onChange={setVia} />
                     <div className="confirm-actions">
                       <button type="button" className="btn btn-ghost" onClick={() => setAsking(false)}>
                         Cancel
                       </button>
-                      <button type="submit" className="btn btn-navy">
+                      <button type="submit" className="btn btn-navy" disabled={!via.length}>
                         Send request
                       </button>
                     </div>
                   </form>
                 ) : (
-                  <button className="btn btn-ghost block-sm" onClick={() => setAsking(true)}>
+                  <>
+                  {sentNote && (
+                    <p className="request-sent" role="status">
+                      {sentNote.text}
+                      {sentNote.chatId && (
+                        <>
+                          {" "}
+                          <a href={`#/chat/${sentNote.chatId}`}>Open the chat</a>
+                        </>
+                      )}
+                    </p>
+                  )}
+                  <button className="btn btn-ghost block-sm" onClick={() => { setSentNote(null); setAsking(true); }}>
                     <BellRing size={15} /> Request update
                   </button>
+                  </>
                 ))}
             </section>
           )}

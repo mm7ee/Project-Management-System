@@ -546,3 +546,18 @@ Choices made during the Pulse upgrade that later phases must follow. Newest last
   client (delivered, open, open-and-late) with on-time rate; delivery time per type as median and 80th percentile.
 - **Definitions:** a cancelled request leaves the backlog at its last update; "on time" means delivered on or before
   the expected date (the day itself counts); lead time is request to delivery.
+
+## Request update: choose Pulse chat, email or Teams (2026-11-25)
+
+- **The choice:** the Request update form offers Pulse chat, Email and Teams (one or more). Email and Teams are
+  greyed out until an administrator connects them in Settings → Notifications; a view-only link can't use chat.
+  The browser remembers the last choice. Whatever is chosen, the project lead and developers are also told under
+  the bell, so a request is never lost.
+- **Pulse chat** posts a message in the project's channel (`p-<project id>`) from the person asking, @mentioning
+  the lead and developers (the channel is made, and they are added, if needed). The bell notification then links to
+  that message. No separate chat notification is raised, so nobody hears twice.
+- **Email** goes straight to each team member with an address, whatever their email-alert setting: the person
+  asking chose it, like sending an email themselves. The reply says who has no address.
+- **Teams** posts to the connected channel; the reply says if Teams refused it.
+- `requests.via` (migration `0011_request_channels.sql`) records the choice; the request card and activity log show
+  it. A client that sends no choice gets the old behaviour (bell, plus Teams when connected).
