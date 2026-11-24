@@ -13,12 +13,23 @@ import type { ItemContext } from "./workitems";
 import type { Alert } from "./notify";
 import { mentionsIn } from "../src/data/workitems";
 import {
+  INLINE_IMAGE,
+  MAX_CHAT_FILE,
+  MAX_CHAT_FILES,
   MAX_GROUP_NAME,
   MAX_GROUP_SIZE,
   MAX_MESSAGE,
+  MAX_REACTIONS,
   PAGE_SIZE,
   cleanMessage,
   directKey,
+  fileSize,
+  isEmoji,
+  isSticker,
+  messagePreview,
+  validGif,
+  type ChatFile,
+  type ChatGif,
   type ChatMessage,
   type Conversation,
   type ConversationKind,
@@ -46,21 +57,42 @@ interface MessageRow {
   created_at: string;
   edited_at: string | null;
   deleted_at: string | null;
+  meta: string | null;
+  reply_to: number | null;
+  pinned_at: string | null;
+  pinned_by: string | null;
 }
 
-const toMessage = (r: MessageRow): ChatMessage => ({
-  id: Number(r.id),
-  conversationId: r.conversation_id,
-  userId: r.user_id,
-  kind: r.kind,
-  // A deleted message keeps its place in the conversation, without its words.
-  body: r.deleted_at ? "" : r.body,
-  createdAt: r.created_at,
-  ...(r.edited_at ? { editedAt: r.edited_at } : {}),
-  ...(r.deleted_at ? { deletedAt: r.deleted_at } : {}),
-});
+type Meta = { gif?: ChatGif; sticker?: string };
+const parseMeta = (s: string | null): Meta => {
+  if (!s) return {};
+  try {
+    return JSON.parse(s) as Meta;
+  } catch {
+    return {};
+  }
+};
 
-const MESSAGE_COLUMNS = "id, conversation_id, user_id, kind, body, created_at, edited_at, deleted_at";
+const toMessage = (r: MessageRow): ChatMessage => {
+  const meta = r.deleted_at ? {} : parseMeta(r.meta);
+  return {
+    id: Number(r.id),
+    conversationId: r.conversation_id,
+    userId: r.user_id,
+    kind: r.kind,
+    // A deleted message keeps its place in the conversation, without its words, files, GIF or sticker.
+    body: r.deleted_at ? "" : r.body,
+    createdAt: r.created_at,
+    ...(r.edited_at ? { editedAt: r.edited_at } : {}),
+    ...(r.deleted_at ? { deletedAt: r.deleted_at } : {}),
+    ...(meta.gif ? { gif: meta.gif } : {}),
+    ...(meta.sticker ? { sticker: meta.sticker } : {}),
+    ...(r.pinned_at && !r.deleted_at ? { pinnedAt: r.pinned_at, pinnedBy: r.pinned_by ?? undefined } : {}),
+  };
+};
+
+const MESSAGE_COLUMNS = "id, conversation_id, user_id, kind, body, created_at, edited_at, deleted_at, meta, reply_to, pinned_at, pinned_by";
+const marks = (n: number) => Array.from({ length: n }, () => "?").join(", ");
 const CONVERSATION_SELECT = `SELECT c.id, c.kind, c.name, c.system_id, c.created_by, c.created_at, c.last_message_at, (s.data::jsonb ->> 'name') AS system_name
   FROM chat_conversations c LEFT JOIN systems s ON s.id = c.system_id`;
 /** A poll asks for changes since its last answer; this much overlap covers clocks a little apart. */
@@ -131,24 +163,84 @@ export async function chatApi(c: ItemContext, path: string, method: string): Pro
       .bind(conversationId, me.id, text, c.now, c.now);
   const touch = (conversationId: string) => db.prepare("UPDATE chat_conversations SET last_message_at = ? WHERE id = ?").bind(c.now, conversationId);
 
+  /** Messages with their files, reactions and the quote of what they reply to: three queries per page. */
+  const enrich = async (rows: MessageRow[]): Promise<ChatMessage[]> => {
+    const live = rows.filter((r) => !r.deleted_at).map((r) => Number(r.id));
+    const replyIds = [...new Set(rows.filter((r) => r.reply_to && !r.deleted_at).map((r) => Number(r.reply_to)))];
+    const [files, reactions, replies] = await Promise.all([
+      live.length
+        ? db.prepare(`SELECT id, message_id, name, mime, size FROM chat_files WHERE message_id IN (${marks(live.length)}) ORDER BY uploaded_at, id`).bind(...live).all<{ id: string; message_id: number; name: string; mime: string; size: number }>()
+        : null,
+      live.length
+        ? db.prepare(`SELECT message_id, emoji, user_id FROM chat_reactions WHERE message_id IN (${marks(live.length)}) ORDER BY created_at`).bind(...live).all<{ message_id: number; emoji: string; user_id: string }>()
+        : null,
+      replyIds.length && rows.length
+        ? db
+            .prepare(`SELECT ${MESSAGE_COLUMNS} FROM chat_messages WHERE conversation_id = ? AND id IN (${marks(replyIds.length)})`)
+            .bind(rows[0].conversation_id, ...replyIds)
+            .all<MessageRow>()
+        : null,
+    ]);
+    const filesOf = new Map<number, ChatFile[]>();
+    for (const f of files?.results ?? []) {
+      const list = filesOf.get(Number(f.message_id)) ?? [];
+      list.push({ id: f.id, name: f.name, mime: f.mime, size: Number(f.size) });
+      filesOf.set(Number(f.message_id), list);
+    }
+    const reactionsOf = new Map<number, Map<string, string[]>>();
+    for (const r of reactions?.results ?? []) {
+      const byEmoji = reactionsOf.get(Number(r.message_id)) ?? new Map<string, string[]>();
+      byEmoji.set(r.emoji, [...(byEmoji.get(r.emoji) ?? []), r.user_id]);
+      reactionsOf.set(Number(r.message_id), byEmoji);
+    }
+    const quoted = new Map((replies?.results ?? []).map((r) => [Number(r.id), r]));
+    return rows.map((r) => {
+      const m = toMessage(r);
+      if (r.deleted_at) return m;
+      const id = Number(r.id);
+      const f = filesOf.get(id);
+      if (f) m.files = f;
+      const re = reactionsOf.get(id);
+      if (re) m.reactions = [...re].map(([emoji, userIds]) => ({ emoji, userIds }));
+      const q = r.reply_to ? quoted.get(Number(r.reply_to)) : undefined;
+      if (q) {
+        const meta = parseMeta(q.meta);
+        m.replyTo = q.deleted_at
+          ? { id: Number(q.id), userId: q.user_id, body: "", deleted: true }
+          : { id: Number(q.id), userId: q.user_id, body: messagePreview({ body: q.body, gif: meta.gif, sticker: meta.sticker, fileName: filesOf.get(Number(q.id))?.[0]?.name }).slice(0, 160) || "Attachment" };
+      }
+      return m;
+    });
+  };
+  const oneMessage = async (conversationId: string, id: number) => {
+    const row = await db.prepare(`SELECT ${MESSAGE_COLUMNS} FROM chat_messages WHERE id = ? AND conversation_id = ?`).bind(id, conversationId).first<MessageRow>();
+    return row ? (await enrich([row]))[0] : null;
+  };
+
   /** Your conversations, newest first, with what's unread. */
   const listConversations = async (): Promise<Conversation[]> => {
     const rows = await db
       .prepare(
         `SELECT c.id, c.kind, c.name, c.system_id, c.created_by, c.created_at, c.last_message_at, (s.data::jsonb ->> 'name') AS system_name,
-           lm.user_id AS lm_user, lm.body AS lm_body, lm.kind AS lm_kind, lm.created_at AS lm_at, lm.deleted_at AS lm_deleted,
+           lm.user_id AS lm_user, lm.body AS lm_body, lm.kind AS lm_kind, lm.created_at AS lm_at, lm.deleted_at AS lm_deleted, lm.meta AS lm_meta,
+           (SELECT f.name FROM chat_files f WHERE f.message_id = lm.id ORDER BY f.uploaded_at LIMIT 1) AS lm_file,
            (SELECT COUNT(*) FROM chat_messages x WHERE x.conversation_id = c.id AND x.id > m.last_read_id AND x.user_id <> ? AND x.deleted_at IS NULL) AS unread
          FROM chat_members m
          JOIN chat_conversations c ON c.id = m.conversation_id
          LEFT JOIN systems s ON s.id = c.system_id
-         LEFT JOIN LATERAL (SELECT user_id, body, kind, created_at, deleted_at FROM chat_messages y WHERE y.conversation_id = c.id ORDER BY y.id DESC LIMIT 1) lm ON TRUE
+         LEFT JOIN LATERAL (SELECT id, user_id, body, kind, created_at, deleted_at, meta FROM chat_messages y WHERE y.conversation_id = c.id ORDER BY y.id DESC LIMIT 1) lm ON TRUE
          WHERE m.user_id = ? AND m.left_at IS NULL
          ORDER BY COALESCE(c.last_message_at, c.created_at) DESC
          LIMIT 200`,
       )
       .bind(me.id, me.id)
-      .all<ConversationRow & { lm_user: string | null; lm_body: string | null; lm_kind: MessageKind | null; lm_at: string | null; lm_deleted: string | null; unread: number }>();
+      .all<ConversationRow & { lm_user: string | null; lm_body: string | null; lm_kind: MessageKind | null; lm_at: string | null; lm_deleted: string | null; lm_meta: string | null; lm_file: string | null; unread: number }>();
     const members = await memberIds(rows.results.map((r) => r.id));
+    // A GIF, sticker or file with no words still shows something in the list.
+    const preview = (r: { lm_body: string | null; lm_meta: string | null; lm_file: string | null }) => {
+      const meta = parseMeta(r.lm_meta);
+      return messagePreview({ body: r.lm_body ?? "", gif: meta.gif, sticker: meta.sticker, fileName: r.lm_file }).slice(0, 140);
+    };
     return rows.results.map((r) => ({
       id: r.id,
       kind: r.kind,
@@ -156,7 +248,7 @@ export async function chatApi(c: ItemContext, path: string, method: string): Pro
       ...(r.system_id ? { systemId: r.system_id } : {}),
       memberIds: members.get(r.id) ?? [],
       ...(r.created_by ? { createdBy: r.created_by } : {}),
-      ...(r.lm_user && r.lm_at ? { lastMessage: { userId: r.lm_user, body: r.lm_deleted ? "" : (r.lm_body ?? "").slice(0, 140), at: r.lm_at, kind: r.lm_kind ?? "text" } } : {}),
+      ...(r.lm_user && r.lm_at ? { lastMessage: { userId: r.lm_user, body: r.lm_deleted ? "" : preview(r), at: r.lm_at, kind: r.lm_kind ?? "text" } } : {}),
       ...(r.last_message_at ? { lastMessageAt: r.last_message_at } : {}),
       unread: Number(r.unread),
       member: true,
@@ -282,6 +374,31 @@ export async function chatApi(c: ItemContext, path: string, method: string): Pro
     const id = projectChannelId(system.id);
     await db.batch([db.prepare("INSERT INTO chat_conversations (id, kind, system_id, created_at) VALUES (?, 'project', ?, ?) ON CONFLICT DO NOTHING").bind(id, system.id, c.now), join(id)]);
     return json({ id });
+  }
+
+  // ----- GIFs: GIPHY search, through the Worker so the browser never calls GIPHY with the key -----
+  // Off until an administrator sets the GIPHY_API_KEY secret. Only G-rated results.
+  if (path === "/api/chat/gifs" && method === "GET") {
+    const key = c.env?.GIPHY_API_KEY;
+    if (!key) return json({ enabled: false, results: [] });
+    const q = (url.searchParams.get("q") ?? "").trim().slice(0, 50);
+    const offset = Math.min(500, Math.max(0, Number(url.searchParams.get("offset")) || 0));
+    const giphy = new URL(`https://api.giphy.com/v1/gifs/${q ? "search" : "trending"}`);
+    giphy.search = new URLSearchParams({ api_key: key, limit: "24", offset: String(offset), rating: "g", lang: "en", bundle: "messaging_non_clips", ...(q ? { q } : {}) }).toString();
+    const res = await fetch(giphy.toString(), { headers: { accept: "application/json" } }).catch(() => null);
+    if (!res || !res.ok) throw new HttpError(502, "GIF search isn't answering right now. Try again in a moment.");
+    type Img = { url?: string; width?: string; height?: string };
+    const data = (await res.json().catch(() => ({}))) as { data?: { id: string; title?: string; images?: Record<string, Img> }[] };
+    const results = (data.data ?? [])
+      .map((g) => {
+        const full = g.images?.fixed_height ?? g.images?.downsized;
+        const small = g.images?.fixed_height_small ?? full;
+        const gif = validGif({ id: g.id, url: full?.url?.split("?")[0], width: full?.width, height: full?.height, title: g.title });
+        const preview = small?.url?.split("?")[0];
+        return gif && preview && validGif({ ...gif, url: preview }) ? { ...gif, preview } : null;
+      })
+      .filter(Boolean);
+    return new Response(JSON.stringify({ enabled: true, results }), { headers: { "content-type": "application/json", "cache-control": "private, max-age=60" } });
   }
 
   // ----- starting conversations -----
@@ -421,7 +538,8 @@ export async function chatApi(c: ItemContext, path: string, method: string): Pro
         db.prepare(`SELECT ${MESSAGE_COLUMNS} FROM chat_messages WHERE conversation_id = ? AND id <= ? AND updated_at > ? ORDER BY id LIMIT 200`).bind(row.id, after, since).all<MessageRow>(),
       ]);
       messages = fresh.results;
-      changed = edits.results.filter((m) => m.edited_at || m.deleted_at);
+      // Edits, deletions, reactions and pins all move updated_at.
+      changed = edits.results;
     }
     // Reading the conversation, with the tab in view, marks it read, and its notifications with it.
     if (member && q.get("read") === "1") {
@@ -440,9 +558,10 @@ export async function chatApi(c: ItemContext, path: string, method: string): Pro
       .prepare("SELECT user_id, last_read_id FROM chat_members WHERE conversation_id = ? AND left_at IS NULL")
       .bind(row.id)
       .all<{ user_id: string; last_read_id: number }>();
+    const [shown, updated] = await Promise.all([enrich(messages), enrich(changed)]);
     const page: MessagesPage = {
-      messages: messages.map(toMessage),
-      changed: changed.map(toMessage),
+      messages: shown,
+      changed: updated,
       readers: readers.results.map((r) => ({ userId: r.user_id, lastReadId: Number(r.last_read_id) })),
       hasOlder,
       now: new Date().toISOString(),
@@ -452,48 +571,205 @@ export async function chatApi(c: ItemContext, path: string, method: string): Pro
 
   if (rest === "/messages" && method === "POST") {
     const { row, member } = await open(conversationId);
-    const text = cleanMessage(String((await body<{ body?: unknown }>(req)).body ?? ""));
-    if (!text) throw new HttpError(400, "Write a message first");
+    const b = await body<{ body?: unknown; replyTo?: unknown; files?: unknown; gif?: unknown; sticker?: unknown }>(req);
+    const text = cleanMessage(String(b.body ?? ""));
     if (text.length > MAX_MESSAGE) throw new HttpError(400, `Messages are up to ${MAX_MESSAGE.toLocaleString("en-GB")} characters`);
+    const gif = b.gif === undefined || b.gif === null ? null : validGif(b.gif);
+    if (b.gif && !gif) throw new HttpError(400, "That GIF can't be sent");
+    const sticker = b.sticker === undefined || b.sticker === null ? null : isSticker(b.sticker) ? b.sticker : undefined;
+    if (sticker === undefined) throw new HttpError(400, "That sticker doesn't exist");
+    if (gif && sticker) throw new HttpError(400, "Send a GIF or a sticker, not both");
+    const fileIds = [...new Set((Array.isArray(b.files) ? b.files : []).map(String))];
+    if (fileIds.length > MAX_CHAT_FILES) throw new HttpError(400, `Up to ${MAX_CHAT_FILES} files in one message`);
+    if (fileIds.length) {
+      // Only your own uploads to this conversation that aren't on a message yet.
+      const mine = await db
+        .prepare(`SELECT id FROM chat_files WHERE id IN (${marks(fileIds.length)}) AND conversation_id = ? AND uploaded_by = ? AND message_id IS NULL`)
+        .bind(...fileIds, row.id, me.id)
+        .all<{ id: string }>();
+      if (mine.results.length !== fileIds.length) throw new HttpError(400, "One of those files isn't ready. Attach it again.");
+    }
+    if (!text && !gif && !sticker && !fileIds.length) throw new HttpError(400, "Write a message first");
+    let replyTo: number | null = null;
+    if (b.replyTo !== undefined && b.replyTo !== null) {
+      const target = await db
+        .prepare("SELECT id FROM chat_messages WHERE id = ? AND conversation_id = ? AND kind = 'text' AND deleted_at IS NULL")
+        .bind(Number(b.replyTo), row.id)
+        .first<{ id: number }>();
+      if (!target) throw new HttpError(400, "The message you're replying to has gone");
+      replyTo = Number(target.id);
+    }
+    const meta: Meta = { ...(gif ? { gif } : {}), ...(sticker ? { sticker } : {}) };
     // Writing in a project channel joins it.
     if (!member) await join(row.id).run();
     const saved = await db
-      .prepare(`INSERT INTO chat_messages (conversation_id, user_id, kind, body, created_at, updated_at) VALUES (?, ?, 'text', ?, ?, ?) RETURNING ${MESSAGE_COLUMNS}`)
-      .bind(row.id, me.id, text, c.now, c.now)
+      .prepare(`INSERT INTO chat_messages (conversation_id, user_id, kind, body, meta, reply_to, created_at, updated_at) VALUES (?, ?, 'text', ?, ?, ?, ?, ?) RETURNING ${MESSAGE_COLUMNS}`)
+      .bind(row.id, me.id, text, Object.keys(meta).length ? JSON.stringify(meta) : null, replyTo, c.now, c.now)
       .first<MessageRow>();
     await db.batch([
       touch(row.id),
       db.prepare("UPDATE chat_members SET last_read_id = GREATEST(last_read_id, ?) WHERE conversation_id = ? AND user_id = ?").bind(saved!.id, row.id, me.id),
+      ...(fileIds.length ? [db.prepare(`UPDATE chat_files SET message_id = ? WHERE id IN (${marks(fileIds.length)}) AND uploaded_by = ?`).bind(saved!.id, ...fileIds, me.id)] : []),
     ]);
-    c.defer?.(notifyMessage(row, Number(saved!.id), text));
-    return json(toMessage(saved!), 201);
+    const [message] = await enrich([saved!]);
+    const said = messagePreview({ body: text, gif, sticker, files: message.files });
+    c.defer?.(notifyMessage(row, Number(saved!.id), text ? text : said));
+    return json(message, 201);
   }
 
-  const messageMatch = rest.match(/^\/messages\/(\d{1,15})$/);
-  if (messageMatch && (method === "PUT" || method === "DELETE")) {
-    const { row } = await open(conversationId);
+  const messageMatch = rest.match(/^\/messages\/(\d{1,15})(\/reactions|\/pin)?$/);
+  const findMessage = async (conversation: string) => {
     const msg = await db
       .prepare(`SELECT ${MESSAGE_COLUMNS} FROM chat_messages WHERE id = ? AND conversation_id = ? AND deleted_at IS NULL`)
-      .bind(Number(messageMatch[1]), row.id)
+      .bind(Number(messageMatch![1]), conversation)
       .first<MessageRow>();
     if (!msg || msg.kind !== "text") throw new HttpError(404, "Message not found");
+    return msg;
+  };
+
+  // Reactions: one click adds your emoji, the next takes it away.
+  if (messageMatch?.[2] === "/reactions" && method === "POST") {
+    const { row, member } = await open(conversationId);
+    const msg = await findMessage(row.id);
+    const emoji = (await body<{ emoji?: unknown }>(req)).emoji;
+    if (!isEmoji(emoji)) throw new HttpError(400, "Choose an emoji");
+    if (!member) await join(row.id).run();
+    const removed = await db.prepare("DELETE FROM chat_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?").bind(msg.id, me.id, emoji).run();
+    if (!removed.meta.changes) {
+      const kinds = await db.prepare("SELECT COUNT(DISTINCT emoji) AS n FROM chat_reactions WHERE message_id = ? AND emoji <> ?").bind(msg.id, emoji).first<{ n: number }>();
+      if (Number(kinds?.n ?? 0) >= MAX_REACTIONS) throw new HttpError(400, `A message can have up to ${MAX_REACTIONS} different reactions`);
+      await db.prepare("INSERT INTO chat_reactions (message_id, user_id, emoji, created_at) VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING").bind(msg.id, me.id, emoji, c.now).run();
+    }
+    // Moving updated_at is how everyone else's next poll hears about it.
+    await db.prepare("UPDATE chat_messages SET updated_at = ? WHERE id = ?").bind(c.now, msg.id).run();
+    return json(await oneMessage(row.id, Number(msg.id)));
+  }
+
+  // Pins: anyone in the conversation may pin or unpin a message for everyone.
+  if (messageMatch?.[2] === "/pin" && method === "POST") {
+    const { row, member } = await open(conversationId);
+    if (!member) throw new HttpError(403, "Join the channel to pin messages");
+    const msg = await findMessage(row.id);
+    const pin = !msg.pinned_at;
+    await db
+      .prepare("UPDATE chat_messages SET pinned_at = ?, pinned_by = ?, updated_at = ? WHERE id = ?")
+      .bind(pin ? c.now : null, pin ? me.id : null, c.now, msg.id)
+      .run();
+    return json(await oneMessage(row.id, Number(msg.id)));
+  }
+
+  if (messageMatch && !messageMatch[2] && (method === "PUT" || method === "DELETE")) {
+    const { row } = await open(conversationId);
+    const msg = await findMessage(row.id);
     if (method === "PUT") {
       if (msg.user_id !== me.id) throw new HttpError(403, "You can only edit your own messages");
       const text = cleanMessage(String((await body<{ body?: unknown }>(req)).body ?? ""));
-      if (!text) throw new HttpError(400, "A message can't be empty. Delete it instead.");
+      const hasFiles = await db.prepare("SELECT 1 AS x FROM chat_files WHERE message_id = ? LIMIT 1").bind(msg.id).first();
+      // Words can be cleared from a message that still carries a file, GIF or sticker.
+      if (!text && !msg.meta && !hasFiles) throw new HttpError(400, "A message can't be empty. Delete it instead.");
       if (text.length > MAX_MESSAGE) throw new HttpError(400, `Messages are up to ${MAX_MESSAGE.toLocaleString("en-GB")} characters`);
-      const updated = await db
-        .prepare(`UPDATE chat_messages SET body = ?, edited_at = ?, updated_at = ? WHERE id = ? RETURNING ${MESSAGE_COLUMNS}`)
-        .bind(text, c.now, c.now, msg.id)
-        .first<MessageRow>();
-      return json(toMessage(updated!));
+      await db.prepare("UPDATE chat_messages SET body = ?, edited_at = ?, updated_at = ? WHERE id = ?").bind(text, c.now, c.now, msg.id).run();
+      return json(await oneMessage(row.id, Number(msg.id)));
     }
     // Your own messages; in a group or project channel, someone who manages users may remove any.
     const moderating = msg.user_id !== me.id;
     if (moderating && (row.kind === "direct" || !c.can("manage_users"))) throw new HttpError(403, "You can only delete your own messages");
-    await db.prepare("UPDATE chat_messages SET deleted_at = ?, updated_at = ? WHERE id = ?").bind(c.now, c.now, msg.id).run();
+    // A deleted message's files and reactions go with it (the chunks follow by ON DELETE CASCADE).
+    await db.batch([
+      db.prepare("UPDATE chat_messages SET deleted_at = ?, updated_at = ?, pinned_at = NULL, pinned_by = NULL WHERE id = ?").bind(c.now, c.now, msg.id),
+      db.prepare("DELETE FROM chat_files WHERE message_id = ?").bind(msg.id),
+      db.prepare("DELETE FROM chat_reactions WHERE message_id = ?").bind(msg.id),
+    ]);
     if (moderating) await c.audit("chat_message_removed", null, { where: row.kind === "project" ? `#${row.system_name ?? "project"}` : row.name });
     return json({ ok: true });
+  }
+
+  // ----- pinned messages, and searching one conversation -----
+  if (rest === "/pins" && method === "GET") {
+    const { row } = await open(conversationId);
+    const rows = await db
+      .prepare(`SELECT ${MESSAGE_COLUMNS} FROM chat_messages WHERE conversation_id = ? AND pinned_at IS NOT NULL AND deleted_at IS NULL ORDER BY pinned_at DESC LIMIT 50`)
+      .bind(row.id)
+      .all<MessageRow>();
+    return json(await enrich(rows.results));
+  }
+
+  if (rest === "/search" && method === "GET") {
+    const { row } = await open(conversationId);
+    const q = (url.searchParams.get("q") ?? "").trim().slice(0, 100);
+    if (q.length < 2) return json([]);
+    // The words are a bound value; % and _ are matched literally.
+    const like = `%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+    const rows = await db
+      .prepare(
+        `SELECT ${MESSAGE_COLUMNS.split(", ").map((col) => `m.${col}`).join(", ")} FROM chat_messages m
+         WHERE m.conversation_id = ? AND m.kind = 'text' AND m.deleted_at IS NULL
+           AND (m.body ILIKE ? OR EXISTS (SELECT 1 FROM chat_files f WHERE f.message_id = m.id AND f.name ILIKE ?))
+         ORDER BY m.id DESC LIMIT 50`,
+      )
+      .bind(row.id, like, like)
+      .all<MessageRow>();
+    return json(await enrich(rows.results));
+  }
+
+  // ----- files: uploaded first, then sent with a message -----
+  if (rest === "/files" && method === "POST") {
+    const { row, member } = await open(conversationId);
+    if (!(req.headers.get("content-type") ?? "").startsWith("multipart/form-data")) throw new HttpError(400, "Send the file as a form upload");
+    const form = await req.formData().catch(() => {
+      throw new HttpError(400, "Couldn't read the upload");
+    });
+    const file = form.get("file");
+    if (!file || typeof file === "string") throw new HttpError(400, "Choose a file to upload");
+    if (file.size === 0) throw new HttpError(400, "That file is empty");
+    if (file.size > MAX_CHAT_FILE) throw new HttpError(413, `Files can be up to ${fileSize(MAX_CHAT_FILE)}`);
+    if (!member) await join(row.id).run();
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const id = newToken().slice(0, 20);
+    const name = (file.name || "file").replace(/[\r\n\\/]+/g, " ").trim().slice(0, 200) || "file";
+    const mime = /^[\w.+-]+\/[\w.+-]+$/.test(file.type) ? file.type : "application/octet-stream";
+    const CHUNK = 1024 * 1024;
+    const stmts = [
+      db
+        .prepare("INSERT INTO chat_files (id, conversation_id, name, mime, size, uploaded_by, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .bind(id, row.id, name, mime, bytes.length, me.id, c.now),
+    ];
+    for (let i = 0, seq = 0; i < bytes.length; i += CHUNK, seq++) {
+      stmts.push(db.prepare("INSERT INTO chat_file_chunks (file_id, seq, data) VALUES (?, ?, ?)").bind(id, seq, bytes.slice(i, i + CHUNK)));
+    }
+    await db.batch(stmts);
+    const saved: ChatFile = { id, name, mime, size: bytes.length };
+    return json(saved, 201);
+  }
+
+  const fileMatch = rest.match(/^\/files\/([A-Za-z0-9_-]{8,40})$/);
+  if (fileMatch && method === "GET") {
+    const { row } = await open(conversationId);
+    const file = await db
+      .prepare(
+        `SELECT f.id, f.name, f.mime, f.message_id, f.uploaded_by, m.deleted_at FROM chat_files f LEFT JOIN chat_messages m ON m.id = f.message_id
+         WHERE f.id = ? AND f.conversation_id = ?`,
+      )
+      .bind(fileMatch[1], row.id)
+      .first<{ id: string; name: string; mime: string; message_id: number | null; uploaded_by: string; deleted_at: string | null }>();
+    // Not yet sent: only its uploader sees it. Deleted with its message: gone.
+    if (!file || file.deleted_at || (!file.message_id && file.uploaded_by !== me.id)) throw new HttpError(404, "File not found");
+    const chunks = await db.prepare("SELECT data FROM chat_file_chunks WHERE file_id = ? ORDER BY seq").bind(file.id).all<{ data: ArrayBuffer | number[] }>();
+    const parts = chunks.results.map((x) => new Uint8Array(x.data as ArrayBuffer));
+    const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+    parts.reduce((at, p) => (out.set(p, at), at + p.length), 0);
+    // Uploads are untrusted: only raster images and PDFs open in the browser; everything else downloads,
+    // and nothing served here may run script on this origin.
+    const inline = (INLINE_IMAGE.test(file.mime) || file.mime === "application/pdf") && url.searchParams.get("download") === null;
+    return new Response(out, {
+      headers: {
+        "content-type": inline ? file.mime : "application/octet-stream",
+        "content-disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+        "x-content-type-options": "nosniff",
+        "content-security-policy": "sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'",
+        "cache-control": "private, max-age=3600",
+      },
+    });
   }
 
   throw new HttpError(404, "Not found");

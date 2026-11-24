@@ -30,6 +30,16 @@ export async function api<T = unknown>(path: string, method = "GET", data?: unkn
   return payload as T;
 }
 
+/** Uploads one file to a chat conversation, ready to be sent with the next message. */
+export async function uploadChatFile<T>(conversationId: string, file: File): Promise<T> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`/api/chat/${conversationId}/files`, { method: "POST", credentials: "same-origin", body: form });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, payload.error ?? `Upload failed (${res.status})`, payload.code);
+  return payload as T;
+}
+
 /** Uploads one file to a project's documents (multipart, so it can't go through `api`). */
 export async function uploadDocument(systemId: string, file: File): Promise<void> {
   const form = new FormData();

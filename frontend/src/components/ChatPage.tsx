@@ -1,20 +1,53 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { ArrowLeft, Check, Hash, LogOut, MessagesSquare, Pencil, Plus, Search, Send, Trash2, UserPlus, Users, X } from "lucide-react";
-import { api } from "../data/api";
+import {
+  ArrowLeft,
+  Check,
+  Copy,
+  CornerUpLeft,
+  Hash,
+  LogOut,
+  MessagesSquare,
+  Paperclip,
+  Pencil,
+  Pin,
+  PinOff,
+  Plus,
+  Reply,
+  Search,
+  Send,
+  Smile,
+  SmilePlus,
+  StickyNote,
+  Trash2,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
+import { api, uploadChatFile } from "../data/api";
 import { initials } from "../data/systems";
 import type { User } from "../data/roles";
 import {
+  INLINE_IMAGE,
+  MAX_CHAT_FILE,
+  MAX_CHAT_FILES,
   MAX_GROUP_NAME,
   MAX_MESSAGE,
   POLL_BADGE_MS,
   POLL_LIST_MS,
   POLL_OPEN_MS,
+  QUICK_REACTIONS,
   conversationTitle,
+  fileSize,
+  messagePreview,
+  type ChatFile,
+  type ChatGif,
   type ChatMessage,
+  type ChatReaction,
   type Conversation,
   type MessagesPage,
 } from "../data/chat";
 import Markdown from "./Markdown";
+import { EmojiPicker, FileList, GifPicker, GifView, PendingFiles, Sticker, StickerPicker, type PendingFile } from "./ChatExtras";
 
 /** Whether the tab is in view: polling slows to nothing while it isn't. */
 function useVisible(): boolean {
@@ -73,6 +106,8 @@ const dayLabel = (iso: string) => {
   if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
   return d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", ...(d.getFullYear() !== today.getFullYear() ? { year: "numeric" } : {}) });
 };
+/** A list preview without Markdown marks: "**plan**" reads "plan". */
+const plainPreview = (s: string) => s.replace(/(\*\*|__|~~|`+)/g, "").replace(/\n+/g, " ");
 const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 const listTime = (iso: string) => (new Date(iso).toDateString() === new Date().toDateString() ? clock(iso) : new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short" }));
 
@@ -183,7 +218,7 @@ export default function ChatPage({ me, users, canModerate, openId, onUnread }: P
                           {(last?.at ?? c.lastMessageAt) && <time>{listTime(last?.at ?? c.lastMessageAt!)}</time>}
                         </span>
                         <span className="chat-row-bottom">
-                          <span className="chat-preview">{preview}</span>
+                          <span className="chat-preview">{plainPreview(preview)}</span>
                           {c.unread > 0 && <span className="chat-badge">{c.unread > 99 ? "99+" : c.unread}</span>}
                         </span>
                       </span>
@@ -261,6 +296,14 @@ interface ViewProps {
   onLeft: () => void;
 }
 
+/** What the composer sends: words, files, a GIF or a sticker, maybe as a reply. */
+export interface Outgoing {
+  body: string;
+  files?: string[];
+  gif?: ChatGif;
+  sticker?: string;
+}
+
 /** Messages a few minutes apart from the same person are shown as one block. */
 const GROUP_GAP_MS = 5 * 60_000;
 
@@ -272,6 +315,12 @@ function ConversationView({ id, conversation, me, users, nameOf, canModerate, on
   const [error, setError] = useState("");
   const [details, setDetails] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [reacting, setReacting] = useState<number | null>(null); // the message whose full emoji picker is open
+  const [panel, setPanel] = useState<"pins" | "search" | null>(null);
+  const [highlight, setHighlight] = useState<number | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const addFiles = useRef<((files: File[]) => void) | null>(null);
   const since = useRef<string | null>(null);
   const lastId = useRef(0);
   const scroller = useRef<HTMLDivElement>(null);
@@ -307,7 +356,7 @@ function ConversationView({ id, conversation, me, users, nameOf, canModerate, on
 
   const loadOlder = async () => {
     const first = messages[0];
-    if (!first) return;
+    if (!first) return false;
     const el = scroller.current;
     const fromBottom = el ? el.scrollHeight - el.scrollTop : 0;
     const page = await api<MessagesPage>(`/chat/${id}/messages?before=${first.id}`);
@@ -318,6 +367,7 @@ function ConversationView({ id, conversation, me, users, nameOf, canModerate, on
     requestAnimationFrame(() => {
       if (el) el.scrollTop = el.scrollHeight - fromBottom;
     });
+    return page.hasOlder;
   };
 
   useLayoutEffect(() => {
@@ -330,28 +380,55 @@ function ConversationView({ id, conversation, me, users, nameOf, canModerate, on
     if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
   };
 
-  const send = async (text: string) => {
-    const saved = await api<ChatMessage>(`/chat/${id}/messages`, "POST", { body: text });
+  /** Scrolls to a message (a reply's quote, a pin, a search result), loading older pages until it's there. */
+  const jumpTo = async (target: number) => {
+    let more = hasOlder;
+    for (let i = 0; i < 20 && !document.getElementById(`chat-msg-${target}`) && more; i++) {
+      more = await loadOlder();
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    const el = document.getElementById(`chat-msg-${target}`);
+    if (!el) return setError("That message is too far back to show here.");
+    stick.current = false;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    setHighlight(target);
+    setTimeout(() => setHighlight((h) => (h === target ? null : h)), 2200);
+  };
+
+  const send = async (out: Outgoing) => {
+    const saved = await api<ChatMessage>(`/chat/${id}/messages`, "POST", { ...out, ...(replyTo ? { replyTo: replyTo.id } : {}) });
     stick.current = true;
+    setReplyTo(null);
     merge([saved]);
     onChanged();
   };
 
-  const remove = async (m: ChatMessage) => {
-    if (!window.confirm(m.userId === me.id ? "Delete this message?" : `Remove ${nameOf(m.userId)}'s message?`)) return;
+  const run = async (fn: () => Promise<ChatMessage | null | void>, failed: string) => {
     try {
-      await api(`/chat/${id}/messages/${m.id}`, "DELETE");
-      merge([{ ...m, body: "", deletedAt: new Date().toISOString() }]);
+      const m = await fn();
+      if (m) merge([m]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't delete that message");
+      setError(e instanceof Error ? e.message : failed);
     }
   };
+  const react = (m: ChatMessage, emoji: string) => run(() => api<ChatMessage>(`/chat/${id}/messages/${m.id}/reactions`, "POST", { emoji }), "Couldn't add that reaction");
+  const pin = (m: ChatMessage) => run(() => api<ChatMessage>(`/chat/${id}/messages/${m.id}/pin`, "POST"), "Couldn't pin that message");
 
-  const saveEdit = async (m: ChatMessage, text: string) => {
-    const updated = await api<ChatMessage>(`/chat/${id}/messages/${m.id}`, "PUT", { body: text });
+  const remove = async (m: ChatMessage) => {
+    if (!window.confirm(m.userId === me.id ? "Delete this message?" : `Remove ${nameOf(m.userId)}'s message?`)) return;
+    await run(async () => {
+      await api(`/chat/${id}/messages/${m.id}`, "DELETE");
+      return { ...m, body: "", files: undefined, gif: undefined, sticker: undefined, reactions: undefined, replyTo: undefined, pinnedAt: undefined, deletedAt: new Date().toISOString() };
+    }, "Couldn't delete that message");
+  };
+
+  const saveEdit = async (m: ChatMessage, out: Outgoing) => {
+    const updated = await api<ChatMessage>(`/chat/${id}/messages/${m.id}`, "PUT", { body: out.body });
     merge([updated]);
     setEditing(null);
   };
+
+  const copy = (m: ChatMessage) => navigator.clipboard?.writeText(m.body).catch(() => setError("Couldn't copy that"));
 
   const title = conversation ? conversationTitle(conversation, me.id, nameOf) : "";
   const member = conversation?.member ?? false;
@@ -363,6 +440,7 @@ function ConversationView({ id, conversation, me, users, nameOf, canModerate, on
   // "Seen": on your latest message, who has read up to it.
   const myLast = [...messages].reverse().find((m) => m.userId === me.id && m.kind === "text" && !m.deletedAt);
   const seenBy = myLast ? readers.filter((r) => r.userId !== me.id && r.lastReadId >= myLast.id).map((r) => r.userId) : [];
+  const pinnedCount = messages.filter((m) => m.pinnedAt).length;
 
   const subtitle =
     conversation?.kind === "direct"
@@ -371,8 +449,29 @@ function ConversationView({ id, conversation, me, users, nameOf, canModerate, on
         ? `${memberIds.length} ${memberIds.length === 1 ? "member" : "members"}`
         : "";
 
+  const reactionLabel = (r: ChatReaction) => {
+    const names = r.userIds.map((u) => (u === me.id ? "You" : nameOf(u).split(" ")[0]));
+    return `${names.slice(0, 5).join(", ")}${names.length > 5 ? ` and ${names.length - 5} more` : ""} reacted ${r.emoji}`;
+  };
+
   return (
-    <>
+    <div
+      className={`chat-conv ${dragging ? "dropping" : ""}`}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        setDragging(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false);
+      }}
+      onDrop={(e) => {
+        if (!e.dataTransfer.files.length) return;
+        e.preventDefault();
+        setDragging(false);
+        addFiles.current?.([...e.dataTransfer.files]);
+      }}
+    >
       <header className="chat-head">
         <button className="chat-back" onClick={onBack} aria-label="Back to conversations">
           <ArrowLeft size={18} />
@@ -382,96 +481,202 @@ function ConversationView({ id, conversation, me, users, nameOf, canModerate, on
           <h3>{conversation ? (conversation.kind === "project" ? `# ${title}` : title) : "Loading…"}</h3>
           {subtitle && <span>{subtitle}</span>}
         </div>
-        {conversation && conversation.kind !== "direct" && (
-          <button className="btn btn-ghost sm" onClick={() => setDetails(true)}>
-            <Users size={15} /> Details
+        <div className="chat-head-tools">
+          <button className={`icon-link ${panel === "search" ? "on" : ""}`} onClick={() => setPanel((p) => (p === "search" ? null : "search"))} aria-label="Search this conversation" aria-pressed={panel === "search"} title="Search">
+            <Search size={15} />
           </button>
-        )}
+          <button className={`icon-link ${panel === "pins" ? "on" : ""}`} onClick={() => setPanel((p) => (p === "pins" ? null : "pins"))} aria-label="Pinned messages" aria-pressed={panel === "pins"} title="Pinned messages">
+            <Pin size={15} />
+            {pinnedCount > 0 && <span className="chat-head-count">{pinnedCount}</span>}
+          </button>
+          {conversation && conversation.kind !== "direct" && (
+            <button className="btn btn-ghost sm" onClick={() => setDetails(true)}>
+              <Users size={15} /> Details
+            </button>
+          )}
+        </div>
       </header>
 
-      <div className="chat-messages" ref={scroller} onScroll={onScroll} aria-live="polite">
-        {hasOlder && (
-          <button className="chat-older" onClick={() => loadOlder().catch(() => undefined)}>
-            Show earlier messages
-          </button>
-        )}
-        {loaded && messages.length === 0 && <p className="chat-empty">No messages yet. Say hello.</p>}
-        {messages.map((m, i) => {
-          const prev = messages[i - 1];
-          const newDay = !prev || new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString();
-          const continued = !newDay && prev && prev.kind === "text" && m.kind === "text" && prev.userId === m.userId && Date.parse(m.createdAt) - Date.parse(prev.createdAt) < GROUP_GAP_MS;
-          const mine = m.userId === me.id;
-          return (
-            <div key={m.id}>
-              {newDay && (
-                <div className="chat-day">
-                  <span>{dayLabel(m.createdAt)}</span>
-                </div>
-              )}
-              {m.kind === "event" ? (
-                <p className="chat-event">
-                  <b>{mine ? "You" : nameOf(m.userId)}</b> {m.body} · {clock(m.createdAt)}
-                </p>
-              ) : (
-                <div className={`chat-msg ${mine ? "mine" : ""} ${continued ? "continued" : ""}`}>
-                  {!continued ? (
-                    <span className="chat-avatar sm" aria-hidden="true">
-                      {initials(nameOf(m.userId))}
-                    </span>
-                  ) : (
-                    <span className="chat-avatar-gap" />
-                  )}
-                  <div className="chat-msg-main">
-                    {!continued && (
-                      <div className="chat-msg-head">
-                        <b>{mine ? "You" : nameOf(m.userId)}</b>
-                        <time dateTime={m.createdAt}>{clock(m.createdAt)}</time>
-                      </div>
-                    )}
-                    {m.deletedAt ? (
-                      <p className="chat-deleted">Message deleted</p>
-                    ) : editing === m.id ? (
-                      <Composer
-                        initial={m.body}
-                        mentionable={mentionable}
-                        submitLabel="Save"
-                        onSubmit={(text) => saveEdit(m, text)}
-                        onCancel={() => setEditing(null)}
-                      />
+      <div className="chat-body-row">
+        <div
+          className="chat-messages"
+          ref={scroller}
+          onScroll={onScroll}
+          // Images arrive after the text: keep the newest message in view while the reader is at the bottom.
+          onLoadCapture={() => {
+            const el = scroller.current;
+            if (el && stick.current) el.scrollTop = el.scrollHeight;
+          }}
+          aria-live="polite"
+        >
+          {hasOlder && (
+            <button className="chat-older" onClick={() => loadOlder().catch(() => undefined)}>
+              Show earlier messages
+            </button>
+          )}
+          {loaded && messages.length === 0 && <p className="chat-empty">No messages yet. Say hello, or drop a file here.</p>}
+          {messages.map((m, i) => {
+            const prev = messages[i - 1];
+            const newDay = !prev || new Date(prev.createdAt).toDateString() !== new Date(m.createdAt).toDateString();
+            const continued = !newDay && prev && prev.kind === "text" && m.kind === "text" && prev.userId === m.userId && Date.parse(m.createdAt) - Date.parse(prev.createdAt) < GROUP_GAP_MS && !m.replyTo;
+            const mine = m.userId === me.id;
+            const canDelete = mine || (canModerate && conversation?.kind !== "direct");
+            return (
+              <div key={m.id} id={`chat-msg-${m.id}`}>
+                {newDay && (
+                  <div className="chat-day">
+                    <span>{dayLabel(m.createdAt)}</span>
+                  </div>
+                )}
+                {m.kind === "event" ? (
+                  <p className="chat-event">
+                    <b>{mine ? "You" : nameOf(m.userId)}</b> {m.body} · {clock(m.createdAt)}
+                  </p>
+                ) : (
+                  <div className={`chat-msg ${mine ? "mine" : ""} ${continued ? "continued" : ""} ${highlight === m.id ? "flash" : ""} ${m.pinnedAt ? "pinned" : ""}`}>
+                    {!continued ? (
+                      <span className="chat-avatar sm" aria-hidden="true">
+                        {initials(nameOf(m.userId))}
+                      </span>
                     ) : (
-                      <div className="chat-body">
-                        <Markdown text={m.body} usernames={usernames} />
-                        {m.editedAt && <span className="chat-edited">(edited)</span>}
+                      <span className="chat-avatar-gap" />
+                    )}
+                    <div className="chat-msg-main">
+                      {!continued && (
+                        <div className="chat-msg-head">
+                          <b>{mine ? "You" : nameOf(m.userId)}</b>
+                          <time dateTime={m.createdAt}>{clock(m.createdAt)}</time>
+                          {m.pinnedAt && (
+                            <span className="chat-pinned-tag" title={m.pinnedBy ? `Pinned by ${m.pinnedBy === me.id ? "you" : nameOf(m.pinnedBy)}` : "Pinned"}>
+                              <Pin size={11} aria-hidden="true" /> Pinned
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {m.deletedAt ? (
+                        <p className="chat-deleted">Message deleted</p>
+                      ) : editing === m.id ? (
+                        <Composer conversationId={id} initial={m.body} mentionable={mentionable} submitLabel="Save" onSubmit={(out) => saveEdit(m, out)} onCancel={() => setEditing(null)} />
+                      ) : (
+                        <>
+                          {m.replyTo && (
+                            <button className="chat-quote" onClick={() => jumpTo(m.replyTo!.id)} title="Go to the message">
+                              <CornerUpLeft size={12} aria-hidden="true" />
+                              <b>{m.replyTo.userId === me.id ? "You" : nameOf(m.replyTo.userId)}</b>
+                              <span>{m.replyTo.deleted ? "Message deleted" : m.replyTo.body}</span>
+                            </button>
+                          )}
+                          {m.body && (
+                            <div className="chat-body">
+                              <Markdown text={m.body} usernames={usernames} />
+                              {m.editedAt && <span className="chat-edited">(edited)</span>}
+                            </div>
+                          )}
+                          {m.sticker && <Sticker id={m.sticker} />}
+                          {m.gif && <GifView gif={m.gif} />}
+                          {m.files && m.files.length > 0 && <FileList conversationId={id} files={m.files} />}
+                          {m.reactions && m.reactions.length > 0 && (
+                            <div className="chat-reactions">
+                              {m.reactions.map((r) => (
+                                <button key={r.emoji} className={r.userIds.includes(me.id) ? "on" : ""} onClick={() => react(m, r.emoji)} title={reactionLabel(r)} aria-label={`${reactionLabel(r)}. ${r.userIds.includes(me.id) ? "Remove yours" : "Add yours"}`} aria-pressed={r.userIds.includes(me.id)}>
+                                  <span>{r.emoji}</span>
+                                  <b>{r.userIds.length}</b>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    {!m.deletedAt && editing !== m.id && (
+                      <div className={`chat-msg-tools ${reacting === m.id ? "open" : ""}`}>
+                        {QUICK_REACTIONS.slice(0, 3).map((e) => (
+                          <button key={e} onClick={() => react(m, e)} aria-label={`React ${e}`} title={`React ${e}`} className="chat-quick">
+                            {e}
+                          </button>
+                        ))}
+                        <button onClick={() => setReacting(m.id)} aria-label="Add a reaction" title="Add a reaction">
+                          <SmilePlus size={14} />
+                        </button>
+                        <button onClick={() => setReplyTo(m)} aria-label="Reply" title="Reply">
+                          <Reply size={14} />
+                        </button>
+                        {member && (
+                          <button onClick={() => pin(m)} aria-label={m.pinnedAt ? "Unpin message" : "Pin message"} title={m.pinnedAt ? "Unpin" : "Pin"}>
+                            {m.pinnedAt ? <PinOff size={14} /> : <Pin size={14} />}
+                          </button>
+                        )}
+                        {m.body && (
+                          <button onClick={() => copy(m)} aria-label="Copy text" title="Copy text">
+                            <Copy size={14} />
+                          </button>
+                        )}
+                        {mine && (
+                          <button onClick={() => setEditing(m.id)} aria-label="Edit message" title="Edit">
+                            <Pencil size={14} />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button onClick={() => remove(m)} aria-label="Delete message" title="Delete">
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                        {reacting === m.id && (
+                          <EmojiPicker
+                            label="Add a reaction"
+                            onClose={() => setReacting(null)}
+                            onPick={(e) => {
+                              setReacting(null);
+                              react(m, e);
+                            }}
+                          />
+                        )}
                       </div>
                     )}
                   </div>
-                  {!m.deletedAt && editing !== m.id && (mine || (canModerate && conversation?.kind !== "direct")) && (
-                    <div className="chat-msg-tools">
-                      {mine && (
-                        <button onClick={() => setEditing(m.id)} aria-label="Edit message" title="Edit">
-                          <Pencil size={14} />
-                        </button>
-                      )}
-                      <button onClick={() => remove(m)} aria-label="Delete message" title="Delete">
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-              {myLast?.id === m.id && seenBy.length > 0 && (
-                <p className="chat-seen">
-                  <Check size={12} /> Seen{conversation?.kind === "direct" ? "" : ` by ${seenBy.length === 1 ? nameOf(seenBy[0]) : `${seenBy.length} people`}`}
-                </p>
-              )}
-            </div>
-          );
-        })}
+                )}
+                {myLast?.id === m.id && seenBy.length > 0 && (
+                  <p className="chat-seen">
+                    <Check size={12} /> Seen{conversation?.kind === "direct" ? "" : ` by ${seenBy.length === 1 ? nameOf(seenBy[0]) : `${seenBy.length} people`}`}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {panel && (
+          <SidePanel
+            kind={panel}
+            conversationId={id}
+            me={me}
+            nameOf={nameOf}
+            onClose={() => setPanel(null)}
+            onJump={(mid) => jumpTo(mid)}
+            onUnpin={member ? (m) => pin(m) : undefined}
+            refreshKey={pinnedCount}
+          />
+        )}
       </div>
 
+      {dragging && (
+        <div className="chat-drop" aria-hidden="true">
+          <Paperclip size={28} />
+          <b>Drop files to attach them</b>
+        </div>
+      )}
       {error && <p className="chat-error">{error}</p>}
       {conversation?.kind === "project" && !member && <p className="chat-join-note">You're reading this channel. Sending a message joins it.</p>}
-      <Composer mentionable={mentionable} submitLabel="Send" onSubmit={send} autoFocus />
+      <Composer
+        conversationId={id}
+        mentionable={mentionable}
+        submitLabel="Send"
+        onSubmit={send}
+        autoFocus
+        replyTo={replyTo ? { name: replyTo.userId === me.id ? "yourself" : nameOf(replyTo.userId), text: messagePreview(replyTo) || "Attachment" } : null}
+        onClearReply={() => setReplyTo(null)}
+        registerAdd={(fn) => (addFiles.current = fn)}
+      />
 
       {details && conversation && (
         <ConversationDetails
@@ -488,29 +693,117 @@ function ConversationView({ id, conversation, me, users, nameOf, canModerate, on
           }}
         />
       )}
-    </>
+    </div>
+  );
+}
+
+/** Pinned messages, or a search of this conversation. Clicking one scrolls to it. */
+function SidePanel({
+  kind,
+  conversationId,
+  me,
+  nameOf,
+  onClose,
+  onJump,
+  onUnpin,
+  refreshKey,
+}: {
+  kind: "pins" | "search";
+  conversationId: string;
+  me: User;
+  nameOf: (id: string) => string;
+  onClose: () => void;
+  onJump: (id: number) => void;
+  onUnpin?: (m: ChatMessage) => void;
+  refreshKey: number;
+}) {
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<ChatMessage[] | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let live = true;
+    if (kind === "search" && q.trim().length < 2) {
+      setResults(null);
+      return;
+    }
+    const t = setTimeout(
+      () =>
+        api<ChatMessage[]>(kind === "pins" ? `/chat/${conversationId}/pins` : `/chat/${conversationId}/search?q=${encodeURIComponent(q.trim())}`)
+          .then((r) => live && (setResults(r), setError("")))
+          .catch((e) => live && setError(e instanceof Error ? e.message : "Couldn't load that")),
+      kind === "search" ? 300 : 0,
+    );
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [kind, q, conversationId, refreshKey]);
+  return (
+    <aside className="chat-side" aria-label={kind === "pins" ? "Pinned messages" : "Search this conversation"}>
+      <header>
+        <b>{kind === "pins" ? "Pinned messages" : "Search"}</b>
+        <button className="icon-link" onClick={onClose} aria-label="Close">
+          <X size={14} />
+        </button>
+      </header>
+      {kind === "search" && (
+        <label className="chat-filter">
+          <Search size={14} aria-hidden="true" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Words or a file name" aria-label="Search messages" autoFocus maxLength={100} />
+        </label>
+      )}
+      {error && <p className="chat-error">{error}</p>}
+      <ul>
+        {kind === "pins" && results?.length === 0 && <li className="chat-empty">Nothing pinned yet. Pin a message from its toolbar to keep it here.</li>}
+        {kind === "search" && results?.length === 0 && <li className="chat-empty">No messages match.</li>}
+        {kind === "search" && results === null && <li className="chat-empty">Type at least two letters.</li>}
+        {results?.map((m) => (
+          <li key={m.id}>
+            <button className="chat-side-item" onClick={() => onJump(m.id)}>
+              <span>
+                <b>{m.userId === me.id ? "You" : nameOf(m.userId)}</b> <time>{new Date(m.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</time>
+              </span>
+              <span className="chat-side-text">{messagePreview(m) || "Attachment"}</span>
+            </button>
+            {kind === "pins" && onUnpin && (
+              <button className="icon-link" onClick={() => onUnpin(m)} aria-label="Unpin" title="Unpin">
+                <PinOff size={13} />
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </aside>
   );
 }
 
 // ---------- writing a message ----------
 
 interface ComposerProps {
+  conversationId: string;
   initial?: string;
   mentionable: User[];
   submitLabel: string;
   autoFocus?: boolean;
-  onSubmit: (text: string) => Promise<void>;
-  onCancel?: () => void;
+  onSubmit: (out: Outgoing) => Promise<void>;
+  onCancel?: () => void; // editing: words only
+  replyTo?: { name: string; text: string } | null;
+  onClearReply?: () => void;
+  registerAdd?: (fn: (files: File[]) => void) => void;
 }
 
-/** Enter sends, Shift+Enter starts a new line; typing @ suggests people. */
-function Composer({ initial = "", mentionable, submitLabel, autoFocus, onSubmit, onCancel }: ComposerProps) {
+/** Enter sends, Shift+Enter starts a new line; typing @ suggests people. Files by button, paste or drop. */
+function Composer({ conversationId, initial = "", mentionable, submitLabel, autoFocus, onSubmit, onCancel, replyTo, onClearReply, registerAdd }: ComposerProps) {
   const [text, setText] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [pick, setPick] = useState(0);
   const [caret, setCaret] = useState(0);
+  const [pending, setPending] = useState<PendingFile[]>([]);
+  const [open, setOpen] = useState<"emoji" | "gif" | "sticker" | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const editing = !!onCancel;
 
   // The @word being typed at the caret, if any.
   const mention = text.slice(0, caret).match(/(?:^|[^\w@])@([a-z0-9._-]{0,40})$/i);
@@ -527,6 +820,51 @@ function Composer({ initial = "", mentionable, submitLabel, autoFocus, onSubmit,
     el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
   }, [text]);
 
+  // Object URLs for image previews are let go when the composer closes.
+  const previews = useRef<string[]>([]);
+  useEffect(() => () => previews.current.forEach((u) => URL.revokeObjectURL(u)), []);
+
+  const add = useCallback(
+    (files: File[]) => {
+      if (editing) return;
+      setError("");
+      const room = MAX_CHAT_FILES - pending.length;
+      if (files.length > room) setError(`Up to ${MAX_CHAT_FILES} files in one message.`);
+      for (const file of files.slice(0, Math.max(0, room))) {
+        const key = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const preview = INLINE_IMAGE.test(file.type) ? URL.createObjectURL(file) : undefined;
+        if (preview) previews.current.push(preview);
+        if (file.size > MAX_CHAT_FILE) {
+          setPending((p) => [...p, { key, name: file.name, size: file.size, preview, error: `Too big: files can be up to ${fileSize(MAX_CHAT_FILE)}` }]);
+          continue;
+        }
+        setPending((p) => [...p, { key, name: file.name, size: file.size, preview }]);
+        uploadChatFile<ChatFile>(conversationId, file)
+          .then((saved) => setPending((p) => p.map((x) => (x.key === key ? { ...x, file: saved } : x))))
+          .catch((e) => setPending((p) => p.map((x) => (x.key === key ? { ...x, error: e instanceof Error ? e.message : "Upload failed" } : x))));
+      }
+    },
+    [conversationId, editing, pending.length],
+  );
+  // Braces: the effect must return nothing, or React would call `add` as its clean-up.
+  useEffect(() => {
+    registerAdd?.(add);
+  }, [registerAdd, add]);
+
+  const insertAtCaret = (s: string) => {
+    const el = box.current;
+    const start = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? text.length;
+    const next = `${text.slice(0, start)}${s}${text.slice(end)}`.slice(0, MAX_MESSAGE);
+    setText(next);
+    const at = start + s.length;
+    requestAnimationFrame(() => {
+      box.current?.focus();
+      box.current?.setSelectionRange(at, at);
+      setCaret(at);
+    });
+  };
+
   const insert = (u: User) => {
     const start = caret - (mention?.[1].length ?? 0);
     const next = `${text.slice(0, start)}${u.username} ${text.slice(caret)}`;
@@ -539,21 +877,33 @@ function Composer({ initial = "", mentionable, submitLabel, autoFocus, onSubmit,
     });
   };
 
-  const submit = async (e?: FormEvent) => {
-    e?.preventDefault();
-    const t = text.trim();
-    if (!t || busy) return;
+  const uploading = pending.some((p) => !p.file && !p.error);
+  const ready = pending.filter((p) => p.file).map((p) => p.file!.id);
+
+  const deliver = async (out: Outgoing, clear: boolean) => {
+    if (busy) return;
     setBusy(true);
     setError("");
     try {
-      await onSubmit(t);
-      if (!onCancel) setText("");
+      await onSubmit(out);
+      if (clear && !editing) {
+        setText("");
+        setPending([]);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't send that");
     } finally {
       setBusy(false);
       box.current?.focus();
     }
+  };
+
+  const submit = async (e?: FormEvent) => {
+    e?.preventDefault();
+    const t = text.trim();
+    if (uploading) return setError("Wait for the files to finish uploading.");
+    if (!t && !ready.length && !(editing && initial)) return;
+    await deliver({ body: t, ...(ready.length ? { files: ready } : {}) }, true);
   };
 
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -569,15 +919,32 @@ function Composer({ initial = "", mentionable, submitLabel, autoFocus, onSubmit,
         return;
       }
     }
-    if (e.key === "Escape" && onCancel) onCancel();
+    if (e.key === "Escape") {
+      if (onCancel) onCancel();
+      else if (replyTo) onClearReply?.();
+    }
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       submit();
     }
   };
 
+  const canSend = !busy && !uploading && (!!text.trim() || ready.length > 0 || (editing && !!initial));
+
   return (
-    <form className={`chat-composer ${onCancel ? "editing" : ""}`} onSubmit={submit}>
+    <form className={`chat-composer ${editing ? "editing" : ""}`} onSubmit={submit}>
+      {replyTo && !editing && (
+        <div className="chat-replying">
+          <CornerUpLeft size={13} aria-hidden="true" />
+          <span>
+            Replying to <b>{replyTo.name}</b>: {replyTo.text}
+          </span>
+          <button type="button" onClick={onClearReply} aria-label="Cancel the reply">
+            <X size={13} />
+          </button>
+        </div>
+      )}
+      {!editing && <PendingFiles files={pending} onRemove={(key) => setPending((p) => p.filter((x) => x.key !== key))} />}
       {suggestions.length > 0 && (
         <ul className="chat-mentions" role="listbox" aria-label="People to mention">
           {suggestions.map((u, i) => (
@@ -596,30 +963,84 @@ function Composer({ initial = "", mentionable, submitLabel, autoFocus, onSubmit,
           ))}
         </ul>
       )}
-      <textarea
-        ref={box}
-        rows={1}
-        value={text}
-        maxLength={MAX_MESSAGE}
-        autoFocus={autoFocus}
-        placeholder={onCancel ? "Edit your message" : "Write a message. Enter sends, Shift+Enter for a new line."}
-        aria-label={onCancel ? "Edit message" : "Message"}
-        onChange={(e) => {
-          setText(e.target.value);
-          setCaret(e.target.selectionStart);
-          setPick(0);
-        }}
-        onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
-        onKeyDown={onKey}
-      />
-      {onCancel && (
-        <button type="button" className="btn btn-ghost sm" onClick={onCancel}>
-          Cancel
+      <div className="chat-compose-row">
+        {!editing && (
+          <div className="chat-compose-tools">
+            <input
+              ref={fileInput}
+              type="file"
+              multiple
+              hidden
+              onChange={(e) => {
+                add([...(e.target.files ?? [])]);
+                e.target.value = "";
+              }}
+            />
+            <button type="button" onClick={() => fileInput.current?.click()} aria-label="Attach files" title={`Attach files (up to ${fileSize(MAX_CHAT_FILE)} each)`}>
+              <Paperclip size={17} />
+            </button>
+            <button type="button" className={open === "emoji" ? "on" : ""} onClick={() => setOpen((o) => (o === "emoji" ? null : "emoji"))} aria-label="Emoji" title="Emoji" aria-expanded={open === "emoji"}>
+              <Smile size={17} />
+            </button>
+            <button type="button" className={`chat-gif-btn ${open === "gif" ? "on" : ""}`} onClick={() => setOpen((o) => (o === "gif" ? null : "gif"))} aria-label="GIFs" title="GIFs" aria-expanded={open === "gif"}>
+              GIF
+            </button>
+            <button type="button" className={open === "sticker" ? "on" : ""} onClick={() => setOpen((o) => (o === "sticker" ? null : "sticker"))} aria-label="Stickers" title="Stickers" aria-expanded={open === "sticker"}>
+              <StickyNote size={17} />
+            </button>
+            {open === "emoji" && <EmojiPicker onClose={() => setOpen(null)} onPick={insertAtCaret} />}
+            {open === "gif" && (
+              <GifPicker
+                onClose={() => setOpen(null)}
+                onPick={(gif) => {
+                  setOpen(null);
+                  deliver({ body: "", gif }, false);
+                }}
+              />
+            )}
+            {open === "sticker" && (
+              <StickerPicker
+                onClose={() => setOpen(null)}
+                onPick={(sticker) => {
+                  setOpen(null);
+                  deliver({ body: "", sticker }, false);
+                }}
+              />
+            )}
+          </div>
+        )}
+        <textarea
+          ref={box}
+          rows={1}
+          value={text}
+          maxLength={MAX_MESSAGE}
+          autoFocus={autoFocus}
+          placeholder={editing ? "Edit your message" : "Write a message. Enter sends, Shift+Enter for a new line."}
+          aria-label={editing ? "Edit message" : "Message"}
+          onChange={(e) => {
+            setText(e.target.value);
+            setCaret(e.target.selectionStart);
+            setPick(0);
+          }}
+          onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
+          onKeyDown={onKey}
+          onPaste={(e) => {
+            const files = [...e.clipboardData.files];
+            if (files.length && !editing) {
+              e.preventDefault();
+              add(files);
+            }
+          }}
+        />
+        {editing && (
+          <button type="button" className="btn btn-ghost sm" onClick={onCancel}>
+            Cancel
+          </button>
+        )}
+        <button type="submit" className="btn btn-navy sm chat-send" disabled={!canSend} aria-label={submitLabel}>
+          {editing ? submitLabel : <Send size={16} />}
         </button>
-      )}
-      <button type="submit" className="btn btn-navy sm chat-send" disabled={!text.trim() || busy} aria-label={submitLabel}>
-        {onCancel ? submitLabel : <Send size={16} />}
-      </button>
+      </div>
       {error && <p className="chat-error">{error}</p>}
     </form>
   );

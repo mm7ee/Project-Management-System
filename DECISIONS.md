@@ -614,3 +614,33 @@ Choices made during the Pulse upgrade that later phases must follow. Newest last
   ring). Small text must reach 4.5:1 in both themes.
 - **Themes:** there are two, light and dark (`data-theme="futuristic"`, shown as "Dark"). Dark keeps a restrained
   glow (card hairline, hover glow), never at the cost of contrast.
+
+## Chat: files, emoji, GIFs, stickers, reactions, replies, pins and search (2026-11-25)
+
+- **Migration `0012_chat_rich.sql`:** `chat_messages` gains `meta` (JSON: a GIF or a sticker), `reply_to`, `pinned_at`
+  and `pinned_by`; new tables `chat_files` + `chat_file_chunks` (1 MB chunks in Postgres, like project documents) and
+  `chat_reactions` (one row per person, emoji and message).
+- **Files:** up to 10 files of up to 10 MB each per message. They're uploaded first (`POST /api/chat/:id/files`) and
+  attached when the message is sent; until then only the uploader can fetch them, and the weekday clean-up deletes
+  any not sent within a day. Served from `GET /api/chat/:id/files/:fileId` to anyone who may read the conversation,
+  with the same rules as documents: only PNG, JPEG, GIF, WebP and PDF open in the browser; everything else downloads;
+  `nosniff` and a sandboxing CSP on every file. Deleting a message deletes its files and reactions.
+- **GIFs:** GIPHY search, proxied by the Worker (`GET /api/chat/gifs?q=`), so the key never reaches the browser and
+  only search words leave Pulse. Rating G only. **Off until an administrator sets the `GIPHY_API_KEY` Worker secret**
+  (`npx wrangler secret put GIPHY_API_KEY`); the picker says so until then. A sent GIF keeps only GIPHY's id and its
+  `media*.giphy.com` address (checked on the server, so a "GIF" can't load an image from anywhere else). The picker
+  shows "Powered by GIPHY", as GIPHY's terms ask. People can always attach their own GIF files.
+- **Stickers:** Pulse's own set of 16 (original artwork: icons, brand gradients, short phrases), drawn in the UI
+  (`src/components/ChatExtras.tsx`). The server accepts only their ids (`STICKERS` in `src/data/chat.ts`).
+- **Emoji:** a built-in picker (`src/data/emoji.ts`, search words per emoji, recently used remembered per browser),
+  drawn by the system's emoji font, so nothing is downloaded.
+- **Reactions:** click to add, again to remove (`POST /api/chat/:id/messages/:mid/reactions`). Only real emoji are
+  accepted (`isEmoji`), up to 20 different ones per message. Reacting in a project channel joins it, like writing.
+- **Replies** quote the original (who and the first words, or "Message deleted"); clicking the quote scrolls to it.
+- **Pins:** anyone in the conversation pins or unpins a message for everyone (`POST …/pin`); `GET /api/chat/:id/pins`
+  lists them. Deleting a message unpins it.
+- **Search in a conversation:** `GET /api/chat/:id/search?q=` (2+ characters) matches words and file names, newest
+  first, 50 at most. `%` and `_` match literally.
+- **How others see changes:** reactions, pins, edits and deletions all move `updated_at`, so the next poll's
+  `changed` list carries them (no new polling).
+- **Not logged:** like messages, files, reactions and pins aren't written to the activity log.

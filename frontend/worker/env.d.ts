@@ -43,6 +43,7 @@ interface Env {
   AI?: Ai; // Workers AI binding, for Ask Pulse
   MFA_KEY?: string; // encrypts two-step verification secrets; a Worker secret (.dev.vars locally)
   PUBLIC_URL?: string; // Pulse's address, for links in emails and Teams posts
+  GIPHY_API_KEY?: string; // turns on GIF search in chat; a Worker secret (wrangler secret put GIPHY_API_KEY)
 }
 
 interface ExecutionContext {

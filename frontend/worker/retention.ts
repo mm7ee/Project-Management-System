@@ -53,6 +53,8 @@ export async function purgeExpired(db: D1Database, now = Date.now()): Promise<Re
     ),
     // An attachment's file outlives its document only if a removal was interrupted.
     ["document_chunks (orphaned)", db.prepare("DELETE FROM document_chunks WHERE doc_id NOT IN (SELECT id FROM documents)")],
+    // Chat files uploaded but never sent (the composer was closed): gone after a day. Chunks follow by cascade.
+    ["chat_files (never sent)", db.prepare("DELETE FROM chat_files WHERE message_id IS NULL AND uploaded_at < ?").bind(before(1))],
   ];
   const results = await db.batch(steps.map(([, s]) => s));
   return Object.fromEntries(steps.map(([name], i) => [name, results[i].meta.changes ?? 0]));

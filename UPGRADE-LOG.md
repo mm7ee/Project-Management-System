@@ -550,3 +550,29 @@ colours, with no change to behaviour, data or permissions.
 
 Files: `src/styles.css`, `src/components/DashboardPage.tsx`, `src/components/CustomDashboards.tsx`,
 `src/components/Panel.tsx`. No API, query, permission or route changed.
+
+## Chat: files, emoji, GIFs, stickers and more (2026-11-25)
+
+**Why:** the owner asked for documents, emoji, GIFs and stickers in chat, plus other useful chat features.
+
+**What was built**
+- **Attach files** with the paperclip, by pasting, or by dragging onto the conversation: up to 10 per message, 10 MB
+  each. Images show in the message (click for full size); PDFs open in a new tab; other files download.
+- **Emoji picker** with search, groups and recently used; emoji go in at the cursor.
+- **GIFs** from GIPHY (search and trending), once an administrator adds a `GIPHY_API_KEY` Worker secret.
+- **Stickers:** 16 Pulse stickers (Thank you!, Shipped!, Looks good, Blocked, Coffee break …).
+- **Reactions** on any message: three quick ones on the toolbar, or any emoji; counts show who reacted on hover.
+- **Reply** to a message with a quote that jumps back to the original.
+- **Pin** messages; a Pinned panel lists them.
+- **Search** a conversation by words or file names; results jump to the message.
+- **Copy text** from a message's toolbar.
+- The conversation list previews GIFs, stickers and files ("GIF", "Sticker: Shipped!", "📎 plan.pdf").
+- Notifications for a message with no words say what was sent.
+
+**New endpoints:** `GET /api/chat/gifs`, `POST /api/chat/:id/files`, `GET /api/chat/:id/files/:fileId`,
+`POST /api/chat/:id/messages/:mid/reactions`, `POST /api/chat/:id/messages/:mid/pin`, `GET /api/chat/:id/pins`,
+`GET /api/chat/:id/search`. `POST /api/chat/:id/messages` also takes `files`, `gif`, `sticker` and `replyTo`.
+
+**Migration:** `0012_chat_rich.sql`. Run `npm run db:migrate` before deploying.
+
+**Tests:** `tests/chatRich.test.ts` (emoji-only reactions, GIPHY-only GIFs, sticker ids, previews).

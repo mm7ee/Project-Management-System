@@ -1,0 +1,142 @@
+// The emoji picker's set: common emoji in groups, each with words to search by. Plain Unicode, drawn by the
+// viewer's own system font, so nothing is downloaded.
+
+export interface EmojiGroup {
+  id: string;
+  label: string;
+  emoji: [string, string][]; // [emoji, search words]
+}
+
+export const EMOJI_GROUPS: EmojiGroup[] = [
+  {
+    id: "smileys",
+    label: "Smileys",
+    emoji: [
+      ["😀", "grin smile happy"], ["😃", "smile happy"], ["😄", "smile laugh"], ["😁", "grin beam"], ["😆", "laugh squint"],
+      ["😅", "sweat relief"], ["😂", "joy tears laugh lol"], ["🤣", "rofl rolling laugh"], ["🙂", "slight smile"], ["😉", "wink"],
+      ["😊", "blush smile"], ["😇", "angel innocent"], ["🥰", "love hearts"], ["😍", "heart eyes love"], ["🤩", "star struck wow"],
+      ["😘", "kiss"], ["😋", "yum tasty"], ["😛", "tongue"], ["😜", "wink tongue crazy"], ["🤪", "zany crazy"],
+      ["🤗", "hug"], ["🤭", "oops giggle"], ["🤫", "shush quiet"], ["🤔", "thinking hmm"], ["🤐", "zip mouth secret"],
+      ["😐", "neutral"], ["😑", "expressionless"], ["😶", "speechless"], ["🙄", "eye roll"], ["😏", "smirk"],
+      ["😬", "grimace awkward"], ["😌", "relieved calm"], ["😴", "sleep tired"], ["🤒", "sick ill"], ["🤧", "sneeze cold"],
+      ["🥵", "hot"], ["🥶", "cold freezing"], ["🤯", "mind blown"], ["🥳", "party celebrate"], ["😎", "cool sunglasses"],
+      ["🤓", "nerd geek"], ["🧐", "monocle inspect"], ["😕", "confused"], ["😟", "worried"], ["😮", "wow surprised open mouth"],
+      ["😲", "astonished shocked"], ["😳", "flushed embarrassed"], ["🥺", "pleading puppy eyes"], ["😢", "cry sad tear"], ["😭", "sob crying"],
+      ["😱", "scream fear"], ["😤", "triumph huff"], ["😡", "angry mad"], ["🤬", "swearing cursing"], ["😈", "devil mischief"],
+      ["💀", "skull dead"], ["🤡", "clown"], ["👻", "ghost"], ["🤖", "robot bot"], ["💩", "poop"],
+    ],
+  },
+  {
+    id: "people",
+    label: "Gestures",
+    emoji: [
+      ["👍", "thumbs up yes like ok"], ["👎", "thumbs down no dislike"], ["👌", "ok perfect"], ["✌️", "peace victory"], ["🤞", "fingers crossed luck"],
+      ["🤟", "love you"], ["🤘", "rock on"], ["🤙", "call me"], ["👈", "point left"], ["👉", "point right"],
+      ["👆", "point up"], ["👇", "point down"], ["☝️", "index up"], ["✋", "hand stop high five"], ["👋", "wave hello bye"],
+      ["🤚", "raised back hand"], ["🖐️", "hand fingers"], ["👏", "clap applause well done"], ["🙌", "raise hands hooray"], ["👐", "open hands"],
+      ["🤲", "palms up"], ["🤝", "handshake deal agree"], ["🙏", "pray please thanks"], ["✍️", "writing"], ["💪", "strong muscle flex"],
+      ["🫡", "salute"], ["🫶", "heart hands"], ["👀", "eyes look see"], ["🧠", "brain smart"], ["🗣️", "speaking"],
+      ["🙋", "raise hand question"], ["🙇", "bow sorry"], ["🤷", "shrug dunno"], ["🤦", "facepalm"], ["🏃", "run hurry"],
+      ["🧑‍💻", "developer coder technologist"], ["👩‍💻", "woman developer"], ["👨‍💻", "man developer"], ["🧑‍🔧", "mechanic fix"], ["🧑‍🏫", "teacher"],
+    ],
+  },
+  {
+    id: "hearts",
+    label: "Hearts",
+    emoji: [
+      ["❤️", "red heart love"], ["🧡", "orange heart"], ["💛", "yellow heart"], ["💚", "green heart"], ["💙", "blue heart"],
+      ["💜", "purple heart"], ["🖤", "black heart"], ["🤍", "white heart"], ["🤎", "brown heart"], ["💔", "broken heart"],
+      ["❣️", "heart exclamation"], ["💕", "two hearts"], ["💞", "revolving hearts"], ["💓", "beating heart"], ["💗", "growing heart"],
+      ["💖", "sparkling heart"], ["💘", "heart arrow"], ["💝", "heart ribbon gift"], ["❤️‍🔥", "heart on fire"], ["❤️‍🩹", "mending heart"],
+    ],
+  },
+  {
+    id: "nature",
+    label: "Nature",
+    emoji: [
+      ["🐶", "dog"], ["🐱", "cat"], ["🦁", "lion"], ["🐘", "elephant"], ["🦒", "giraffe"],
+      ["🦓", "zebra"], ["🐆", "leopard"], ["🦏", "rhino"], ["🐒", "monkey"], ["🦅", "eagle"],
+      ["🐝", "bee busy"], ["🦋", "butterfly"], ["🐢", "turtle slow"], ["🐌", "snail slow"], ["🦄", "unicorn"],
+      ["🌱", "seedling grow"], ["🌳", "tree"], ["🌵", "cactus"], ["🌻", "sunflower"], ["🌹", "rose"],
+      ["🍀", "clover luck"], ["🌞", "sun"], ["🌙", "moon night"], ["⭐", "star"], ["🌟", "glowing star"],
+      ["⚡", "lightning zap fast"], ["🔥", "fire hot lit"], ["🌈", "rainbow"], ["☔", "rain umbrella"], ["❄️", "snow cold"],
+      ["🌊", "wave sea"], ["🌍", "earth africa world globe"],
+    ],
+  },
+  {
+    id: "food",
+    label: "Food",
+    emoji: [
+      ["☕", "coffee tea hot drink"], ["🍵", "tea"], ["🧃", "juice"], ["🥤", "soda drink"], ["🍺", "beer"],
+      ["🍕", "pizza"], ["🍔", "burger"], ["🍟", "fries chips"], ["🌭", "hot dog"], ["🥪", "sandwich"],
+      ["🌮", "taco"], ["🍗", "chicken"], ["🍖", "meat braai"], ["🥩", "steak"], ["🍚", "rice"],
+      ["🌽", "corn maize sadza"], ["🥗", "salad"], ["🍰", "cake"], ["🎂", "birthday cake"], ["🧁", "cupcake"],
+      ["🍩", "doughnut"], ["🍪", "cookie biscuit"], ["🍫", "chocolate"], ["🍿", "popcorn"], ["🍎", "apple"],
+      ["🍌", "banana"], ["🍉", "watermelon"], ["🥭", "mango"],
+    ],
+  },
+  {
+    id: "activities",
+    label: "Activities",
+    emoji: [
+      ["🎉", "party popper celebrate tada"], ["🎊", "confetti"], ["🎈", "balloon"], ["🎁", "gift present"], ["🏆", "trophy win"],
+      ["🥇", "gold medal first"], ["🥈", "silver medal"], ["🥉", "bronze medal"], ["🏅", "medal"], ["🎯", "target goal bullseye"],
+      ["⚽", "soccer football"], ["🏀", "basketball"], ["🏏", "cricket"], ["🏉", "rugby"], ["🎾", "tennis"],
+      ["🎮", "game controller"], ["🎲", "dice"], ["🧩", "puzzle"], ["🎨", "art palette design"], ["🎵", "music note"],
+      ["🎧", "headphones"], ["🎤", "microphone"], ["🎬", "clapper film"], ["📸", "camera"],
+    ],
+  },
+  {
+    id: "travel",
+    label: "Travel",
+    emoji: [
+      ["🚀", "rocket launch ship"], ["✈️", "plane flight"], ["🚗", "car"], ["🚕", "taxi"], ["🚌", "bus"],
+      ["🚲", "bike"], ["🛵", "scooter"], ["🚦", "traffic light"], ["🚧", "construction roadworks wip"], ["⛽", "fuel"],
+      ["🏠", "home house"], ["🏢", "office building"], ["🏥", "hospital"], ["🏦", "bank"], ["🏫", "school"],
+      ["🗺️", "map"], ["🧭", "compass"], ["⛰️", "mountain"], ["🏖️", "beach holiday"], ["🌅", "sunrise"],
+    ],
+  },
+  {
+    id: "objects",
+    label: "Work",
+    emoji: [
+      ["💻", "laptop computer"], ["🖥️", "desktop computer"], ["⌨️", "keyboard"], ["🖱️", "mouse"], ["📱", "phone mobile"],
+      ["☎️", "telephone call"], ["📞", "phone receiver call"], ["🎧", "headset call centre"], ["📧", "email"], ["📨", "incoming envelope"],
+      ["📝", "memo note write"], ["📄", "document page"], ["📊", "bar chart report"], ["📈", "chart up growth"], ["📉", "chart down"],
+      ["📅", "calendar date"], ["📆", "tear-off calendar"], ["⏰", "alarm clock"], ["⏳", "hourglass waiting"], ["⌛", "hourglass done"],
+      ["📌", "pin pushpin"], ["📎", "paperclip attachment"], ["🔗", "link"], ["🔒", "lock secure"], ["🔑", "key"],
+      ["🛠️", "tools fix"], ["🔧", "wrench"], ["⚙️", "gear settings"], ["🐛", "bug"], ["🧪", "test tube testing"],
+      ["💡", "idea bulb"], ["🔍", "search magnify"], ["📦", "package box ship"], ["🗂️", "dividers folders"], ["📁", "folder"],
+      ["💰", "money bag"], ["💵", "dollar cash"], ["💳", "card payment"], ["🧾", "receipt"], ["✏️", "pencil edit"],
+    ],
+  },
+  {
+    id: "symbols",
+    label: "Symbols",
+    emoji: [
+      ["✅", "check done yes tick"], ["☑️", "check box"], ["✔️", "check mark"], ["❌", "cross no wrong"], ["❎", "cross button"],
+      ["⚠️", "warning caution"], ["🚫", "no entry prohibited"], ["⛔", "no entry stop"], ["❗", "exclamation important"], ["❓", "question"],
+      ["‼️", "double exclamation"], ["⁉️", "exclamation question"], ["💯", "hundred perfect"], ["🔴", "red circle"], ["🟠", "orange circle"],
+      ["🟡", "yellow circle"], ["🟢", "green circle"], ["🔵", "blue circle"], ["🟣", "purple circle"], ["⚫", "black circle"],
+      ["⬆️", "up arrow"], ["⬇️", "down arrow"], ["➡️", "right arrow"], ["⬅️", "left arrow"], ["🔄", "refresh repeat"],
+      ["➕", "plus add"], ["➖", "minus"], ["✨", "sparkles new"], ["💬", "speech bubble comment"], ["💭", "thought"],
+      ["🆗", "ok button"], ["🆕", "new button"], ["🆙", "up button"], ["🔝", "top"], ["🔜", "soon"],
+      ["🇿🇼", "zimbabwe flag"], ["🇿🇦", "south africa flag"], ["🇬🇧", "uk flag"], ["🇺🇸", "usa flag"], ["🏁", "chequered flag finish"],
+    ],
+  },
+];
+
+/** Emoji matching a search: every word must appear in its search words. */
+export function searchEmoji(q: string): string[] {
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const g of EMOJI_GROUPS)
+    for (const [e, kw] of g.emoji)
+      if (!seen.has(e) && words.every((w) => kw.includes(w))) {
+        seen.add(e);
+        out.push(e);
+      }
+  return out;
+}
