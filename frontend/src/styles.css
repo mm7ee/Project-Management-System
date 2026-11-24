@@ -23,7 +23,7 @@
   --muted: #464b66;
   --faint: #7d829c;
   --shadow: 0 1px 2px rgba(16, 21, 83, 0.05);
-  --heading: #1c2168;
+  --heading: #011f5b;
   --st-not-ink: #15183b;
   --st-not: #bfc4d6; --st-wip: #0039a6; --st-testing: #5b5fc7; --st-deploy: #c98a00;
   --st-live: #0e8a6b; --st-done: #2c3280; --st-overdue: #c8102e;
@@ -118,7 +118,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .profile:hover { background: rgba(255, 255, 255, 0.06); }
 .profile-avatar {
   flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
-  background: var(--cyan); color: #fff; font-size: 13px; font-weight: 700;
+  background: var(--penn-blue); color: #fff; font-size: 13px; font-weight: 700;
 }
 .profile-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .profile-name { font-size: 14.5px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
@@ -229,7 +229,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .updated { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
 .avatar {
   width: 23px; height: 23px; border-radius: 50%; display: grid; place-items: center;
-  background: var(--navy); color: #fff; font-size: 9px; font-weight: 700; letter-spacing: 0.02em;
+  background: var(--penn-blue); color: #fff; font-size: 9px; font-weight: 700; letter-spacing: 0.02em;
 }
 .updated-text { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
 .lead-name { color: var(--text); font-size: 14px; }
@@ -287,12 +287,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
   display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 3px; border: 1px solid var(--cyan); border-radius: 99px;
   font-size: 13.5px; font-weight: 600; color: var(--heading);
 }
-.dev-chip .avatar { background: var(--cyan); }
+.dev-chip .avatar { background: var(--penn-blue); }
 .dev-chip small { font-weight: 400; color: var(--gold-ink); }
 .dev-chip button { display: grid; place-items: center; width: 20px; height: 20px; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
 .dev-chip button:hover { background: var(--track); color: var(--red); }
 .dev-stack { display: inline-flex; margin-left: 2px; }
-.dev-stack .avatar { background: var(--cyan); box-shadow: 0 0 0 2px var(--card, #fff); }
+.dev-stack .avatar { background: var(--penn-blue); box-shadow: 0 0 0 2px var(--card, #fff); }
 .dev-stack .avatar + .avatar { margin-left: -6px; }
 .contact-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .contact-btn {
@@ -2607,7 +2607,7 @@ span.backlog-points { border-color: transparent; background: var(--track); }
 }
 .chat-avatar {
   flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
-  background: var(--navy); color: #fff; font-size: 13px; font-weight: 700;
+  background: var(--penn-blue); color: #fff; font-size: 13px; font-weight: 700;
 }
 .chat-avatar.group { background: var(--violet); }
 .chat-avatar.project { background: var(--cyan); border-radius: 10px; }
@@ -2824,7 +2824,7 @@ span.backlog-points { border-color: transparent; background: var(--track); }
   /* Whatever the theme on screen, paper gets the light palette. */
   .bi-page {
     --card: #ffffff; --canvas: #ffffff; --border: #d9deea; --track: #eceff6; --grid: #eef0f6;
-    --text: #121427; --muted: #464b66; --faint: #6b7088; --heading: #1c2168; --shadow: none;
+    --text: #121427; --muted: #464b66; --faint: #6b7088; --heading: #011f5b; --shadow: none;
     --navy: #2c3280; --navy-900: #101553; --cyan: #0039a6; --tint-cyan: #e8edf9;
     --st-not-ink: #15183b; --st-not: #bfc4d6; --st-wip: #0039a6; --st-testing: #5b5fc7; --st-deploy: #c98a00;
     --st-live: #0e8a6b; --st-done: #2c3280; --st-overdue: #c8102e;
@@ -2881,5 +2881,5 @@ span.backlog-points { border-color: transparent; background: var(--track); }
 .sidebar .add-btn:hover { background: rgba(27, 169, 225, 0.12); border-color: #1ba9e1; }
 .sidebar .profile { border-top-color: rgba(140, 200, 240, 0.16); }
 .sidebar .profile:hover, .sidebar .profile.on { background: rgba(143, 200, 240, 0.08); }
-.sidebar .profile-avatar { background: linear-gradient(135deg, #1ba9e1, #0a5fb4); box-shadow: 0 4px 14px rgba(27, 169, 225, 0.35); }
+.sidebar .profile-avatar { background: var(--penn-blue); box-shadow: 0 0 0 2px rgba(143, 220, 251, 0.55), 0 4px 14px rgba(0, 0, 0, 0.3); }
 .sidebar .role-tag { background: rgba(27, 169, 225, 0.16); color: #8fdcfb; }
