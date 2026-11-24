@@ -1,4 +1,4 @@
-import { Columns3, MessagesSquare, Eye, Search, Headset, FileBarChart, FileText, FolderKanban, LayoutDashboard, ListChecks, Plus, Settings, X } from "lucide-react";
+import { Columns3, MessagesSquare, Eye, Search, Headset, FileBarChart, FileText, LayoutDashboard, ListChecks, Plus, Settings, X } from "lucide-react";
 import { initials, type Status } from "../data/systems";
 import { ROLE_LABEL, type User } from "../data/roles";
 import { COMPANY_URL } from "../brand";
@@ -53,18 +53,12 @@ export default function Sidebar(p: Props) {
 
         <nav className="nav">
           <div className="nav-section">Navigation</div>
-          <button className={`nav-item ${p.view === "dashboard" ? "active" : ""}`} onClick={go(() => p.onView("dashboard"))}>
+          <button className={`nav-item ${p.view === "dashboard" || p.view === "projects" || p.view === "project" ? "active" : ""}`} onClick={go(() => p.onView("dashboard"))}>
             <span>
               <LayoutDashboard size={16} className="nav-icon" /> Dashboard
             </span>
           </button>
-          {/* The stage and status filters live on the Projects page itself. */}
-          <button className={`nav-item ${p.view === "projects" ? "active" : ""}`} onClick={go(() => p.onView("projects"))}>
-            <span>
-              <FolderKanban size={16} className="nav-icon" /> Projects
-            </span>
-            <span className="nav-count">{p.counts.ALL}</span>
-          </button>
+          {/* No separate Projects item: the dashboard's figures open the Projects page, so Dashboard covers both. */}
 
           {p.canReports && p.simple && (
             <button className={`nav-item ${p.view === "reports" ? "active" : ""}`} onClick={go(() => p.onView("reports"))}>
