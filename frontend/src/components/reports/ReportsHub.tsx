@@ -1,12 +1,13 @@
 import { useState, type ComponentProps } from "react";
-import { BarChart3, Gauge, Headset, ListChecks } from "lucide-react";
+import { BarChart3, Gauge, Headset, LayoutDashboard, ListChecks } from "lucide-react";
+import BiDashboard from "./BiDashboard";
 import type { Feature } from "../../data/features";
 import ReportsPage from "./ReportsPage";
 import AgileReports from "./AgileReports";
 import FeatureInsights from "../FeatureInsights";
 import { Reports as ServiceDeskReports } from "../ServiceDeskPage";
 
-type Tab = "projects" | "features" | "delivery" | "service";
+type Tab = "overview" | "projects" | "features" | "delivery" | "service";
 /** This browser remembers the last tab, so Reports opens where you left it. */
 const SAVED = "pulse:reports-tab";
 
@@ -21,6 +22,7 @@ export default function ReportsHub({
   ...projects
 }: ComponentProps<typeof ReportsPage> & { workspaces: string[]; onOpenFeature: (f: Feature) => void; serviceDesk: boolean }) {
   const tabs: { key: Tab; label: string; icon: typeof BarChart3 }[] = [
+    { key: "overview", label: "Overview", icon: LayoutDashboard },
     { key: "projects", label: "Projects", icon: BarChart3 },
     { key: "features", label: "Feature requests", icon: ListChecks },
     { key: "delivery", label: "Delivery", icon: Gauge },
@@ -33,7 +35,7 @@ export default function ReportsHub({
     } catch {
       // No storage: start on Projects.
     }
-    return "projects";
+    return "overview";
   });
   const pick = (t: Tab) => {
     setTab(t);
@@ -55,6 +57,17 @@ export default function ReportsHub({
           ))}
         </div>
       </div>
+      {tab === "overview" && (
+        <div className="page">
+          <header className="page-head">
+            <div>
+              <h2>Overview</h2>
+              <p>The portfolio at a glance. Every chart filters the others: click to drill in.</p>
+            </div>
+          </header>
+          <BiDashboard systems={projects.systems} features={projects.features} blockers={projects.blockers} users={projects.users} workspaces={workspaces} now={projects.now} />
+        </div>
+      )}
       {tab === "projects" && <ReportsPage {...projects} />}
       {tab === "features" && (
         <div className="page">

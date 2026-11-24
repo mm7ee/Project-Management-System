@@ -572,3 +572,18 @@ Choices made during the Pulse upgrade that later phases must follow. Newest last
   see that work through Reports and the project pages instead of the day-to-day lists. Their permissions are
   unchanged, so links (notifications, a project's work items, a feature request) still open as before.
 - Other roles' menus are unchanged.
+
+## Reports → Overview: an interactive BI dashboard (2026-11-25)
+
+- The first Reports tab, and where Reports opens by default. Built from the data the page already has (projects,
+  feature requests, blockers, people): nothing new is fetched, no migration.
+- **Layout:** a workspace slicer (tiles), five headline figures, then projects by stage (donut), schedule by
+  workspace, feature requests by client, requests by type and priority, progress by project lead, requests over
+  12 months, and a portfolio treemap (each project sized by open requests, coloured by schedule).
+- **Cross-filtering, as in Power BI:** clicking a tile, slice, legend entry or bar toggles a filter for the whole
+  page; filters show as removable chips with Clear all. Each chart is computed with every filter except its own,
+  so its own choices stay visible and highlighted while the others dim. Project filters narrow the requests;
+  request filters (client, type) narrow the projects to those with a matching request. Logic in `src/data/bi.ts`
+  (tested), charts in `src/components/reports/BiDashboard.tsx`.
+- Priority is ordinal, so it's one hue stepped light to strong (towards white on dark themes so the low end stays
+  visible), not four unrelated colours. Schedule uses the reserved status colours with a legend.
