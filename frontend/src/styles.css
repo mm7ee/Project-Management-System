@@ -2893,7 +2893,9 @@ span.backlog-points { border-color: transparent; background: var(--track); }
 .sidebar .profile { border-top-color: rgba(140, 200, 240, 0.16); }
 .sidebar .profile:hover, .sidebar .profile.on { background: rgba(143, 200, 240, 0.08); }
 .sidebar .profile-avatar { background: var(--penn-blue); box-shadow: 0 0 0 2px rgba(143, 220, 251, 0.55), 0 4px 14px rgba(0, 0, 0, 0.3); }
-.sidebar .role-tag { background: rgba(27, 169, 225, 0.16); color: #8fdcfb; }
+/* In the sidebar profile the role is a plain label, flush with the name above it (no pill, so no inset). */
+.sidebar .profile .role-tag { margin-top: 2px; padding: 0; border-radius: 0; background: none; color: #8fdcfb; font-size: 10.5px; letter-spacing: 0.08em; line-height: 1.3; }
+.sidebar .profile-text { gap: 0; }
 
 /* ======================= Dashboard design system (2026-11-25) =======================
    One card style for overview panels and gadgets, a 12-column grid, KPI tiles, gadget states, tables.
