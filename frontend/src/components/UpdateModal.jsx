@@ -1,6 +1,6 @@
 /** @import { Health, Status, System } from '../data/systems' */
 import { useEffect, useState } from "react";
-import { CheckCircle2, Wrench, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Wrench, X } from "lucide-react";
 import { STATUS_META } from "../data/systems";
 /**
  * @param {Props} props
@@ -54,6 +54,9 @@ export default function UpdateModal({ systems, initialId, onSave, onClose }) {
       >
         <button type="button" className="close-btn" onClick={onClose} aria-label="Close">
           <X size={18} />
+        </button>
+        <button type="button" className="modal-back" onClick={onClose} aria-label="Back to the previous page (nothing is saved)">
+          <ArrowLeft size={16} aria-hidden="true" /> Back
         </button>
         <h2>Post progress update</h2>
 

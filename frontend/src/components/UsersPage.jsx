@@ -4,7 +4,7 @@
 /** @import { Limits, Workload } from '../data/project' */
 /** @import { SigninRules } from '../data/signin' */
 import { useEffect, useState } from "react";
-import { AlertOctagon, Check, Copy, Fingerprint, KeyRound, LifeBuoy, Lock, LockOpen, Pencil, Plus, Search, ShieldCheck, ShieldOff, Smartphone, Trash2, X } from "lucide-react";
+import { ArrowLeft, AlertOctagon, Check, Copy, Fingerprint, KeyRound, LifeBuoy, Lock, LockOpen, Pencil, Plus, Search, ShieldCheck, ShieldOff, Smartphone, Trash2, X } from "lucide-react";
 import { api } from "../data/api";
 import { initials } from "../data/systems";
 import { timeAgo } from "../time";
@@ -647,6 +647,9 @@ function UserModal({ user, systems, limit, onSave, onClose }) {
       >
         <button type="button" className="close-btn" onClick={onClose} aria-label="Close">
           <X size={18} />
+        </button>
+        <button type="button" className="modal-back" onClick={onClose} aria-label="Back to the previous page (nothing is saved)">
+          <ArrowLeft size={16} aria-hidden="true" /> Back
         </button>
         <h2>{user ? `Edit ${user.name}` : "Add user"}</h2>
 

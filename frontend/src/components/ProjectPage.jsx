@@ -261,6 +261,9 @@ export default function ProjectPage(p) {
                     <button type="button" className="close-btn" onClick={() => setEditingPcn(null)} aria-label="Close">
                       <X size={18} />
                     </button>
+                    <button type="button" className="modal-back" onClick={() => setEditingPcn(null)} aria-label="Back to the previous page (nothing is saved)">
+                      <ArrowLeft size={16} aria-hidden="true" /> Back
+                    </button>
                     <h2>{system.pcn ? "Edit Project Concept Note" : "Add a Project Concept Note"}</h2>
                     <PcnForm value={editingPcn} onChange={setEditingPcn} users={users} />
                     {error && <p className="form-error">{error}</p>}

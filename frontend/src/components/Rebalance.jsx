@@ -3,7 +3,7 @@
 /** @import { Feature } from '../data/features' */
 /** @import { Limits, Suggestion } from '../data/project' */
 import { useEffect, useState } from "react";
-import { AlertOctagon, ArrowRightLeft, UserMinus, UserPlus, X } from "lucide-react";
+import { ArrowLeft, AlertOctagon, ArrowRightLeft, UserMinus, UserPlus, X } from "lucide-react";
 import { initials } from "../data/systems";
 import { suggestDevelopers, workloadOf } from "../data/project";
 /**
@@ -94,6 +94,9 @@ export default function RebalanceModal({ users, systems, features, limits, now, 
       <div className="modal modal-wide rebalance" role="dialog" aria-label="Rebalance workload" onClick={(e) => e.stopPropagation()}>
         <button type="button" className="close-btn" onClick={onClose} aria-label="Close">
           <X size={18} />
+        </button>
+        <button type="button" className="modal-back" onClick={onClose} aria-label="Back to the previous page (nothing is saved)">
+          <ArrowLeft size={16} aria-hidden="true" /> Back
         </button>
         <h2>Rebalance workload</h2>
         <p className="modal-note">

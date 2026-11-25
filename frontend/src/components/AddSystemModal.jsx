@@ -105,6 +105,9 @@ export default function AddSystemModal({ workspaces, initialWorkspace = "", user
           <button type="button" className="close-btn" onClick={onClose} aria-label="Close">
             <X size={18} />
           </button>
+          <button type="button" className="modal-back" onClick={onClose} aria-label="Back to the previous page (nothing is saved)">
+            <ArrowLeft size={16} aria-hidden="true" /> Back
+          </button>
           <h2>Project Concept Note</h2>
           <p className="modal-note">
             OmniContact BPO's PCN for proposing a new project. It's saved as an <b>Idea</b>; once every signatory approves through Econet, it moves on to planning.
@@ -137,6 +140,9 @@ export default function AddSystemModal({ workspaces, initialWorkspace = "", user
         <div className="modal modal-wide start-modal" role="dialog" aria-label="Add a system" onClick={(e) => e.stopPropagation()}>
           <button type="button" className="close-btn" onClick={onClose} aria-label="Close">
             <X size={18} />
+          </button>
+          <button type="button" className="modal-back" onClick={onClose} aria-label="Back to the previous page (nothing is saved)">
+            <ArrowLeft size={16} aria-hidden="true" /> Back
           </button>
           <h2>Add a system</h2>
           <p className="modal-note">How do you want to start?</p>
@@ -238,6 +244,9 @@ export default function AddSystemModal({ workspaces, initialWorkspace = "", user
       >
         <button type="button" className="close-btn" onClick={onClose} aria-label="Close">
           <X size={18} />
+        </button>
+        <button type="button" className="modal-back" onClick={onClose} aria-label="Back to the previous page (nothing is saved)">
+          <ArrowLeft size={16} aria-hidden="true" /> Back
         </button>
         <h2>Add a system</h2>
         <div className="start-chosen">

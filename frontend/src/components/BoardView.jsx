@@ -4,7 +4,7 @@
 /** @import { StatusDef, Swimlanes, Workflow } from '../data/workflows' */
 /** @import { PendingMove } from './MoveDialog' */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertOctagon, ArrowDown, ArrowUp, CalendarClock, Plus, Settings2, Trash2, X } from "lucide-react";
+import { ArrowLeft, AlertOctagon, ArrowDown, ArrowUp, CalendarClock, Plus, Settings2, Trash2, X } from "lucide-react";
 import { api } from "../data/api";
 import { initials } from "../data/systems";
 import { formatDate } from "../time";
@@ -443,6 +443,9 @@ function BoardSettings({ board, statuses, relevant, onClose, onSaved }) {
       >
         <button type="button" className="close-btn" onClick={onClose} aria-label="Close">
           <X size={18} />
+        </button>
+        <button type="button" className="modal-back" onClick={onClose} aria-label="Back to the previous page (nothing is saved)">
+          <ArrowLeft size={16} aria-hidden="true" /> Back
         </button>
         <h2>Board columns</h2>
         <p className="modal-note">Each column shows one or more statuses. A status can be in one column. A column over its work-in-progress limit turns amber.</p>

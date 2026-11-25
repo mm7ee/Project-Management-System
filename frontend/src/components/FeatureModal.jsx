@@ -3,7 +3,7 @@
 /** @import { User } from '../data/roles' */
 /** @import { Feature } from '../data/features' */
 import { useEffect, useState } from "react";
-import { Trash2, X } from "lucide-react";
+import { ArrowLeft, Trash2, X } from "lucide-react";
 import { FEATURE_KINDS, FEATURE_STATUSES, FEATURE_STATUS_META, KIND_META, PRIORITIES, PRIORITY_META } from "../data/features";
 import { formatDate, timeAgo } from "../time";
 import { MentionTextarea } from "./WorkItemBits";
@@ -95,6 +95,9 @@ export default function FeatureModal({ feature, initialSystemId, systems, users,
       >
         <button type="button" className="close-btn" onClick={onClose} aria-label="Close">
           <X size={18} />
+        </button>
+        <button type="button" className="modal-back" onClick={onClose} aria-label="Back to the previous page (nothing is saved)">
+          <ArrowLeft size={16} aria-hidden="true" /> Back
         </button>
         <h2>{feature ? (full ? "Edit feature request" : feature.title) : "Log a feature request"}</h2>
         {feature && (

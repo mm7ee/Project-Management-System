@@ -3436,3 +3436,12 @@ th[aria-sort="ascending"] .pr-sort svg, th[aria-sort="descending"] .pr-sort svg 
 }
 .back-btn:hover { border-color: var(--cyan); background: var(--tint-cyan); transform: translateX(-1px); }
 @media (prefers-reduced-motion: reduce) { .back-btn:hover { transform: none; } }
+
+/* "← Back" at the top of a full-view form: closes it, back to the page underneath (like Cancel). */
+.modal-back {
+  justify-self: start; align-self: start; display: inline-flex; align-items: center; gap: 6px; width: fit-content;
+  margin-bottom: -4px; padding: 6px 10px 6px 6px; border: 0; border-radius: var(--r-sm); background: none;
+  color: var(--muted); font: inherit; font-size: var(--fs-small); font-weight: 600; cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.modal-back:hover { background: var(--track); color: var(--heading); }
