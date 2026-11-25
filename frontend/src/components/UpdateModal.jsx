@@ -34,7 +34,7 @@ export default function UpdateModal({ systems, initialId, onSave, onClose }) {
   return (
     <div className="backdrop modal-backdrop" onClick={onClose}>
       <form
-        className="modal"
+        className="modal modal-wide update-modal"
         role="dialog"
         aria-label="Post progress update"
         onClick={(e) => e.stopPropagation()}
@@ -57,7 +57,7 @@ export default function UpdateModal({ systems, initialId, onSave, onClose }) {
         </button>
         <h2>Post progress update</h2>
 
-        <label className="field">
+        <label className="field update-left">
           <span>Project</span>
           <select value={id} onChange={(e) => pick(e.target.value)}>
             {systems.map((s) => (
@@ -68,14 +68,14 @@ export default function UpdateModal({ systems, initialId, onSave, onClose }) {
           </select>
         </label>
 
-        <label className="field">
+        <label className="field update-left">
           <span>
             Progress <b>{progress}%</b>
           </span>
           <input type="range" min={0} max={100} step={5} value={progress} onChange={(e) => setProgress(+e.target.value)} />
         </label>
 
-        <label className="field">
+        <label className="field update-right">
           <span>Status</span>
           <select value={status} onChange={(e) => setStatus(/** @type {Status} */ (e.target.value))}>
             {/** @type {Status[]} */ (Object.keys(STATUS_META)).map((s) => (
@@ -87,7 +87,7 @@ export default function UpdateModal({ systems, initialId, onSave, onClose }) {
         </label>
 
         {delivered && (
-          <div className="field">
+          <div className="field update-right">
             <span>System health</span>
             <div className="health-toggle" role="radiogroup" aria-label="System health">
               <button type="button" role="radio" aria-checked={health === "Stable"} className={health === "Stable" ? "on stable" : ""} onClick={() => setHealth("Stable")}>
@@ -100,7 +100,7 @@ export default function UpdateModal({ systems, initialId, onSave, onClose }) {
           </div>
         )}
         {delivered && health === "Maintenance" && (
-          <label className="field">
+          <label className="field update-right">
             <span>What's being updated? (optional)</span>
             <textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Upgrading to v2.3 — reports may be slow until Friday" />
           </label>

@@ -3382,3 +3382,13 @@ th[aria-sort="ascending"] .pr-sort svg, th[aria-sort="descending"] .pr-sort svg 
   body.printing-project-report .pr-table th, body.printing-project-report .pr-table td { padding: 4px 6px; font-size: 8.5pt; }
   body.printing-project-report .pr-sort svg { display: none; }
 }
+
+/* Post progress update: full view like Log a feature request; on wide screens, project and progress on the
+   left, status and health on the right. */
+@media (min-width: 900px) {
+  .update-modal { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 32px; row-gap: 16px; align-content: start; grid-auto-flow: row dense; }
+  .update-modal > * { grid-column: 1 / -1; }
+  .update-modal > .update-left { grid-column: 1; }
+  .update-modal > .update-right { grid-column: 2; }
+  .update-modal > .modal-actions { justify-content: flex-end; }
+}
