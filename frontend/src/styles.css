@@ -3427,3 +3427,12 @@ th[aria-sort="ascending"] .pr-sort svg, th[aria-sort="descending"] .pr-sort svg 
 
 /* Concept Notes: search beside the status tabs. */
 .pcn-search { flex: 1 1 280px; max-width: 460px; margin-bottom: 0; padding-left: 12px; }
+
+/* ← in the top bar: back to the previous page in Pulse (shown once there is one). */
+.back-btn {
+  flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--r-md);
+  border: 1px solid var(--border); background: var(--card); color: var(--heading); cursor: pointer; box-shadow: var(--e-1);
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.back-btn:hover { border-color: var(--cyan); background: var(--tint-cyan); transform: translateX(-1px); }
+@media (prefers-reduced-motion: reduce) { .back-btn:hover { transform: none; } }

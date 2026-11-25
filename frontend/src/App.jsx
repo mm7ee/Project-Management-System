@@ -8,8 +8,8 @@
 /** @import { Feature } from './data/features' */
 /** @import { SignoffStatus } from './data/pcn' */
 /** @import { User } from './data/roles' */
-import { useEffect, useMemo, useState } from "react";
-import { AlertOctagon, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, LockKeyhole, Menu, Zap, Plug, BellRing, Lock, ListPlus, Headset, Plus, Search, Send, ShieldCheck, Sparkles, Users, Workflow } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertOctagon, ArrowLeft, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, LockKeyhole, Menu, Zap, Plug, BellRing, Lock, ListPlus, Headset, Plus, Search, Send, ShieldCheck, Sparkles, Users, Workflow } from "lucide-react";
 import { getSchedule } from "./data/systems";
 import { api, useAppData } from "./data/api";
 import { isAssigned } from "./data/roles";
@@ -252,8 +252,73 @@ function Dashboard({ data, reload }) {
   const openProject = /** @param {string} id */ (id) => {
     window.location.hash = `/projects/${id}`;
   };
+  // ---------- Back and forward ----------
+  // Every screen is a browser history entry carrying { view, filter, depth }, so the browser's Back and
+  // Forward (and a phone's back gesture) move between Pulse's pages, and the ← in the top bar does the same.
+  // Projects keep their address (#/projects/…); the entry for one also remembers the page underneath.
+  // `depth` counts the steps since Pulse opened, so the ← only shows when there's somewhere to go back to.
+  const viewRef = useRef(view);
+  const filterRef = useRef(filter);
+  const depthRef = useRef(0);
+  const fromHistory = useRef(false);
+  const leftProjectAt = useRef(0);
+  viewRef.current = view;
+  filterRef.current = filter;
+  const [canGoBack, setCanGoBack] = useState(false);
+  /** @param {number} depth */
+  const stamp = (depth) => ({ ...(window.history.state ?? {}), pulse: { view: viewRef.current, filter: filterRef.current, depth } });
+  useEffect(() => {
+    // The first screen: whatever was there before Pulse (a link, a bookmark) stays out of reach of the ←.
+    depthRef.current = Number(window.history.state?.pulse?.depth ?? 0);
+    window.history.replaceState(stamp(depthRef.current), "");
+    setCanGoBack(depthRef.current > 0);
+    const onPop = /** @param {PopStateEvent} e */ (e) => {
+      const s = e.state?.pulse;
+      if (!s) return;
+      depthRef.current = Number(s.depth ?? 0);
+      setCanGoBack(depthRef.current > 0);
+      if (s.view !== viewRef.current || s.filter !== filterRef.current) {
+        fromHistory.current = true;
+        setView(s.view);
+        setFilter(s.filter);
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+  // A new page or Projects tab becomes an entry, unless Back or Forward brought us here.
+  useEffect(() => {
+    if (fromHistory.current) {
+      fromHistory.current = false;
+      return;
+    }
+    const s = window.history.state?.pulse;
+    if (s && s.view === view && s.filter === filter) return;
+    // Leaving a project for another page: that page takes over the entry made for leaving it.
+    if (Date.now() - leftProjectAt.current < 400) {
+      window.history.replaceState(stamp(depthRef.current), "");
+      return;
+    }
+    depthRef.current += 1;
+    window.history.pushState(stamp(depthRef.current), "");
+    setCanGoBack(true);
+  }, [view, filter]);
+  // Opening a project (or moving within one) changes the address: give that entry a screen and a depth too.
+  useEffect(() => {
+    const onHash = () => {
+      if (window.history.state?.pulse) return; // an entry we already know (Back or Forward)
+      depthRef.current += 1;
+      window.history.replaceState(stamp(depthRef.current), "");
+      setCanGoBack(true);
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
   const closeProject = () => {
-    window.history.pushState(null, "", window.location.pathname + window.location.search);
+    depthRef.current += 1;
+    leftProjectAt.current = Date.now();
+    window.history.pushState(stamp(depthRef.current), "", window.location.pathname + window.location.search);
+    setCanGoBack(true);
     setSelectedId(null);
   };
   const [posting, setPosting] = useState(/** @type {{ initialId?: string } | null | (() => { initialId?: string } | null)} */ (null));
@@ -462,6 +527,11 @@ function Dashboard({ data, reload }) {
           <button className="menu-btn" onClick={() => setMenuOpen(true)} aria-label="Open menu">
             <Menu size={20} />
           </button>
+          {canGoBack && (
+            <button className="back-btn" onClick={() => window.history.back()} aria-label="Back to the previous page" title="Back">
+              <ArrowLeft size={18} />
+            </button>
+          )}
           <h1>{data.viewOnly ? "Welcome" : `${greeting()}, ${me.name.split(" ")[0]}`}</h1>
           <VitalSign
             attention={attention.length}
