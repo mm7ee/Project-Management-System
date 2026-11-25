@@ -3445,3 +3445,6 @@ th[aria-sort="ascending"] .pr-sort svg, th[aria-sort="descending"] .pr-sort svg 
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .modal-back:hover { background: var(--track); color: var(--heading); }
+
+/* Search box used as a form field (Post progress update → Project): one border, the box's own. */
+.field .dev-search-box input:not([type=range]) { padding: 12px 0; border: 0; border-radius: 0; background: none; box-shadow: none; outline: 0; }

@@ -1,6 +1,6 @@
 /** @import { Health, Status, System } from '../data/systems' */
 import { useEffect, useState } from "react";
-import { ArrowLeft, CheckCircle2, Wrench, X } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, Search, Wrench, X } from "lucide-react";
 import { STATUS_META } from "../data/systems";
 /**
  * @param {Props} props
@@ -60,16 +60,10 @@ export default function UpdateModal({ systems, initialId, onSave, onClose }) {
         </button>
         <h2>Post progress update</h2>
 
-        <label className="field update-left">
-          <span>Project</span>
-          <select value={id} onChange={(e) => pick(e.target.value)}>
-            {systems.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="field update-left">
+          <span id="update-project-label">Project</span>
+          <ProjectSearch systems={systems} value={id} onPick={pick} />
+        </div>
 
         <label className="field update-left">
           <span>
@@ -119,6 +113,105 @@ export default function UpdateModal({ systems, initialId, onSave, onClose }) {
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+/**
+ * Type-to-find project box. Shows the chosen project's name; typing filters the list by name,
+ * short code or status, ↑/↓ move, Enter picks, Escape closes the list without closing the form.
+ * @param {{ systems: System[], value: string, onPick: (id: string) => void }} props
+ */
+function ProjectSearch({ systems, value, onPick }) {
+  const [query, setQuery] = useState(/** @type {string | null} */ (null));
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const chosen = systems.find((s) => s.id === value);
+  const q = (query ?? "").trim().toLowerCase();
+  const matches = systems.filter(
+    (s) => !q || s.name.toLowerCase().includes(q) || (s.short ?? "").toLowerCase().includes(q) || STATUS_META[s.status].label.toLowerCase().includes(q),
+  );
+  const close = () => {
+    setOpen(false);
+    setQuery(null);
+  };
+  const choose = /** @param {string} next */ (next) => {
+    onPick(next);
+    close();
+  };
+  return (
+    <div className="dev-search" onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && close()}>
+      <label className="dev-search-box">
+        <Search size={15} aria-hidden="true" />
+        <input
+          value={query ?? chosen?.name ?? ""}
+          placeholder="Search projects by name…"
+          role="combobox"
+          aria-labelledby="update-project-label"
+          aria-expanded={open}
+          aria-autocomplete="list"
+          onFocus={(e) => {
+            e.currentTarget.select();
+            setOpen(true);
+            setActive(Math.max(0, systems.findIndex((s) => s.id === value)));
+          }}
+          onClick={(e) => {
+            // Not searching yet: select the shown name so typing replaces it.
+            if (query === null) e.currentTarget.select();
+            setOpen(true);
+          }}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setActive(0);
+            setOpen(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setOpen(true);
+              setActive((i) => Math.min(i + 1, matches.length - 1));
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setActive((i) => Math.max(i - 1, 0));
+            } else if (e.key === "Enter") {
+              // Enter picks a project instead of posting the update.
+              if (open) {
+                e.preventDefault();
+                if (matches[active]) choose(matches[active].id);
+              }
+            } else if (e.key === "Escape" && open) {
+              e.stopPropagation();
+              close();
+            }
+          }}
+        />
+      </label>
+      {open && (
+        <ul className="dev-menu" role="listbox">
+          {matches.length ? (
+            matches.map((s, i) => (
+              <li key={s.id} role="option" aria-selected={s.id === value}>
+                <button
+                  type="button"
+                  className={`dev-option ${i === active ? "active" : ""}`}
+                  onMouseEnter={() => setActive(i)}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => choose(s.id)}
+                >
+                  <span className="dev-option-text">
+                    <b>{s.name}</b>
+                    <span>
+                      {STATUS_META[s.status].label} · {s.progress}%
+                    </span>
+                  </span>
+                  {s.id === value && <Check size={15} aria-label="Current" />}
+                </button>
+              </li>
+            ))
+          ) : (
+            <li className="dev-menu-empty">No project matches "{(query ?? "").trim()}"</li>
+          )}
+        </ul>
+      )}
     </div>
   );
 }
