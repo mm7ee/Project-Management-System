@@ -609,3 +609,19 @@ managers can present.
   - `src/styles.css`, `worker/index.ts`, `docs/API.md`, `postman/Pulse.postman_collection.json`.
 
 **No migration.**
+
+## TypeScript → JavaScript (2026-11-25)
+
+**Why:** the owner asked for the code to be JavaScript.
+
+**What changed**
+- All 143 source files and the two configs (`vite.config`, `neon`) are now `.js` / `.jsx`, with their types as JSDoc.
+  `tsc --checkJs` still checks them on every build: 0 errors, as before.
+- `tsconfig.json` and `worker/tsconfig.json` gain `allowJs` and `checkJs`; `wrangler.jsonc` points at
+  `worker/index.js`; `index.html` at `src/main.jsx`.
+- Done mechanically, then checked: the TypeScript compiler annotated every cast, generic call, non-null assertion
+  and typed arrow function as JSDoc first, `ts-to-jsdoc` converted the files, and the last ~90 type errors were
+  fixed by hand against the original TypeScript (commit before this one on `main`).
+- Verified: `npm run build` (type check + production bundle), all 117 tests, the Worker bundles (`wrangler deploy
+  --dry-run`), and the app loads in the browser from both the dev server and the production build.
+- No behaviour changes intended; no migration.

@@ -33,14 +33,14 @@ Browser ──► "pulse" Worker (gateway) ──► "omni-tracker" Worker ─�
                                            └─► Workers AI (Ask Pulse) · Resend (email) · Teams webhook
 ```
 
-- **Front end:** React 18, TypeScript and Vite, with hand-written SVG charts. Routing uses the URL hash.
+- **Front end:** React 18 and Vite, in JavaScript with JSDoc types that `npm run build` checks (`tsc --checkJs`), with hand-written SVG charts. Routing uses the URL hash.
 - **API:** one Cloudflare Worker, `frontend/worker/`. Every permission check happens here; the UI only hides what
   a user can't do.
-- **Database:** Postgres 18 on Neon, reached through Cloudflare Hyperdrive. `worker/pg.ts` gives it a small
+- **Database:** Postgres 18 on Neon, reached through Cloudflare Hyperdrive. `worker/pg.js` gives it a small
   D1-shaped API (`prepare` → `bind` → `first`/`all`/`run`, and `batch` as one transaction).
 - **Placement:** the Worker is pinned to `aws:ap-southeast-1`, next to the database, so each page's queries are
   short hops.
-- **Scheduled jobs:** one hourly cron trigger. `worker/schedule.ts` decides what's due: daily digests, the Monday
+- **Scheduled jobs:** one hourly cron trigger. `worker/schedule.js` decides what's due: daily digests, the Monday
   briefing, filter subscriptions, automation rules and the retention clean-up.
 
 ## Repository layout
@@ -48,7 +48,7 @@ Browser ──► "pulse" Worker (gateway) ──► "omni-tracker" Worker ─�
 ```
 frontend/              the app: everything is built and deployed from here
   src/                 React app (components/, data/ for types and shared logic)
-  worker/              the API Worker (index.ts routes; a module per area)
+  worker/              the API Worker (index.js routes; a module per area)
   migrations/          Postgres schema changes, applied in order
   scripts/db.mjs       migrate, status, backup and run SQL against a database
   scripts/demo-data.mjs  demo records for presentations (every id starts "demo-")
