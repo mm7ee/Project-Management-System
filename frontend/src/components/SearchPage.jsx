@@ -157,7 +157,7 @@ export default function SearchPage({ users, workspaces, now, canShare, initialPq
       <header className="page-head">
         <div>
           <h2>Search</h2>
-          <p>Find work items across every project you can see. Choose from the lists, or write a query in PQL (like Jira's JQL).</p>
+          <p>Find work items across every project you can see. Choose from the lists, or write a query in PQL.</p>
         </div>
         <div className="seg" role="radiogroup" aria-label="Search mode">
           {/** @type {const} */ (["basic", "advanced"]).map((m) => (
