@@ -698,3 +698,15 @@ Choices made during the Pulse upgrade that later phases must follow. Newest last
     `useRef(/** @type {HTMLDivElement | null} */ (null))`.
   - Generic helpers: `@template {keyof X} K` with its constraint, as TypeScript's `<K extends keyof X>` had.
   - Rest parameters: `@param {...unknown} values` (the element type, not an array).
+
+## @mentions while typing, and in feature requests (2026-11-25)
+
+- **Suggestions:** typing `@` and a letter in a work item's comment, comment edit or description box, or a feature
+  request's Details or Developer notes, lists up to 6 people (username, or any word of their name, starting with the
+  letters). ↑/↓ and Enter/Tab insert `@username `; Escape closes the list only. One component,
+  `MentionTextarea` (`src/components/WorkItemBits.jsx`); chat keeps its own composer.
+- **Feature requests notify mentions:** a request's endpoints create and edit its work item quietly (they send their
+  own "assigned to you" alerts), so mentions in its Details or Developer notes are handled there: the people
+  **newly** mentioned are told, as named recipients (`extra`) of `item_created` (new request) or `item_updated`
+  (edited). So it works whatever the scheme's "mentioned" switch says; the scheme still decides email, and
+  visibility and personal opt-outs still apply. You're never told about your own mention.

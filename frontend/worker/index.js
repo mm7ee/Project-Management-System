@@ -33,7 +33,8 @@ import { runBriefing, runDailyDigests } from "./digest";
 import { toFeature } from "./rows";
 import { pgDatabase } from "./pg";
 import { HttpError, body, json } from "./http";
-import { KEY_PATTERN, suggestKey } from "../src/data/workitems";
+import { KEY_PATTERN, mentionsIn, suggestKey } from "../src/data/workitems";
+import { notifyItem } from "./schemes";
 import { applyChange, askItemLines, createItem, deleteItem, featureToItem, afterChange, moveFeatureTo, itemById, itemsApi, recomputeProgress } from "./workitems";
 import { workflowsApi } from "./workflows";
 import { askBoardLines, boardsApi } from "./boards";
@@ -2492,6 +2493,35 @@ async function api(req, env, path, ctx) {
   // shape and rules and run on the work item code underneath. The `features` view reads them back.
   const featureRow = /** @param {string} id */ async (id) => /** @type {FeatureRow} */ (await /** @type {Promise<FeatureRow | null>} */ (/** @type {unknown} */ (db.prepare("SELECT * FROM features WHERE id = ?").bind(id).first())));
   const featureLabels = /** @param {string} id */ async (id) => (await /** @type {Promise<D1Result<{ label: string; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT label FROM work_item_labels WHERE item_id = ?").bind(id).all()))).results.map((l) => l.label);
+  // @mentions in a request's description or developer notes: the people newly mentioned are told (by bell, and
+  // by email if the event's scheme emails), as long as they can see the request and haven't opted out.
+  const featureMentions = /**
+   * @param {string} itemId
+   * @param {string} before the description and notes before the change ("" for a new request)
+   * @param {string} after the description and notes now
+   * @param {"item_created" | "item_updated"} event
+   */ async (itemId, before, after, event) => {
+    const had = new Set(mentionsIn(before));
+    const fresh = mentionsIn(after).filter((u) => !had.has(u));
+    if (!fresh.length) return;
+    const people = await /** @type {Promise<D1Result<{ id: string; }>>} */ (
+      /** @type {unknown} */ (
+        db
+          .prepare(`SELECT id FROM users WHERE lower(username) IN (${fresh.map(() => "?").join(", ")})`)
+          .bind(...fresh)
+          .all()
+      )
+    );
+    const r = await itemById(itemCtx, itemId);
+    if (!r || !people.results.length) return;
+    await notifyItem(itemCtx, event, r, {
+      onlyMentioned: true,
+      extra: people.results.map((p) => p.id),
+      mentioned: people.results.map((p) => p.id),
+      title: `${me.name} mentioned you on ${r.project_key}-${r.number} ${r.summary}`,
+      body: after.replace(/\s+/g, " ").slice(0, 200),
+    });
+  };
   if (path === "/api/features" && method === "POST") {
     if (!can("manage_features") && !can("log_features")) throw new HttpError(403, "You don't have permission to do that");
     const b = await /** @type {Promise<Partial<Feature>>} */ (/** @type {unknown} */ (body(req)));
@@ -2530,6 +2560,7 @@ async function api(req, env, path, ctx) {
         link: `#/projects/${system.id}`,
       });
     }
+    await featureMentions(item.id, "", `${f.description ?? ""}\n${f.notes ?? ""}`, "item_created");
     return json(toFeature(f), 201);
   }
   const featMatch = path.match(/^\/api\/features\/([a-z0-9-]+)$/);
@@ -2601,6 +2632,9 @@ async function api(req, env, path, ctx) {
         body: `${project}, ${saved.priority.toLowerCase()} priority. From ${me.name}.`,
         link: `#/projects/${saved.system_id}`,
       });
+    }
+    if (changed.includes("description") || changed.includes("notes")) {
+      await featureMentions(saved.id, `${row.description ?? ""}\n${row.notes ?? ""}`, `${saved.description ?? ""}\n${saved.notes ?? ""}`, "item_updated");
     }
     return json(toFeature(saved));
   }

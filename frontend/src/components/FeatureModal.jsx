@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Trash2, X } from "lucide-react";
 import { FEATURE_KINDS, FEATURE_STATUSES, FEATURE_STATUS_META, KIND_META, PRIORITIES, PRIORITY_META } from "../data/features";
 import { formatDate, timeAgo } from "../time";
+import { MentionTextarea } from "./WorkItemBits";
 /**
  * @param {{ n: number; title: string; sub?: string; children: ReactNode }} props
  */
@@ -147,7 +148,7 @@ export default function FeatureModal({ feature, initialSystemId, systems, users,
               </label>
               <label className="field">
                 <span>Details (optional)</span>
-                <textarea rows={3} value={f.description} onChange={(e) => set("description", e.target.value)} placeholder="What should it do? Any changes to existing screens?" />
+                <MentionTextarea rows={3} value={f.description} onChange={(v) => set("description", v)} people={users} placeholder="What should it do? Any changes to existing screens? Type @ to mention someone." />
               </label>
             </>
           ) : (
@@ -248,7 +249,7 @@ export default function FeatureModal({ feature, initialSystemId, systems, users,
           {mayEdit ? (
             <label className="field">
               <span>Developer notes (optional)</span>
-              <textarea rows={3} value={f.notes} onChange={(e) => set("notes", e.target.value)} placeholder="Blockers, questions for the client, access or data that's needed…" />
+              <MentionTextarea rows={3} value={f.notes} onChange={(v) => set("notes", v)} people={users} placeholder="Blockers, questions for the client, access or data that's needed… Type @ to mention someone." />
             </label>
           ) : (
             f.notes && <p className="ro-text">{f.notes}</p>
