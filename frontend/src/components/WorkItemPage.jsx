@@ -153,7 +153,7 @@ export default function WorkItemPage({ system, itemKey, users, me, now, readOnly
 
       <div className="wi-grid">
         <div className="wi-main">
-          <Description item={item} canEdit={can.edit} usernames={usernames} onSave={(description) => save({ description })} />
+          <Description item={item} canEdit={can.edit} usernames={usernames} people={users} onSave={(description) => save({ description })} />
 
           {item.source === "client_request" && (
             <Section title="Client request">
@@ -183,7 +183,7 @@ export default function WorkItemPage({ system, itemKey, users, me, now, readOnly
 
           {!readOnly && <Attachments item={item} canUpload={can.comment} canManage={can.assignOthers} me={me} nameOf={nameOf} now={now} run={run} />}
 
-          <Comments item={item} me={me} now={now} nameOf={nameOf} usernames={usernames} canComment={can.comment} canReplyToCustomer={!!can.replyToCustomer} onCount={(n) => setItem((i) => (i ? { ...i, commentCount: n } : i))} onPublicReply={load} />
+          <Comments item={item} me={me} now={now} nameOf={nameOf} usernames={usernames} people={users} canComment={can.comment} canReplyToCustomer={!!can.replyToCustomer} onCount={(n) => setItem((i) => (i ? { ...i, commentCount: n } : i))} onPublicReply={load} />
 
           <Section title="Status history" icon={<Timer size={16} />}>
             <ol className="timeline">
@@ -424,9 +424,9 @@ function Summary({ item, canEdit, onSave }) {
   );
 }
 /**
- * @param {{ item: WorkItem; canEdit: boolean; usernames: string[]; onSave: (v: string) => Promise<boolean> }} props
+ * @param {{ item: WorkItem; canEdit: boolean; usernames: string[]; people: { username: string; name: string }[]; onSave: (v: string) => Promise<boolean> }} props
  */
-function Description({ item, canEdit, usernames, onSave }) {
+function Description({ item, canEdit, usernames, people, onSave }) {
   const [editing, setEditing] = useState(false);
   const [v, setV] = useState(item.description);
   useEffect(() => setV(item.description), [item.description]);
@@ -449,7 +449,7 @@ function Description({ item, canEdit, usernames, onSave }) {
             if (await onSave(v)) setEditing(false);
           }}
         >
-          <MarkdownField label="Description" value={v} onChange={setV} rows={10} usernames={usernames} autoFocus />
+          <MarkdownField label="Description" value={v} onChange={setV} rows={10} usernames={usernames} people={people} autoFocus />
           <div className="confirm-actions">
             <button type="button" className="btn btn-ghost" onClick={() => setEditing(false)}>
               Cancel
@@ -812,13 +812,14 @@ function Attachments({ item, canUpload, canManage, me, nameOf, now, run }) {
  *   now: number;
  *   nameOf: (id?: string) => string;
  *   usernames: string[];
+ *   people: { username: string; name: string }[];
  *   canComment: boolean;
  *   canReplyToCustomer: boolean;
  *   onCount: (n: number) => void;
  *   onPublicReply: () => Promise<void>;
  * }} arg1
  */
-function Comments({ item, me, now, nameOf, usernames, canComment, canReplyToCustomer, onCount, onPublicReply }) {
+function Comments({ item, me, now, nameOf, usernames, people, canComment, canReplyToCustomer, onCount, onPublicReply }) {
   const [toCustomer, setToCustomer] = useState(false);
   const [comments, setComments] = useState(/** @type {WorkComment[] | null | (() => WorkComment[] | null)} */ (null));
   const [total, setTotal] = useState(0);
@@ -872,7 +873,7 @@ function Comments({ item, me, now, nameOf, usernames, canComment, canReplyToCust
                       if (await act(() => api(`/items/${item.key}/comments/${c.id}`, "PATCH", { body: editing.body }))) setEditing(null);
                     }}
                   >
-                    <MarkdownField label="Edit comment" value={editing.body} onChange={(body) => setEditing({ id: c.id, body })} rows={4} usernames={usernames} autoFocus />
+                    <MarkdownField label="Edit comment" value={editing.body} onChange={(body) => setEditing({ id: c.id, body })} rows={4} usernames={usernames} people={people} autoFocus />
                     <div className="confirm-actions">
                       <button type="button" className="btn btn-ghost sm" onClick={() => setEditing(null)}>
                         Cancel
@@ -926,6 +927,7 @@ function Comments({ item, me, now, nameOf, usernames, canComment, canReplyToCust
             onChange={setDraft}
             rows={3}
             usernames={usernames}
+            people={people}
             placeholder={canReplyToCustomer && toCustomer ? "The customer sees this on the portal and by email." : "Type @ and a username to mention someone; they'll be told if they can see this item."}
           />
           {canReplyToCustomer && (

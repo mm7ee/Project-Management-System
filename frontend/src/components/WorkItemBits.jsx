@@ -1,5 +1,5 @@
 /** @import { StatusCategory, WorkItemType, WorkPriority } from '../data/workitems' */
-import { useId, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import { Bookmark, Bug, CheckSquare, Layers, ListTree } from "lucide-react";
 import { CATEGORY_TONE, TYPE_META, WORK_PRIORITY_META } from "../data/workitems";
 import Markdown from "./Markdown";
@@ -56,7 +56,7 @@ export function Rollup({ done, total }) {
   );
 }
 /**
- * A Markdown text box with Write and Preview tabs.
+ * A Markdown text box with Write and Preview tabs. Typing @ and a letter suggests people to mention.
  * @param {{
  *   label: string;
  *   value: string;
@@ -64,12 +64,43 @@ export function Rollup({ done, total }) {
  *   rows?: number;
  *   placeholder?: string;
  *   usernames?: string[];
+ *   people?: { username: string; name: string }[];
  *   autoFocus?: boolean;
  * }} props
  */
-export function MarkdownField({ label, value, onChange, rows = 6, placeholder, usernames, autoFocus }) {
+export function MarkdownField({ label, value, onChange, rows = 6, placeholder, usernames, people, autoFocus }) {
   const [preview, setPreview] = useState(false);
   const id = useId();
+  const listId = useId();
+  const box = useRef(/** @type {HTMLTextAreaElement | null} */ (null));
+  const [caret, setCaret] = useState(0);
+  const [pick, setPick] = useState(0);
+  const [closed, setClosed] = useState(false);
+  // Who can be suggested: the people given, or just the usernames.
+  const who = people ?? (usernames ?? []).map((u) => ({ username: u, name: "" }));
+  // The @word being typed at the caret (at least one letter), if any.
+  const mention = value.slice(0, caret).match(/(?:^|[^\w@])@([a-z0-9._-]{1,40})$/i);
+  const q = mention?.[1].toLowerCase() ?? "";
+  const suggestions =
+    mention && !closed
+      ? who
+          .filter((u) => u.username.toLowerCase().startsWith(q) || u.name.toLowerCase().split(/\s+/).some((w) => w.startsWith(q)))
+          .sort((a, b) => Number(!a.username.toLowerCase().startsWith(q)) - Number(!b.username.toLowerCase().startsWith(q)) || a.name.localeCompare(b.name))
+          .slice(0, 6)
+      : [];
+  const at = Math.min(pick, Math.max(0, suggestions.length - 1));
+  // Put @username in place of the letters typed, followed by a space.
+  const insert = /** @param {{ username: string }} u */ (u) => {
+    const start = caret - q.length;
+    onChange(`${value.slice(0, start)}${u.username} ${value.slice(caret)}`);
+    const next = start + u.username.length + 1;
+    requestAnimationFrame(() => {
+      box.current?.focus();
+      box.current?.setSelectionRange(next, next);
+      setCaret(next);
+    });
+  };
+  useLayoutEffect(() => setPick(0), [q]);
   return (
     <div className="md-field">
       <div className="md-field-head">
@@ -88,7 +119,61 @@ export function MarkdownField({ label, value, onChange, rows = 6, placeholder, u
           {value.trim() ? <Markdown text={value} usernames={usernames} /> : <p className="lead-none">Nothing to preview yet.</p>}
         </div>
       ) : (
-        <textarea id={id} rows={rows} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} autoFocus={autoFocus} />
+        <div className="md-input">
+          <textarea
+            ref={box}
+            id={id}
+            rows={rows}
+            value={value}
+            placeholder={placeholder}
+            autoFocus={autoFocus}
+            role="combobox"
+            aria-autocomplete="list"
+            aria-expanded={suggestions.length > 0}
+            aria-controls={listId}
+            aria-activedescendant={suggestions.length ? `${listId}-${at}` : undefined}
+            onChange={(e) => {
+              onChange(e.target.value);
+              setCaret(e.target.selectionStart);
+              setClosed(false);
+            }}
+            onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
+            onKeyDown={(e) => {
+              if (!suggestions.length) return;
+              if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                e.preventDefault();
+                setPick((p) => (Math.min(p, suggestions.length - 1) + (e.key === "ArrowDown" ? 1 : suggestions.length - 1)) % suggestions.length);
+              } else if (e.key === "Enter" || e.key === "Tab") {
+                e.preventDefault();
+                insert(suggestions[at]);
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                setClosed(true);
+              }
+            }}
+            onBlur={() => setTimeout(() => setClosed(true), 150)}
+            onFocus={() => setClosed(false)}
+          />
+          {suggestions.length > 0 && (
+            <ul className="md-mentions" id={listId} role="listbox" aria-label="People to mention">
+              {suggestions.map((u, i) => (
+                <li key={u.username} id={`${listId}-${i}`} role="option" aria-selected={i === at}>
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    className={i === at ? "on" : ""}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      insert(u);
+                    }}
+                  >
+                    {u.name && <b>{u.name}</b>} <span>@{u.username}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
       <small className="field-hint">Markdown: **bold**, *italic*, `code`, - lists, [links](https://…) and @username to mention someone.</small>
     </div>

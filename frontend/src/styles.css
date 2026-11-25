@@ -3392,3 +3392,17 @@ th[aria-sort="ascending"] .pr-sort svg, th[aria-sort="descending"] .pr-sort svg 
   .update-modal > .update-right { grid-column: 2; }
   .update-modal > .modal-actions { justify-content: flex-end; }
 }
+
+/* @mention suggestions in Markdown text boxes (work item comments and descriptions). */
+.md-input { position: relative; display: flex; flex-direction: column; }
+.md-mentions {
+  position: absolute; left: 0; top: calc(100% + 4px); z-index: 30; list-style: none; margin: 0; padding: 4px; min-width: 260px; max-width: 100%;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--e-3);
+}
+.md-mentions button {
+  width: 100%; display: flex; align-items: baseline; gap: 8px; padding: 7px 10px; border: 0; border-radius: var(--r-sm);
+  background: none; color: var(--text); font: inherit; font-size: var(--fs-small); text-align: left; cursor: pointer;
+}
+.md-mentions button b { color: var(--heading); font-weight: 600; }
+.md-mentions button span { color: var(--faint); font-size: var(--fs-caption); }
+.md-mentions button.on, .md-mentions button:hover { background: var(--tint-cyan); }
