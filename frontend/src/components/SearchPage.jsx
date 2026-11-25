@@ -344,17 +344,27 @@ function BasicMode({ values, onRun }) {
   const [text, setText] = useState("");
   const [open, setOpen] = useState(true);
   const q = basicToPql({ projects, types, statuses, priorities, assignee, text, open });
+  // A list of tick boxes: a click picks a value, another click unpicks it (no Ctrl needed).
   const multi = /** @param {string} label @param {string[] | undefined} list @param {string[]} value @param {(v: string[]) => void} set */ (label, list, value, set) => (
-    <label className="field">
-      <span>{label}</span>
-      <select multiple size={4} value={value} onChange={(e) => set([...e.target.selectedOptions].map((o) => o.value))}>
+    <fieldset className="field pick-list">
+      <legend>
+        <span>{label}</span>
+        {value.length > 0 && (
+          <button type="button" className="pick-clear" onClick={() => set([])} aria-label={`Clear ${label}`}>
+            {value.length} chosen · Clear
+          </button>
+        )}
+      </legend>
+      <div className="pick-box">
         {(list ?? []).map((v) => (
-          <option key={v} value={v}>
+          <label key={v} className={value.includes(v) ? "on" : ""}>
+            <input type="checkbox" checked={value.includes(v)} onChange={() => set(value.includes(v) ? value.filter((x) => x !== v) : [...value, v])} />
             {v}
-          </option>
+          </label>
         ))}
-      </select>
-    </label>
+        {!(list ?? []).length && <span className="pick-none">None yet</span>}
+      </div>
+    </fieldset>
   );
   return (
     <form
@@ -391,7 +401,7 @@ function BasicMode({ values, onRun }) {
         <input type="checkbox" checked={open} onChange={(e) => setOpen(e.target.checked)} /> Open items only
       </label>
       <p className="field-hint">
-        As PQL: <code>{q || "(everything)"}</code>. Hold Ctrl (or Cmd) to choose several in a list.
+        As PQL: <code>{q || "(everything)"}</code>.
       </p>
       <button className="btn btn-amber" type="submit">
         <Search size={15} /> Search
