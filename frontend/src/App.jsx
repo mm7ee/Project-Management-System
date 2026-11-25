@@ -415,11 +415,12 @@ function Dashboard({ data, reload }) {
                       ? s.health === "Maintenance"
                       : s.status === filter,
         )
-        .filter((s) => !q || s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q))
+        // Name, short code, description, owning team or lead.
+        .filter((s) => !q || [s.name, s.short, s.description, s.owner, users.find((u) => u.id === s.lead)?.name].some((t) => (t ?? "").toLowerCase().includes(q)))
         // Your own projects come first.
         .sort((a, b) => Number(isMine(b)) - Number(isMine(a)))
     );
-  }, [wsSystems, requests, blockers, limits, filter, query, now, me]);
+  }, [wsSystems, requests, blockers, limits, filter, query, now, me, users]);
   // On "All projects", the ones assigned to you get their own section above the rest.
   const sections =
     filter === "ALL" && visible.some(isMine)
@@ -551,7 +552,16 @@ function Dashboard({ data, reload }) {
             <>
               <label className="search">
                 <Search size={18} />
-                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search projects..." aria-label="Search projects" />
+                <input
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    // The Dashboard has no list to filter: show the matches on the full project list.
+                    if (view === "dashboard" && e.target.value.trim()) showTab("ALL");
+                  }}
+                  placeholder="Search projects..."
+                  aria-label="Search projects"
+                />
               </label>
               {editable.length > 0 && (
                 <button className="btn btn-amber post-btn" onClick={() => setPosting({})}>
