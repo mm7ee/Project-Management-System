@@ -2,7 +2,7 @@
 /** @import { User } from '../data/roles' */
 /** @import { Pcn, PcnStatus, SignoffStatus } from '../data/pcn' */
 import { useState } from "react";
-import { FileText } from "lucide-react";
+import { FileText, Search, X } from "lucide-react";
 import { PCN_STATUS_META, awaitingSignature, pcnStatus } from "../data/pcn";
 import { formatDate } from "../time";
 import { PcnCard } from "./Pcn";
@@ -20,9 +20,18 @@ import { PcnCard } from "./Pcn";
  */
 export default function ConceptNotesPage({ systems, me, canRecord, canPropose, onSign, onPropose }) {
   const [show, setShow] = useState(/** @type {"all" | PcnStatus | (() => "all" | PcnStatus)} */ ("all"));
+  const [query, setQuery] = useState("");
   const notes = systems.filter(/** @returns {s is WithPcn} */ (s) => !!s.pcn).sort((a, b) => b.pcn.date.localeCompare(a.pcn.date));
   const mine = notes.filter((s) => awaitingSignature(s.pcn, me.id));
-  const listed = notes.filter((s) => show === "all" || pcnStatus(s.pcn) === show);
+  // Search: every word typed must appear somewhere in the PCN (title, originator, type, pillars, its text,
+  // the signatories) or the project's name.
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const haystack = /** @param {WithPcn} s */ (s) =>
+    [s.name, s.pcn.title, s.pcn.originator, s.pcn.type, s.pcn.mainPillar, ...(s.pcn.supportingPillars ?? []), s.pcn.background, s.pcn.concept, s.pcn.mechanics, s.pcn.objectives, ...s.pcn.signatories.map((g) => g.name)]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+  const listed = notes.filter((s) => (show === "all" || pcnStatus(s.pcn) === show) && words.every((w) => haystack(s).includes(w)));
   const count = /** @param {PcnStatus} st */ (st) => notes.filter((s) => pcnStatus(s.pcn) === st).length;
   return (
     <div className="page">
@@ -63,6 +72,20 @@ export default function ConceptNotesPage({ systems, me, canRecord, canPropose, o
             </button>
           ))}
         </div>
+        <div className="feature-search pcn-search" role="search">
+          <Search size={16} aria-hidden="true" />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search Concept Notes: title, originator, pillar, signatory…" aria-label="Search Concept Notes" />
+          {query && (
+            <button className="feature-search-clear" onClick={() => setQuery("")} aria-label="Clear search" title="Clear search">
+              <X size={15} />
+            </button>
+          )}
+        </div>
+        {words.length > 0 && (
+          <span className="viz-count" aria-live="polite">
+            {listed.length} of {notes.length} match
+          </span>
+        )}
       </div>
 
       {listed.length ? (
@@ -117,7 +140,7 @@ export default function ConceptNotesPage({ systems, me, canRecord, canPropose, o
           </table>
         </div>
       ) : (
-        <div className="empty">{notes.length ? "No Concept Notes match." : "No Concept Notes yet."}</div>
+        <div className="empty">{!notes.length ? "No Concept Notes yet." : words.length ? `No Concept Notes match "${query.trim()}".` : "No Concept Notes match."}</div>
       )}
     </div>
   );

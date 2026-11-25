@@ -3424,3 +3424,6 @@ th[aria-sort="ascending"] .pr-sort svg, th[aria-sort="descending"] .pr-sort svg 
 .md-mentions button b { color: var(--heading); font-weight: 600; }
 .md-mentions button span { color: var(--faint); font-size: var(--fs-caption); }
 .md-mentions button.on, .md-mentions button:hover { background: var(--tint-cyan); }
+
+/* Concept Notes: search beside the status tabs. */
+.pcn-search { flex: 1 1 280px; max-width: 460px; margin-bottom: 0; padding-left: 12px; }
