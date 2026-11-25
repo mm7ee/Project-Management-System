@@ -2,6 +2,7 @@
 /** @import { User } from '../data/roles' */
 /** @import { Feature, FeatureKind } from '../data/features' */
 import { useMemo, useRef, useState } from "react";
+import { useHistoryTab } from "../history";
 import { BarChart3, CalendarClock, ListChecks, Plus, Search, StickyNote, X } from "lucide-react";
 import { FEATURE_KINDS, KIND_META, PRIORITIES, PRIORITY_META, byUrgency, isLate, isOpen } from "../data/features";
 import { formatDate } from "../time";
@@ -20,7 +21,7 @@ const UNASSIGNED = "__none";
  * @param {Props} props
  */
 export default function FeaturesPage({ features, systems, users, me, now, canManage, ownOnly = false, workspaces, onOpen, onNew, insights = false }) {
-  const [mode, setMode] = useState(/** @type {"list" | "insights" | (() => "list" | "insights")} */ ("list"));
+  const [mode, setMode] = useHistoryTab("features", /** @type {"list" | "insights"} */ ("list"));
   const mineCount = features.filter((f) => f.assignee === me.id).length;
   const [who, setWho] = useState(/** @type {Who | (() => Who)} */ (mineCount && !ownOnly ? "mine" : "all"));
   const [state, setState] = useState(/** @type {State | (() => State)} */ ("open"));

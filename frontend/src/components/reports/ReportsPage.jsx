@@ -136,7 +136,7 @@ export default function ReportsPage({ me, users, workspaces, now }) {
   // The address follows the filters (without adding history entries, so Back leaves Reports).
   useEffect(() => {
     const next = `${HASH}${query ? `?${query}` : ""}`;
-    if (window.location.hash !== next) window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${next}`);
+    if (window.location.hash !== next) window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}${next}`);
   }, [query]);
   useEffect(() => {
     const onHash = () => window.location.hash.startsWith(HASH) && setFilters(readHash(Date.now()));

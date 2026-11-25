@@ -17,6 +17,7 @@ import { resolveTheme, useApplyPrefs } from "./prefs";
 import ParticleField from "./components/ParticleField";
 import { shareToken } from "./data/api";
 import { useNow } from "./time";
+import { depth as sharedDepth, setDepthListener } from "./history";
 import Sidebar from "./components/Sidebar";
 import SystemCard from "./components/SystemCard";
 import ProjectPage from "./components/ProjectPage";
@@ -243,7 +244,7 @@ function Dashboard({ data, reload }) {
         setChatOpen(chat);
         setView("chat");
         // Forget the address, so the same link works again later.
-        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+        window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search);
       }
     };
     window.addEventListener("hashchange", onHash);
@@ -259,19 +260,23 @@ function Dashboard({ data, reload }) {
   // `depth` counts the steps since Pulse opened, so the ← only shows when there's somewhere to go back to.
   const viewRef = useRef(view);
   const filterRef = useRef(filter);
-  const depthRef = useRef(0);
+  const depthRef = sharedDepth; // shared with tab switches inside pages (history.js)
   const fromHistory = useRef(false);
   const leftProjectAt = useRef(0);
   viewRef.current = view;
   filterRef.current = filter;
   const [canGoBack, setCanGoBack] = useState(false);
-  /** @param {number} depth */
-  const stamp = (depth) => ({ ...(window.history.state ?? {}), pulse: { view: viewRef.current, filter: filterRef.current, depth } });
+  /** @param {number} depth @param {boolean} [keepTabs] keep the tabs this entry remembers (same screen, e.g. after a reload) */
+  const stamp = (depth, keepTabs = false) => {
+    const s = window.history.state ?? {};
+    return { ...s, pulse: { view: viewRef.current, filter: filterRef.current, depth, ...(keepTabs && s.pulse?.tabs ? { tabs: s.pulse.tabs } : {}) } };
+  };
   useEffect(() => {
     // The first screen: whatever was there before Pulse (a link, a bookmark) stays out of reach of the ←.
     depthRef.current = Number(window.history.state?.pulse?.depth ?? 0);
-    window.history.replaceState(stamp(depthRef.current), "");
+    window.history.replaceState(stamp(depthRef.current, true), "");
     setCanGoBack(depthRef.current > 0);
+    setDepthListener(setCanGoBack);
     const onPop = /** @param {PopStateEvent} e */ (e) => {
       const s = e.state?.pulse;
       if (!s) return;
@@ -684,7 +689,14 @@ function Dashboard({ data, reload }) {
             onSignedOut={reload}
             signOutJump={signOutJump}
             openPage={view === "users" ? "people" : view === "activity" ? "activity" : undefined}
-            onPage={() => setView("settings")}
+            onPage={() => {
+              // Settings just made a history step for the new page; that step is the Settings screen,
+              // so it takes the place of the entry the view change would add.
+              if (view === "settings") return;
+              const s = window.history.state ?? {};
+              window.history.replaceState({ ...s, pulse: { ...s.pulse, view: "settings" } }, "");
+              setView("settings");
+            }}
             adminPages={[
               ...(can("manage_users")
                 ? [

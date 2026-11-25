@@ -10,6 +10,7 @@ import { api } from "../data/api";
 import { createPasskey, passkeysSupported } from "../data/passkeys";
 import { RECOVERY_SIGNIN } from "./Login";
 import { formatDate, plural } from "../time";
+import { useHistoryTab } from "../history";
 import MfaSetup, { RecoveryCodes } from "./MfaSetup";
 import PasswordRules from "./PasswordRules";
 import { PASSWORD_MIN, passwordProblem } from "../data/password";
@@ -55,21 +56,18 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
         { key: "phone", label: "Phone app", icon: Smartphone },
       ];
   const everyPage = [...pages, ...adminPages];
-  const [page, setPage] = useState(
-    /** @type {string | (() => string)} */ (
-      () => {
-        try {
-          return openPage ?? localStorage.getItem(PAGE_STORE) ?? "profile";
-        } catch {
-          return openPage ?? "profile";
-        }
-      }
-    ),
-  );
+  // The open page is a browser-history step: Back returns to the page you were on.
+  const [page, goPage, setPage] = useHistoryTab("settings", () => {
+    try {
+      return openPage ?? localStorage.getItem(PAGE_STORE) ?? "profile";
+    } catch {
+      return openPage ?? "profile";
+    }
+  });
   const shown = everyPage.some((p) => p.key === page) ? page : pages[0].key;
   const admin = adminPages.find((p) => p.key === shown);
   const go = /** @param {string} key */ (key) => {
-    setPage(key);
+    goPage(key);
     onPage?.(key);
     try {
       localStorage.setItem(PAGE_STORE, key);

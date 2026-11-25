@@ -1,6 +1,7 @@
 /** @import { User } from '../data/roles' */
 /** @import { PortalRequest, QueueItem, QueueKey, RequestType } from '../data/servicedesk' */
 import { useCallback, useEffect, useState } from "react";
+import { useHistoryTab } from "../history";
 import { ArrowLeft, Headset } from "lucide-react";
 import { api } from "../data/api";
 import { QUEUES, REQUEST_KINDS, formatBusinessMinutes } from "../data/servicedesk";
@@ -18,7 +19,7 @@ export default function ServiceDeskPage({ users, canWork, canReports }) {
     { key: "mine", label: "My requests" },
     ...(canReports ? [{ key: /** @type {const} */ ("reports"), label: "Reports" }] : []),
   ];
-  const [tab, setTab] = useState(/** @type {Tab | (() => Tab)} */ (tabs[0].key));
+  const [tab, setTab] = useHistoryTab("servicedesk", /** @type {Tab} */ (tabs[0].key));
   return (
     <div className="page service-desk">
       <header className="page-head">

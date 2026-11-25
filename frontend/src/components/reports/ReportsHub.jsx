@@ -2,7 +2,7 @@
 /** @import { System } from '../../data/systems' */
 /** @import { UpdateRequest, User } from '../../data/roles' */
 /** @import { Blocker, Limits } from '../../data/project' */
-import { useState } from "react";
+import { useHistoryTab } from "../../history";
 import { BarChart3, Gauge, Headset, LayoutDashboard, ListChecks, Printer } from "lucide-react";
 import BiDashboard from "./BiDashboard";
 import ReportsPage from "./ReportsPage";
@@ -45,24 +45,20 @@ export default function ReportsHub({ me, workspaces, onOpenFeature, serviceDesk,
     { key: "delivery", label: "Delivery", icon: Gauge },
     ...(serviceDesk ? [{ key: /** @type {const} */ ("service"), label: "Service desk", icon: Headset }] : []),
   ];
-  const [tab, setTab] = useState(
-    /** @type {Tab | (() => Tab)} */ (
-      () => {
-        if (projectsInHash()) return "projects";
-        try {
-          const t = /** @type {Tab | null} */ (localStorage.getItem(SAVED));
-          if (t && tabs.some((x) => x.key === t)) return t;
-        } catch {
-          // No storage: start on Projects.
-        }
-        return "overview";
-      }
-    ),
-  );
+  // The open tab is a browser-history step: Back returns to the tab you were on.
+  const [tab, setTab] = useHistoryTab("reports", () => {
+    if (projectsInHash()) return /** @type {Tab} */ ("projects");
+    try {
+      const t = /** @type {Tab | null} */ (localStorage.getItem(SAVED));
+      if (t && tabs.some((x) => x.key === t)) return t;
+    } catch {
+      // No storage: start on Projects.
+    }
+    return /** @type {Tab} */ ("overview");
+  });
   const pick = /** @param {Tab} t */ (t) => {
-    setTab(t);
     // Only the Projects tab keeps its filters in the address.
-    if (t !== "projects" && projectsInHash()) window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    setTab(t, t !== "projects" && projectsInHash() ? window.location.pathname + window.location.search : undefined);
     try {
       localStorage.setItem(SAVED, t);
     } catch {
