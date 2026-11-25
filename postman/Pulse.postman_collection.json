@@ -404,6 +404,36 @@
               ]
             }
           }
+        },
+        {
+          "name": "Password reset options",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"says whether texting is offered\", () => pm.expect(pm.response.json().sms).to.be.a(\"boolean\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/password/options",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "password",
+                "options"
+              ]
+            }
+          }
         }
       ]
     },
@@ -5731,6 +5761,85 @@
                   "value": "{{sprintId}}"
                 }
               ]
+            }
+          }
+        },
+        {
+          "name": "Password reset by text: an unknown number gets the usual reply",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"the same reply as for a real account\", () => pm.expect(pm.response.json().message).to.match(/If that matches an account with a mobile number/));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/password/forgot-sms",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "password",
+                "forgot-sms"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"who\": \"+263 71 000 0001\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Password reset by text: a wrong code",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"says nothing about why\", () => pm.expect(pm.response.json().code).to.eql(\"code_wrong\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/password/forgot-sms/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "password",
+                "forgot-sms",
+                "verify"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"who\": \"qa-admin\",\n  \"code\": \"000000\"\n}"
             }
           }
         },

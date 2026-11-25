@@ -75,6 +75,17 @@ Errors come back as JSON, `{"error": "…"}`, with a 4xx status:
   - Custom fields are searched by name, in quotes when the name has spaces: `"Customer tier" = Gold`.
 - **`GET /api/search/fields`** returns the fields (built-in and custom), functions and known values.
 
+## Password reset (no sign-in)
+
+- **`POST /api/password/forgot`** `{ login }` emails a reset link. The reply is always the same.
+- **`GET /api/password/options`** returns `{ sms }`: whether "Text me a code" is available.
+- **`POST /api/password/forgot-sms`** `{ who }` (a mobile number or username) texts a 6-digit code to the number on
+  the account. The reply is always the same.
+- **`POST /api/password/forgot-sms/verify`** `{ who, code }` returns `{ token }` for a right code, or `400` with
+  `code: "code_wrong"` (the same for a wrong, expired, used or unknown code).
+- **`POST /api/password/reset/check`** `{ token }` and **`POST /api/password/reset`** `{ token, password }` choose the
+  new password, whichever way the token came.
+
 ## Reports: Projects
 
 For people signed in with "Generate reports" (Admin, Manager, Team Leader, Projects Assistant). View-only links

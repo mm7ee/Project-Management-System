@@ -625,3 +625,16 @@ managers can present.
 - Verified: `npm run build` (type check + production bundle), all 117 tests, the Worker bundles (`wrangler deploy
   --dry-run`), and the app loads in the browser from both the dev server and the production build.
 - No behaviour changes intended; no migration.
+
+## Password reset by text message (2026-11-25)
+
+**Why:** the owner asked for a reset option that texts a code to the user's phone.
+
+**What was built**
+- "Forgot your password?" now offers *Text me a code* beside *Email me a link*. People type their mobile number (any
+  usual Zimbabwean format) or username, get a 6-digit code by SMS, enter it, then choose a new password on the same
+  screen the email link opens.
+- Twilio sends the texts (`worker/sms.js`); the option appears once the three `TWILIO_*` Worker secrets are set.
+- Rules are in DECISIONS.md. Tests: `tests/passwordResetSms.test.js` (phone formats, outcomes, codes, hashing).
+
+**Migration:** `0013_password_reset_sms.sql`. Apply it with `npm run db:migrate` before deploying.

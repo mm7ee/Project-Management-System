@@ -698,3 +698,30 @@ Choices made during the Pulse upgrade that later phases must follow. Newest last
     `useRef(/** @type {HTMLDivElement | null} */ (null))`.
   - Generic helpers: `@template {keyof X} K` with its constraint, as TypeScript's `<K extends keyof X>` had.
   - Rest parameters: `@param {...unknown} values` (the element type, not an array).
+
+## Password reset by text message (2026-11-25)
+
+- **Flow:** "Forgot your password?" offers *Email me a link* or *Text me a code*. For a code, the person types their
+  mobile number or username; Pulse texts a 6-digit code to the number **on the account** (never to a number typed
+  in that isn't on one). A right code opens the same "choose a new password" screen as an emailed link, so every
+  rule of the email reset applies: password policy and history, all devices signed out, two-step verification at
+  the next sign-in, and a "your password was changed" notice (by email when they have one, and by text).
+- **Provider:** Twilio, through its REST API (`worker/sms.js`, no SDK). Off until the Worker secrets
+  `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_FROM` (a Twilio number or a Messaging Service SID) are set;
+  the option is hidden until then (`GET /api/password/options`). Each text costs money, so the limits below matter.
+- **Phone numbers** are compared in international form (`normalizePhone`): Zimbabwe (+263, exactly 9 digits after
+  it) is assumed for numbers written without a country code, so "077 123 4567" and "+263771234567" match. A number
+  matches only when exactly one account has it.
+- **Codes:** 6 digits from the secure random source, working for 10 minutes and 5 tries, then dead. Stored only as
+  HMAC-SHA256 keyed with `MFA_KEY` over the account and the code. A new code (or link) cancels the previous one. A
+  right code becomes a reset token that works once, for 15 minutes.
+- **No enumeration:** the same reply whether or not the number or username matched an account, had a number, or hit
+  a limit; the text goes after the reply. A wrong, expired, used or unknown code always gets the same message.
+- **Limits:** shared with the email reset: 5 requests per IP address per 15 minutes, and 3 sends (email or text)
+  per account per hour.
+- **Activity log:** `password_reset_requested` (with `channel: "sms"` and the outcome; never the phone number),
+  `password_reset_code_verified`, `password_reset_by_sms`.
+- **Stored in** `password_resets` (migration `0013_password_reset_sms.sql`: `channel`, `code_hash`, `attempts`),
+  removed after 24 hours like the rest.
+- **Endpoints (no sign-in):** `GET /api/password/options`, `POST /api/password/forgot-sms` `{ who }`,
+  `POST /api/password/forgot-sms/verify` `{ who, code }` → `{ token }`.

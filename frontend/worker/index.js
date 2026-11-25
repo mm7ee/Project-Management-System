@@ -21,7 +21,8 @@ import { DEFAULT_LIMITS, DEFAULT_WORKSPACES, MAX_DOCUMENT_BYTES, formatBytes } f
 import { buildShowcase } from "../src/data/showcase";
 import { PASSWORD_HISTORY, passwordProblem } from "../src/data/password";
 import { CHANNEL_LABEL, cleanChannels } from "../src/data/updateRequests";
-import { RESET_ADDRESS_MINUTES, RESET_KEEP_HOURS, RESET_LINK_MINUTES, RESET_REPLY, resetOutcome } from "../src/data/passwordReset";
+import { RESET_ADDRESS_MINUTES, RESET_AFTER_CODE_MINUTES, RESET_CODE_LENGTH, RESET_CODE_MINUTES, RESET_CODE_TRIES, RESET_CODE_WRONG, RESET_KEEP_HOURS, RESET_LINK_MINUTES, RESET_REPLY, RESET_SMS_REPLY, looksLikePhone, normalizePhone, resetOutcome, resetSmsText, smsOutcome } from "../src/data/passwordReset";
+import { codeHash, randomCode, sameText, sendSms, smsReady } from "./sms";
 import { SESSION_DAYS, SIGNIN_FAILURE_HOURS } from "../src/data/retention";
 import { DEFAULT_SIGNIN_RULES, SIGNIN_WINDOW_MINUTES, cleanSigninRules, lockMinutesFor, signinRefusal } from "../src/data/signin";
 import { purgeExpired } from "./retention";
@@ -956,13 +957,100 @@ async function api(req, env, path, ctx) {
     }
     return json({ ok: true, message: RESET_REPLY });
   }
+  // ---------- forgot password, by text message (src/data/passwordReset.js) ----------
+  // Whether "Text me a code" can be offered: texting set up, and a key to protect the codes with.
+  if (path === "/api/password/options" && method === "GET") {
+    return json({ sms: smsReady(env) && !!env.MFA_KEY });
+  }
+  // Who a request names: a phone number that belongs to exactly one account, or a username.
+  const resetAccount = /** @param {string} who */ async (who) => {
+    if (looksLikePhone(who)) {
+      const wanted = normalizePhone(who);
+      if (!wanted) return null;
+      const withPhones = await /** @type {Promise<D1Result<UserRow>>} */ (/** @type {unknown} */ (db.prepare("SELECT * FROM users WHERE phone IS NOT NULL AND phone <> ''").all()));
+      const same = withPhones.results.filter((u) => normalizePhone(u.phone) === wanted);
+      return same.length === 1 ? same[0] : null;
+    }
+    return await /** @type {Promise<UserRow | null>} */ (/** @type {unknown} */ (db.prepare("SELECT * FROM users WHERE lower(username) = lower(?)").bind(who).first()));
+  };
+  // Same reply whatever happened; the text is sent after the reply, so timing doesn't tell either.
+  if (path === "/api/password/forgot-sms" && method === "POST") {
+    const who = String((await /** @type {Promise<{ who?: string; }>} */ (/** @type {unknown} */ (body(req)))).who ?? "")
+      .trim()
+      .slice(0, 120);
+    if (!who) throw new HttpError(400, "Enter your mobile number or username");
+    const at = Date.now();
+    const ip = req.headers.get("cf-connecting-ip");
+    const count = /** @param {string} sql @param {...unknown} args */ async (sql, ...args) => Number((await /** @type {Promise<{ n: number; } | null>} */ (/** @type {unknown} */ (db.prepare(sql).bind(...args).first())))?.n ?? 0);
+    const fromAddress = ip ? await count("SELECT COUNT(*) AS n FROM password_resets WHERE ip = ? AND created_at > ?", ip, at - RESET_ADDRESS_MINUTES * 60_000) : 0;
+    const row = await resetAccount(who);
+    const sentToAccount = row ? await count("SELECT COUNT(*) AS n FROM password_resets WHERE user_id = ? AND outcome IN ('emailed', 'admins_told', 'texted') AND created_at > ?", row.id, at - 3_600_000) : 0;
+    const phone = row ? normalizePhone(row.phone) : null;
+    const outcome = smsOutcome({ found: !!row, fromAddress, sentToAccount, canText: !!phone && smsReady(env) && !!env.MFA_KEY });
+    const code = outcome === "texted" ? randomCode(RESET_CODE_LENGTH) : null;
+    await db.batch([
+      // A new code (or link) replaces any earlier one still unused.
+      ...(code && row ? [db.prepare("UPDATE password_resets SET expires_at = ? WHERE user_id = ? AND used_at IS NULL AND expires_at > ?").bind(at, row.id, at)] : []),
+      db
+        .prepare("INSERT INTO password_resets (id, created_at, login, user_id, ip, outcome, channel, code_hash, expires_at) VALUES (?, ?, ?, ?, ?, ?, 'sms', ?, ?)")
+        .bind(newToken().slice(0, 16), at, who.toLowerCase(), row?.id ?? null, ip, outcome, code && row ? await codeHash(/** @type {string} */ (env.MFA_KEY), row.id, code) : null, code ? at + RESET_CODE_MINUTES * 60_000 : null),
+      db.prepare("DELETE FROM password_resets WHERE created_at < ?").bind(at - RESET_KEEP_HOURS * 3_600_000),
+    ]);
+    // The number itself never goes in the log, only that it was a phone number.
+    await audit(db, req, { id: row?.id ?? null, name: row?.name ?? (looksLikePhone(who) ? "a phone number" : who.slice(0, 64)) }, "password_reset_requested", row?.id ?? null, {
+      channel: "sms",
+      login: looksLikePhone(who) ? "(phone number)" : who.slice(0, 64),
+      outcome,
+    });
+    if (code && phone) ctx.waitUntil(sendSms(env, phone, resetSmsText(code)).catch((e) => noteFailure(db, "SMS", e)));
+    return json({ ok: true, message: RESET_SMS_REPLY });
+  }
+  // A right code becomes a single-use reset token (the same as an emailed link's) for choosing the password.
+  if (path === "/api/password/forgot-sms/verify" && method === "POST") {
+    const b = await /** @type {Promise<{ who?: string; code?: string; }>} */ (/** @type {unknown} */ (body(req)));
+    const who = String(b.who ?? "")
+      .trim()
+      .slice(0, 120);
+    const code = String(b.code ?? "").replace(/\D/g, "");
+    const wrong = () => new HttpError(400, RESET_CODE_WRONG, "code_wrong");
+    if (!who || code.length !== RESET_CODE_LENGTH || !env.MFA_KEY) throw wrong();
+    const row = await resetAccount(who);
+    if (!row) throw wrong();
+    const at = Date.now();
+    const pending = await /** @type {Promise<{ id: string; code_hash: string; attempts: number; } | null>} */ (
+      /** @type {unknown} */ (
+        db
+          .prepare("SELECT id, code_hash, attempts FROM password_resets WHERE user_id = ? AND channel = 'sms' AND code_hash IS NOT NULL AND used_at IS NULL AND expires_at > ? ORDER BY created_at DESC LIMIT 1")
+          .bind(row.id, at)
+          .first()
+      )
+    );
+    if (!pending || Number(pending.attempts) >= RESET_CODE_TRIES) throw wrong();
+    if (!sameText(pending.code_hash, await codeHash(env.MFA_KEY, row.id, code))) {
+      // Count the miss; the code stops working after the last try.
+      await db
+        .prepare("UPDATE password_resets SET attempts = attempts + 1, expires_at = CASE WHEN attempts + 1 >= ? THEN ? ELSE expires_at END WHERE id = ?")
+        .bind(RESET_CODE_TRIES, at, pending.id)
+        .run();
+      throw wrong();
+    }
+    // Right: swap the code for a reset token, once only (two quick submits can't both get one).
+    const token = newToken();
+    const swapped = await db
+      .prepare("UPDATE password_resets SET code_hash = NULL, token_hash = ?, expires_at = ? WHERE id = ? AND code_hash IS NOT NULL")
+      .bind(await tokenHash(token), at + RESET_AFTER_CODE_MINUTES * 60_000, pending.id)
+      .run();
+    if (!swapped.meta.changes) throw wrong();
+    await audit(db, req, row, "password_reset_code_verified", row.id, { name: row.name });
+    return json({ ok: true, token });
+  }
   // A reset link: who it's for (so the screen can check "not your name"), while it still works.
   const resetLink = /** @param {unknown} token */ async (token) => {
-    const row = await /** @type {Promise<(UserRow & { reset_id: string; }) | null>} */ (
+    const row = await /** @type {Promise<(UserRow & { reset_id: string; reset_channel: string; }) | null>} */ (
       /** @type {unknown} */ (
         db
           .prepare(
-            `SELECT pr.id AS reset_id, u.* FROM password_resets pr JOIN users u ON u.id = pr.user_id
+            `SELECT pr.id AS reset_id, pr.channel AS reset_channel, u.* FROM password_resets pr JOIN users u ON u.id = pr.user_id
          WHERE pr.token_hash = ? AND pr.used_at IS NULL AND pr.expires_at > ?`,
           )
           .bind(await tokenHash(String(token ?? "")), Date.now())
@@ -993,14 +1081,20 @@ async function api(req, env, path, ctx) {
       db.prepare("DELETE FROM login_failures WHERE user_id = ?").bind(row.id),
       db.prepare("UPDATE password_resets SET expires_at = ? WHERE user_id = ? AND used_at IS NULL AND expires_at > ?").bind(at, row.id, at),
     ]);
-    await audit(db, req, row, "password_reset_by_email", row.id, { name: row.name, ...(isLocked(row, at) ? { unlocked: true } : {}) });
+    const bySms = row.reset_channel === "sms";
+    await audit(db, req, row, bySms ? "password_reset_by_sms" : "password_reset_by_email", row.id, { name: row.name, ...(isLocked(row, at) ? { unlocked: true } : {}) });
+    // Tell them it happened: by email when they have one, and by text too when the reset came by text.
     const delivery = await readDelivery(db);
     if (row.email && delivery.resendKey) {
       const mail = securityEmail("Your password was changed", [
-        `Hi ${row.name}, the password for your Pulse account, ${row.username}, was just changed using a reset link, and every device was signed out.`,
+        `Hi ${row.name}, the password for your Pulse account, ${row.username}, was just changed using ${bySms ? "a code texted to your phone" : "a reset link"}, and every device was signed out.`,
         "If this was you, there's nothing more to do. If it wasn't, contact your Pulse administrator straight away.",
       ]);
       ctx.waitUntil(sendEmail(env, delivery, row.email, mail.subject, mail.html, mail.text).catch((e) => noteFailure(db, "Email", e)));
+    }
+    const phone = bySms ? normalizePhone(row.phone) : null;
+    if (phone && smsReady(env)) {
+      ctx.waitUntil(sendSms(env, phone, `Your Pulse password was just changed and every device was signed out. If this wasn't you, contact your Pulse administrator straight away.`).catch((e) => noteFailure(db, "SMS", e)));
     }
     return json({ ok: true });
   }
