@@ -53,6 +53,16 @@ export default function DashboardPage({ systems, users, features, blockers, docu
   // trend: "up" good news, "down" needs action, "flat" information. Each carries an icon and words, never colour alone.
   /** @type {Kpi[]} */ const kpis = [
     {
+      label: "All projects",
+      value: systems.length,
+      delta: `${live.length} live · ${active.length} in progress`,
+      trend: "flat",
+      icon: FolderKanban,
+      tone: "cyan",
+      tab: "ALL",
+      title: "Show all projects",
+    },
+    {
       label: "In progress",
       value: active.length,
       delta: `${avg}% average progress · ${startedThisYear} started in ${year}`,

@@ -3087,6 +3087,11 @@ span.backlog-points { border-color: transparent; background: var(--track); }
 
 /* The KPI row runs the full width above the charts. */
 .dash-kpi-row { margin-bottom: var(--sp-4); }
+/* Five tiles: one row on wide screens, then 3 + 2, 2 + 2 + 1 and one per row on phones. */
+.dash .dash-kpi-row { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 1280px) { .dash .dash-kpi-row { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 860px) { .dash .dash-kpi-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .dash .dash-kpi-row { grid-template-columns: minmax(0, 1fr); } }
 
 /* ======================= Chat: files, emoji, GIFs, stickers, reactions, replies, pins (2026-11-25) ======================= */
 .chat-conv { position: relative; display: flex; flex-direction: column; flex: 1; min-height: 0; }
