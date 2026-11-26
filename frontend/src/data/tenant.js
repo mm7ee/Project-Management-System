@@ -5,8 +5,9 @@
 
 const ORG_KEY = "pulse:org";
 const LAST_WS_KEY = "pulse:last-workspace";
-/** The open workspace's id, set by the app once its data has loaded. */
+/** The open workspace's id and the organisation's name, set by the app once its data has loaded. */
 let openWorkspace = "";
+let openOrganisation = "";
 
 /**
  * An organisation code as typed: lower case, letters, digits and dashes, or "" if it can't be one.
@@ -76,10 +77,13 @@ export function rememberWorkspace(orgId, workspaceId) {
     // Only a convenience.
   }
 }
-/** @param {string} workspaceId */
-export function setOpenWorkspace(workspaceId) {
+/** @param {string} workspaceId @param {string} [organisation] its name */
+export function setOpenWorkspace(workspaceId, organisation = "") {
   openWorkspace = workspaceId;
+  openOrganisation = organisation;
 }
+/** The open organisation's name (for printed covers), or "". */
+export const organisationName = () => openOrganisation;
 /**
  * A browser storage key for something remembered inside the open workspace.
  * @param {string} key

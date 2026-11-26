@@ -704,7 +704,7 @@ function manifest(start) {
       id: view ?? "/",
       name: "Pulse",
       short_name: "Pulse",
-      description: "Omni Contact's project tracker",
+      description: "Pulse: the project tracker",
       start_url: view ?? "/",
       scope: "/",
       display: "standalone",
@@ -1102,44 +1102,43 @@ async function api(req, env, path, ctx) {
   }
   // The public showcase (/executive): totals only, no names. Needs no sign-in.
   if (path === "/api/showcase" && method === "GET") {
-    // Until phase (e) makes it a secret link per workspace: the first organisation's (Omnicontact's) totals,
-    // added up across its workspaces, each read through that workspace's own handle. Nothing of any other
-    // organisation is read. Not cached by shared caches any more.
-    const legacy = /** @type {{ organization_id: string } | null} */ (await db.prepare("SELECT organization_id FROM tenancy_legacy WHERE id = 1").first());
-    const spaces = legacy ? /** @type {D1Result<{ id: string }>} */ (await db.prepare("SELECT id FROM workspaces WHERE organization_id = ? AND status = 'active' ORDER BY position").bind(legacy.organization_id).all()).results : [];
-    /** @type {{ data: string }[]} */ const systems = [];
-    /** @type {Map<string, UserRow>} */ const people = new Map();
-    /** @type {{ user_id: string; system_id: string }[]} */ const assigned = [];
-    /** @type {FeatureRow[]} */ const features = [];
-    /** @type {Set<string>} */ const blocked = new Set();
-    /** @type {Limits} */ let limits = DEFAULT_LIMITS;
-    for (const [i, w] of spaces.entries()) {
-      const sdb = env.ROOT.withScope({ orgId: /** @type {{ organization_id: string }} */ (legacy).organization_id, workspaceId: w.id });
-      const [s, u, a, f, b, l] = await Promise.all([
-        /** @type {Promise<D1Result<{ data: string; }>>} */ (/** @type {unknown} */ (sdb.prepare("SELECT data FROM systems").all())),
-        /** @type {Promise<D1Result<UserRow>>} */ (/** @type {unknown} */ (sdb.prepare("SELECT * FROM users").all())),
-        /** @type {Promise<D1Result<{ user_id: string; system_id: string; }>>} */ (/** @type {unknown} */ (sdb.prepare("SELECT user_id, system_id FROM assignments").all())),
-        /** @type {Promise<D1Result<FeatureRow>>} */ (/** @type {unknown} */ (sdb.prepare("SELECT * FROM features").all())),
-        /** @type {Promise<D1Result<{ system_id: string; }>>} */ (/** @type {unknown} */ (sdb.prepare("SELECT DISTINCT system_id FROM blockers WHERE resolved_at IS NULL").all())),
-        workloadLimits(sdb),
-      ]);
-      systems.push(...s.results);
-      for (const p of u.results) if (!people.has(p.id)) people.set(p.id, p);
-      assigned.push(...a.results);
-      features.push(...f.results);
-      for (const x of b.results) blocked.add(x.system_id);
-      if (i === 0) limits = l;
-    }
-    const projects = /** @param {string} id */ (id) => assigned.filter((a) => a.user_id === id).map((a) => a.system_id);
+    // The executive page: a secret link per workspace (migration 0016). The link is found by its hash (as the
+    // owner), then the workspace's totals are read through that workspace's own handle. Totals only, as before.
+    const given = req.headers.get("x-showcase-token") ?? "";
+    const link = /^[a-f0-9]{64}$/.test(given)
+      ? /** @type {{ id: string; organization_id: string; workspace_id: string; org: string; ws: string } | null} */ (
+          await db
+            .prepare(
+              `SELECT l.id, l.organization_id, l.workspace_id, o.name AS org, w.name AS ws FROM showcase_links l
+               JOIN workspaces w ON w.id = l.workspace_id AND w.status = 'active'
+               JOIN organizations o ON o.id = l.organization_id AND o.status = 'active'
+               WHERE l.token_hash = ? AND l.revoked_at IS NULL AND l.expires_at > ?`,
+            )
+            .bind(await tokenHash(given), new Date().toISOString())
+            .first()
+        )
+      : null;
+    if (!link) throw new HttpError(404, "This executive page link has expired or been turned off. Ask whoever sent it for a new one.", "showcase_invalid");
+    const sdb = env.ROOT.withScope({ orgId: link.organization_id, workspaceId: link.workspace_id });
+    const [systems, users, assigned, features, blocked, limits] = await Promise.all([
+      /** @type {Promise<D1Result<{ data: string; }>>} */ (/** @type {unknown} */ (sdb.prepare("SELECT data FROM systems").all())),
+      /** @type {Promise<D1Result<UserRow>>} */ (/** @type {unknown} */ (sdb.prepare("SELECT * FROM users").all())),
+      /** @type {Promise<D1Result<{ user_id: string; system_id: string; }>>} */ (/** @type {unknown} */ (sdb.prepare("SELECT user_id, system_id FROM assignments").all())),
+      /** @type {Promise<D1Result<FeatureRow>>} */ (/** @type {unknown} */ (sdb.prepare("SELECT * FROM features").all())),
+      /** @type {Promise<D1Result<{ system_id: string; }>>} */ (/** @type {unknown} */ (sdb.prepare("SELECT DISTINCT system_id FROM blockers WHERE resolved_at IS NULL").all())),
+      workloadLimits(sdb),
+    ]);
+    await sdb.prepare("UPDATE showcase_links SET views = views + 1, last_used_at = ? WHERE id = ?").bind(new Date().toISOString(), link.id).run();
+    const projects = /** @param {string} id */ (id) => assigned.results.filter((a) => a.user_id === id).map((a) => a.system_id);
     const showcase = buildShowcase(
-      systems.map((r) => JSON.parse(r.data)),
-      [...people.values()].map((u) => toUser(u, projects(u.id))),
-      features.map(toFeature),
-      blocked,
+      systems.results.map((r) => JSON.parse(r.data)),
+      users.results.map((u) => toUser(u, projects(u.id))),
+      features.results.map(toFeature),
+      new Set(blocked.results.map((b) => b.system_id)),
       limits,
       Date.now(),
     );
-    return json(showcase, 200, { "cache-control": "private, max-age=60" });
+    return json({ ...showcase, organization: link.org, workspace: link.ws }, 200, { "cache-control": "private, no-store" });
   }
   // GitHub calls this, signed with the shared secret; the customer portal works by its link. No session.
   if (path === "/api/integrations/github/webhook" && method === "POST") return githubWebhook(env, req);
@@ -1627,6 +1626,47 @@ async function api(req, env, path, ctx) {
     if (!row) throw new HttpError(404, "Link not found");
     await db.prepare("UPDATE share_links SET revoked_at = ? WHERE id = ?").bind(now, shareMatch[1]).run();
     await audit(db, req, me, "share_link_revoked", null, { label: row.label });
+    return json({ ok: true });
+  }
+  // ----- executive page links (administrators): /executive/<token>, this workspace's totals only -----
+  if (path === "/api/showcase-links" && method === "GET") {
+    need("manage_users");
+    const rows = /** @type {D1Result<{ id: string; label: string; by_name: string | null; created_at: string; expires_at: string; revoked_at: string | null; last_used_at: string | null; views: number }>} */ (
+      await db.prepare("SELECT l.*, u.name AS by_name FROM showcase_links l LEFT JOIN users u ON u.id = l.created_by ORDER BY l.revoked_at IS NOT NULL, l.created_at DESC LIMIT 50").all()
+    );
+    return json(
+      rows.results.map((r) => ({
+        id: r.id,
+        label: r.label,
+        createdBy: r.by_name ?? "someone",
+        createdAt: r.created_at,
+        expiresAt: r.expires_at,
+        ...(r.revoked_at ? { revokedAt: r.revoked_at } : {}),
+        ...(r.last_used_at ? { lastUsedAt: r.last_used_at } : {}),
+        views: r.views,
+      })),
+    );
+  }
+  if (path === "/api/showcase-links" && method === "POST") {
+    need("manage_users");
+    const b = await /** @type {Promise<{ label?: string; days?: number; }>} */ (/** @type {unknown} */ (body(req)));
+    const label = /** @type {string} */ (text(b.label, "Who it's for", true)).slice(0, 80);
+    const days = [7, 30, 90, 365].includes(Number(b.days)) ? Number(b.days) : 30;
+    const token = newToken();
+    const id = newToken().slice(0, 12);
+    const expires = new Date(Date.now() + days * 86_400_000).toISOString();
+    await db.prepare("INSERT INTO showcase_links (id, token_hash, label, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)").bind(id, await tokenHash(token), label, me.id, now, expires).run();
+    await audit(db, req, me, "showcase_link_created", null, { label, days });
+    // The secret is shown once; only its hash is kept.
+    return json({ id, url: `${env.PUBLIC_URL ?? new URL(req.url).origin}/executive/${token}`, expiresAt: expires }, 201);
+  }
+  const showcaseMatch = path.match(/^\/api\/showcase-links\/([A-Za-z0-9_-]+)$/);
+  if (showcaseMatch && method === "DELETE") {
+    need("manage_users");
+    const row = /** @type {{ label: string } | null} */ (await db.prepare("SELECT label FROM showcase_links WHERE id = ? AND revoked_at IS NULL").bind(showcaseMatch[1]).first());
+    if (!row) throw new HttpError(404, "Link not found");
+    await db.prepare("UPDATE showcase_links SET revoked_at = ? WHERE id = ?").bind(now, showcaseMatch[1]).run();
+    await audit(db, req, me, "showcase_link_revoked", null, { label: row.label });
     return json({ ok: true });
   }
   // ----- notifications -----
@@ -2148,7 +2188,9 @@ async function api(req, env, path, ctx) {
       }) +
       itemLines.join("\n");
     try {
-      const stream = await askStream(env.AI, snapshot, question, history, mode);
+      // Whose data this is: the instructions refer to the first line rather than naming any organisation.
+      const where = await tenantInfo();
+      const stream = await askStream(env.AI, `ORGANISATION: ${where.organization?.name ?? "?"} · WORKSPACE: ${where.workspace?.name ?? "?"}\n${snapshot}`, question, history, mode);
       return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
     } catch (e) {
       console.error("ask failed", e);

@@ -1,8 +1,12 @@
 # Multi-tenancy: audit and proposal
 
-Status (2026-11-26): **approved with every recommendation in section 12** (the owner said "continue"). Phases (a)
-and (b) are built: (a) is on main, (b) is committed locally, and both are applied to the Neon dev branch only.
-Changes from this plan:
+Status (2026-11-26): **approved with every recommendation in section 12** (the owner said "continue"). All five
+phases are built:
+- (a) is on main.
+- (b)–(e) are committed locally, not pushed.
+- All are applied to the Neon dev branch only.
+
+The release steps are at the end of UPGRADE-LOG.md. Changes from this plan:
 - **Tests run on PGlite** (added with the owner's OK), in CI too. The Neon dev branch is optional (`PULSE_DB=dev`).
 - **Row-level security is the enforcement, not only a backstop** (section 4.3). With about 710 raw SQL strings, the
   database refusing unscoped access is more dependable than filters added by hand. See DECISIONS.md, phase (b).

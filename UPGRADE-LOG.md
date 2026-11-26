@@ -804,3 +804,65 @@ undone and applied again; its template matches PGlite's.
 
 **To release:** apply 0015 with 0014, before the deploy. Then make the first Platform Administrator with
 `node scripts/platform-admin.mjs create main <username> "<Full name>"`.
+
+## Multi-tenancy, phase (e): links, GitHub, digests and wording (2026-11-26)
+
+**What was built**
+- **Migration `migrations/0016_showcase_links.sql`** (reverse in `migrations/down/`): executive page links, with
+  row-level security.
+- **`/executive/<link>`:**
+  - the page reads its link and shows that workspace's totals, named for its organisation and workspace
+  - Settings → View-only links → Executive page links makes and revokes them (`src/components/ShareLinks.jsx` now
+    serves both kinds)
+  - the public `/executive` without a link is gone
+- **GitHub:** one secret per workspace, a secret another workspace uses is refused, and the set-up screen explains
+  it.
+- **Digests and the Monday Briefing:** titled with their workspace.
+- **Wording:**
+  - Ask Pulse and the digest openings no longer say "Omni Contact's project tracker"; the snapshot names the
+    organisation and workspace
+  - neutral email footers and install description
+  - workspace and organisation names on the Excel report, the printed report cover and the service desk portal
+- **Docs:** `docs/API.md` (executive page links), `docs/admin-guide-organisations.md` (inside each workspace).
+  Postman: a public check that the executive page needs its link.
+
+**Tests:** `tests/tenancy.integrations.test.js`, 5 checks on PGlite:
+- an executive link shows its own workspace's totals only, and no names
+- every refusal is the same 404
+- Ask Pulse names the right organisation and never "Omni Contact"
+- GitHub: a shared secret is refused, and a delivery links only in the signing workspace even when another
+  organisation has the same key
+- the Monday Briefing goes out per workspace, named for it, from the real hourly cron
+
+`npm test`: 161 passed in 15 files. `tsc` (app and Worker): 0 errors. `vite build` passes. Migration 0016 is applied
+on the Neon dev branch.
+
+## Releasing multi-tenancy phases (b) to (e) together
+
+Phase (a) (migration 0013) is on main. Phases (b)–(e) are committed locally, not pushed, because pushing deploys and
+the deployed Worker needs 0014–0016 in the live database.
+
+1. **Dry run on a copy of production:**
+   - Make a Neon branch from `production`.
+   - Put its address in `.dev.vars` as `PG_STAGE`.
+   - If 0013 isn't live yet, run `node scripts/tenancy-dry-run.mjs stage` and read the placements.
+   - Apply the migrations to the branch in order with `node scripts/db.mjs exec stage migrations/<file>`. (Or point
+     `PG_DEV` at the branch and run `npm run db:migrate:dev`.)
+   - Optionally run `PULSE_DB=stage npx vitest run tests/tenancy` against it. It's slow from a laptop (see phase
+     (b)); the same suite runs on PGlite in `npm test`.
+2. **Back up live:** `npm run db:backup -- ../backup-before-tenancy.sql`, plus a Neon branch
+   `backup-before-tenancy` from `production`.
+3. **Migrate live:** `npm run db:migrate` applies 0014, 0015 and 0016 (and 0013, if not yet applied).
+4. **Deploy straight away:** `git push`. CI runs `npm test`, including the PGlite isolation suite, then deploys. The
+   Worker running before this push can't work on 0014.
+5. **Make the first Platform Administrator:** `node scripts/platform-admin.mjs create main <username> "<Full name>"`.
+   They sign in at `/platform`.
+6. **Tell people:**
+   - The sign-in page now asks for the organisation code: `omnicontact`, or send the link `…/#/o/omnicontact`.
+   - Old `/executive` addresses stop working; make links in Settings → View-only links.
+   - API tokens reach only the workspace they were made in.
+7. **Afterwards:** watch response times. Each query now has two extra round trips to the database (BEGIN and
+   COMMIT), next to the Worker.
+
+**If something goes wrong:** the reverse migrations are in `migrations/down/` (0016, 0015, 0014, newest first). They
+refuse to run once a second organisation exists. Otherwise restore the backup or the Neon branch.

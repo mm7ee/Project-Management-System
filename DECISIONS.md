@@ -880,3 +880,27 @@ section 12. Rules every later feature must follow:
 - **The workspace Administrator role** keeps everything inside its workspace (workflows, boards, automation, fields,
   integrations, service desk, its People page). The People page there adds and removes members of that workspace.
 - **Admin guide:** `docs/admin-guide-organisations.md`.
+
+## Multi-tenancy, phase (e): what goes outside Pulse stays in one workspace (2026-11-26)
+
+- **The executive page is a secret link per workspace** (`showcase_links`, migration 0016):
+  - **Who makes them:** people who manage users, for the open workspace, with the token shown once and kept as a
+    hash. They expire after 7 to 365 days and can be revoked.
+  - **What it shows:** that workspace's totals only, read through its own handle, with the organisation and
+    workspace names. Nothing is cached by shared caches.
+  - **Refusals:** no link, a wrong, revoked or expired one, or a suspended organisation's all get the same 404.
+  - **Gone:** the public `/executive` (Omnicontact's totals, with no link). Send leadership a link instead.
+- **GitHub:** each workspace connects with its own secret, and a secret already used by another workspace is
+  refused (409). The others are decrypted only to compare. A delivery is handled by the workspace whose secret
+  signed it, so a key that exists in two organisations (SAME-1) is linked only in the signer's.
+- **Digests and the Monday Briefing** are per workspace, titled with its name ("Monday Briefing for HR: …"). The
+  briefing's extra email list is an organisation setting, so those addresses get one briefing per workspace.
+- **Pulse never tells an organisation it is someone else's:**
+  - **Ask Pulse and the digest openings:** their instructions are neutral, and each snapshot begins with
+    `ORGANISATION: … · WORKSPACE: …`.
+  - **Visible wording:** email footers, the app's install description, the Excel report header (the workspace), the
+    printed report cover (the organisation), the service desk portal heading (the organisation) and the forced
+    password change message name the organisation or nothing.
+  - **Not changed:** the Omni Contact logos (sidebar, sign-in page, reports, executive page) are Pulse's own
+    branding as a product. Branding each organisation (white-labelling) would be a separate decision.
+- **API tokens** can't use executive links or organisation administration, as for view-only links.

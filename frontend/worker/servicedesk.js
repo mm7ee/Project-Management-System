@@ -892,7 +892,9 @@ export async function portalApi(env, req, path, waitUntil) {
   const keyHash = /^[a-f0-9]{32,64}$/.test(key) ? await tokenHash(key) : null;
   if (path === "/api/portal" && method === "GET") {
     const ready = !!(await configuredSystem(db));
-    return json({ label: link.label, expiresAt: link.expires_at, ready, types: ready ? await loadTypes(db, true) : [] });
+    // Whose service desk it is, for the heading.
+    const owner = /** @type {{ name: string } | null} */ (await db.prepare("SELECT name FROM organizations WHERE id = ?").bind(link.organization_id).first());
+    return json({ label: link.label, organization: owner?.name ?? "", expiresAt: link.expires_at, ready, types: ready ? await loadTypes(db, true) : [] });
   }
   if (path === "/api/portal/requests" && method === "POST") {
     const b = await /** @type {Promise<RaiseBody>} */ (/** @type {unknown} */ (body(req)));

@@ -221,3 +221,16 @@ Platform Administrators only, at `/api/platform/…`, with their own session coo
 - `PATCH /api/platform/organizations/:id` `{ name?, status?: "active" | "suspended" | "archived" }`. Leaving active
   ends its sessions.
 - `POST /api/platform/organizations/:id/admins` `{ username, name, email? }`: another Organisation Administrator.
+
+## Executive page links
+
+The executive page (`/executive/<link>`) shows one workspace's portfolio as totals, with no names, to anyone
+holding its link. People who manage users make the links, for the open workspace:
+
+- `GET /api/showcase-links` lists this workspace's links.
+- `POST /api/showcase-links` `{ label, days: 7 | 30 | 90 | 365 }` → `{ id, url, expiresAt }`. The `url` is shown
+  once; only its hash is kept.
+- `DELETE /api/showcase-links/:id` turns a link off.
+- `GET /api/showcase` with the header `x-showcase-token: <the link's secret>` returns the totals plus the
+  `organization` and `workspace` names. No link, a wrong, expired or revoked one, or a suspended organisation's all
+  give the same `404` (`code: "showcase_invalid"`). The old public `/executive` without a link is gone.

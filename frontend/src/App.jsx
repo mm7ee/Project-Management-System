@@ -69,7 +69,7 @@ import NotificationBell from "./components/NotificationBell";
 /**
  * @returns {boolean}
  */
-const isExecutive = () => /^\/executive\/?$/.test(window.location.pathname);
+const isExecutive = () => /^\/executive(\/[a-f0-9]{64})?\/?$/.test(window.location.pathname);
 const isPlatform = () => /^\/platform\/?$/.test(window.location.pathname);
 /**
  * "Good morning" and so on, by the visitor's own clock.
@@ -162,7 +162,7 @@ function Tracker() {
  */
 function Dashboard({ data, reload }) {
   // Before anything reads browser storage: what is remembered inside a workspace is kept per workspace.
-  setOpenWorkspace(data.tenant?.workspace?.id ?? "");
+  setOpenWorkspace(data.tenant?.workspace?.id ?? "", data.tenant?.organization?.name ?? "");
   const now = useNow();
   const { me, systems, users, requests, features, documents, blockers, limits } = data;
   const can = /** @param {Permission} p */ (p) => data.permissions.includes(p);

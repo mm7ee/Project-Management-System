@@ -177,7 +177,7 @@ export async function devLinksFor(db, itemId) {
  * Paths a token may never use: accounts, sign-in, tokens, links and integration settings.
  * @type {RegExp[]}
  */
-const TOKEN_BLOCKED = [/^\/api\/me(\/|$)/, /^\/api\/tokens/, /^\/api\/logout/, /^\/api\/users/, /^\/api\/settings\//, /^\/api\/share-links/, /^\/api\/integrations/, /^\/api\/webhooks/, /^\/api\/mfa/];
+const TOKEN_BLOCKED = [/^\/api\/me(\/|$)/, /^\/api\/tokens/, /^\/api\/logout/, /^\/api\/users/, /^\/api\/settings\//, /^\/api\/share-links/, /^\/api\/showcase-links/, /^\/api\/org(\/|$)/, /^\/api\/integrations/, /^\/api\/webhooks/, /^\/api\/mfa/];
 /**
  * A request with "Authorization: Bearer pulse_…": the token's owner, or an error. Read tokens may only
  * read. Each token may make API_RATE_LIMIT requests a minute.
@@ -458,6 +458,15 @@ export async function integrationsApi(c, env, path, method) {
     }
     const secret = String((await /** @type {Promise<{ secret?: unknown; }>} */ (/** @type {unknown} */ (body(req)))).secret ?? "").trim();
     if (secret.length < 20 || secret.length > 200 || /\s/.test(secret)) throw new HttpError(400, "Use a secret of 20 to 200 characters, with no spaces");
+    // A delivery belongs to the workspace whose secret signed it, so no two workspaces may share one. The others'
+    // are read as the owner only to compare; nothing about them is returned.
+    const scope = /** @type {TenantDatabase} */ (db).scope;
+    const others = /** @type {D1Result<{ sealed: string }>} */ (
+      await env.ROOT.prepare("SELECT sealed FROM integration_secrets WHERE kind = 'github' AND workspace_id <> ?").bind(scope?.workspaceId ?? "").all()
+    );
+    for (const o of others.results) {
+      if (sameText(await openSecret(o.sealed, mfaKey(env)), secret)) throw new HttpError(409, "Choose a different secret: each workspace connects GitHub with its own");
+    }
     await db
       .prepare("INSERT INTO integration_secrets (kind, sealed, updated_by, updated_at) VALUES ('github', ?, ?, ?) ON CONFLICT (workspace_id, kind) DO UPDATE SET sealed = excluded.sealed, updated_by = excluded.updated_by, updated_at = excluded.updated_at")
       .bind(await sealSecret(secret, mfaKey(env)), c.me.id, c.now)

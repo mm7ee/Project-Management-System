@@ -58,7 +58,7 @@ async function portal(path, method = "GET", data) {
  * The service desk portal: raise a request and follow your own. No account, no internal items.
  */
 export default function PortalPage() {
-  const [info, setInfo] = useState(/** @type {{ label: string; ready: boolean; types: RequestType[] } | null | (() => { label: string; ready: boolean; types: RequestType[] } | null)} */ (null));
+  const [info, setInfo] = useState(/** @type {{ label: string; organization?: string; ready: boolean; types: RequestType[] } | null | (() => { label: string; organization?: string; ready: boolean; types: RequestType[] } | null)} */ (null));
   const [error, setError] = useState("");
   const [view, setView] = useState(/** @type {"list" | "new" | PortalRequest | (() => "list" | "new" | PortalRequest)} */ ("list"));
   const [list, setList] = useState(/** @type {PortalRequest[] | (() => PortalRequest[])} */ ([]));
@@ -69,7 +69,7 @@ export default function PortalPage() {
   }, []);
   useEffect(() => {
     document.title = "Service desk";
-    /** @type {Promise<{ label: string; ready: boolean; types: RequestType[]; }>} */ (/** @type {unknown} */ (portal("")))
+    /** @type {Promise<{ label: string; organization?: string; ready: boolean; types: RequestType[]; }>} */ (/** @type {unknown} */ (portal("")))
       .then((i) => {
         setInfo(i);
         if (!requesterKey()) setView("new");
@@ -83,7 +83,7 @@ export default function PortalPage() {
         <PulseMark tone="dark" />
         <div>
           <h1>
-            <Headset size={20} aria-hidden="true" /> Omni Contact service desk
+            <Headset size={20} aria-hidden="true" /> {info?.organization ? `${info.organization} service desk` : "Service desk"}
           </h1>
           {info && <p>For {info.label}</p>}
         </div>

@@ -90,3 +90,14 @@ it again. You can't archive the last active workspace, or the one you have open.
 
 A wrong code, an unknown username and a wrong password all get the same message. That's on purpose, so nobody can
 find out which organisations or accounts exist.
+
+## Inside each workspace
+
+- **Executive page:** Settings → View-only links → **Executive page links**. Make a link for leadership. It shows
+  that workspace's totals only (no names of projects or people), until it expires or you turn it off. Each
+  workspace makes its own.
+- **GitHub:** Settings → Integrations → GitHub connects this workspace's repositories, with a secret of its own.
+  Pulse refuses a secret another workspace already uses, because the secret tells Pulse which workspace a delivery
+  is for.
+- **Digests and the Monday Briefing** go out per workspace, to its members, titled with its name. Someone in two
+  workspaces gets one of each.

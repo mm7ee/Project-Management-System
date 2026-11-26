@@ -59,7 +59,7 @@ function emailHtml(env, title, intro, digest, link) {
 ${intro ? `<p style="margin:0">${esc(intro)}</p>` : ""}
 ${sections}
 <p style="margin:24px 0"><a href="${esc(fullLink(env, link))}" style="background:#2c3280;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">Open Pulse</a></p>
-<p style="margin:0;font-size:12px;color:#6b7a90">Sent by Pulse, Omni Contact's project tracker. You can turn these emails off in Settings.${digest?.aiWritten ? " The opening paragraph is AI-written; the lists come straight from Pulse's data." : ""}</p>
+<p style="margin:0;font-size:12px;color:#6b7a90">Sent by Pulse. You can turn these emails off in Settings.${digest?.aiWritten ? " The opening paragraph is AI-written; the lists come straight from Pulse's data." : ""}</p>
 </div>`;
 }
 /**
@@ -109,7 +109,7 @@ export function securityEmail(title, lines, button) {
 <h2 style="margin:0 0 10px;font-size:20px;color:#101553">${esc(title)}</h2>
 ${lines.map((l) => `<p style="margin:0 0 10px">${esc(l)}</p>`).join("")}
 ${button ? `<p style="margin:22px 0"><a href="${esc(button.url)}" style="background:#2c3280;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">${esc(button.label)}</a></p>` : ""}
-<p style="margin:0;font-size:12px;color:#6b7a90">Sent by Pulse, Omni Contact's project tracker, about your account's security. Nobody from Pulse will ever ask for your password.</p>
+<p style="margin:0;font-size:12px;color:#6b7a90">Sent by Pulse about your account's security. Nobody from Pulse will ever ask for your password.</p>
 </div>`;
   const text = [title, ...lines, ...(button ? [`${button.label}: ${button.url}`] : [])].join("\n\n");
   return { subject: `Pulse: ${title}`, html, text };

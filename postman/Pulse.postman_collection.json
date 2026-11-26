@@ -404,6 +404,35 @@
               ]
             }
           }
+        },
+        {
+          "name": "Executive page needs its link",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"says it needs a link\", () => pm.expect(pm.response.json().code).to.eql(\"showcase_invalid\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/showcase",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "showcase"
+              ]
+            }
+          }
         }
       ]
     },
