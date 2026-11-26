@@ -710,3 +710,56 @@ Choices made during the Pulse upgrade that later phases must follow. Newest last
   **newly** mentioned are told, as named recipients (`extra`) of `item_created` (new request) or `item_updated`
   (edited). So it works whatever the scheme's "mentioned" switch says; the scheme still decides email, and
   visibility and personal opt-outs still apply. You're never told about your own mention.
+
+## Multi-tenancy (2026-11-26, phase (a) of five)
+
+The plan, with the audit behind it, is `docs/multi-tenancy-plan.md`. The owner approved every recommendation in its
+section 12. Rules every later feature must follow:
+
+- **Three levels.** Platform (organisations, Platform Administrators), organisation (people, sign-in, two-step,
+  delivery, roles, and shared configuration: statuses, workflows, security levels, notification schemes, holidays,
+  templates) and workspace (all project data and everything made from it).
+- **Every new table says whose it is:**
+  - Organisation tables: `organization_id`, `NOT NULL`, with a foreign key to `organizations`.
+  - Workspace tables: also `workspace_id`, `NOT NULL`, indexed, with a foreign key `(organization_id, workspace_id)`
+    to `workspaces (organization_id, id)`.
+  - A child table points at its parent by `(workspace_id, parent_id)` → `parent (workspace_id, id)`, so the database
+    refuses a row in another workspace than its parent's. The parent needs `UNIQUE (workspace_id, id)`.
+  - Organisation-level references (statuses, workflows, levels) use `(organization_id, …)` the same way.
+- **Unique per tenant, never globally:** usernames and project keys per organisation; workspace names and keys per
+  organisation; everything else per workspace.
+- **People are referenced without foreign keys** (assignee, owner, author …): a removed person's history stays, shown
+  as "Former user", as before.
+- **The activity log** is per workspace. Events about people, sign-in and organisation settings have no workspace and
+  are for Organisation Administrators only.
+- **Workspace scoping decisions (approved):**
+  - Sign-in: organisation code → username and password → two-step → choose among your own workspaces.
+  - Row-level security will back up the code, once its cost through Hyperdrive is measured (phase (b)).
+  - Chat (direct and group too), digests, the Monday Briefing, tokens, share links and the portal are per workspace.
+  - No view across workspaces for now.
+  - Projects don't move between workspaces.
+  - `/executive` becomes a per-workspace secret link.
+  - Platform Administrators are separate accounts that can't open an organisation's data.
+  - The Admin role becomes a workspace role, and "Organisation Administrator" is the `users.org_admin` flag.
+- **Migration `0013_tenancy_schema.sql`:**
+  - Creates Omnicontact, turns the old workspace list into rows, and makes every existing person a member of every
+    workspace with their current role. Administrators become Organisation Administrators.
+  - Places every row by its parent. Rows with no parent of their own go to "Projects"; projects with no workspace go
+    to the first workspace, as the app showed them.
+  - Nothing is dropped silently. Placements that need a look are in `tenancy_report`. Rows that can't be kept (parent
+    gone, or linking two workspaces) are copied whole into `tenancy_orphans` before removal, and the reverse script
+    puts them back.
+- **Until phase (b) ships, the old code runs on the new schema:**
+  - Insert triggers fill `organization_id` and `workspace_id` from the parent.
+  - Renaming or removing a workspace, and moving a project to another workspace, are refused (the database can't tell
+    a rename from a remove-and-add). Adding a workspace works, and everyone joins it.
+  - Phase (b) sets the columns in code and replaces these triggers.
+- **Reverse migrations** live in `migrations/down/` and are run by hand (`node scripts/db.mjs exec dev
+  migrations/down/<file>`). `db.mjs migrate` only reads `migrations/*.sql`, so it never runs them.
+- **Dry run before any real database:** `node scripts/tenancy-dry-run.mjs dev|stage` runs the migration in a
+  transaction, reports rows per table per workspace, and rolls back. It refuses the live database. `stage` is a Neon
+  branch made from production (`PG_STAGE` in `.dev.vars`).
+- **Database tests:**
+  - `tests/helpers/worker.js` runs the real Worker against a real database. Run them with
+    `PULSE_DB=dev npx vitest run tests/tenancy…`. They refuse the live database, and `npm test` skips them.
+  - PGlite (an in-process Postgres, so CI could run them) is not added. A new dependency needs the owner's OK.

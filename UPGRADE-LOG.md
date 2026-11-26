@@ -625,3 +625,41 @@ managers can present.
 - Verified: `npm run build` (type check + production bundle), all 117 tests, the Worker bundles (`wrangler deploy
   --dry-run`), and the app loads in the browser from both the dev server and the production build.
 - No behaviour changes intended; no migration.
+
+## Multi-tenancy, phase (a): organisations and workspaces in the schema (2026-11-26)
+
+**Why:** the owner asked for Pulse to hold several organisations, each with several workspaces, strictly
+separated. The plan is `docs/multi-tenancy-plan.md`, and the rules are in DECISIONS.md. This phase is the schema
+only; nothing changes for people using Pulse, except that workspaces can't be renamed and projects can't move
+between workspaces until phase (b).
+
+**What was built**
+- **Migration `migrations/0013_tenancy_schema.sql`:**
+  - **New tables:** `organizations`, `workspaces`, `workspace_members`. Also `tenancy_legacy`, `tenancy_report` and
+    `tenancy_orphans`, which record the move.
+  - **Organisation columns:** `organization_id` on the 19 organisation tables and `users`, and `users.org_admin`.
+  - **Workspace columns:** `organization_id` and `workspace_id` on the 57 workspace tables.
+  - **Database rules:** composite foreign keys between workspace rows; usernames and project keys unique per
+    organisation; insert triggers for the old code; the rename and move guard.
+- **Reverse:** `migrations/down/0013_tenancy_schema.down.sql`.
+- **Dry run:** `scripts/tenancy-dry-run.mjs` (see DECISIONS.md).
+- **Tests:**
+  - `tests/helpers/worker.js` runs the real Worker against a real database.
+  - `tests/tenancy.phaseA.test.js` has 10 checks that the current code works on the migrated schema and writes every
+    row to the right workspace.
+
+**Tested on the Neon dev branch**
+- Dry run: 0 rows set aside, 0 references cleared, and 27 placements to check (12 projects with no workspace, 6
+  filters, 6 dashboards, 3 example automation rules). The migration took 4.9 s.
+- Applied, undone with the reverse script, and applied again.
+- `PULSE_DB=dev npx vitest run tests/tenancy.phaseA.test.js`: 9 of 10 passed in a full run. The tenth (the main
+  pages load) failed on a dropped network connection to Neon, then passed when run again.
+- `npm test`: 117 passed and the 10 database tests were skipped. `tsc` on the app and the Worker: 0 errors.
+
+**To release this phase** (by hand, before any phase (b) code):
+1. Make a Neon branch from `production`, put its address in `.dev.vars` as `PG_STAGE`, and run
+   `node scripts/tenancy-dry-run.mjs stage --out tenancy-dry-run.md`. Read the placements.
+2. Back up: `npm run db:backup -- ../backup-before-tenancy.sql`, and make a Neon branch `backup-before-tenancy`.
+3. `npm run db:migrate`. No deploy is needed: the Worker is unchanged.
+
+**New permissions, endpoints, screens:** none.
