@@ -1,4 +1,4 @@
-// The hourly trigger's timetable (worker/schedule.ts). Run with: npm test
+// The cron's timetable (worker/schedule.js): every 5 minutes, hourly jobs in the first run of the hour. Run with: npm test
 import { describe, expect, it } from "vitest";
 import { dueJobs } from "../worker/schedule";
 const at =
@@ -7,7 +7,10 @@ const at =
    */ (iso) => dueJobs(Date.parse(iso));
 describe("dueJobs", () => {
   it("runs the hourly jobs every hour", () => {
-    expect(at("2026-11-18T13:00:00Z")).toEqual({ hourly: true, dailyDigest: false, mondayBriefing: false });
+    expect(at("2026-11-18T13:00:00Z")).toEqual({ every: true, hourly: true, dailyDigest: false, mondayBriefing: false });
+    // The other runs of the hour do only the every-run jobs.
+    expect(at("2026-11-18T13:05:00Z")).toEqual({ every: true, hourly: false, dailyDigest: false, mondayBriefing: false });
+    expect(at("2026-11-16T06:30:00Z").mondayBriefing).toBe(false);
   });
   it("sends daily digests at 07:00 Harare on weekdays only", () => {
     expect(at("2026-11-16T05:00:00Z").dailyDigest).toBe(true); // Monday

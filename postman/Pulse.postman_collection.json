@@ -433,6 +433,45 @@
               ]
             }
           }
+        },
+        {
+          "name": "An automation webhook with a wrong secret is 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/hooks/automation/0000000000000000000000000000000000000000000000000000000000000000",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "hooks",
+                "automation",
+                "0000000000000000000000000000000000000000000000000000000000000000"
+              ]
+            }
+          }
         }
       ]
     },
@@ -1263,6 +1302,41 @@
                     "api",
                     "org",
                     "templates"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Automation presets: the seven ready-made rules",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                      "pm.test(\"seven presets\", () => pm.expect(pm.response.json()).to.have.lengthOf(7));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Cookie",
+                    "value": "omni_session={{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/automation/presets",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "automation",
+                    "presets"
                   ]
                 }
               }

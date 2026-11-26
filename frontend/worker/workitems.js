@@ -1640,10 +1640,10 @@ export async function askItemLines(c, nameOf, limit = 120) {
 }
 /**
  * Something automation rules can react to.
- * @typedef {| { type: "item_created" | "comment_added" | "subtasks_done"; itemId: string }
- *   | { type: "item_transitioned"; itemId: string; from: string; to: string }
- *   | { type: "field_changed"; itemId: string; fields: string[] }
- *   | { type: "sprint_started" | "sprint_completed"; sprintId: string; systemId: string }} ItemEvent
+ * @typedef {| { type: "item_created" | "comment_added" | "subtasks_done"; itemId: string; by?: string }
+ *   | { type: "item_transitioned"; itemId: string; from: string; to: string; by?: string }
+ *   | { type: "field_changed"; itemId: string; fields: string[]; by?: string }
+ *   | { type: "sprint_started" | "sprint_completed"; sprintId: string; systemId: string; by?: string }} ItemEvent  by: who set it off (a user id, or "automation")
  */
 /**
  * @typedef {Object} ItemContext

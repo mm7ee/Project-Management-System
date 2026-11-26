@@ -28,10 +28,10 @@
     // fallback; it stopped receiving changes when Pulse moved to Postgres on 2026-11-16).
     "DATABASE": "postgres"
   },
-  // One trigger, every hour, to stay within the Workers Free limit of 5 cron triggers per account.
-  // worker/schedule.ts picks what's due: daily digests at 07:00 Harare on weekdays, the Monday Briefing at
-  // 08:00, and every hour filter subscriptions and scheduled automation rules.
-  "triggers": { "crons": ["0 * * * *"] },
+  // One trigger, every 5 minutes, to stay within the Workers Free limit of 5 cron triggers per account.
+  // worker/schedule.js picks what's due: automation (schedules, due dates, retries) every run; daily digests at
+  // 07:00 Harare on weekdays, the Monday Briefing at 08:00, and filter subscriptions in the first run of each hour.
+  "triggers": { "crons": ["*/5 * * * *"] },
   // Postgres on Neon (project wild-sunset-31993352, branch "production"; PG_MAIN in .dev.vars). Locally, `npm run dev:api` points this at the
   // Neon "dev" branch instead (PG_DEV in .dev.vars).
   "hyperdrive": [

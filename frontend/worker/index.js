@@ -44,7 +44,7 @@ import { workflowsApi } from "./workflows";
 import { askBoardLines, boardsApi } from "./boards";
 import { sprintHealth, sprintsApi } from "./sprints";
 import { askSearchLines, runSubscriptions, searchApi } from "./search";
-import { askAutomationLines, automationApi, runEvent, runScheduledRules } from "./automation";
+import { askAutomationLines, automationApi, automationWebhook, copyOrganisationRules, retryAutomationJobs, runEvent, runTimeTriggers } from "./automation";
 import { dueJobs } from "./schedule";
 import { askIntegrationLines, githubWebhook, integrationsApi, retryWebhooks, tokenAuth } from "./integrations";
 import { askServiceDeskLines, portalApi, runSlaChecks, serviceDeskApi } from "./servicedesk";
@@ -1145,6 +1145,9 @@ async function api(req, env, path, ctx) {
   }
   // GitHub calls this, signed with the shared secret; the customer portal works by its link. No session.
   if (path === "/api/integrations/github/webhook" && method === "POST") return githubWebhook(env, req);
+  // Another system calling an automation rule's webhook: its secret address is the only credential (worker/automation.js).
+  const hookMatch = path.match(/^\/api\/hooks\/automation\/([A-Za-z0-9]{1,128})$/);
+  if (hookMatch && method === "POST") return automationWebhook(env, req, hookMatch[1]);
   const portal = await portalApi(env, req, path, (p) => ctx.waitUntil(p.catch((e) => console.error("portal background work failed", e))));
   if (portal) return portal;
   if (path === "/api/logout" && method === "POST") {
@@ -1305,7 +1308,7 @@ async function api(req, env, path, ctx) {
     env,
     defer: (p) => ctx.waitUntil(p.catch((e) => console.error("background work failed", e))),
     // Automation reacts after the response, so a person never waits for a rule.
-    emit: guest ? undefined : (e) => ctx.waitUntil(runEvent(env, e).catch((err) => console.error("automation failed", err))),
+    emit: guest ? undefined : (e) => ctx.waitUntil(runEvent(env, { ...e, by: me.id }).catch((err) => console.error("automation failed", err))),
   };
   const itemsResponse =
     (await itemsApi(itemCtx, path, method)) ??
@@ -1555,6 +1558,8 @@ async function api(req, env, path, ctx) {
       try {
         if (source) copied = await cloneWorkspaceConfig(env, scope.orgId, source.id, id, name);
         if (template) copied = await applyBlueprint(env.ROOT.withScope({ orgId: scope.orgId, workspaceId: id }), id, name, template.blueprint);
+        // The organisation's rules for every workspace include this one.
+        await copyOrganisationRules(env, scope.orgId, id);
       } catch (e) {
         // Setting it up failed: the half-made workspace goes, so it can be tried again.
         await env.ROOT.prepare("DELETE FROM workspaces WHERE organization_id = ? AND id = ?").bind(scope.orgId, id).run();
@@ -3517,7 +3522,7 @@ export default {
     // Deleting by age is the same for everyone: done once, as the owner.
     if (due.dailyDigest) await purgeExpired(env.ROOT).catch((e) => console.error("Retention clean-up failed", e));
     // Archived organisations whose 30 days have passed are deleted, for good (worker/platform.js).
-    await purgeDueOrganizations(env.ROOT).catch((e) => console.error("Deleting organisations failed", e));
+    if (due.hourly) await purgeDueOrganizations(env.ROOT).catch((e) => console.error("Deleting organisations failed", e));
     // Everything else is done for one workspace at a time, with that workspace's handle, so a job can only
     // read, tell and change that workspace (and its digests reach only its members).
     const spaces = /** @type {D1Result<{ organization_id: string; id: string }>} */ (
@@ -3530,10 +3535,13 @@ export default {
       const tenv = tenantEnv(env, { orgId: w.organization_id, workspaceId: w.id });
       if (due.dailyDigest) await runDailyDigests(tenv).catch((e) => noteFailure(tenv.DB, "Daily digest", e));
       if (due.mondayBriefing) await runBriefing(tenv).catch((e) => noteFailure(tenv.DB, "Monday Briefing", e));
-      await runSubscriptions(tenv).catch((e) => noteFailure(tenv.DB, "Filter subscriptions", e));
-      await runScheduledRules(tenv).catch((e) => console.error("Scheduled automation failed", w.id, e));
-      await runSlaChecks(tenv).catch((e) => noteFailure(tenv.DB, "Service desk SLA alerts", e));
+      // Every run (every 5 minutes): automation's schedules and due dates, and its jobs waiting to be tried again.
+      await runTimeTriggers(tenv).catch((e) => console.error("Time-based automation failed", w.id, e));
+      await retryAutomationJobs(tenv).catch((e) => console.error("Automation retries failed", w.id, e));
       await retryWebhooks(tenv).catch((e) => console.error("Webhook retries failed", w.id, e));
+      if (!due.hourly) continue;
+      await runSubscriptions(tenv).catch((e) => noteFailure(tenv.DB, "Filter subscriptions", e));
+      await runSlaChecks(tenv).catch((e) => noteFailure(tenv.DB, "Service desk SLA alerts", e));
     }
   },
 };

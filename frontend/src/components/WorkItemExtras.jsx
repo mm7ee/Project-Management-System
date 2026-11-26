@@ -1,8 +1,9 @@
 /** @import { User } from '../data/roles' */
 /** @import { WorkItem } from '../data/workitems' */
 /** @import { CustomField, CustomFieldValue, CustomValue } from '../data/admin' */
-import { useState } from "react";
-import { GitBranch, GitCommitHorizontal, GitPullRequest, Headset, ListPlus, Lock } from "lucide-react";
+import { useEffect, useState } from "react";
+import { GitBranch, GitCommitHorizontal, GitPullRequest, Headset, ListPlus, Lock, Zap } from "lucide-react";
+import { api } from "../data/api";
 import { REQUEST_KINDS } from "../data/servicedesk";
 import { formatDate, timeAgo } from "../time";
 import { SlaBadge } from "./ServiceDeskParts";
@@ -289,6 +290,55 @@ export function RequestPanel({ item }) {
         {r.kind === "change" ? " A change is resolved through Change Approval, which a Manager approves." : ""}
         {r.firstResponse.dueAt ? ` First reply due ${formatDate(r.firstResponse.dueAt)}.` : ""}
       </p>
+    </Panel>
+  );
+}
+/**
+ * Automation rules with a button ("Someone presses its button on a work item") that apply to this item.
+ * @param {{ itemKey: string; onRan: () => void }} props
+ */
+export function AutomationButtons({ itemKey, onRan }) {
+  const [rules, setRules] = useState(/** @type {{ id: string; name: string; description: string }[]} */ ([]));
+  const [busy, setBusy] = useState("");
+  const [note, setNote] = useState("");
+  useEffect(() => {
+    api(`/automation/manual?item=${encodeURIComponent(itemKey)}`)
+      .then((r) => setRules(/** @type {typeof rules} */ (r)))
+      .catch(() => setRules([]));
+  }, [itemKey]);
+  if (!rules.length) return null;
+  return (
+    <Panel title="Automation" icon={<Zap size={16} />}>
+      <div className="auto-buttons">
+        {rules.map((r) => (
+          <button
+            key={r.id}
+            className="btn btn-ghost sm"
+            title={r.description}
+            disabled={!!busy}
+            onClick={async () => {
+              setBusy(r.id);
+              setNote("");
+              try {
+                const res = /** @type {{ ran: boolean; reason?: string; status?: string; message?: string }} */ (await api(`/automation/manual/${r.id}`, "POST", { itemKey }));
+                setNote(res.ran ? `${r.name}: ${res.message ?? "done"}` : `${r.name} didn't run: ${res.reason}`);
+                onRan();
+              } catch (e) {
+                setNote(e instanceof Error ? e.message : "Couldn't run it");
+              } finally {
+                setBusy("");
+              }
+            }}
+          >
+            <Zap size={13} /> {r.name}
+          </button>
+        ))}
+      </div>
+      {note && (
+        <p className="field-hint" role="status">
+          {note}
+        </p>
+      )}
     </Panel>
   );
 }

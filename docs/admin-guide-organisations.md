@@ -206,6 +206,54 @@ new workspace gets its own copy of everything, to change freely.
 - **Kinds:** text, long text, number, money (with a currency), date, single or multi select, person, checkbox and link.
 - A field can be just **for some item types**, and can have a **default value**, which fills in new items left empty.
 
+## Automations (workspace administrators)
+
+Settings → This workspace → **Automations**. A rule reads **When** … **If** … **Then** ….
+
+**Start from a preset:** **From a preset** offers ready-made rules:
+- a critical bug goes to the next developer
+- all sub-tasks done moves the story to Code Review
+- content in review goes to the Marketing Lead, due in 2 working days
+- a weekly social media plan every Monday at 08:00
+- reminders before and after due dates
+
+A preset is added **switched off**. Pulse lists anything it couldn't match in your workspace (a status or field it
+doesn't have). Fix those, then switch the rule on.
+
+**Make your own:** **New rule**, then:
+1. **When:**
+   - something happens to a work item: created, moved to a status, assigned, a field changed, commented, all sub-tasks
+     done
+   - a sprint starts or ends
+   - its due date is near, or has passed
+   - on a schedule: every day, working day, week or month at a time, in your organisation's time zone
+   - another system calls the rule's webhook
+   - someone presses the rule's **button** on an item
+2. **If:** add conditions with the dropdowns, such as Item type is Bug, Priority is Highest, Assignee is empty, or Due
+   date is within 2 days.
+   - **All of these** means AND; **Any of these** means OR. Groups can nest.
+   - People who know PQL can add a PQL condition too.
+3. **Then:** up to 10 actions:
+   - **Move and change:** move it, assign it (to a person, a role, in turn between a team, or to whoever has the
+     fewest open items), set or clear a field, add a label.
+   - **Write and tell:** comment, notify, email, send WhatsApp or SMS, escalate to the managers.
+   - **Make and connect:** create a sub-task or a work item (here or in another workspace you're in), link it, call
+     another system's webhook.
+   - **Smart values** such as `{{item.key}}`, `{{item.title}}` and `{{item.assignee.name}}` fill in the details.
+4. **Owner:** they're told if the rule keeps failing.
+5. **Test:** pick a work item. Pulse shows which conditions hold and what each action would do, without changing
+   anything.
+6. **Save**, then switch it on.
+
+Each rule's **Run log** shows every run: what set it off, each condition's result, and what each action did. A step
+that fails is tried again a few times before the owner is told.
+
+**WhatsApp and SMS** need a provider (Twilio, Africa's Talking, the WhatsApp Business API …). Until one is connected,
+the run log shows what would have been sent.
+
+**Organisation Administrators** can make a rule for **every workspace** (or some). Each workspace gets a copy that
+only Organisation Administrators change, and new workspaces get organisation-wide rules too.
+
 ## Inside each workspace
 
 - **Executive page:** Settings → View-only links → **Executive page links**. Make a link for leadership. It shows

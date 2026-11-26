@@ -3595,3 +3595,26 @@ th[aria-sort="ascending"] .pr-sort svg, th[aria-sort="descending"] .pr-sort svg 
 /* Money fields */
 .cf-money { display: inline-flex; align-items: center; gap: 6px; }
 .cf-money > span { font-weight: 600; color: var(--muted); font-size: 13px; }
+
+/* ---------- Administrator module, phase 3: the rule builder ---------- */
+.rule-part { border: 1px solid var(--border); border-radius: var(--r-md, 10px); padding: 12px 14px; margin: 12px 0; }
+.rule-part > legend { padding: 0 6px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; font-size: 12px; }
+.rule-when > legend { color: var(--cyan-ink, #0039a6); }
+.rule-if > legend { color: var(--amber-ink, #8a5a00); }
+.rule-then > legend { color: var(--green-ink, #0b6e55); }
+.cond-group { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 8px; border: 1px dashed var(--border); background: var(--card); }
+.cond-group.depth-2 { background: var(--track); }
+.cond-group.depth-3 { background: var(--card); }
+.cond-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cond-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cond-row select, .cond-row input, .cond-head select { padding: 6px 8px; border: 1px solid var(--input-line, var(--border)); border-radius: var(--r-sm, 6px); background: var(--input-bg, var(--card)); color: var(--text); font: inherit; font-size: 13px; max-width: 100%; }
+.cond-row select:focus-visible, .cond-row input:focus-visible, .cond-head select:focus-visible { outline: none; box-shadow: var(--ring); }
+.rule-checks { list-style: none; margin: 6px 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.rule-checks li.ok { color: var(--green-ink, #0b6e55); }
+.rule-checks li.no { color: var(--red-ink, #b00d27); }
+.rule-checks.compact { font-size: 12px; margin: 0; }
+.rule-test { margin-top: 12px; padding: 12px; border-radius: 10px; background: var(--track); }
+.rule-test ul { margin: 4px 0 8px; padding-left: 18px; }
+.smart-value { display: inline-flex; align-items: center; gap: 3px; margin: 2px; padding: 1px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--heading); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer; }
+.smart-value:focus-visible { outline: none; box-shadow: var(--ring); }
+.auto-buttons { display: flex; flex-wrap: wrap; gap: 6px; }

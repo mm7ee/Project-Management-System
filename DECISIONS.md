@@ -1036,3 +1036,69 @@ The plan, and the 13 recommendations approved with "continue", are in `docs/admi
   - Statuses are matched to the organisation's by name, or added.
   - **Not built in:** sprints are already a per-project choice (Agile mode), and the Marketing "content calendar" is
     the existing Timeline.
+
+## Administrator module, phase 3: the automation engine (2026-11-26)
+
+- **Built on the existing engine**, not beside it. Rules still act as "Automation: <name>" through the same code
+  people use, so workflow rules, history, the activity log and alerts apply.
+- **Triggers:** added "assigned", "due date near" (N hours), "due date passed", schedules, an incoming webhook, and a
+  manual button.
+  - Schedules run every day, working day, week or month at a time, **in the organisation's time zone** (phase 1's
+    profile). Older hourly schedules read as the same schedule.
+  - SLA and approval triggers come with phase 4.
+- **Conditions:** AND/OR groups (up to 3 levels, 25 conditions) built from dropdowns, evaluated in
+  `src/data/automation.js`.
+  - It's shared with the screens and unit-tested.
+  - Choices compare by label, so a preset's "Severity is Critical" works in any workspace with such a field.
+  - PQL stays as an advanced extra condition.
+- **Actions:**
+  - **New:** add a label, clear a field, create an item, email, WhatsApp/SMS, a signed webhook, escalate.
+  - **Assignment:** round-robin (a cursor on the rule) or least loaded (fewest open items) between a role or named
+    people.
+  - **Due dates:** "+2wd" counts the organisation's working days.
+  - **Once per run:** in bulk runs (schedules, sprints, webhooks without an item), "create an item" and "call a
+    webhook" happen once, not once per matching item. That's how a weekly task is made once a week.
+- **Creating items in another workspace:**
+  - It goes through that workspace's own handle, never the owner's, so row-level security still holds.
+  - It's allowed only if the rule's owner is a member there whose role may create work items. This is checked when
+    saving and again when running.
+  - Items in two workspaces can't be linked (links are per workspace), so each gets a comment naming the other.
+- **Smart values:** `{{item.key}}`, `{{item.title}}`, `{{workspace.name}}`, `{{trigger.user.name}}` … (the older
+  `{key}` style still works).
+  - Values are escaped for HTML in emails and for JSON in webhook payloads, so an item's title can't inject markup
+    or break the JSON.
+  - Events now carry who caused them (`by`), for `{{trigger.user.name}}`.
+- **Secrets:**
+  - A webhook action's signing secret is made on save, sealed with `MFA_KEY` and shown once.
+  - Calls carry `X-Pulse-Signature: sha256=<HMAC>`, and only `https://` addresses are allowed.
+  - A webhook trigger's address is a random secret, kept as a hash and shown once. Wrong or switched-off addresses
+    get the same 404.
+  - Secrets are never sent to the browser again.
+- **WhatsApp/SMS:** a provider interface (`worker/messaging.js`) with no provider yet. The run log records what
+  would have been sent; connecting one means implementing `providerFor` with keys in Worker secrets.
+- **A job ledger in Postgres (`automation_jobs`), not Cloudflare Queues** (decision 9: no new paid service):
+  - Each run is a job with an idempotency key, run straight away.
+  - A failure **before anything changed** is retried after 1, 2, 4 and 8 minutes by the cron. A failure after a
+    change isn't retried, since doing it again could do it twice.
+  - After 5 tries the job is failed, and the owner is told once a day.
+  - Time-based triggers record each occasion in `automation_fired`, so they fire once per item and due date, or once
+    per schedule day.
+- **The cron runs every 5 minutes** (still one trigger, within the free plan):
+  - automation every run
+  - digests, the Monday Briefing, subscriptions and organisation deletion in the first run of the hour, as before
+- **Loop protection:**
+  - a depth of 5 (was 3)
+  - 10 runs an hour of a rule on one item
+  - the rule's runs a minute
+  - 600 runs a minute across the organisation
+- **The test run** goes through the same action code in a "dry" mode that changes nothing and says what it would
+  do. The run log keeps each condition's result and each action's outcome.
+- **Organisation rules:**
+  - Copies, one per workspace, sharing an id, made through each workspace's own handle. The alternative, rules
+    without a workspace, would have meant loosening row-level security on rules.
+  - Only Organisation Administrators change or delete them, and that changes every copy.
+  - A new workspace gets the organisation-wide ones.
+- **Presets** (the brief's seven) are added switched off, matched to the workspace by status, type and field names,
+  with a list of what didn't match.
+  - The Marketing "Approved → Scheduled" preset needs a status called Approved, which the Marketing template doesn't
+    have (its approval step is "Client/Manager Approval"). It says so when added.

@@ -158,6 +158,67 @@ one of the organisation's templates (`workspaceId: null`, `template: true`).
   - `DELETE /api/org/templates/:id`.
   - `POST /api/org/workspaces` takes `template: "builtin:marketing"` or `"org:<id>"`.
 
+## Automation
+
+Needs `manage_automation`, except the item buttons and the webhook trigger.
+- **A rule** (`/api/automation/rules`, GET, POST; `/api/automation/rules/:id`, PUT, DELETE):
+  - `trigger`:
+    - `item_created`, `item_transitioned` (`triggerValue`: a status), `field_changed` (`triggerValue`: a field)
+    - `item_assigned`, `comment_added`, `subtasks_done`, `sprint_started`, `sprint_completed`
+    - `due_soon` (`triggerConfig: { hours }`), `due_passed`
+    - `schedule` (`triggerConfig: { every: "day" | "weekday" | "week" | "month", weekday?, day?, time: "08:00" }`, in the
+      organisation's time zone)
+    - `webhook`, `manual`
+  - `conditions`: `{ op: "and" | "or", items: [{ field, op, value?, fieldId? } | group] }`, up to 3 levels and 25
+    conditions.
+    - Fields and operators are in `src/data/automation.js` (`CONDITION_FIELDS`).
+    - `conditionPql` may be used as well.
+  - `actions`, up to 10:
+    - `transition`, `assign` (a user, `reporter`, `lead`, `role:<role>`, `round_robin:role:<role>`,
+      `least_loaded:role:<role>`, or `…:people:<id,id>`)
+    - `set_field` (a due date can be `+2wd`, working days), `add_label`, `clear_field`, `comment`, `notify`,
+      `create_subtask`, `link`
+    - `create_item`, `email`, `message`, `webhook` and `escalate`, whose settings are JSON in `value`:
+      - `create_item`: `{ workspaceId?, systemId, itemType?, summary, description? }`. In another workspace, the
+        rule's owner must be a member there who may create items.
+      - `email`: `{ to: "assignee" | "reporter" | "watchers" | "role:<role>" | "emails:a@b,c@d", subject, body }`
+      - `message`: `{ channel: "whatsapp" | "sms", to: "assignee" | "reporter" | "phone:+…", text }`
+      - `webhook`: `{ url: "https://…", payload: "<JSON with smart values>" }`
+      - `escalate`: `{ message }`
+  - Text can use smart values such as `{{item.key}}`, `{{item.title}}`, `{{item.assignee.name}}`,
+    `{{workspace.name}}` and `{{trigger.user.name}}` (the list is `PLACEHOLDERS` in `src/data/search.js`). Values
+    are escaped for HTML in emails and for JSON in webhooks.
+  - `ownerId`: told when the rule keeps failing.
+  - `sharedScope: "organization" | "workspaces"` (with `sharedWorkspaces`), for Organisation Administrators only:
+    the rule is copied to every workspace (or those named). Changing or deleting it changes every copy, and new
+    workspaces get organisation-wide rules.
+  - **Secrets, shown once:**
+    - A new webhook action's signing secret: `secrets: [{ action, secret }]`. Each call carries
+      `X-Pulse-Signature: sha256=<hex HMAC-SHA256 of the body>`.
+    - A webhook trigger's address: `webhookUrl`. `newWebhookAddress: true` on PUT makes a new one.
+- `POST /api/automation/rules/:id/test` `{ itemKey? }`, or `POST /api/automation/test` `{ rule, itemKey? }` for a
+  rule not saved yet → `{ wouldRun, checks: [{ label, result }], actions: ["Would …"] }`. Changes nothing.
+- `POST /api/automation/rules/:id/run` `{ itemKey? }`: runs it now.
+- `GET /api/automation/rules/:id/runs` → each run with `detail: { conditions, actions }`. The newest also has
+  `retrying`, the number of runs waiting to be tried again.
+- `GET /api/automation/presets`, `POST /api/automation/presets/:id` → `{ rule, warnings }`. The rule is added
+  switched off, matched to this workspace by name; `warnings` lists what didn't match.
+- `GET /api/automation/targets`: the workspaces (and their projects) where you may create work items, for
+  `create_item`.
+- **Buttons on an item:** `GET /api/automation/manual?item=KEY` lists the `manual` rules that apply, and
+  `POST /api/automation/manual/:ruleId` `{ itemKey }` presses one. For anyone who can work on the item.
+- **Webhook trigger:** `POST /api/hooks/automation/<secret>` with JSON. With `{ "itemKey": "DEV-12" }` it runs on
+  that item; otherwise on what the rule's conditions pick. The body's top-level values are `{{webhook.<name>}}`.
+  Answers `202`; a wrong address or a switched-off rule is `404`.
+- **How it runs:**
+  - Each run is a job.
+  - A failure before anything changed is tried again after 1, 2, 4 and 8 minutes. After 5 tries it's failed and
+    the owner is told (once a day).
+  - Loops stop at 5 levels of rules setting off rules, at 10 runs an hour of one rule on one item, at the rule's runs
+    a minute, and at 600 runs a minute across the organisation.
+  - Time-based triggers fire once per item and due date, or once per schedule occasion. The cron runs every 5
+    minutes.
+
 ## Search (PQL)
 
 - **`POST /api/search`** runs a PQL query: `{ "pql": "project = INFRA AND status != Done", "offset": 0, "limit": 50 }`.

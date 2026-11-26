@@ -743,7 +743,7 @@ function Dashboard({ data, reload }) {
                     ]
                   : []),
                 ...(can("manage_schemes") ? [{ group: WS, key: "fields", label: "Fields", icon: ListPlus, content: <CustomFieldsSection workspaces={data.workspaces} /> }] : []),
-                ...(can("manage_automation") ? [{ group: WS, key: "automation", label: "Automations", icon: Zap, content: <AutomationSettings users={users} systems={systems} workspaces={data.workspaces} now={now} /> }] : []),
+                ...(can("manage_automation") ? [{ group: WS, key: "automation", label: "Automations", icon: Zap, content: <AutomationSettings users={users} systems={systems} workspaces={data.workspaces} now={now} orgAdmin={orgAdmin} /> }] : []),
                 ...(can("manage_users") ? [{ group: WS, key: "people", label: "Users", icon: Users, content: <UsersPage section="people" {...usersPageProps} /> }] : []),
                 ...(can("audit_log")
                   ? [

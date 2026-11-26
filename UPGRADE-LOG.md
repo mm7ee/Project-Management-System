@@ -994,3 +994,74 @@ Migration 0018 is applied on the Neon dev branch; its reverse was run there, the
 7. On the live site, check:
    - Settings → Workflows
    - creating and moving a work item
+
+## Administrator module, phase 3: the automation engine (2026-11-26)
+
+**What was built** (decisions: DECISIONS.md)
+- **Migration `migrations/0019_automation_engine.sql`** (reverse in `migrations/down/`):
+  - new triggers and actions
+  - condition groups, trigger settings, owners, round-robin cursor, organisation rules
+  - webhook addresses and signing secrets
+  - `automation_jobs` (retries) and `automation_fired` (once per occasion)
+  - each run's detail
+- **Worker:**
+  - `worker/automation.js` (rebuilt):
+    - conditions, the new triggers and actions
+    - jobs with back-off, loop limits, failure alerts
+    - the test run, presets, the webhook and manual triggers
+    - cross-workspace items, organisation rules
+  - `worker/messaging.js`: the WhatsApp/SMS adapter
+  - `src/data/automation.js`: conditions, smart values, schedules, working days, presets
+  - `worker/schedule.js` and `wrangler.jsonc`: the cron runs every 5 minutes
+  - `worker/index.js`:
+    - the `/api/hooks/automation/<secret>` route
+    - events carry who caused them
+    - new workspaces join organisation rules
+- **Screens:**
+  - Settings → Automations is a When / If / Then builder:
+    - a condition builder with AND/OR groups
+    - pickers for statuses, types, people, roles and fields
+    - every action's settings
+    - smart values to copy
+    - a Test dialog (also for unsaved rules)
+    - presets
+    - the run log with each condition's result
+    - organisation rules
+    - webhook address and secrets shown once
+  - Work items show their rules' buttons.
+- **Docs:** `docs/API.md` (Automation), `docs/admin-guide-organisations.md` (Automations).
+
+**Tests:**
+- `tests/automation.engine.test.js`, 12 checks on PGlite:
+  - conditions and the run log
+  - round-robin and least-loaded assignment
+  - the test run changes nothing
+  - a self-triggering rule stops at the depth limit
+  - a signed webhook, retried with back-off and done
+  - a job failing 5 times stops and tells the owner
+  - due soon, due passed and schedules fire once
+  - the webhook trigger (and its 404s)
+  - the manual button
+  - cross-workspace creation only for an owner allowed there
+  - organisation rules (copies, administrators only, new workspaces)
+  - presets matched with warnings
+- `tests/automationEval.test.js`, 17 unit checks:
+  - AND/OR and nesting
+  - every operator
+  - custom fields
+  - refusals
+  - smart values escaped for HTML and JSON
+  - schedules across time zones
+  - working days
+- Switching off the cross-workspace owner check makes the suite fail.
+
+`npm test`: 220 passed in 21 files. `tsc` (app and Worker): 0 errors. `vite build` passes.
+
+Migration 0019 is applied on the Neon dev branch; its reverse was run there, then it was applied again.
+
+**Not yet checked:** the screens in a browser; the cron every 5 minutes on Cloudflare (it runs the same code as the
+tests call).
+
+**Release:** 0017, 0018 and 0019 go together, before pushing (see phase 2 for the dry run).
+- After the push, the cron runs every 5 minutes.
+- Existing scheduled rules keep their hour, now in the organisation's time zone (Harare unless changed).

@@ -46,7 +46,14 @@ export const GADGET_KINDS = /** @type {GadgetKind[]} */ (Object.keys(GADGETS));
   sprint_started: { label: "A sprint starts" },
   sprint_completed: { label: "A sprint is completed" },
   schedule: { label: "On a schedule" },
+  item_assigned: { label: "A work item is assigned" },
+  due_soon: { label: "Its due date is near" },
+  due_passed: { label: "Its due date has passed" },
+  webhook: { label: "Another system calls its webhook" },
+  manual: { label: "Someone presses its button on a work item" },
 };
+/** Triggers that act on many items at once (everything the rule's conditions pick), not one item. */
+export const BULK_TRIGGERS = /** @type {Trigger[]} */ (["schedule", "sprint_started", "sprint_completed"]);
 export const TRIGGER_KINDS = /** @type {Trigger[]} */ (Object.keys(TRIGGERS));
 /** @type {Record<ActionKind, string>} */ export const ACTIONS = {
   transition: "Move it to a status",
@@ -56,6 +63,13 @@ export const TRIGGER_KINDS = /** @type {Trigger[]} */ (Object.keys(TRIGGERS));
   notify: "Notify people",
   create_subtask: "Create a sub-task",
   link: "Link it to another item",
+  add_label: "Add a label",
+  clear_field: "Clear a field",
+  create_item: "Create a work item (here or in another workspace)",
+  email: "Send an email",
+  message: "Send a WhatsApp or SMS message",
+  webhook: "Call a webhook",
+  escalate: "Escalate to the workspace's managers",
 };
 export const ACTION_KINDS = /** @type {ActionKind[]} */ (Object.keys(ACTIONS));
 /** Fields "Set a field" can change. */
@@ -71,16 +85,16 @@ export const ACTION_KINDS = /** @type {ActionKind[]} */ (Object.keys(ACTIONS));
  * Placeholders a comment or notification can use.
  * @type {string[]}
  */
-export const PLACEHOLDERS = ["{key}", "{summary}", "{status}", "{priority}", "{assignee}", "{project}"];
+export const PLACEHOLDERS = ["{{item.key}}", "{{item.title}}", "{{item.status}}", "{{item.priority}}", "{{item.type}}", "{{item.assignee.name}}", "{{item.reporter.name}}", "{{item.dueDate}}", "{{item.url}}", "{{project.name}}", "{{workspace.name}}", "{{organization.name}}", "{{trigger.user.name}}", "{{now}}"];
 /**
  * Actions done by a rule can set off other rules this many levels deep, and no further.
- * @type {3}
+ * @type {5}
  */
-export const MAX_AUTOMATION_DEPTH = 3;
+export const MAX_AUTOMATION_DEPTH = 5;
 /** @typedef {"private" | "role" | "workspace" | "everyone"} ShareScope */
 /** @typedef {"filter_results" | "pie" | "created_resolved" | "sprint_health" | "workload" | "overdue" | "two_d" | "activity"} GadgetKind */
-/** @typedef {"item_created" | "item_transitioned" | "field_changed" | "comment_added" | "subtasks_done" | "sprint_started" | "sprint_completed" | "schedule"} Trigger */
-/** @typedef {"transition" | "assign" | "set_field" | "comment" | "notify" | "create_subtask" | "link"} ActionKind */
+/** @typedef {"item_created" | "item_transitioned" | "field_changed" | "comment_added" | "subtasks_done" | "sprint_started" | "sprint_completed" | "schedule" | "item_assigned" | "due_soon" | "due_passed" | "webhook" | "manual"} Trigger */
+/** @typedef {"transition" | "assign" | "set_field" | "comment" | "notify" | "create_subtask" | "link" | "add_label" | "clear_field" | "create_item" | "email" | "message" | "webhook" | "escalate"} ActionKind */
 /**
  * @typedef {Object} SavedFilter
  * @property {string} id
@@ -154,6 +168,13 @@ export const MAX_AUTOMATION_DEPTH = 3;
  * @property {AutomationAction[]} actions
  * @property {string} [lastRunAt]
  * @property {"success" | "error" | "skipped"} [lastStatus]
+ * @property {import("./automation").ConditionGroup | null} [conditions]  AND/OR conditions, besides conditionPql
+ * @property {import("./automation").TriggerConfig} [triggerConfig]  due_soon: how soon; schedule: when
+ * @property {string} [ownerId]  told when it keeps failing
+ * @property {string} [ownerName]
+ * @property {"organization" | "workspaces"} [sharedScope]  an organisation rule, copied to every (or some) workspace
+ * @property {string[]} [sharedWorkspaces]
+ * @property {boolean} [hasWebhook]
  */
 /**
  * @typedef {Object} AutomationRun
@@ -165,4 +186,5 @@ export const MAX_AUTOMATION_DEPTH = 3;
  * @property {string} message
  * @property {string[]} touched
  * @property {number} depth
+ * @property {{ conditions?: { label: string; result: boolean }[]; actions?: string[] }} [detail]
  */
