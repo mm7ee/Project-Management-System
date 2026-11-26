@@ -1,4 +1,5 @@
 /** @import { Role } from '../src/data/roles' */
+/** @import { Blueprint } from '../src/data/workspaceTemplates' */
 // Organisation administration, added by the administrator module (phase 1, migration 0017):
 //   - the organisation profile (logo, colour, time zone, working days and hours, contact email) and its logo
 //   - inviting people by email, one at a time or from a CSV file
@@ -15,6 +16,8 @@ import { readDelivery, securityEmail, sendEmail, noteFailure } from "./notify";
 import { ROLES, ROLE_LABEL } from "../src/data/roles";
 import { IMPORT_COLUMNS, MAX_IMPORT_ROWS, parseCsv } from "../src/data/csv";
 import { WORKSPACE_ICONS } from "../src/data/orgAdmin";
+import { applyBlueprint, exportBlueprint } from "./blueprints";
+import { BUILT_IN_TEMPLATES } from "../src/data/workspaceTemplates";
 
 export const INVITE_HOURS = 72;
 const LOGO_MAX_BYTES = 140_000; // as base64 in the data: URL, under the database's 200,000-character limit
@@ -52,6 +55,8 @@ export async function orgAdminApi(c) {
     path === "/api/org/invites" ||
     path === "/api/org/people/import" ||
     path === "/api/org/audit" ||
+    path === "/api/org/templates" ||
+    /^\/api\/org\/templates\/[a-f0-9]{12}$/.test(path) ||
     /^\/api\/org\/people\/[a-z0-9._-]{1,80}\/(deactivate|reactivate)$/.test(path);
   if (!known) return null;
   if (!c.orgAdmin) throw new HttpError(403, "Only your organisation's administrators can change this: it applies to every workspace", "org_admin_only");
@@ -66,6 +71,15 @@ export async function orgAdminApi(c) {
   }
   if (path === "/api/org/people/import" && method === "POST") return importPeople(c);
   if (path === "/api/org/audit" && method === "GET") return auditList(c, new URL(c.req.url).searchParams.get("workspace"));
+  if (path === "/api/org/templates" && method === "GET") return json(await templateList(c.odb));
+  if (path === "/api/org/templates" && method === "POST") return saveTemplate(c);
+  const tpl = path.match(/^\/api\/org\/templates\/([a-f0-9]{12})$/);
+  if (tpl && method === "DELETE") {
+    const row = /** @type {{ name: string } | null} */ (await c.odb.prepare("SELECT name FROM workspace_templates WHERE id = ?").bind(tpl[1]).first());
+    if (!row) throw new HttpError(404, "Template not found");
+    await c.odb.batch([c.odb.prepare("DELETE FROM workspace_templates WHERE id = ?").bind(tpl[1]), auditEntry(c.odb, c.req, c.me, { action: "template_deleted", type: "setting", id: tpl[1], before: { name: row.name } })]);
+    return json({ ok: true });
+  }
   const active = path.match(/^\/api\/org\/people\/([a-z0-9._-]{1,80})\/(deactivate|reactivate)$/);
   if (active && method === "POST") return setActive(c, active[1], active[2] === "reactivate");
   throw new HttpError(404, "Not found");
@@ -445,76 +459,86 @@ export function cleanWorkspaceStyle(b) {
   return out;
 }
 
+// ---------- templates for new workspaces ----------
+
+/** What a template sets up, in a line. @param {Blueprint} bp */
+const summaryOf = (bp) => ({
+  statuses: bp.workflows.find((w) => w.key === bp.workspaceWorkflow)?.statuses.map((s) => bp.statuses.find((x) => x.key === s.status)?.name ?? s.status) ?? [],
+  itemTypes: bp.itemTypes.filter((t) => t.active !== false).map((t) => t.name),
+  fields: bp.fields.map((f) => f.name),
+});
+
+/** The built-in templates and the organisation's own. @param {D1Database} odb */
+async function templateList(odb) {
+  const own = /** @type {{ id: string; name: string; description: string; data: string; created_at: string; created_by: string | null }[]} */ (
+    (await odb.prepare("SELECT id, name, description, data, created_at, created_by FROM workspace_templates ORDER BY lower(name)").all()).results
+  );
+  return {
+    builtIn: BUILT_IN_TEMPLATES.map((t) => ({ id: `builtin:${t.id}`, name: t.name, description: t.description, icon: t.icon, key: t.key, ...summaryOf(t.blueprint) })),
+    organisation: own.map((t) => ({ id: `org:${t.id}`, name: t.name, description: t.description, createdAt: t.created_at, ...summaryOf(JSON.parse(t.data)) })),
+  };
+}
+
+/**
+ * A template by its reference: "builtin:<id>" or "org:<id>" (this organisation's).
+ * @param {D1Database} odb  the organisation's handle
+ * @param {string} ref
+ * @returns {Promise<{ name: string; blueprint: Blueprint }>}
+ */
+export async function templateBlueprint(odb, ref) {
+  const [kind, id] = ref.split(":");
+  if (kind === "builtin") {
+    const t = BUILT_IN_TEMPLATES.find((x) => x.id === id);
+    if (t) return { name: t.name, blueprint: t.blueprint };
+  }
+  if (kind === "org" && /^[a-f0-9]{12}$/.test(id ?? "")) {
+    const row = /** @type {{ name: string; data: string } | null} */ (await odb.prepare("SELECT name, data FROM workspace_templates WHERE id = ?").bind(id).first());
+    if (row) return { name: row.name, blueprint: JSON.parse(row.data) };
+  }
+  throw new HttpError(404, "Template not found");
+}
+
+/** Saves one of the organisation's workspaces' set-up as a template. @param {OrgContext} c */
+async function saveTemplate(c) {
+  const b = /** @type {{ workspaceId?: unknown; name?: unknown; description?: unknown }} */ (await body(c.req));
+  const ws = /** @type {{ id: string; name: string } | null} */ (await c.odb.prepare("SELECT id, name FROM workspaces WHERE id = ?").bind(String(b.workspaceId ?? "")).first());
+  if (!ws) throw new HttpError(404, "Workspace not found");
+  const name = String(b.name ?? "").trim().slice(0, 60);
+  if (!name) throw new HttpError(400, "Name the template");
+  if (BUILT_IN_TEMPLATES.some((t) => t.name.toLowerCase() === name.toLowerCase()) || (await c.odb.prepare("SELECT 1 FROM workspace_templates WHERE lower(name) = lower(?)").bind(name).first())) {
+    throw new HttpError(409, `There's already a template called ${name}`);
+  }
+  const bp = await exportBlueprint(c.env.ROOT.withScope({ orgId: c.scope.orgId, workspaceId: ws.id }), ws.id);
+  // Templates set up new workspaces of any kind: the automation rules (which name this workspace's people and
+  // projects) and workload limits stay with the workspace.
+  const data = { ...bp, rules: [], limits: null };
+  const id = newToken().slice(0, 12);
+  await c.odb.batch([
+    c.odb
+      .prepare("INSERT INTO workspace_templates (id, name, description, data, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .bind(id, name, String(b.description ?? "").trim().slice(0, 300), JSON.stringify(data), c.me.id, new Date().toISOString()),
+    auditEntry(c.odb, c.req, c.me, { action: "template_saved", type: "setting", id, workspaceId: ws.id, after: { name, from: ws.name } }),
+  ]);
+  return json({ template: { id: `org:${id}`, name, ...summaryOf(data) } }, 201);
+}
+
 // ---------- copying a workspace's configuration ----------
 
 /**
- * Copies a workspace's configuration into another of the same organisation, with no work data: the workflow it
- * uses, its custom fields and their options, its automation rules (switched off, to be checked before use) and its
- * workload limits. Both workspaces must already be known to belong to `orgId` (checked by the caller with the
- * organisation's handle); this runs as the owner because it writes across two workspaces.
+ * Copies a workspace's set-up into a new, empty workspace of the same organisation, with no work: its workflows (as
+ * the new workspace's own), item types, custom fields, automation rules (switched off, to be checked before use) and
+ * workload limits (worker/blueprints.js). Both workspaces must already be known to belong to `orgId` (checked by the
+ * caller with the organisation's handle); each side is read or written through its own workspace's handle.
  * @param {Env} env
  * @param {string} orgId
  * @param {string} from
  * @param {string} to
+ * @param {string} toName
  */
-export async function cloneWorkspaceConfig(env, orgId, from, to) {
-  const root = env.ROOT;
-  const now = new Date().toISOString();
-  const target = /** @type {{ name: string }} */ (await root.prepare("SELECT name FROM workspaces WHERE organization_id = ? AND id = ?").bind(orgId, to).first());
-  /** @type {D1PreparedStatement[]} */ const writes = [];
-  const wf = /** @type {{ workflow_id: string } | null} */ (await root.prepare("SELECT workflow_id FROM workspace_workflows WHERE organization_id = ? AND workspace_id = ?").bind(orgId, from).first());
-  if (wf) {
-    writes.push(
-      root
-        .prepare("INSERT INTO workspace_workflows (organization_id, workspace_id, workspace, workflow_id) VALUES (?, ?, ?, ?) ON CONFLICT (workspace_id) DO UPDATE SET workflow_id = excluded.workflow_id")
-        .bind(orgId, to, target.name, wf.workflow_id),
-    );
-  }
-  const fields = /** @type {Record<string, unknown>[]} */ ((await root.prepare("SELECT * FROM custom_fields WHERE organization_id = ? AND workspace_id = ? ORDER BY position").bind(orgId, from).all()).results);
-  const options = /** @type {Record<string, unknown>[]} */ ((await root.prepare("SELECT * FROM custom_field_options WHERE organization_id = ? AND workspace_id = ? ORDER BY position").bind(orgId, from).all()).results);
-  for (const f of fields) {
-    const id = newToken().slice(0, 12);
-    writes.push(
-      root
-        .prepare(
-          "INSERT INTO custom_fields (id, organization_id, workspace_id, workspace, name, kind, description, required, on_create, on_edit, on_view, on_board, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        )
-        .bind(id, orgId, to, target.name, f.name, f.kind, f.description, f.required, f.on_create, f.on_edit, f.on_view, f.on_board, f.position, now, now),
-    );
-    for (const o of options.filter((x) => x.field_id === f.id)) {
-      writes.push(root.prepare("INSERT INTO custom_field_options (id, organization_id, workspace_id, field_id, label, position) VALUES (?, ?, ?, ?, ?, ?)").bind(newToken().slice(0, 12), orgId, to, id, o.label, o.position));
-    }
-  }
-  const rules = /** @type {Record<string, unknown>[]} */ ((await root.prepare("SELECT * FROM automation_rules WHERE organization_id = ? AND workspace_id = ? AND scope = 'workspace'").bind(orgId, from).all()).results);
-  const actions = /** @type {Record<string, unknown>[]} */ ((await root.prepare("SELECT * FROM automation_actions WHERE organization_id = ? AND workspace_id = ? ORDER BY position").bind(orgId, from).all()).results);
-  for (const r of rules) {
-    const id = newToken().slice(0, 12);
-    writes.push(
-      root
-        .prepare(
-          `INSERT INTO automation_rules (id, organization_id, workspace_id, name, description, enabled, scope, scope_value, trigger, trigger_value, schedule_weekday, schedule_hour, condition_pql, max_per_minute, created_by, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, 0, 'workspace', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .bind(id, orgId, to, r.name, r.description, target.name, r.trigger, r.trigger_value, r.schedule_weekday, r.schedule_hour, r.condition_pql, r.max_per_minute, r.created_by, now, now),
-    );
-    for (const a of actions.filter((x) => x.rule_id === r.id)) {
-      writes.push(
-        root
-          .prepare("INSERT INTO automation_actions (id, organization_id, workspace_id, rule_id, position, kind, field, value, value2) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
-          .bind(newToken().slice(0, 12), orgId, to, id, a.position, a.kind, a.field, a.value, a.value2),
-      );
-    }
-  }
-  const limits = /** @type {{ value: string } | null} */ (await root.prepare("SELECT value FROM workspace_settings WHERE organization_id = ? AND workspace_id = ? AND key = 'workload_limits'").bind(orgId, from).first());
-  if (limits) {
-    writes.push(
-      root
-        .prepare("INSERT INTO workspace_settings (organization_id, workspace_id, key, value) VALUES (?, ?, 'workload_limits', ?) ON CONFLICT (workspace_id, key) DO UPDATE SET value = excluded.value")
-        .bind(orgId, to, limits.value),
-    );
-  }
-  if (writes.length) await root.batch(writes);
-  return { workflow: !!wf, fields: fields.length, rules: rules.length };
+export async function cloneWorkspaceConfig(env, orgId, from, to, toName) {
+  const bp = await exportBlueprint(env.ROOT.withScope({ orgId, workspaceId: from }), from);
+  const r = await applyBlueprint(env.ROOT.withScope({ orgId, workspaceId: to }), to, toName, bp, { rules: true });
+  return { workflows: r.workflows, itemTypes: r.itemTypes, fields: r.fields, rules: r.rules };
 }
 
 // ---------- the audit log ----------

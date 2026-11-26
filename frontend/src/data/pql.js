@@ -59,7 +59,9 @@ export function customFieldDefs(list) {
     .map(
       /** @returns {FieldDef} */ (c) => {
         const base = { name: c.name, empty: true, sortable: false, custom: { ids: c.ids, kind: c.kind } };
-        if (c.kind === "number") return { ...base, kind: "number", ops: CMP, description: "A custom number field" };
+        if (c.kind === "number" || c.kind === "currency") return { ...base, kind: "number", ops: CMP, description: c.kind === "currency" ? "A custom money field (the amount)" : "A custom number field" };
+        if (c.kind === "checkbox") return { ...base, kind: "text", ops: ["=", "!="], description: "A custom checkbox: yes or no" };
+        if (c.kind === "textarea" || c.kind === "url") return { ...base, kind: "text", ops: ["=", "!=", "~"], description: c.kind === "url" ? "A custom link field; ~ matches part of it" : "A custom long text field; ~ matches part of it" };
         if (c.kind === "date") return { ...base, kind: "date", ops: CMP.filter((o) => o !== "IN" && o !== "NOT IN"), description: "A custom date field" };
         if (c.kind === "user") return { ...base, kind: "user", ops: EQ, description: "A custom person field: a username, or currentUser()" };
         if (c.kind === "text") return { ...base, kind: "text", ops: ["=", "!=", "~"], description: "A custom text field; ~ matches part of it" };
@@ -552,7 +554,7 @@ export function basicToPql(b) {
  * @property {Op[]} ops Operators it takes, besides IS [NOT] EMPTY where `empty` is true.
  * @property {boolean} empty
  * @property {boolean} sortable
- * @property {{ ids: string[]; kind: "text" | "number" | "date" | "select" | "multiselect" | "user" }} [custom] A custom field (Phase 5): its ids (one per workspace using the name) and its kind.
+ * @property {{ ids: string[]; kind: import("./admin").CustomFieldKind }} [custom] A custom field (Phase 5): its ids (one per workspace using the name) and its kind.
  */
 /**
  * @typedef {Object} Token

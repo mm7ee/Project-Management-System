@@ -1,12 +1,13 @@
 /** @import { ItemContext } from './workitems' */
 /** @import { CustomField, CustomFieldKind, CustomFieldValue, CustomValue } from '../src/data/admin' */
-// Custom fields per workspace: text, number, date, single select, multi select and person. Values are
+// Custom fields per workspace: text, long text, number, money, date, single select, multi select, person, checkbox
+// and link; a field can be for some item types only, and can have a default value. Values are
 // rows in custom_field_values (one per option for a multi select), so they can be searched (PQL),
 // filtered, exported and shown on boards. Administrators with "manage_schemes" define them under
 // Settings → Administration → Custom fields, and choose where each appears and whether it's required.
 import { newToken } from "./auth";
 import { HttpError, body, json } from "./http";
-import { CUSTOM_FIELD_KINDS, MAX_CUSTOM_FIELDS, MAX_FIELD_OPTIONS } from "../src/data/admin";
+import { CURRENCIES, CUSTOM_FIELD_KINDS, MAX_CUSTOM_FIELDS, MAX_FIELD_OPTIONS } from "../src/data/admin";
 import { workspacesRow } from "./settings";
 /**
  * @param {D1Database} db
@@ -37,6 +38,9 @@ export async function loadFields(db, where = "TRUE", args = []) {
     onEdit: !!f.on_edit,
     onView: !!f.on_view,
     onBoard: !!f.on_board,
+    defaultValue: f.default_value ?? null,
+    itemTypes: f.item_types ? /** @type {string[]} */ (JSON.parse(f.item_types)) : null,
+    ...(f.currency ? { currency: f.currency } : {}),
     options: options.results.filter((o) => o.field_id === f.id).map((o) => ({ id: o.id, label: o.label })),
   }));
 }
@@ -91,8 +95,10 @@ export async function customValuesFor(db, itemIds, onlyBoard = false) {
       const v = vs[0];
       /** @type {CustomValue} */ let value = null;
       let display = "";
-      if (f.kind === "text") ((value = v.value_text), (display = v.value_text ?? ""));
+      if (f.kind === "text" || f.kind === "textarea" || f.kind === "url") ((value = v.value_text), (display = v.value_text ?? ""));
       if (f.kind === "number") ((value = v.value_number == null ? null : Number(v.value_number)), (display = value == null ? "" : String(value)));
+      if (f.kind === "currency") ((value = v.value_number == null ? null : Number(v.value_number)), (display = value == null ? "" : money(Number(value), f.currency)));
+      if (f.kind === "checkbox") ((value = Number(v.value_number) === 1), (display = value ? "Yes" : "No"));
       if (f.kind === "date") ((value = v.value_date), (display = v.value_date ?? ""));
       if (f.kind === "user") ((value = v.value_user), (display = v.value_user ? (nameOf.get(v.value_user) ?? "Former user") : ""));
       if (f.kind === "select" || f.kind === "multiselect") {
@@ -126,6 +132,23 @@ async function rowsFor(c, f, raw) {
       if (t.length > 500) throw new HttpError(400, `${f.name}: up to 500 characters`);
       return t ? [{ ...base, value_text: t }] : [];
     }
+    case "textarea": {
+      const t = String(raw).trim();
+      if (t.length > 5000) throw new HttpError(400, `${f.name}: up to 5,000 characters`);
+      return t ? [{ ...base, value_text: t }] : [];
+    }
+    case "url": {
+      const t = String(raw).trim();
+      // Only web addresses: never javascript: or data: links, which would run when clicked.
+      if (t.length > 500 || !/^https?:\/\/[^\s<>"]+$/i.test(t)) throw new HttpError(400, `${f.name} must be a web address starting with https://`);
+      return [{ ...base, value_text: t }];
+    }
+    case "checkbox": {
+      const on = raw === true || /^(yes|true|1|on)$/i.test(String(raw));
+      if (!on && !(raw === false || /^(no|false|0|off)$/i.test(String(raw)))) throw new HttpError(400, `${f.name} is yes or no`);
+      return [{ ...base, value_number: on ? 1 : 0 }];
+    }
+    case "currency":
     case "number": {
       const n = Number(raw);
       if (!Number.isFinite(n) || Math.abs(n) >= 1e12) throw new HttpError(400, `${f.name} must be a number`);
@@ -160,8 +183,10 @@ const display =
    */ (f, rows, names) => {
     if (!rows.length) return null;
     const r = rows[0];
-    if (f.kind === "text") return r.value_text;
+    if (f.kind === "text" || f.kind === "textarea" || f.kind === "url") return r.value_text;
     if (f.kind === "number") return r.value_number == null ? null : String(Number(r.value_number));
+    if (f.kind === "currency") return r.value_number == null ? null : money(Number(r.value_number), f.currency);
+    if (f.kind === "checkbox") return Number(r.value_number) === 1 ? "Yes" : "No";
     if (f.kind === "date") return r.value_date;
     if (f.kind === "user") return r.value_user ? (names.get(r.value_user) ?? "Former user") : null;
     return rows.map((x) => f.options.find((o) => o.id === x.option_id)?.label ?? "").join(", ");
@@ -175,16 +200,29 @@ const display =
  * @param {string} systemId
  * @param {unknown} input
  * @param {"create" | "edit"} mode
+ * @param {string} [itemType]  the item's type: only its fields apply
  * @returns {Promise<{ stmts: D1PreparedStatement[]; changes: [string, unknown, unknown][]; }>}
  */
-export async function planCustomValues(c, itemId, systemId, input, mode) {
-  const given = input && typeof input === "object" && !Array.isArray(input) ? /** @type {Record<string, unknown>} */ (input) : {};
-  const fields = await fieldsForSystem(c.db, systemId);
+export async function planCustomValues(c, itemId, systemId, input, mode, itemType) {
+  const sent = input !== undefined;
+  const raw = input && typeof input === "object" && !Array.isArray(input) ? /** @type {Record<string, unknown>} */ (input) : {};
+  // Only the fields for this item's type (a field without types is for every type).
+  const fields = (await fieldsForSystem(c.db, systemId)).filter((f) => !itemType || !f.itemTypes || f.itemTypes.includes(itemType));
+  // On create, a field left out takes its default value, if it has one.
+  /** @type {Record<string, unknown>} */ const given = { ...raw };
+  if (mode === "create") {
+    for (const f of fields) {
+      if (f.defaultValue != null && f.onCreate && !Object.prototype.hasOwnProperty.call(given, f.id)) {
+        const d = defaultFor(f);
+        if (d !== undefined) given[f.id] = d;
+      }
+    }
+  }
   /** @type {D1PreparedStatement[]} */ const stmts = [];
   /** @type {[string, unknown, unknown][]} */ const changes = [];
   if (!fields.length && !Object.keys(given).length) return { stmts, changes };
   const unknownId = Object.keys(given).find((id) => !fields.some((f) => f.id === id));
-  if (unknownId) throw new HttpError(400, "That custom field isn't used in this project's workspace");
+  if (unknownId) throw new HttpError(400, "That custom field isn't used for this kind of item in this workspace");
   const current = mode === "edit" ? await /** @type {Promise<D1Result<ValueRow>>} */ (/** @type {unknown} */ (c.db.prepare("SELECT * FROM custom_field_values WHERE item_id = ?").bind(itemId).all())) : { results: /** @type {ValueRow[]} */ ([]) };
   const names = fields.some((f) => f.kind === "user")
     ? new Map((await /** @type {Promise<D1Result<{ id: string; name: string; }>>} */ (/** @type {unknown} */ (c.db.prepare("SELECT id, name FROM users").all()))).results.map((u) => [u.id, u.name]))
@@ -193,7 +231,8 @@ export async function planCustomValues(c, itemId, systemId, input, mode) {
     const shown = mode === "create" ? f.onCreate : f.onEdit;
     const has = Object.prototype.hasOwnProperty.call(given, f.id);
     if (has && !shown) throw new HttpError(400, `${f.name} can't be set here`);
-    if (mode === "create" && f.required && f.onCreate && !has) throw new HttpError(400, `${f.name} is required`);
+    // Required fields are checked when the form or the API sends custom fields (automation and older clients don't).
+    if (mode === "create" && sent && f.required && f.onCreate && !has) throw new HttpError(400, `${f.name} is required`);
     if (!has) continue;
     const next = await rowsFor(c, f, given[f.id]);
     if (f.required && !next.length) throw new HttpError(400, `${f.name} is required`);
@@ -215,17 +254,18 @@ export async function planCustomValues(c, itemId, systemId, input, mode) {
  * @param {string} systemId
  * @param {unknown} input
  * @param {"create" | "edit"} mode
+ * @param {string} [itemType]
  * @returns {Promise<[string, unknown, unknown][]>}
  */
-export async function saveCustomValues(c, itemId, systemId, input, mode) {
-  const plan = await planCustomValues(c, itemId, systemId, input, mode);
+export async function saveCustomValues(c, itemId, systemId, input, mode, itemType) {
+  const plan = await planCustomValues(c, itemId, systemId, input, mode, itemType);
   if (plan.stmts.length) await c.db.batch(plan.stmts);
   return plan.changes;
 }
 // ---------- administration ----------
 /**
  * @param {Record<string, unknown>} b
- * @returns {{ name: string; kind: CustomFieldKind; description: string; required: number; onCreate: number; onEdit: number; onView: number; onBoard: number; options: { id: string | null; label: string; }[]; }}
+ * @returns {{ name: string; kind: CustomFieldKind; description: string; required: number; onCreate: number; onEdit: number; onView: number; onBoard: number; options: { id: string | null; label: string; }[]; defaultValue: string | null; itemTypes: string[] | null; currency: string | null }}
  */
 function checkField(b) {
   const name = String(b.name ?? "")
@@ -262,7 +302,73 @@ function checkField(b) {
     onView: b.onView === false ? 0 : 1,
     onBoard: b.onBoard ? 1 : 0,
     options: kind === "select" || kind === "multiselect" ? options.filter((o) => o.label) : [],
+    defaultValue: cleanDefault(kind, b.defaultValue, options),
+    itemTypes: Array.isArray(b.itemTypes) && b.itemTypes.length ? [...new Set(b.itemTypes.map(String))].slice(0, 30) : null,
+    currency: kind === "currency" ? cleanCurrency(b.currency) : null,
   };
+}
+/**
+ * A default value as stored: text as given, a number, a date (or +3d: days from the day the item is made), yes or
+ * no, or a choice's label (matched by label, so a default survives the choices being saved again).
+ * @param {CustomFieldKind} kind
+ * @param {unknown} v
+ * @param {{ label: string }[]} options
+ * @returns {string | null}
+ */
+function cleanDefault(kind, v, options) {
+  if (v === undefined || v === null || v === "") return null;
+  const t = String(v).trim().slice(0, 500);
+  if (kind === "number" || kind === "currency") {
+    if (!Number.isFinite(Number(t))) throw new HttpError(400, "The default must be a number");
+  } else if (kind === "date") {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(t) && !/^\+\d{1,3}d$/.test(t)) throw new HttpError(400, "The default date is a date (2026-12-01) or days from the day it's made (+3d)");
+  } else if (kind === "checkbox") {
+    if (!/^(yes|no)$/i.test(t)) throw new HttpError(400, "The default is yes or no");
+  } else if (kind === "select" || kind === "multiselect") {
+    if (!options.some((o) => o.label.toLowerCase() === t.toLowerCase())) throw new HttpError(400, "The default must be one of the choices");
+  } else if (kind === "url") {
+    if (!/^https?:\/\/[^\s<>"]+$/i.test(t)) throw new HttpError(400, "The default must be a web address starting with https://");
+  } else if (kind === "user") throw new HttpError(400, "A person field has no default");
+  return t;
+}
+/** @param {unknown} v */
+function cleanCurrency(v) {
+  const c = String(v ?? "USD").toUpperCase();
+  if (!CURRENCIES.includes(c)) throw new HttpError(400, `Choose a currency: ${CURRENCIES.join(", ")}`);
+  return c;
+}
+/**
+ * A field's default as a value the API takes (a date "+3d" counts from today); undefined if it no longer fits.
+ * @param {CustomField} f
+ * @returns {unknown}
+ */
+function defaultFor(f) {
+  const d = /** @type {string} */ (f.defaultValue);
+  if (f.kind === "date" && /^\+\d+d$/.test(d)) return new Date(Date.now() + Number(d.slice(1, -1)) * 86_400_000).toISOString().slice(0, 10);
+  if (f.kind === "select" || f.kind === "multiselect") {
+    const o = f.options.find((x) => x.label.toLowerCase() === d.toLowerCase());
+    return o ? (f.kind === "select" ? o.id : [o.id]) : undefined;
+  }
+  return d;
+}
+/**
+ * An amount with its currency: "USD 1,250.00".
+ * @param {number} n
+ * @param {string | undefined} currency
+ */
+function money(n, currency) {
+  return `${currency ?? ""} ${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`.trim();
+}
+/**
+ * Item types named for a field must be this workspace's.
+ * @param {D1Database} db
+ * @param {string[] | null} ids
+ */
+async function checkItemTypes(db, ids) {
+  if (!ids) return;
+  const known = new Set((/** @type {{ id: string }[]} */ ((await db.prepare("SELECT id FROM item_types").all()).results)).map((r) => r.id));
+  const bad = ids.find((id) => !known.has(id));
+  if (bad) throw new HttpError(400, `Unknown item type ${bad}`);
 }
 /**
  * @param {ItemContext} c
@@ -292,6 +398,7 @@ export async function customFieldsApi(c, path, method) {
   if (path === "/api/custom-fields" && method === "POST") {
     const b = await /** @type {Promise<Record<string, unknown>>} */ (/** @type {unknown} */ (body(req)));
     const f = checkField(b);
+    await checkItemTypes(db, f.itemTypes);
     const workspace = String(b.workspace ?? "");
     const ws = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (workspacesRow(db)));
     if (!(ws ? /** @type {string[]} */ (JSON.parse(ws.value)) : ["Projects", "HR"]).includes(workspace)) throw new HttpError(400, "Choose the workspace");
@@ -304,10 +411,10 @@ export async function customFieldsApi(c, path, method) {
     await db.batch([
       db
         .prepare(
-          `INSERT INTO custom_fields (id, workspace, name, kind, description, required, on_create, on_edit, on_view, on_board, position, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM custom_fields WHERE workspace = ?), ?, ?)`,
+          `INSERT INTO custom_fields (id, workspace, name, kind, description, required, on_create, on_edit, on_view, on_board, position, default_value, item_types, currency, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM custom_fields WHERE workspace = ?), ?, ?, ?, ?, ?)`,
         )
-        .bind(id, workspace, f.name, f.kind, f.description, f.required, f.onCreate, f.onEdit, f.onView, f.onBoard, workspace, c.now, c.now),
+        .bind(id, workspace, f.name, f.kind, f.description, f.required, f.onCreate, f.onEdit, f.onView, f.onBoard, workspace, f.defaultValue, f.itemTypes ? JSON.stringify(f.itemTypes) : null, f.currency, c.now, c.now),
       ...saveOptions(id, f.options, []),
     ]);
     await c.audit("custom_field_created", null, { field: f.name, workspace, kind: CUSTOM_FIELD_KINDS[f.kind], required: !!f.required, choices: f.options.map((o) => o.label) });
@@ -325,11 +432,14 @@ export async function customFieldsApi(c, path, method) {
     }
     const f = checkField({ ...(await /** @type {Promise<Record<string, unknown>>} */ (/** @type {unknown} */ (body(req)))) });
     if (f.kind !== before.kind) throw new HttpError(400, "A field's kind can't change; make a new field instead");
+    await checkItemTypes(db, f.itemTypes);
     if (f.name.toLowerCase() !== before.name.toLowerCase() && (await db.prepare("SELECT 1 FROM custom_fields WHERE workspace = ? AND lower(name) = lower(?)").bind(before.workspace, f.name).first())) {
       throw new HttpError(409, `${before.workspace} already has a field called ${f.name}`);
     }
     await db.batch([
-      db.prepare("UPDATE custom_fields SET name = ?, description = ?, required = ?, on_create = ?, on_edit = ?, on_view = ?, on_board = ?, updated_at = ? WHERE id = ?").bind(f.name, f.description, f.required, f.onCreate, f.onEdit, f.onView, f.onBoard, c.now, before.id),
+      db
+        .prepare("UPDATE custom_fields SET name = ?, description = ?, required = ?, on_create = ?, on_edit = ?, on_view = ?, on_board = ?, default_value = ?, item_types = ?, currency = ?, updated_at = ? WHERE id = ?")
+        .bind(f.name, f.description, f.required, f.onCreate, f.onEdit, f.onView, f.onBoard, f.defaultValue, f.itemTypes ? JSON.stringify(f.itemTypes) : null, f.currency, c.now, before.id),
       ...saveOptions(
         before.id,
         f.options,
@@ -337,7 +447,7 @@ export async function customFieldsApi(c, path, method) {
       ),
     ]);
     const [after] = await loadFields(db, "id = ?", [before.id]);
-    const summary = /** @param {CustomField} x */ (x) => ({ name: x.name, required: x.required, create: x.onCreate, edit: x.onEdit, view: x.onView, board: x.onBoard, choices: x.options.map((o) => o.label) });
+    const summary = /** @param {CustomField} x */ (x) => ({ name: x.name, required: x.required, create: x.onCreate, edit: x.onEdit, view: x.onView, board: x.onBoard, choices: x.options.map((o) => o.label), default: x.defaultValue, itemTypes: x.itemTypes });
     await c.audit("custom_field_updated", null, { field: after.name, workspace: after.workspace, from: summary(before), to: summary(after) });
     return json(after);
   }
@@ -379,6 +489,9 @@ export async function customFieldsByName(db) {
  * @property {number} on_view
  * @property {number} on_board
  * @property {number} position
+ * @property {string | null} default_value
+ * @property {string | null} item_types
+ * @property {string | null} currency
  */
 /**
  * @typedef {Object} ValueRow

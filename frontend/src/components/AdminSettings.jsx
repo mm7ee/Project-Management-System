@@ -5,7 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { BellRing, Check, Copy, GitBranch, KeyRound, ListPlus, Lock, Plug, Plus, RefreshCw, Send, Trash2, Webhook as WebhookIcon, X } from "lucide-react";
 import { api } from "../data/api";
 import { ROLES, ROLE_LABEL } from "../data/roles";
-import { API_RATE_LIMIT, CUSTOM_FIELD_KINDS, NOTIFICATION_EVENTS, RECIPIENTS, TOKEN_DAYS, WEBHOOK_EVENTS } from "../data/admin";
+import { API_RATE_LIMIT, CURRENCIES, CUSTOM_FIELD_KINDS, NOTIFICATION_EVENTS, RECIPIENTS, TOKEN_DAYS, WEBHOOK_EVENTS } from "../data/admin";
+import { useItemTypes } from "../data/itemTypes";
 import { Section } from "./SettingsParts";
 import { formatDate, timeAgo } from "../time";
 const errText =
@@ -291,11 +292,12 @@ export function CustomFieldsSection({ workspaces }) {
   const [fields, setFields] = useState(/** @type {CustomField[] | null | (() => CustomField[] | null)} */ (null));
   const [editing, setEditing] = useState(/** @type {FieldDraft | null | (() => FieldDraft | null)} */ (null));
   const [error, setError] = useState("");
+  const itemTypes = useItemTypes();
   const load = useCallback(() => /** @type {Promise<Array<CustomField>>} */ (/** @type {unknown} */ (api("/custom-fields"))).then(setFields).catch((e) => setError(errText(e, "Couldn't load the fields"))), []);
   useEffect(() => {
     load();
   }, [load]);
-  const blank = /** @param {string} workspace @returns {FieldDraft} */ (workspace) => ({ workspace, name: "", kind: "text", description: "", required: false, onCreate: true, onEdit: true, onView: true, onBoard: false, options: [] });
+  const blank = /** @param {string} workspace @returns {FieldDraft} */ (workspace) => ({ workspace, name: "", kind: "text", description: "", required: false, onCreate: true, onEdit: true, onView: true, onBoard: false, options: [], defaultValue: null, itemTypes: null });
   const save = async () => {
     if (!editing) return;
     setError("");
@@ -331,7 +333,10 @@ export function CustomFieldsSection({ workspaces }) {
                       </b>
                       <small className="muted">
                         {CUSTOM_FIELD_KINDS[f.kind]}
+                        {f.currency ? ` (${f.currency})` : ""}
                         {f.options.length ? `: ${f.options.map((o) => o.label).join(", ")}` : ""} · on {[f.onCreate && "create", f.onEdit && "edit", f.onView && "view", f.onBoard && "board cards"].filter(Boolean).join(", ") || "no screen"}
+                        {f.itemTypes ? ` · for ${f.itemTypes.map((t) => itemTypes.find((x) => x.id === t)?.name ?? t).join(", ")}` : ""}
+                        {f.defaultValue != null ? ` · starts as ${f.defaultValue}` : ""}
                       </small>
                     </div>
                     <span className="row-actions">
@@ -412,6 +417,70 @@ export function CustomFieldsSection({ workspaces }) {
               </button>
             </fieldset>
           )}
+          {editing.kind === "currency" && (
+            <label className="field">
+              <span>Currency</span>
+              <select value={editing.currency ?? "USD"} onChange={(e) => setEditing({ ...editing, currency: e.target.value })}>
+                {CURRENCIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {editing.kind !== "user" && (
+            <label className="field">
+              <span>Default value (optional)</span>
+              {editing.kind === "checkbox" ? (
+                <select value={editing.defaultValue ?? ""} onChange={(e) => setEditing({ ...editing, defaultValue: e.target.value || null })}>
+                  <option value="">None</option>
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              ) : selectish ? (
+                <select value={editing.defaultValue ?? ""} onChange={(e) => setEditing({ ...editing, defaultValue: e.target.value || null })}>
+                  <option value="">None</option>
+                  {editing.options
+                    .filter((o) => o.label.trim())
+                    .map((o, i) => (
+                      <option key={o.id ?? `n${i}`} value={o.label}>
+                        {o.label}
+                      </option>
+                    ))}
+                </select>
+              ) : (
+                <input
+                  value={editing.defaultValue ?? ""}
+                  onChange={(e) => setEditing({ ...editing, defaultValue: e.target.value || null })}
+                  placeholder={editing.kind === "date" ? "2026-12-01, or +3d for three days after it's made" : editing.kind === "url" ? "https://" : ""}
+                  maxLength={500}
+                />
+              )}
+              <small className="field-hint">Filled in on new work items when it's left empty.</small>
+            </label>
+          )}
+          <fieldset className="field checks">
+            <legend>For which item types</legend>
+            <label className="wi-check">
+              <input type="checkbox" checked={!editing.itemTypes} onChange={(e) => setEditing({ ...editing, itemTypes: e.target.checked ? null : [] })} /> Every type
+            </label>
+            {editing.itemTypes &&
+              itemTypes.map((t) => (
+                <label key={t.id} className="wi-check">
+                  <input
+                    type="checkbox"
+                    checked={/** @type {string[]} */ (editing.itemTypes).includes(t.id)}
+                    onChange={(e) => {
+                      const now = /** @type {string[]} */ (editing.itemTypes);
+                      setEditing({ ...editing, itemTypes: e.target.checked ? [...now, t.id] : now.filter((x) => x !== t.id) });
+                    }}
+                  />{" "}
+                  {t.name}
+                  {!t.active && <span className="muted"> (off)</span>}
+                </label>
+              ))}
+          </fieldset>
           <fieldset className="field checks">
             <legend>Where it appears</legend>
             {/** @type {const} */ ([

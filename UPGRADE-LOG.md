@@ -928,3 +928,69 @@ Migration 0017 is applied on the Neon dev branch. Its reverse was run there, the
 4. `npm run db:status` again.
 5. Push.
 6. Check sign-in and Settings → Organisation on the live site.
+
+## Administrator module, phase 2: workflow designer, versions and templates (2026-11-26)
+
+**What was built** (decisions: DECISIONS.md)
+- **Migration `migrations/0018_workflow_designer.sql`** (reverse in `migrations/down/`):
+  - workflows per workspace (each workspace gets its own copies; the organisation's become templates), with
+    row-level security and an ownership trigger
+  - `item_types`, and `work_items.item_type` with its trigger
+  - `workflow_drafts`, `workflow_versions`
+  - `workspace_templates`
+  - custom field kinds, defaults, item types and currency
+  - new workspaces get the five built-in types and a copy of the default workflow
+- **Worker:**
+  - `worker/workflows.js` (rewritten): templates, drafts, publish, versions, restore, item types, assignments per
+    workspace, project and item type
+  - `worker/blueprints.js`: export and apply a workspace's set-up
+  - `worker/orgadmin.js`: templates, and workspace copies through blueprints
+  - `worker/workitems.js`: `itemType` on create and update, a workflow per type, the "clear a field" post-function,
+    fields per type
+  - `worker/customfields.js`: the new kinds, defaults, fields per type
+  - PQL: the new field kinds
+- **Screens:**
+  - Workflows: a React Flow diagram you edit, draft / publish / discard, versions with restore, templates marked,
+    and who uses which workflow (workspace, projects, item types)
+  - Settings → This workspace → **Item types**
+  - Settings → Organisation → **Templates**
+  - Add workspace → **Start from** a template
+  - the custom field editor: default, currency, item types
+  - item forms offer the workspace's types and only their fields
+- **Dependency:** `@xyflow/react` 12.3.6, pinned, in a chunk of its own (178 KB, 58 KB gzipped) loaded only by the
+  Workflows page.
+- **Docs:** `docs/API.md` (workflows, item types, templates), `docs/admin-guide-organisations.md` (templates, item
+  types, creating a workflow, fields).
+
+**Tests:**
+- `tests/workflow.designer.test.js`, 7 checks on PGlite:
+  - each workspace's workflow is its own, invisible and unusable from another (and the database refuses it directly)
+  - templates are read-only except to Organisation Administrators
+  - draft → publish with status moves → versions → restore
+  - item types, with a workflow per type, and isolated per workspace
+  - the new field kinds, defaults, per-type fields and link safety
+  - a workspace from the Marketing template, saved as an organisation template and used again
+  - the clear-field post-function
+- `tests/transitionEngine.test.js`, 11 unit checks: moves out of a status, conditions, validators, assignment
+  satisfying "someone must be assigned", sub-tasks, and every built-in template a valid, completable workflow.
+
+`npm test`: 195 passed in 19 files. `tsc` (app and Worker): 0 errors. `vite build` passes.
+
+Migration 0018 is applied on the Neon dev branch; its reverse was run there, then it was applied again.
+
+**Not yet checked:** the screens in a browser, including the diagram.
+
+**Release:** 0017 and 0018 go live together, before pushing.
+1. **Dry run first.** This one rewrites every workspace's workflow references.
+   - Make a Neon branch from production.
+   - Put its address in `.dev.vars` as `PG_STAGE`.
+   - Run `node scripts/tenancy-dry-run.mjs stage --migration migrations/0018_workflow_designer.sql`, after applying
+     0017 there.
+2. `npm run db:status`. 0017 and 0018 should be pending.
+3. `npm run db:backup -- ../backup-before-0018.sql`
+4. `npm run db:migrate`
+5. `npm run db:status` again.
+6. Push.
+7. On the live site, check:
+   - Settings → Workflows
+   - creating and moving a work item

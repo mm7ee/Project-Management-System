@@ -40,6 +40,7 @@ import { ROLE_LABEL } from "./roles";
     { rule: "assign_role", label: "Assign to someone with a role", value: "role" },
     { rule: "assign_reporter", label: "Assign to the reporter" },
     { rule: "clear_assignee", label: "Clear the assignee" },
+    { rule: "clear_field", label: "Clear a field", value: "field" },
     { rule: "set_resolution", label: "Set the resolution", value: "resolution" },
     { rule: "notify", label: "Notify", value: "notify" },
   ],
@@ -77,6 +78,8 @@ export function describeRule(r, nameOf = (id) => id) {
       return "Assign to the reporter";
     case "clear_assignee":
       return "Clear the assignee";
+    case "clear_field":
+      return `Clear ${FIELD_RULE_LABEL[r.value ?? ""]?.toLowerCase() ?? "a field"}`;
     case "set_resolution":
       return `Resolution: ${r.value === "WONT_DO" ? "Won't do" : "Done"}`;
     case "notify":
@@ -165,8 +168,24 @@ export const needsInput =
  * @property {string} name
  * @property {string} description
  * @property {boolean} isDefault
+ * @property {string | null} [workspaceId]  the workspace it belongs to; null: one of the organisation's templates
  * @property {{ id: string; initial: boolean }[]} statuses
  * @property {Transition[]} transitions
+ */
+/**
+ * A workflow as edited and published (a draft, or a published version).
+ * @typedef {Object} WorkflowDraft
+ * @property {string} name
+ * @property {string} description
+ * @property {{ id: string; initial: boolean }[]} statuses
+ * @property {{ name: string; from: string | null; to: string; rules: Rule[] }[]} transitions
+ */
+/**
+ * @typedef {Object} WorkflowVersion
+ * @property {number} version
+ * @property {string} note
+ * @property {string} publishedBy
+ * @property {string} publishedAt
  */
 /**
  * What the item looks like, for checking a move.

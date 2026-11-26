@@ -10,11 +10,12 @@ import { ArrowLeft, Copy, Download, Eye, EyeOff, Link2, MessageSquare, Paperclip
 import { api, ApiError } from "../data/api";
 import { formatBytes, MAX_DOCUMENT_BYTES } from "../data/project";
 import { formatDate, timeAgo } from "../time";
-import { LINK_META, LINK_TYPES, RESOLUTION_META, TYPE_META, WORK_PRIORITIES, WORK_PRIORITY_META, WORK_TYPES, allowedParentTypes, childTypesOf, cleanLabel, formatMinutes, isDone, parseDuration } from "../data/workitems";
+import { LINK_META, LINK_TYPES, RESOLUTION_META, TYPE_META, WORK_PRIORITIES, WORK_PRIORITY_META, allowedParentTypes, childTypesOf, cleanLabel, formatMinutes, isDone, parseDuration } from "../data/workitems";
 import Markdown from "./Markdown";
 import { ItemPriority, ItemStatusPill, MarkdownField, Rollup, TypeIcon, itemHref } from "./WorkItemBits";
 import MoveDialog from "./MoveDialog";
 import { assignable as canHaveWork } from "../data/roles";
+import { useItemTypes } from "../data/itemTypes";
 /**
  * One work item's page: #/projects/<id>/items/<KEY-n>.
  * @param {Props} props
@@ -24,6 +25,7 @@ export default function WorkItemPage({ system, itemKey, users, me, now, readOnly
   const [missing, setMissing] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const itemTypes = useItemTypes();
   const [pending, setPending] = useState(/** @type {PendingMove | null | (() => PendingMove | null)} */ (null));
   const load = useCallback(async () => {
     try {
@@ -280,16 +282,19 @@ export default function WorkItemPage({ system, itemKey, users, me, now, readOnly
           )}
           <Field label="Type">
             {can.edit ? (
-              <select value={item.type} disabled={busy} onChange={(e) => save({ type: e.target.value })} aria-label="Type">
-                {WORK_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {TYPE_META[t].label}
-                  </option>
-                ))}
+              <select value={item.itemType ?? item.type} disabled={busy} onChange={(e) => save({ itemType: e.target.value })} aria-label="Type">
+                {/* The workspace's types offered for new items, and this item's own even if it's switched off. */}
+                {itemTypes
+                  .filter((t) => t.active || t.id === (item.itemType ?? item.type))
+                  .map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
               </select>
             ) : (
               <span className="wi-inline">
-                <TypeIcon type={item.type} /> {TYPE_META[item.type].label}
+                <TypeIcon type={item.type} /> {item.itemTypeName ?? TYPE_META[item.type].label}
               </span>
             )}
           </Field>

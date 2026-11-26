@@ -16,12 +16,18 @@ export {}; // the type imports above belong to the file, not to the first declar
 ];
 /** @type {Record<CustomFieldKind, string>} */ export const CUSTOM_FIELD_KINDS = {
   text: "Text",
+  textarea: "Long text",
   number: "Number",
+  currency: "Amount of money",
   date: "Date",
   select: "Single select",
   multiselect: "Multi select",
   user: "Person",
+  checkbox: "Checkbox (yes or no)",
+  url: "Link",
 };
+/** Currencies a money field can be in (ISO 4217). */
+export const CURRENCIES = ["USD", "ZWG", "ZAR", "EUR", "GBP", "BWP", "ZMW", "KES"];
 export const MAX_CUSTOM_FIELDS = 30;
 export const MAX_FIELD_OPTIONS = 50;
 export const TOKEN_PREFIX = "pulse_";
@@ -45,10 +51,10 @@ export const API_RATE_LIMIT = 120;
 export const WEBHOOK_BACKOFF_MINUTES = [0.25, 60, 120, 240, 480];
 export const WEBHOOK_MAX_ATTEMPTS = 6;
 /** @typedef {"item_created" | "item_assigned" | "item_updated" | "item_transitioned" | "item_commented"} NotificationEvent */
-/** @typedef {"text" | "number" | "date" | "select" | "multiselect" | "user"} CustomFieldKind */
+/** @typedef {"text" | "textarea" | "number" | "currency" | "date" | "select" | "multiselect" | "user" | "checkbox" | "url"} CustomFieldKind */
 /**
  * A value as the API sends and takes it: text, a number, a date, a user id, or option ids.
- * @typedef {string | number | string[] | null} CustomValue
+ * @typedef {string | number | boolean | string[] | null} CustomValue
  */
 /** @typedef {"commit" | "branch" | "pull_request"} DevLinkKind */
 /** @typedef {"read" | "write"} TokenScope */
@@ -93,6 +99,9 @@ export const WEBHOOK_MAX_ATTEMPTS = 6;
  * @property {boolean} onView
  * @property {boolean} onBoard
  * @property {CustomFieldOption[]} options
+ * @property {string | null} [defaultValue]   set on new items when left empty
+ * @property {string[] | null} [itemTypes]    only for these item types; none: every type
+ * @property {string} [currency]              a money field's currency
  */
 /**
  * @typedef {Object} CustomFieldValue

@@ -30,6 +30,23 @@ export function CustomFieldInput({ field, value, users, onChange, id }) {
   switch (field.kind) {
     case "text":
       return <input id={id} value={/** @type {string} */ (value) ?? ""} onChange={(e) => onChange(e.target.value)} maxLength={500} aria-label={label} required={field.required} />;
+    case "textarea":
+      return <textarea id={id} rows={4} value={/** @type {string} */ (value) ?? ""} onChange={(e) => onChange(e.target.value)} maxLength={5000} aria-label={label} required={field.required} />;
+    case "url":
+      return <input id={id} type="url" placeholder="https://" value={/** @type {string} */ (value) ?? ""} onChange={(e) => onChange(e.target.value)} maxLength={500} aria-label={label} required={field.required} />;
+    case "checkbox":
+      return (
+        <label className="wi-check">
+          <input id={id} type="checkbox" checked={value === true} onChange={(e) => onChange(e.target.checked)} /> {field.name}
+        </label>
+      );
+    case "currency":
+      return (
+        <span className="cf-money">
+          <span aria-hidden="true">{field.currency ?? ""}</span>
+          <input id={id} type="number" step="0.01" value={value == null ? "" : String(value)} onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))} aria-label={`${label}, in ${field.currency ?? "the field's currency"}`} required={field.required} />
+        </span>
+      );
     case "number":
       return <input id={id} type="number" step="any" value={value == null ? "" : String(value)} onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))} aria-label={label} required={field.required} />;
     case "date":
@@ -119,7 +136,16 @@ export function CustomFieldsPanel({ item, users, canEdit, onSave }) {
               .map((f) => (
                 <div key={f.id} className="fact-row">
                   <dt>{f.name}</dt>
-                  <dd>{valueOf(f)?.display || <span className="muted">—</span>}</dd>
+                  <dd>
+                    {f.kind === "url" && valueOf(f)?.display ? (
+                      // Only https:// and http:// addresses are stored (worker/customfields.js), so this can't run script.
+                      <a href={valueOf(f)?.display} target="_blank" rel="noopener noreferrer">
+                        {valueOf(f)?.display}
+                      </a>
+                    ) : (
+                      valueOf(f)?.display || <span className="muted">—</span>
+                    )}
+                  </dd>
                 </div>
               ))}
           </dl>

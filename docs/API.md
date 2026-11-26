@@ -95,6 +95,69 @@ or changed, and asking for it by id or key gives `404`, the same as something th
   it a reply the customer sees.
 - **`DELETE /api/items/{KEY-12}`** deletes an item, if your role may.
 
+## Workflows, item types and templates
+
+Changes need `manage_workflows` in the open workspace. A workflow belongs to a workspace (`workspaceId`), or it is
+one of the organisation's templates (`workspaceId: null`, `template: true`).
+- **Templates:** everyone can read and copy them. Only Organisation Administrators change them; anyone else gets `403`,
+  `code: "template_read_only"`.
+- **Another workspace's workflow:** `404`.
+
+- `GET /api/workflows` → `{ workflows, statuses, workspace, projects, itemTypes, usage, canEditTemplates }`.
+  - `workspace` is the id of the workflow this workspace uses.
+  - Each workflow has `version` (the latest published) and `draftSavedAt` if there's a draft.
+- `POST /api/workflows` `{ name, copyFrom?, template? }`: a copy for this workspace. With `template: true`
+  (Organisation Administrators), a new organisation template.
+- **Drafts:**
+  - `GET /api/workflows/:id/draft` → `{ draft | null, published, savedBy?, savedAt? }`
+  - `PUT /api/workflows/:id/draft` `{ name, description, statuses: [{ id, initial }], transitions: [{ name, from, to, rules }] }`:
+    checked and kept; nothing changes yet.
+  - `DELETE /api/workflows/:id/draft` discards it.
+- `POST /api/workflows/:id/publish` `{ moves?, note? }`: the draft becomes the workflow and is kept as a new version.
+  - Work items in a status the draft takes out need a place to go: without `moves` (`{ "<status>": "<status>" }`), the
+    reply is `409`, `code: "needs_moves"`, `statuses: [{ id, name, count }]`.
+  - The first publish also keeps the workflow as it was, as version 1.
+  - `PUT /api/workflows/:id` (the whole workflow, with `moves?` and `note?`) still publishes straight away.
+- **Versions:**
+  - `GET /api/workflows/:id/versions` → `{ versions: [{ version, note, publishedBy, publishedAt, statuses, moves }] }`
+  - `GET /api/workflows/:id/versions/:n` → the version
+  - `POST /api/workflows/:id/versions/:n/restore` `{ moves? }` publishes it again as a new version. Versions are never
+    changed.
+- `DELETE /api/workflows/:id`: only when no workspace, project or item type uses it.
+- `PUT /api/workflow-assignments` `{ workspace?, projects?: { <id>: workflowId | null }, itemTypes?: { <typeId>: workflowId | null }, moves? }`:
+  - Which workflow this workspace, each project and each item type uses.
+  - An item follows its type's workflow, else its project's, else the workspace's.
+  - Items whose workflow changes keep their status if the new workflow has it; otherwise `moves` applies, as for
+    publishing.
+- **Statuses:**
+  - `POST /api/statuses` `{ name, category }` adds to the organisation's list.
+  - `PATCH` and `DELETE /api/statuses/:id`: a status another workspace's workflow (or a template) uses can only be
+    renamed or recategorised by an Organisation Administrator, and can't be deleted (`code: "status_shared"`).
+- **Item types:**
+  - `GET /api/item-types` → `[{ id, name, base, description, active, workflowId, builtIn, items }]`.
+  - `base` is the kind (`EPIC`, `STORY`, `TASK`, `BUG`, `SUBTASK`): where the type sits in the hierarchy and on boards.
+  - `POST /api/item-types` `{ name, base, description? }`.
+  - `PATCH /api/item-types/:id` `{ name?, description?, active?, position? }`. `active: false` stops offering the type
+    for new items.
+  - `DELETE /api/item-types/:id` works only for a type of the workspace's own that no item uses. The five built-in
+    types stay.
+- **Work items:**
+  - `POST /api/items` takes `itemType` (such as `CAMPAIGN`), or `type` (a kind) as before.
+  - `PATCH /api/items/:key` `{ itemType }` changes it.
+  - Items carry `itemType` and `itemTypeName`.
+- **Custom fields** also have:
+  - `kind`: `textarea`, `currency` (with `currency`, such as `USD`), `checkbox` or `url` (https:// or http:// only)
+  - `defaultValue`: filled in on new items left empty. A date can be `+3d`; a choice is given by its label.
+  - `itemTypes`: the item types it's for. `null` means every type; an item of another type can't be given it.
+  - In PQL, a checkbox is `"Signed off" = yes`, and money compares as a number.
+- **Workspace templates** (Organisation Administrators):
+  - `GET /api/org/templates` → `{ builtIn, organisation }`, each with the statuses, item types and fields it sets up.
+    The built-in ones are Software Development, Marketing, HR and Projects (general).
+  - `POST /api/org/templates` `{ workspaceId, name, description? }` saves a workspace's set-up (not its work, people
+    or automation).
+  - `DELETE /api/org/templates/:id`.
+  - `POST /api/org/workspaces` takes `template: "builtin:marketing"` or `"org:<id>"`.
+
 ## Search (PQL)
 
 - **`POST /api/search`** runs a PQL query: `{ "pql": "project = INFRA AND status != Done", "offset": 0, "limit": 50 }`.

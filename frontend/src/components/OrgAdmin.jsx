@@ -15,6 +15,7 @@ import {
   Headset,
   History,
   Layers,
+  LayoutTemplate,
   Mail,
   Megaphone,
   Palette,
@@ -38,7 +39,7 @@ import { Empty, Help, ToastProvider, useConfirm, useToast } from "./AdminKit";
  * @typedef {{ workspaceId: string; role: Role }} Membership
  * @typedef {{ id: string; username: string; name: string; title: string; email?: string; orgAdmin: boolean; mustChangePassword?: boolean; locked?: boolean; deactivated?: boolean; invited?: "pending" | "expired"; workspaces: Membership[] }} Person
  * @typedef {{ organization: { id: string; name: string; code: string }; workspaces: Workspace[]; people: Person[] }} Org
- * @typedef {"profile" | "workspaces" | "people" | "audit" | "workspace-audit"} OrgSection
+ * @typedef {"profile" | "workspaces" | "people" | "audit" | "workspace-audit" | "templates"} OrgSection
  */
 
 /** @type {Record<WorkspaceIcon, LucideIcon>} */ export const WORKSPACE_ICON = {
@@ -110,6 +111,7 @@ function OrgPage({ me, section }) {
       {section === "workspaces" && <Workspaces org={org} act={act} />}
       {section === "people" && <People org={org} active={active} me={me} act={act} />}
       {section === "audit" && <AuditLog workspaces={org.workspaces} />}
+      {section === "templates" && <Templates org={org} />}
     </div>
   );
 }
@@ -346,6 +348,10 @@ function WorkspaceForm({ org, ws, act, onDone }) {
     cloneFrom: "",
   });
   const [keyTouched, setKeyTouched] = useState(!!ws);
+  const [templates, setTemplates] = useState(/** @type {TemplateList | null} */ (null));
+  useEffect(() => {
+    if (!ws) api("/org/templates").then((r) => setTemplates(/** @type {TemplateList} */ (r))).catch(() => setTemplates(null));
+  }, [ws]);
   return (
     <form
       className="org-new org-boxed"
@@ -353,9 +359,11 @@ function WorkspaceForm({ org, ws, act, onDone }) {
       onSubmit={async (e) => {
         e.preventDefault();
         const payload = { name: f.name, key: f.key, icon: f.icon, colour: f.colour || null, description: f.description, visibility: f.visibility };
+        // "Start from": a template ("builtin:…" or "org:…") or another workspace's id.
+        const start = f.cloneFrom.startsWith("builtin:") || f.cloneFrom.startsWith("org:") ? { template: f.cloneFrom } : f.cloneFrom ? { cloneFrom: f.cloneFrom } : {};
         const ok = ws
           ? await act(() => api(`/org/workspaces/${ws.id}`, "PATCH", payload), `${f.name} is saved.`)
-          : await act(() => api("/org/workspaces", "POST", { ...payload, ...(f.cloneFrom ? { cloneFrom: f.cloneFrom } : {}) }), `${f.name} is ready. You're its administrator.`);
+          : await act(() => api("/org/workspaces", "POST", { ...payload, ...start }), `${f.name} is ready. You're its administrator.`);
         if (ok) onDone();
       }}
     >
@@ -426,17 +434,42 @@ function WorkspaceForm({ org, ws, act, onDone }) {
       {!ws && (
         <label className="field">
           Start from
-          <select value={f.cloneFrom} onChange={(e) => setF({ ...f, cloneFrom: e.target.value })}>
-            <option value="">A blank workspace</option>
-            {org.workspaces
-              .filter((w) => w.status === "active")
-              .map((w) => (
-                <option key={w.id} value={w.id}>
-                  A copy of {w.name}'s set-up (workflow, fields, automation; no work)
-                </option>
-              ))}
+          <select
+            value={f.cloneFrom}
+            onChange={(e) => {
+              const v = e.target.value;
+              // A built-in template suggests its icon (and a key, if none is typed yet).
+              const t = templates?.builtIn.find((x) => x.id === v);
+              setF({ ...f, cloneFrom: v, ...(t ? { icon: /** @type {WorkspaceIcon} */ (t.icon), ...(!f.key ? { key: t.key } : {}) } : {}) });
+            }}
+          >
+            <option value="">A blank workspace (the organisation's default workflow)</option>
+            {templates && (
+              <optgroup label="Templates">
+                {[...templates.builtIn, ...templates.organisation].map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            <optgroup label="A copy of a workspace's set-up (no work)">
+              {org.workspaces
+                .filter((w) => w.status === "active")
+                .map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+            </optgroup>
           </select>
-          <small className="muted">Copied automation rules start switched off, so you can check them first.</small>
+          <small className="muted">
+            {(() => {
+              const t = templates && [...templates.builtIn, ...templates.organisation].find((x) => x.id === f.cloneFrom);
+              if (t) return `${t.statuses.join(" → ")}. Types: ${t.itemTypes.join(", ")}.${t.fields.length ? ` Fields: ${t.fields.join(", ")}.` : ""} Everything can be changed afterwards.`;
+              return f.cloneFrom ? "Its workflows, item types, fields and automation rules (switched off, to check first). No projects or work items." : "";
+            })()}
+          </small>
         </label>
       )}
       <div className="org-row">
@@ -801,6 +834,133 @@ function ImportPeople({ onCancel, onMade }) {
         </button>
       </div>
     </div>
+  );
+}
+
+// ---------- templates for new workspaces ----------
+
+/**
+ * @typedef {{ id: string; name: string; description: string; statuses: string[]; itemTypes: string[]; fields: string[] }} TemplateSummary
+ * @typedef {{ builtIn: (TemplateSummary & { icon: string; key: string })[]; organisation: (TemplateSummary & { createdAt: string })[] }} TemplateList
+ */
+
+/** The built-in templates, the organisation's own, and saving a workspace as one. @param {{ org: Org }} p */
+function Templates({ org }) {
+  const toast = useToast();
+  const [dialog, ask] = useConfirm();
+  const [list, setList] = useState(/** @type {TemplateList | null} */ (null));
+  const [form, setForm] = useState({ workspaceId: "", name: "", description: "" });
+  const load = () =>
+    api("/org/templates")
+      .then((r) => setList(/** @type {TemplateList} */ (r)))
+      .catch((e) => toast(message(e, "Couldn't load the templates"), false));
+  useEffect(() => {
+    load();
+  }, []);
+  if (!list) return <p className="muted">Loading…</p>;
+  /** @param {TemplateSummary} t @param {import('react').ReactNode} [action] */
+  const card = (t, action) => (
+    <li key={t.id} className="tpl-card">
+      <div>
+        <b>{t.name}</b>
+        {t.description && <p className="muted">{t.description}</p>}
+        <p className="tpl-flow" aria-label={`Statuses: ${t.statuses.join(", ")}`}>
+          {t.statuses.map((s, i) => (
+            <span key={s}>
+              {i > 0 && <span aria-hidden="true"> → </span>}
+              {s}
+            </span>
+          ))}
+        </p>
+        <small className="muted">
+          Types: {t.itemTypes.join(", ")}
+          {t.fields.length ? ` · Fields: ${t.fields.join(", ")}` : ""}
+        </small>
+      </div>
+      {action}
+    </li>
+  );
+  return (
+    <Panel title="Templates for new workspaces" icon={LayoutTemplate}>
+      {dialog}
+      <Help>
+        A new workspace can start from a template: its statuses and workflow, item types and fields become the workspace's own, to change as it likes. Choose one under Workspaces → Add workspace → Start from.
+      </Help>
+      <h4 className="tpl-head">Built in</h4>
+      <ul className="tpl-list">{list.builtIn.map((t) => card(t))}</ul>
+      <h4 className="tpl-head">Your organisation's</h4>
+      {list.organisation.length === 0 ? (
+        <Empty title="None yet">Save a workspace you've set up as a template, below.</Empty>
+      ) : (
+        <ul className="tpl-list">
+          {list.organisation.map((t) =>
+            card(
+              t,
+              <button
+                className="btn btn-ghost sm"
+                aria-label={`Delete the template ${t.name}`}
+                onClick={async () => {
+                  if (!(await ask({ title: `Delete the template ${t.name}?`, body: "Workspaces made from it keep their set-up.", confirm: "Delete", danger: true }))) return;
+                  try {
+                    await api(`/org/templates/${t.id.slice(4)}`, "DELETE");
+                    toast(`${t.name} is deleted.`);
+                    await load();
+                  } catch (e) {
+                    toast(message(e, "Couldn't delete it"), false);
+                  }
+                }}
+              >
+                <Trash2 size={14} /> Delete
+              </button>,
+            ),
+          )}
+        </ul>
+      )}
+      <form
+        className="org-new org-boxed"
+        aria-label="Save a workspace as a template"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          try {
+            await api("/org/templates", "POST", form);
+            toast(`${form.name} is saved as a template.`);
+            setForm({ workspaceId: "", name: "", description: "" });
+            await load();
+          } catch (err) {
+            toast(message(err, "Couldn't save it"), false);
+          }
+        }}
+      >
+        <h4>Save a workspace as a template</h4>
+        <Help>Its workflow, item types and fields are kept. Its projects, work, people and automation rules aren't.</Help>
+        <div className="org-grid">
+          <label className="field">
+            Workspace
+            <select required value={form.workspaceId} onChange={(e) => setForm({ ...form, workspaceId: e.target.value, name: form.name || `${org.workspaces.find((w) => w.id === e.target.value)?.name ?? ""} set-up` })}>
+              <option value="">Choose…</option>
+              {org.workspaces
+                .filter((w) => w.status === "active")
+                .map((w) => (
+                  <option key={w.id} value={w.id}>
+                    {w.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="field">
+            Template name
+            <input required maxLength={60} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </label>
+        </div>
+        <label className="field">
+          Description (optional)
+          <input maxLength={300} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+        </label>
+        <div className="org-row">
+          <button className="btn btn-navy sm">Save as a template</button>
+        </div>
+      </form>
+    </Panel>
   );
 }
 

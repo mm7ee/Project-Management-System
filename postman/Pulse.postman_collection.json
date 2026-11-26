@@ -1195,6 +1195,77 @@
                   ]
                 }
               }
+            },
+            {
+              "name": "Item types: the five built-in kinds are always there",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                      "const t = pm.response.json();",
+                      "pm.test(\"built-in types present\", () => [\"EPIC\", \"STORY\", \"TASK\", \"BUG\", \"SUBTASK\"].forEach((id) => pm.expect(t.map((x) => x.id)).to.include(id)));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Cookie",
+                    "value": "omni_session={{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/item-types",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "item-types"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Workspace templates: the four built-in ones",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                      "const r = pm.response.json();",
+                      "pm.test(\"Software Development, Marketing, HR, Projects\", () => pm.expect(r.builtIn.map((t) => t.name)).to.eql([\"Software Development\", \"Marketing\", \"HR\", \"Projects (general)\"]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Cookie",
+                    "value": "omni_session={{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/org/templates",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "org",
+                    "templates"
+                  ]
+                }
+              }
             }
           ]
         },

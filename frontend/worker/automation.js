@@ -238,7 +238,7 @@ async function execute(env, loaded, rows, trigger, depth, bulk) {
 async function act(c, a, row, names) {
   switch (a.kind) {
     case "transition": {
-      const wf = await loadWorkflow(c.db, await workflowIdFor(c.db, row.system_id));
+      const wf = await loadWorkflow(c.db, await workflowIdFor(c.db, row.system_id, row.item_type));
       const statuses = new Map((await statusCatalogue(c.db)).map((s) => [s.id, s]));
       const want = String(a.value ?? "");
       const hit = /** @param {string} to */ (to) => {

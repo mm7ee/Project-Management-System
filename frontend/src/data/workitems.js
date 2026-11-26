@@ -202,7 +202,9 @@ export function byWorkUrgency(a, b) {
  * @property {string} key
  * @property {string} systemId
  * @property {number} number
- * @property {WorkItemType} type
+ * @property {WorkItemType} type  the kind: where it sits in the hierarchy
+ * @property {string} itemType  the workspace's item type (CAMPAIGN, or the kind itself)
+ * @property {string} itemTypeName
  * @property {string} summary
  * @property {WorkStatus} status
  * @property {string} statusName

@@ -190,7 +190,15 @@ export function compile(q, lk) {
     const cond = /** @returns {string} */ () => {
       switch (cf.kind) {
         case "text":
+        case "textarea":
+        case "url":
           return op === "~" ? `v.value_text ILIKE ${p(like(textOf(n.values[0], f)))}` : `lower(v.value_text) = lower(${p(textOf(n.values[0], f))})`;
+        case "checkbox": {
+          const t = textOf(n.values[0], f).toLowerCase();
+          if (!/^(yes|no|true|false)$/.test(t)) fail(`${f.name} is yes or no`, n.values[0]);
+          return `v.value_number = ${p(t === "yes" || t === "true" ? 1 : 0)}`;
+        }
+        case "currency":
         case "number":
           return cmp(
             "v.value_number",

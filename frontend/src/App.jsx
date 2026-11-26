@@ -9,7 +9,7 @@
 /** @import { SignoffStatus } from './data/pcn' */
 /** @import { User } from './data/roles' */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertOctagon, ArrowLeft, Building2, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, LockKeyhole, Menu, Zap, Plug, BellRing, Lock, ListPlus, Headset, Layers, Plus, ScrollText, Search, Send, ShieldCheck, Sparkles, Users, Workflow } from "lucide-react";
+import { AlertOctagon, ArrowLeft, Building2, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, LockKeyhole, Menu, Zap, Plug, BellRing, Lock, ListPlus, Headset, Layers, LayoutTemplate, Plus, ScrollText, Shapes, Search, Send, ShieldCheck, Sparkles, Users, Workflow } from "lucide-react";
 import { getSchedule } from "./data/systems";
 import { api, useAppData } from "./data/api";
 import { isAssigned } from "./data/roles";
@@ -56,6 +56,7 @@ import ChatPage, { useChatUnread } from "./components/ChatPage";
 import ServiceDeskSettings from "./components/ServiceDeskSettings";
 import { CustomFieldsSection, IntegrationsSection, NotificationSchemesSection, SecurityLevelsSection } from "./components/AdminSettings";
 import WorkflowsSettings from "./components/WorkflowsSettings";
+import ItemTypesSettings from "./components/ItemTypesSettings";
 import { awaitingSignature } from "./data/pcn";
 import { mfaRequiredFor } from "./data/roles";
 import AskPanel from "./components/AskPanel";
@@ -731,10 +732,16 @@ function Dashboard({ data, reload }) {
                       { group: ORG, key: "organisation", label: "Workspaces", icon: Layers, content: <OrgAdmin me={me} section="workspaces" /> },
                       { group: ORG, key: "org-people", label: "Members & roles", icon: Users, content: <OrgAdmin me={me} section="people" /> },
                       ...(can("manage_users") ? [{ group: ORG, key: "roles", label: "Roles & permissions", icon: ShieldCheck, content: <UsersPage section="roles" {...usersPageProps} /> }] : []),
+                      { group: ORG, key: "org-templates", label: "Templates", icon: LayoutTemplate, content: <OrgAdmin me={me} section="templates" /> },
                       { group: ORG, key: "org-audit", label: "Audit log", icon: ScrollText, content: <OrgAdmin me={me} section="audit" /> },
                     ]
                   : []),
-                ...(can("manage_workflows") ? [{ group: WS, key: "workflows", label: "Workflows", icon: Workflow, content: <WorkflowsSettings users={users} workspaces={data.workspaces} canEdit={can("manage_workflows")} /> }] : []),
+                ...(can("manage_workflows")
+                  ? [
+                      { group: WS, key: "workflows", label: "Workflows", icon: Workflow, content: <WorkflowsSettings users={users} workspaces={data.workspaces} canEdit={can("manage_workflows")} /> },
+                      { group: WS, key: "item-types", label: "Item types", icon: Shapes, content: <ItemTypesSettings canEdit={can("manage_workflows")} /> },
+                    ]
+                  : []),
                 ...(can("manage_schemes") ? [{ group: WS, key: "fields", label: "Fields", icon: ListPlus, content: <CustomFieldsSection workspaces={data.workspaces} /> }] : []),
                 ...(can("manage_automation") ? [{ group: WS, key: "automation", label: "Automations", icon: Zap, content: <AutomationSettings users={users} systems={systems} workspaces={data.workspaces} now={now} /> }] : []),
                 ...(can("manage_users") ? [{ group: WS, key: "people", label: "Users", icon: Users, content: <UsersPage section="people" {...usersPageProps} /> }] : []),

@@ -26,7 +26,7 @@ import { assignable } from "../src/data/roles";
 /**
  * Everything a list or page needs about an item, in one query. Cancelled ("won't do") children don't count.
  */
-export const SELECT = `SELECT w.*, st.name AS status_name, st.category AS status_category,
+export const SELECT = `SELECT w.*, st.name AS status_name, st.category AS status_category, it.name AS item_type_name,
   s.key AS project_key, (s.data::json ->> 'name') AS project_name, p.number AS parent_number,
   (SELECT string_agg(l.label, ',' ORDER BY l.label) FROM work_item_labels l WHERE l.item_id = w.id) AS labels,
   (SELECT COUNT(*) FROM work_items c WHERE c.parent_id = w.id AND COALESCE(c.resolution, '') <> 'WONT_DO') AS child_total,
@@ -35,7 +35,8 @@ export const SELECT = `SELECT w.*, st.name AS status_name, st.category AS status
   FROM work_items w
   JOIN work_statuses st ON st.id = w.status
   JOIN systems s ON s.id = w.system_id
-  LEFT JOIN work_items p ON p.id = w.parent_id`;
+  LEFT JOIN work_items p ON p.id = w.parent_id
+  LEFT JOIN item_types it ON it.workspace_id = w.workspace_id AND it.id = w.item_type`;
 export const keyOf =
   /** @param {{ project_key: string; number: number }} r
    * @returns {string}
@@ -51,6 +52,8 @@ export function toSummary(r) {
     systemId: r.system_id,
     number: r.number,
     type: r.type,
+    itemType: r.item_type ?? r.type,
+    itemTypeName: r.item_type_name ?? TYPE_META[r.type]?.label ?? r.type,
     summary: r.summary,
     status: r.status,
     statusName: r.status_name,
@@ -73,6 +76,27 @@ export function toSummary(r) {
     ...(r.type === "EPIC" || r.child_total ? { children: { total: Number(r.child_total), done: Number(r.child_done) } } : {}),
     ...(r.security_level ? { securityLevel: r.security_level } : {}),
   };
+}
+/**
+ * The item type a request names (the workspace's own, such as CAMPAIGN), or else the built-in type of the kind it
+ * names (TASK), with the kind it is. A type that's switched off isn't offered for new items.
+ * @param {ItemContext} c
+ * @param {unknown} itemType
+ * @param {unknown} kind
+ * @param {boolean} [existing=false]  changing an existing item: a switched-off type is still refused
+ * @returns {Promise<{ id: string; base: WorkItemType }>}
+ */
+export async function resolveItemType(c, itemType, kind, existing = false) {
+  if (itemType !== undefined && itemType !== null && itemType !== "") {
+    const t = /** @type {{ id: string; base: WorkItemType; name: string; active: number } | null} */ (
+      await c.db.prepare("SELECT id, base, name, active FROM item_types WHERE id = ?").bind(String(itemType).toUpperCase().slice(0, 20)).first()
+    );
+    if (!t) throw new HttpError(400, "Unknown item type");
+    if (!t.active) throw new HttpError(400, `${t.name} isn't offered for ${existing ? "items" : "new items"} in this workspace`);
+    return { id: t.id, base: t.base };
+  }
+  const base = pick(kind ?? "TASK", WORK_TYPES, "type");
+  return { id: base, base };
 }
 // ---------- reading ----------
 /**
@@ -340,7 +364,8 @@ async function detail(c, r) {
     ...(await movesFor(c, r)),
     ...(levelName ? { securityLevelName: levelName } : {}),
     securityLevels: c.guest ? [] : levels.results.filter((l) => myLevels.includes(l.id)),
-    fieldDefs,
+    // Only the fields for this item's type.
+    fieldDefs: fieldDefs.filter((f) => !f.itemTypes || f.itemTypes.includes(r.item_type)),
     fieldValues: (await customValuesFor(c.db, [r.id])).get(r.id) ?? [],
     devLinks: c.guest ? [] : await devLinksFor(c.db, r.id),
     ...(r.source === "service_desk" ? { request: await requestDetail(c, r) } : {}),
@@ -376,7 +401,7 @@ async function forCheck(c, r) {
  * @returns {Promise<{ workflowId: string; moves: ItemMove[] }>}
  */
 async function movesFor(c, r) {
-  const wf = await loadWorkflow(c.db, await workflowIdFor(c.db, r.system_id));
+  const wf = await loadWorkflow(c.db, await workflowIdFor(c.db, r.system_id, r.item_type));
   const names = await statusNames(c);
   const item = await forCheck(c, r);
   const editable = rights(c, r).edit;
@@ -443,7 +468,7 @@ export async function transitionItem(c, r, m, opts = {}) {
   const log = opts.log ?? true;
   const may = rights(c, r);
   if (!may.edit) throw new HttpError(403, "Only the assignee, the reporter or someone who can edit any work item can move this");
-  const wf = await loadWorkflow(c.db, await workflowIdFor(c.db, r.system_id));
+  const wf = await loadWorkflow(c.db, await workflowIdFor(c.db, r.system_id, r.item_type));
   const options = transitionsFrom(wf, r.status);
   /** @type {Transition | undefined} */ const t = m.transitionId ? options.find((x) => x.id === m.transitionId) : options.find((x) => x.to === m.to);
   const names = await statusNames(c);
@@ -472,6 +497,10 @@ export async function transitionItem(c, r, m, opts = {}) {
     if (rule.rule === "assign_role" && rule.value) patch.assignee = (await personWithRole(c, rule.value, r.system_id)) ?? patch.assignee;
     if (rule.rule === "assign_reporter") patch.assignee = r.reporter;
     if (rule.rule === "clear_assignee") patch.assignee = null;
+    if (rule.rule === "clear_field" && rule.value) {
+      const empty = { description: "", dueDate: null, startDate: null, storyPoints: null, originalEstimate: null, component: null, labels: [] };
+      if (rule.value in empty) /** @type {Record<string, unknown>} */ (patch)[rule.value] = /** @type {Record<string, unknown>} */ (empty)[rule.value];
+    }
     if (rule.rule === "set_resolution" && (rule.value === "DONE" || rule.value === "WONT_DO")) patch.resolution = rule.value;
   }
   if (m.resolution) patch.resolution = m.resolution;
@@ -565,7 +594,7 @@ async function featureTarget(c, wf, r, status) {
  * @returns {Promise<ItemRow>}
  */
 export async function moveFeatureTo(c, r, status) {
-  const wf = await loadWorkflow(c.db, await workflowIdFor(c.db, r.system_id));
+  const wf = await loadWorkflow(c.db, await workflowIdFor(c.db, r.system_id, r.item_type));
   const target = await featureTarget(c, wf, r, status);
   let row = r;
   if (target) {
@@ -826,7 +855,15 @@ export async function applyChange(c, r, b, viaTransition = false) {
   let nextLabels = r.labels ? r.labels.split(",") : [];
   if (b.summary !== undefined) next.summary = /** @type {string} */ (str(b.summary, "Summary", MAX_SUMMARY, true));
   if (b.description !== undefined) next.description = str(b.description, "Description", MAX_DESCRIPTION) ?? "";
-  if (b.type !== undefined) next.type = pick(b.type, WORK_TYPES, "type");
+  if (b.itemType !== undefined) {
+    const t = await resolveItemType(c, b.itemType, undefined, true);
+    next.item_type = t.id;
+    next.type = t.base;
+  } else if (b.type !== undefined) {
+    next.type = pick(b.type, WORK_TYPES, "type");
+    // A new kind without a type named: that kind's built-in type.
+    if (next.type !== r.type) next.item_type = next.type;
+  }
   if (b.priority !== undefined) next.priority = pick(b.priority, WORK_PRIORITIES, "priority");
   if (b.assignee !== undefined) next.assignee = await checkAssignee(c, b.assignee, r.source);
   if (b.labels !== undefined) nextLabels = labels(b.labels);
@@ -860,10 +897,22 @@ export async function applyChange(c, r, b, viaTransition = false) {
     next.parent_id = null;
     moving = true;
     // Its status, in the new project's workflow: the same one if it has it, else the first of the same kind.
-    const wf = await loadWorkflow(c.db, await workflowIdFor(c.db, target.id));
+    const wf = await loadWorkflow(c.db, await workflowIdFor(c.db, target.id, next.item_type));
     if (!wf.statuses.some((x) => x.id === r.status)) {
       const names = await statusNames(c);
       next.status = wf.statuses.find((x) => names.get(x.id)?.category === r.status_category)?.id ?? initialStatus(wf);
+    }
+  }
+  // A new item type with a workflow of its own: the item keeps its status if that workflow has it, else takes the
+  // first of the same kind there (as when moving to another project).
+  if (!moving && next.item_type !== r.item_type) {
+    const [from, to] = await Promise.all([workflowIdFor(c.db, r.system_id, r.item_type), workflowIdFor(c.db, r.system_id, next.item_type)]);
+    if (from !== to) {
+      const wf = await loadWorkflow(c.db, to);
+      if (!wf.statuses.some((x) => x.id === r.status)) {
+        const names = await statusNames(c);
+        next.status = wf.statuses.find((x) => names.get(x.id)?.category === r.status_category)?.id ?? initialStatus(wf);
+      }
     }
   }
   // The hierarchy: a new parent, or the same parent under a new type, must fit.
@@ -907,6 +956,7 @@ export async function applyChange(c, r, b, viaTransition = false) {
   track("description", r.description.slice(0, 300), next.description.slice(0, 300));
   if (field("description") && !changes.some((x) => x[0] === "description")) changes.push(["description", "(longer text)", "(changed)"]);
   track("type", r.type, next.type);
+  if (next.item_type !== r.item_type) track("itemType", r.item_type, next.item_type);
   track("status", r.status, next.status);
   track("resolution", r.resolution, next.resolution);
   track("onHold", !!r.on_hold, !!next.on_hold);
@@ -926,7 +976,7 @@ export async function applyChange(c, r, b, viaTransition = false) {
   track("systemId", r.system_id, next.system_id);
   track("securityLevel", r.security_level, next.security_level);
   // Custom fields: each changed one is logged as "field:<name>".
-  const custom = b.customFields !== undefined ? await planCustomValues(c, r.id, next.system_id, b.customFields, "edit") : null;
+  const custom = b.customFields !== undefined ? await planCustomValues(c, r.id, next.system_id, b.customFields, "edit", next.item_type) : null;
   if (custom) changes.push(...custom.changes);
   if (!changes.length) return { before: r, after: r, changed: [], diff: {} };
   next.updated_at = c.now;
@@ -948,12 +998,13 @@ export async function applyChange(c, r, b, viaTransition = false) {
   stmts.push(
     db
       .prepare(
-        `UPDATE work_items SET type = ?, parent_id = ?, summary = ?, description = ?, status = ?, resolution = ?, on_hold = ?,
+        `UPDATE work_items SET type = ?, item_type = ?, parent_id = ?, summary = ?, description = ?, status = ?, resolution = ?, on_hold = ?,
            priority = ?, assignee = ?, component = ?, story_points = ?, original_estimate = ?, remaining_estimate = ?,
            start_date = ?, due_date = ?, client = ?, notes = ?, updated_at = ?, resolved_at = ?, security_level = ? WHERE id = ?`,
       )
       .bind(
         next.type,
+        next.item_type,
         next.parent_id,
         next.summary,
         next.description,
@@ -1046,10 +1097,13 @@ export async function createItem(c, b, source, id = newToken().slice(0, 16)) {
     )
   );
   if (!sys) throw new HttpError(404, "System not found");
-  const type = pick(b.type ?? "TASK", WORK_TYPES, "type");
+  // The item type (the workspace's own, such as Campaign) or, from older clients, a kind (Task).
+  const itemType = await resolveItemType(c, b.itemType, b.type);
+  const type = itemType.base;
   const parent = await checkParent(c, b.parent, type, sys.id);
-  // Every new item starts in its workflow's first status; a feature request then moves on from there.
-  const wf = await loadWorkflow(c.db, await workflowIdFor(c.db, sys.id));
+  // Every new item starts in its workflow's first status (its type's workflow, if it has one); a feature request
+  // then moves on from there.
+  const wf = await loadWorkflow(c.db, await workflowIdFor(c.db, sys.id, itemType.id));
   const status = initialStatus(wf);
   const done = (await statusNames(c)).get(status)?.category === "DONE";
   const resolution = done ? (b.resolution === "WONT_DO" ? "WONT_DO" : "DONE") : null;
@@ -1061,16 +1115,17 @@ export async function createItem(c, b, source, id = newToken().slice(0, 16)) {
   const tags = labels(b.labels);
   const level = await checkLevel(c, b.securityLevel);
   // Custom fields (and their required ones) are checked when the create form or the API sends them.
-  const custom = b.customFields !== undefined ? await planCustomValues(c, id, sys.id, b.customFields, "create") : null;
+  // Defaults fill the fields left out, so the plan is made even when none are sent.
+  const custom = await planCustomValues(c, id, sys.id, b.customFields, "create", itemType.id);
   const db = c.db;
   const stmts = [
     db
       .prepare(
         `WITH n AS (UPDATE systems SET item_seq = item_seq + 1 WHERE id = ? RETURNING item_seq)
-         INSERT INTO work_items (id, system_id, number, type, parent_id, summary, description, status, resolution, on_hold, priority,
+         INSERT INTO work_items (id, system_id, number, type, item_type, parent_id, summary, description, status, resolution, on_hold, priority,
            assignee, reporter, component, story_points, original_estimate, remaining_estimate, start_date, due_date,
            created_at, updated_at, resolved_at, source, client, notes, security_level, backlog_rank)
-         SELECT ?, ?, n.item_seq, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+         SELECT ?, ?, n.item_seq, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
            (SELECT COALESCE(MAX(x.backlog_rank), 0) + 1024 FROM work_items x WHERE x.system_id = ?) FROM n RETURNING number`,
       )
       .bind(
@@ -1078,6 +1133,7 @@ export async function createItem(c, b, source, id = newToken().slice(0, 16)) {
         id,
         sys.id,
         type,
+        itemType.id,
         parent?.id ?? null,
         str(b.summary, "Summary", MAX_SUMMARY, true),
         str(b.description, "Description", MAX_DESCRIPTION) ?? "",
@@ -1603,6 +1659,8 @@ export async function askItemLines(c, nameOf, limit = 120) {
  * @property {boolean} ownOnly Developers without manage_features: only items assigned to them or that they reported.
  * @property {Viewer} viewer Who is asking, for the visibility rule in worker/access.ts (own items and security levels).
  * @property {string} now
+ * @property {Scope} [scope] the organisation and workspace the request is in
+ * @property {boolean} [orgAdmin] an Organisation Administrator, signed in (organisation-wide changes)
  * @property {(action: string, target: string | null, detail: Record<string, unknown>) => Promise<void>} audit
  * @property {(alerts: Alert[], channel?: ChannelPost) => void} alert Raises alerts for others (never the person acting), without holding up the request.
  * @property {(e: ItemEvent) => void} [emit] Tells automation what happened (worker/automation.ts). Absent where nothing should react.
@@ -1615,6 +1673,8 @@ export async function askItemLines(c, nameOf, limit = 120) {
  * @property {string} system_id
  * @property {number} number
  * @property {WorkItemType} type
+ * @property {string} item_type
+ * @property {string | null} [item_type_name]
  * @property {string | null} parent_id
  * @property {string} summary
  * @property {string} description
@@ -1659,6 +1719,7 @@ export async function askItemLines(c, nameOf, limit = 120) {
 /**
  * What may change on an item. `systemId` moves it to another project (with a new number there).
  * @typedef {Object} ItemPatch
+ * @property {unknown} [itemType]
  * @property {unknown} [summary]
  * @property {unknown} [description]
  * @property {unknown} [type]
@@ -1692,6 +1753,7 @@ export async function askItemLines(c, nameOf, limit = 120) {
  * @typedef {Object} NewItem
  * @property {unknown} systemId
  * @property {unknown} [type]
+ * @property {unknown} [itemType]
  * @property {unknown} [summary]
  * @property {unknown} [description]
  * @property {unknown} [status]

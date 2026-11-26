@@ -214,8 +214,11 @@ describe("administrator module, phase 1: roles, organisation and workspace admin
   it("a new workspace can copy another's configuration, without any of its work", async () => {
     const r = await as("owen", "/api/org/workspaces", { method: "POST", body: { name: "Events", key: "EVT", icon: "megaphone", colour: "#AA3366", description: "Conferences", cloneFrom: ws.MKT } });
     expect(r.status, JSON.stringify(r.data)).toBe(201);
-    expect(r.data.copied).toEqual({ workflow: false, fields: 1, rules: 1 });
+    expect(r.data.copied).toEqual({ workflows: 1, itemTypes: 5, fields: 1, rules: 1 });
     const id2 = r.data.workspace.id;
+    // Its workflow is its own copy, not Marketing's.
+    const [own] = await db`SELECT f.workspace_id FROM workspace_workflows ww JOIN workflows f ON f.organization_id = ww.organization_id AND f.id = ww.workflow_id WHERE ww.workspace_id = ${id2}`;
+    expect(own.workspace_id).toBe(id2);
     const [field] = await db`SELECT f.name, (SELECT count(*)::int FROM custom_field_options o WHERE o.field_id = f.id) AS options FROM custom_fields f WHERE f.workspace_id = ${id2}`;
     expect(field).toEqual({ name: "Channel", options: 1 });
     const [rule] = await db`SELECT name, enabled, scope_value, (SELECT count(*)::int FROM automation_actions a WHERE a.rule_id = r.id) AS actions FROM automation_rules r WHERE r.workspace_id = ${id2}`;

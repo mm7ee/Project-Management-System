@@ -11,6 +11,7 @@ import { formatDate, timeAgo } from "../time";
 import { KEY_PATTERN, PAGE_SIZE, TYPE_META, WORK_PRIORITIES, WORK_PRIORITY_META, WORK_TYPES, isDone } from "../data/workitems";
 import { ItemPriority, ItemStatusPill, Rollup, TypeIcon, itemHref } from "./WorkItemBits";
 import { CustomFieldInput } from "./WorkItemExtras";
+import { useItemTypes } from "../data/itemTypes";
 import { assignable } from "../data/roles";
 /** @type {{ key: string; label: string }[]} */ const SORTS = [
   { key: "key", label: "Key" },
@@ -272,7 +273,7 @@ function Row({ item: i, assignee, now, systemId }) {
         <span className="feature-cell">
           <b className={isDone(i) ? "wi-done" : ""}>{i.summary}</b>
           <small>
-            {TYPE_META[i.type].label}
+            {i.itemTypeName ?? TYPE_META[i.type].label}
             {i.parentKey ? ` · in ${i.parentKey}` : ""}
             {i.source === "client_request" ? " · client request" : ""}
             {i.labels.map((l) => (
@@ -301,15 +302,23 @@ function Row({ item: i, assignee, now, systemId }) {
  * @param {{ system: System; users: User[]; onCreated: (item: WorkItem) => void }} props
  */
 function QuickCreate({ system, users, onCreated }) {
-  const [type, setType] = useState(/** @type {WorkItemType | (() => WorkItemType)} */ ("TASK"));
+  // The workspace's item types (its own, such as Campaign, each one of the built-in kinds), and the one chosen.
+  const types = useItemTypes();
+  const offered = types.filter((t) => t.active);
+  const [itemType, setItemType] = useState("TASK");
+  const chosen = offered.find((t) => t.id === itemType) ?? offered.find((t) => t.base === "TASK") ?? offered[0];
+  /** The chosen type's kind: where it sits in the hierarchy. */
+  const type = /** @type {WorkItemType} */ (chosen?.base ?? "TASK");
   // The workspace's custom fields shown on the create form, and the security levels you may give.
-  const [fields, setFields] = useState(/** @type {CustomField[] | (() => CustomField[])} */ ([]));
+  const [allFields, setAllFields] = useState(/** @type {CustomField[] | (() => CustomField[])} */ ([]));
+  // Only the fields for the chosen item type.
+  const fields = allFields.filter((x) => !x.itemTypes || x.itemTypes.includes(chosen?.id ?? type));
   const [levels, setLevels] = useState(/** @type {SecurityLevel[] | (() => SecurityLevel[])} */ ([]));
   const [values, setValues] = useState(/** @type {Record<string, CustomValue> | (() => Record<string, CustomValue>)} */ ({}));
   const [level, setLevel] = useState("");
   const [more, setMore] = useState(false);
   useEffect(() => {
-    /** @type {Promise<Array<CustomField>>} */ (/** @type {unknown} */ (api(`/custom-fields?workspace=${encodeURIComponent(system.workspace ?? "Projects")}`))).then((f) => setFields(f.filter((x) => x.onCreate))).catch(() => setFields([]));
+    /** @type {Promise<Array<CustomField>>} */ (/** @type {unknown} */ (api(`/custom-fields?workspace=${encodeURIComponent(system.workspace ?? "Projects")}`))).then((f) => setAllFields(f.filter((x) => x.onCreate))).catch(() => setAllFields([]));
     /** @type {Promise<Array<SecurityLevel>>} */ (/** @type {unknown} */ (api("/security-levels"))).then(setLevels).catch(() => setLevels([]));
   }, [system.workspace]);
   const required = fields.filter((f) => f.required);
@@ -339,7 +348,7 @@ function QuickCreate({ system, users, onCreated }) {
         /** @type {unknown} */ (
           api("/items", "POST", {
             systemId: system.id,
-            type,
+            itemType: chosen?.id ?? type,
             summary: summary.trim(),
             ...(parent ? { parent } : {}),
             customFields: Object.fromEntries(Object.entries(values).filter(([, v]) => v !== null && v !== "" && !(Array.isArray(v) && !v.length))),
@@ -359,10 +368,10 @@ function QuickCreate({ system, users, onCreated }) {
   };
   return (
     <form className="wi-quick" onSubmit={submit} aria-label="Create a work item">
-      <select value={type} onChange={(e) => setType(/** @type {WorkItemType} */ (e.target.value))} aria-label="Type of work item">
-        {WORK_TYPES.map((t) => (
-          <option key={t} value={t}>
-            {TYPE_META[t].label}
+      <select value={chosen?.id ?? type} onChange={(e) => setItemType(e.target.value)} aria-label="Type of work item">
+        {offered.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}
           </option>
         ))}
       </select>

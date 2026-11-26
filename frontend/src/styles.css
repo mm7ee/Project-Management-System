@@ -3560,3 +3560,38 @@ th[aria-sort="ascending"] .pr-sort svg, th[aria-sort="descending"] .pr-sort svg 
 .ws-switch-icon { display: inline-flex; }
 @media (prefers-reduced-motion: no-preference) { .toast { animation: toast-in .18s ease-out; } }
 @keyframes toast-in { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ---------- Administrator module, phase 2: workflow designer, item types, templates ---------- */
+.wf-tabs-label { font-size: 12px; color: var(--muted); margin-left: 8px; text-transform: uppercase; letter-spacing: .04em; }
+.wf-tabs > button[role="tab"].wf-template-tab { border-style: dashed; }
+.wf-draft-dot { color: var(--amber-ink, #8a5a00); }
+.wf-template-note { margin: 4px 0 0; }
+.wf-version-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.wf-draft-badge { color: var(--amber-ink, #8a5a00); font-weight: 600; }
+.wf-versions { margin: 8px 0 12px; }
+.wf-moves-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.wf-moves-head .seg button { display: inline-flex; align-items: center; gap: 6px; }
+.wf-publish { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.wf-publish .field { flex: 1 1 260px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.wf-publish small { flex-basis: 100%; }
+/* The canvas */
+.wfc-canvas { height: 360px; border: 1px solid var(--border); border-radius: var(--r-md, 10px); background: var(--card); }
+.wfc-node { display: flex; flex-direction: column; gap: 2px; min-width: 150px; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); border-left: 4px solid var(--slate); background: var(--card); color: var(--text); font-size: 12.5px; }
+.wfc-node b { color: var(--heading); font-size: 13px; }
+.wfc-node small { color: var(--muted); }
+.wfc-node.cat-in_progress { border-left-color: var(--cyan); }
+.wfc-node.cat-done { border-left-color: var(--green); }
+.wfc-node.start { box-shadow: 0 0 0 2px var(--tint-cyan); }
+.wfc .react-flow__edge.has-rules .react-flow__edge-path { stroke-dasharray: 5 3; }
+.wfc .react-flow__edge-text { font-size: 11px; }
+.wfc .react-flow__handle { width: 9px; height: 9px; background: var(--cyan); }
+.wfc .react-flow__controls button { color: #222; }
+/* Templates */
+.tpl-head { margin: 16px 0 8px; font-size: 14px; color: var(--heading); }
+.tpl-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.tpl-card { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: var(--r-md, 10px); background: var(--card); }
+.tpl-card p { margin: 4px 0; font-size: 13px; }
+.tpl-flow { color: var(--heading); font-size: 12.5px; line-height: 1.6; }
+/* Money fields */
+.cf-money { display: inline-flex; align-items: center; gap: 6px; }
+.cf-money > span { font-weight: 600; color: var(--muted); font-size: 13px; }

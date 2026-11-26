@@ -154,6 +154,58 @@ under This workspace → Audit log.
 A wrong code, an unknown username and a wrong password all get the same message. That's on purpose, so nobody can
 find out which organisations or accounts exist.
 
+## Templates for new workspaces (Organisation Administrator)
+
+Settings → Organisation → **Templates** lists:
+- **The built-in templates:**
+  - **Software Development:** Backlog → … → Done, with code review and QA.
+  - **Marketing:** Idea → … → Reporting. Campaigns, content pieces, social posts, events.
+  - **HR:** requests reviewed, approved or rejected.
+  - **Projects (general):** To Do, In Progress, Blocked, In Review, Done.
+- **Your organisation's own templates.**
+
+To make one of your own, set a workspace up the way you like, then **Save a workspace as a template**. The template
+keeps its workflow, item types and fields, but not its projects, work, people or automation rules.
+
+When you add a workspace, **Start from** offers a blank workspace, any template, or a copy of another workspace. The
+new workspace gets its own copy of everything, to change freely.
+
+## Item types and workflows (workspace administrators)
+
+**Item types:** Settings → This workspace → **Item types**.
+- Add the kinds of work this workspace tracks, such as Campaign or Leave Request.
+- Each one **behaves like** a built-in kind:
+  - an **epic** groups other items
+  - a **sub-task** sits under another item
+  - **story, task and bug** are pieces of work
+- **Rename** a type, or switch it **off** so it isn't offered for new items. Items of that type keep it.
+- A type of your own can be deleted once no item uses it.
+
+**Create or change a workflow:** Settings → This workspace → **Workflows**.
+1. Pick the workflow, or **New workflow** to copy one. The organisation's templates are listed separately: copy one to
+   make it this workspace's own.
+2. **Statuses:** add from the list, reorder, choose where items start.
+3. **Moves:**
+   - On the **Diagram**, drag from the right edge of one status to another to add a move. Select an arrow and press
+     Delete to remove it.
+   - The table below lists the same moves. There you name each move and add **rules**:
+     - **Who may:** a role, the assignee or the reporter
+     - **Needs first:** a comment, an assignee, a field, all sub-tasks done
+     - **Then:** assign, set the resolution, clear a field, notify
+4. **Save draft** as you go. Nothing changes for anyone until you **Publish** (with a note of what changed). If you took
+   out a status that has work items in it, Pulse asks where they go.
+5. **Versions** lists everything published. **Restore** publishes an old version again, so nothing is lost.
+
+**Who uses which workflow:** at the top of the page.
+- The workspace uses one workflow.
+- A project, or an **item type**, can use another of the workspace's workflows. For example, Bugs could follow a
+  triage workflow.
+- An item follows its type's workflow first, then its project's, then the workspace's.
+
+**Custom fields:** Settings → This workspace → **Fields**.
+- **Kinds:** text, long text, number, money (with a currency), date, single or multi select, person, checkbox and link.
+- A field can be just **for some item types**, and can have a **default value**, which fills in new items left empty.
+
 ## Inside each workspace
 
 - **Executive page:** Settings → View-only links → **Executive page links**. Make a link for leadership. It shows

@@ -26,10 +26,10 @@ export async function categoryOf(db, status) {
 export async function loadWorkflows(db, only) {
   const filter = only?.length ? ` WHERE id IN (${only.map(() => "?").join(", ")})` : "";
   const [wfs, sts, trs, rules] = await Promise.all([
-    /** @type {Promise<D1Result<{ id: string; name: string; description: string; is_default: number; }>>} */ (
+    /** @type {Promise<D1Result<{ id: string; name: string; description: string; is_default: number; workspace_id: string | null; }>>} */ (
       /** @type {unknown} */ (
         db
-          .prepare(`SELECT id, name, description, is_default FROM workflows${filter} ORDER BY is_default DESC, name`)
+          .prepare(`SELECT id, name, description, is_default, workspace_id FROM workflows${filter} ORDER BY workspace_id IS NULL, is_default DESC, name`)
           .bind(...(only ?? []))
           .all()
       )
@@ -45,6 +45,7 @@ export async function loadWorkflows(db, only) {
     name: w.name,
     description: w.description,
     isDefault: !!w.is_default,
+    workspaceId: w.workspace_id,
     statuses: sts.results.filter((s) => s.workflow_id === w.id).map((s) => ({ id: s.status_id, initial: !!s.is_initial })),
     transitions: trs.results.filter((t) => t.workflow_id === w.id).map((t) => ({ id: t.id, name: t.name, from: t.from_status, to: t.to_status, rules: rulesOf.get(t.id) ?? [] })),
   }));
@@ -66,11 +67,18 @@ export const EFFECTIVE_WORKFLOW = `COALESCE(s.workflow_id,
   (SELECT ww.workflow_id FROM workspace_workflows ww WHERE ww.workspace = (s.data::json ->> 'workspace')),
   (SELECT d.id FROM workflows d WHERE d.is_default = 1))`;
 /**
+ * The workflow an item follows: its item type's, if the type has one; else its project's, its workspace's or the
+ * default.
  * @param {D1Database} db
  * @param {string} systemId
+ * @param {string | null} [itemType]
  * @returns {Promise<string>}
  */
-export async function workflowIdFor(db, systemId) {
+export async function workflowIdFor(db, systemId, itemType) {
+  if (itemType) {
+    const t = /** @type {{ workflow_id: string | null } | null} */ (await db.prepare("SELECT workflow_id FROM item_types WHERE id = ?").bind(itemType).first());
+    if (t?.workflow_id) return t.workflow_id;
+  }
   const row = await /** @type {Promise<{ id: string; } | null>} */ (/** @type {unknown} */ (db.prepare(`SELECT ${EFFECTIVE_WORKFLOW} AS id FROM systems s WHERE s.id = ?`).bind(systemId).first()));
   if (!row) throw new Error(`Project ${systemId} not found`);
   return row.id;

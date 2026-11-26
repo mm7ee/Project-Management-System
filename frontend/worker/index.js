@@ -35,7 +35,8 @@ import { NO_TENANT, pgDatabase, tenantEnv } from "./pg";
 import { platformApi, purgeDueOrganizations } from "./platform";
 import { HttpError, body, json } from "./http";
 import { adminAudit, auditEntry, changed } from "./audit";
-import { cleanWorkspaceStyle, cloneWorkspaceConfig, orgAdminApi } from "./orgadmin";
+import { cleanWorkspaceStyle, cloneWorkspaceConfig, orgAdminApi, templateBlueprint } from "./orgadmin";
+import { applyBlueprint } from "./blueprints";
 import { KEY_PATTERN, mentionsIn, suggestKey } from "../src/data/workitems";
 import { notifyItem } from "./schemes";
 import { applyChange, askItemLines, createItem, deleteItem, featureToItem, afterChange, moveFeatureTo, itemById, itemsApi, recomputeProgress } from "./workitems";
@@ -1297,6 +1298,8 @@ async function api(req, env, path, ctx) {
     ownOnly: ownFeaturesOnly,
     viewer: { id: me.id, role: me.role, ownOnly: ownFeaturesOnly, guest: !!guest },
     now,
+    scope,
+    orgAdmin: !guest && !apiToken && !!me.org_admin,
     audit: (action, target, detail) => audit(db, req, me, action, target, detail),
     alert: (alerts, channel) => alert(alerts, channel),
     env,
@@ -1523,9 +1526,12 @@ async function api(req, env, path, ctx) {
       const key = checkWsKey(b.key);
       const style = cleanWorkspaceStyle(b);
       if (await odb.prepare("SELECT 1 FROM workspaces WHERE lower(name) = lower(?) OR key = ?").bind(name, key).first()) throw new HttpError(409, "Another workspace has that name or key");
-      // Copy another workspace's configuration (no work): it must be one of this organisation's.
+      // Copy another workspace's configuration (no work): it must be one of this organisation's. Or start from a
+      // template: a built-in one, or one of this organisation's (worker/blueprints.js).
       const source = b.cloneFrom ? await workspaceRow(String(b.cloneFrom)) : null;
       if (b.cloneFrom && !source) throw new HttpError(404, "Workspace not found");
+      if (b.cloneFrom && b.template) throw new HttpError(400, "Start from a template or a copy of a workspace, not both");
+      const template = b.template ? await templateBlueprint(odb, String(b.template)) : null;
       const id = newToken().slice(0, 16);
       const pos = Number((/** @type {{ p: number }} */ (await odb.prepare("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM workspaces").first())).p);
       const made = { name, key, icon: style.icon ?? "layers", colour: style.colour ?? null, description: style.description ?? "", visibility: style.visibility ?? "private" };
@@ -1535,12 +1541,26 @@ async function api(req, env, path, ctx) {
           .bind(id, name, key, pos, made.icon, made.colour, made.description, made.visibility, now, now),
         // Whoever makes it is in it, as its administrator, so it can be set up.
         odb.prepare("INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, 'admin', ?)").bind(id, me.id, now),
-        auditEntry(odb, req, me, { action: "workspace_created", type: "workspace", id, workspaceId: id, after: { ...made, ...(source ? { copiedFrom: source.name } : {}) } }),
+        auditEntry(odb, req, me, {
+          action: "workspace_created",
+          type: "workspace",
+          id,
+          workspaceId: id,
+          after: { ...made, ...(source ? { copiedFrom: source.name } : {}), ...(template ? { template: template.name } : {}) },
+        }),
       ]);
       // The service desk's request types, from the template (the seeding function is the owner's).
       await env.ROOT.prepare("SELECT tenancy_seed_workspace(?, 'pulse-template-ws')").bind(id).run();
-      const copied = source ? await cloneWorkspaceConfig(env, scope.orgId, source.id, id) : null;
-      await audit(odb, req, me, "workspace_created", id, { name, key, ...(source ? { copiedFrom: source.name } : {}) });
+      /** @type {Record<string, number> | null} */ let copied = null;
+      try {
+        if (source) copied = await cloneWorkspaceConfig(env, scope.orgId, source.id, id, name);
+        if (template) copied = await applyBlueprint(env.ROOT.withScope({ orgId: scope.orgId, workspaceId: id }), id, name, template.blueprint);
+      } catch (e) {
+        // Setting it up failed: the half-made workspace goes, so it can be tried again.
+        await env.ROOT.prepare("DELETE FROM workspaces WHERE organization_id = ? AND id = ?").bind(scope.orgId, id).run();
+        throw e;
+      }
+      await audit(odb, req, me, "workspace_created", id, { name, key, ...(source ? { copiedFrom: source.name } : {}), ...(template ? { template: template.name } : {}) });
       return json({ workspace: { id, ...made, status: "active" }, ...(copied ? { copied } : {}) }, 201);
     }
     const wsMatch = path.match(/^\/api\/org\/workspaces\/([A-Za-z0-9_-]{1,64})$/);

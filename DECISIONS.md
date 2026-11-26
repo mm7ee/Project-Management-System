@@ -973,3 +973,66 @@ The plan, and the 13 recommendations approved with "continue", are in `docs/admi
   - Cancel is focused first.
   - Destructive actions say what happens. Removing a person or deleting an organisation needs the name or code
     typed.
+
+## Administrator module, phase 2: workflows per workspace, item types, versions and templates (2026-11-26)
+
+- **Workflows belong to a workspace (migration 0018):**
+  - The organisation's existing workflows became its **templates**.
+  - Every workspace got its own copy of each workflow it used, and its projects and its setting point at the copies.
+    A new workspace gets a copy of the organisation's default (a database trigger, however the workspace is made).
+  - **Isolation, in the database:**
+    - Row-level security lets a workspace read its own workflows and the templates, and change only its own.
+    - The organisation's handle (its administrators) changes the templates.
+    - A trigger refuses any workspace, project or item type pointing at another workspace's workflow, even through
+      the owner.
+  - Statuses stay the organisation's one list, so the categories (To Do, In Progress, Done) line reports up across
+    workspaces. Any workspace may add a status. One that another workspace's workflow uses is renamed or
+    recategorised only by an Organisation Administrator, and isn't deleted.
+- **Item types per workspace:**
+  - Each type (Campaign, Leave Request …) is one of the five built-in **kinds**, which decides where it sits in the
+    hierarchy and how boards, sprints, the timeline and PQL treat it.
+  - `work_items.type` stays the kind, and `work_items.item_type` names the type. A trigger keeps them in step.
+  - So none of the code built on the five kinds (about 70 places) changed, and a Campaign works like an Epic
+    everywhere.
+  - The built-in five can be renamed or switched off, never deleted. A type of the workspace's own is deleted only
+    when no item uses it.
+- **A workflow per item type:** an item follows its type's workflow, else its project's, else the workspace's.
+  Changing any of these moves the affected items' statuses only where the new workflow lacks them, and asks where
+  first (as before).
+- **Draft, publish, versions:**
+  - A workflow is edited as a draft (kept on the server, so work isn't lost) and published.
+  - Each publish is kept as a version; the first also keeps how it was before, as version 1.
+  - **Restore** publishes an old version again as a new one, so history is never rewritten. The app's role can't
+    update versions.
+  - Items don't carry a version: after a publish, all of them follow the current one, and the status moves are
+    asked for at publish time. Plain `PUT /api/workflows/:id` still publishes straight away, for scripts.
+- **The canvas:**
+  - React Flow 12.3.6 (`@xyflow/react`, MIT, pinned), loaded only on the Workflows page as its own chunk.
+  - Dragging between statuses adds a move, and Delete removes one.
+  - The table below lists the same moves with their rules, and is the accessible way to edit. The diagram is also
+    described for screen readers.
+  - Box positions aren't saved; boxes are laid out in workflow order.
+- **Rules:** a "Clear a field" post-function is new. Conditions, validators, approvals-by-comment, assigning, the
+  resolution and notifying were already there.
+  - **No attachment validator:** Pulse has no attachments on work items yet.
+  - **Approvals** (named approvers, N of M) are phase 4.
+- **Custom fields:**
+  - New kinds: long text, money (with a currency), checkbox and link.
+  - Links are only `http(s)://`, so they can't run script when clicked.
+  - A **default value** applies on create, when the field is left out. Required fields are still checked only when
+    the form or API sends custom fields, as before, so automation and older clients aren't refused.
+  - A field can be **for some item types**: the others neither show it nor accept it.
+  - **No file field:** it waits for attachment storage. The Marketing template's "Asset files" is a link to the
+    folder.
+- **Workspace blueprints (`worker/blueprints.js`):** a workspace's set-up without its work (statuses, workflows, item
+  types, fields; automation rules for copies only). One mechanism serves three uses:
+  - **Built-in templates** (`src/data/workspaceTemplates.js`): Software Development, Marketing, HR and Projects,
+    with the brief's statuses, types and fields.
+  - **The organisation's own templates**, saved from a workspace without its automation rules, which name its
+    people.
+  - **Copying a workspace** (phase 1's copy now makes the workflow the new workspace's own).
+  - Applying one is a single transaction, through the new workspace's own handle, and only for a workspace with no
+    projects. If it fails, the half-made workspace is removed.
+  - Statuses are matched to the organisation's by name, or added.
+  - **Not built in:** sprints are already a per-project choice (Agile mode), and the Marketing "content calendar" is
+    the existing Timeline.
