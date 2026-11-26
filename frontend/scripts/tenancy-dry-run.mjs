@@ -19,10 +19,7 @@ const args = process.argv.slice(2);
 const target = args[0];
 const outAt = args.indexOf("--out");
 const outFile = outAt >= 0 ? args[outAt + 1] : null;
-// --migration <file> dry-runs a later tenancy migration (it must be the next one not yet applied).
-const migAt = args.indexOf("--migration");
-const MIGRATION = migAt >= 0 ? args[migAt + 1] : "0013_tenancy_schema.sql";
-const PLACEMENT = MIGRATION === "0013_tenancy_schema.sql"; // only 0013 places rows and writes tenancy_report
+const MIGRATION = "0013_tenancy_schema.sql";
 
 function fail(message) {
   console.error(message);
@@ -105,7 +102,7 @@ try {
     say(`| ${cols.join(" | ")} |`);
     say(`| ${cols.map((_, i) => (i ? "---:" : "---")).join(" | ")} |`);
     let mismatch = false;
-    const orphanCounts = new Map((PLACEMENT ? await tx`SELECT table_name, count(*) AS c FROM tenancy_orphans GROUP BY table_name` : []).map((r) => [r.table_name, n(r.c)]));
+    const orphanCounts = new Map((await tx`SELECT table_name, count(*) AS c FROM tenancy_orphans GROUP BY table_name`).map((r) => [r.table_name, n(r.c)]));
     for (const t of tables) {
       const after = n((await tx.unsafe(`SELECT count(*) AS c FROM "${t}"`))[0].c);
       const hasWs = (await tx`SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = ${t} AND column_name = 'workspace_id'`).length > 0;
@@ -119,12 +116,8 @@ try {
     say();
     if (mismatch) say("**Warning:** some table's count changed by more than the rows set aside. Look before migrating.");
 
-    const report = PLACEMENT ? await tx`SELECT table_name, row_id, workspace_id, outcome, reason FROM tenancy_report ORDER BY outcome, table_name, id` : [];
-    if (!PLACEMENT) {
-      say(`${MIGRATION} places no rows; the table above shows that no counts changed.`);
-      say();
-    }
-    for (const [outcome, title] of !PLACEMENT ? [] : [
+    const report = await tx`SELECT table_name, row_id, workspace_id, outcome, reason FROM tenancy_report ORDER BY outcome, table_name, id`;
+    for (const [outcome, title] of [
       ["default_workspace", "Placed in a default workspace (check these)"],
       ["reference_cleared", "References cleared (the row stays; one link to another workspace is removed)"],
       ["moved_to_orphans", "Set aside in tenancy_orphans (kept whole, removed from the table)"],

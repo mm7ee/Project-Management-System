@@ -15,7 +15,6 @@ import { Donut } from "./reports/DashCharts";
 import { LineChart } from "./reports/AgileCharts";
 import { TooltipLayer } from "./reports/chartKit";
 import { describe } from "./ActivityPage";
-import { workspaceKey } from "../data/tenant";
 const OVERVIEW = "overview";
 const PICK_KEY = "pulse:dashboard";
 const OVERVIEW_DESC = "Projects, delivery and team workload across Pulse, as of now.";
@@ -63,7 +62,7 @@ function foldSlices(slices) {
  */
 function remembered() {
   try {
-    return localStorage.getItem(workspaceKey(PICK_KEY)) ?? OVERVIEW;
+    return localStorage.getItem(PICK_KEY) ?? OVERVIEW;
   } catch {
     return OVERVIEW;
   }
@@ -92,7 +91,7 @@ export default function CustomDashboards({ overview, users, systems, workspaces,
   const choose = /** @param {string} id */ (id) => {
     setPick(id);
     try {
-      localStorage.setItem(workspaceKey(PICK_KEY), id);
+      localStorage.setItem(PICK_KEY, id);
     } catch {
       /* this browser keeps no choice */
     }

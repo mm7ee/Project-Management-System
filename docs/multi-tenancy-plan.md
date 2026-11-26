@@ -1,15 +1,9 @@
 # Multi-tenancy: audit and proposal
 
-Status (2026-11-26): **approved with every recommendation in section 12** (the owner said "continue"). All five
-phases are built:
-- (a) is on main.
-- (b)–(e) are committed locally, not pushed.
-- All are applied to the Neon dev branch only.
-
-The release steps are at the end of UPGRADE-LOG.md. Changes from this plan:
-- **Tests run on PGlite** (added with the owner's OK), in CI too. The Neon dev branch is optional (`PULSE_DB=dev`).
-- **Row-level security is the enforcement, not only a backstop** (section 4.3). With about 710 raw SQL strings, the
-  database refusing unscoped access is more dependable than filters added by hand. See DECISIONS.md, phase (b).
+Status (2026-11-26): **approved with every recommendation in section 12** (the owner said "continue"). Phase (a) is
+built and applied to the Neon dev branch only. Two changes from this plan:
+- **Tests run against the Neon dev branch, not PGlite.** Adding the PGlite dependency needs the owner's explicit OK.
+  Until then the database tests can't run in CI.
 - **Phase (a) freezes workspace renames and project moves** until phase (b) ships (see 4.6 and DECISIONS.md).
 
 ## 1. Where the brief and the repository differ

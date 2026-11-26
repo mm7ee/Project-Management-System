@@ -376,7 +376,7 @@ export async function workflowsApi(c, path, method) {
     }
     /** @type {D1PreparedStatement[]} */ const stmts = [];
     for (const [w, v] of Object.entries(b.workspaces ?? {})) {
-      stmts.push(v ? db.prepare("INSERT INTO workspace_workflows (workspace, workflow_id) VALUES (?, ?) ON CONFLICT (workspace_id) DO UPDATE SET workflow_id = excluded.workflow_id").bind(w.slice(0, 60), v) : db.prepare("DELETE FROM workspace_workflows WHERE workspace = ?").bind(w));
+      stmts.push(v ? db.prepare("INSERT INTO workspace_workflows (workspace, workflow_id) VALUES (?, ?) ON CONFLICT (workspace) DO UPDATE SET workflow_id = excluded.workflow_id").bind(w.slice(0, 60), v) : db.prepare("DELETE FROM workspace_workflows WHERE workspace = ?").bind(w));
     }
     for (const [p, v] of Object.entries(b.projects ?? {})) stmts.push(db.prepare("UPDATE systems SET workflow_id = ? WHERE id = ?").bind(v || null, p));
     if (stmts.length) await db.batch(stmts);

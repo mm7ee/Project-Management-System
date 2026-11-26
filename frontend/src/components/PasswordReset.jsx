@@ -5,10 +5,9 @@ import { PASSWORD_MIN, passwordProblem } from "../data/password";
 import PasswordRules from "./PasswordRules";
 /**
  * "Forgot your password?": asks for a username or email; the reply is the same either way.
- * Within the organisation chosen on the sign-in page.
- * @param {{ initial: string; organization: string; onBack: () => void }} props
+ * @param {{ initial: string; onBack: () => void }} props
  */
-export function ForgotPassword({ initial, organization, onBack }) {
+export function ForgotPassword({ initial, onBack }) {
   const [login, setLogin] = useState(initial);
   const [sent, setSent] = useState("");
   const [error, setError] = useState("");
@@ -21,7 +20,7 @@ export function ForgotPassword({ initial, organization, onBack }) {
         setBusy(true);
         setError("");
         try {
-          const r = await /** @type {Promise<{ message: string; }>} */ (/** @type {unknown} */ (api("/password/forgot", "POST", { login, organization })));
+          const r = await /** @type {Promise<{ message: string; }>} */ (/** @type {unknown} */ (api("/password/forgot", "POST", { login })));
           setSent(r.message);
         } catch (err) {
           setError(err instanceof Error ? err.message : "Couldn't send that request");

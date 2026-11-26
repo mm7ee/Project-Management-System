@@ -19,22 +19,6 @@ interface D1Database {
   batch(statements: D1PreparedStatement[]): Promise<D1Result[]>;
 }
 
-/** Whose data a query may see: one organisation and, within it, one workspace ("" for organisation-wide work). */
-interface Scope {
-  orgId: string;
-  workspaceId: string;
-}
-
-/**
- * The Postgres database (worker/pg.js). A handle with a scope runs every query as the pulse_app role with that
- * tenant set, so row-level security shows and accepts only that tenant's rows. The root handle (no scope) is the
- * owner and sees everything: only for working out who is asking, the cron's loops and the clean-up.
- */
-interface TenantDatabase extends D1Database {
-  readonly scope: Scope | null;
-  withScope(scope: Scope): TenantDatabase;
-}
-
 interface Fetcher {
   fetch(request: Request): Promise<Response>;
 }
@@ -51,12 +35,10 @@ interface Hyperdrive {
 }
 
 interface Env {
-  DB: TenantDatabase; // scoped to the request's tenant once known; before that, to no tenant (sees nothing). Set by withDatabase()
-  ROOT: TenantDatabase; // the owner: identity, cron loops, clean-up. Never for reading a tenant's data on its behalf
-  PG_ROOT?: TenantDatabase; // tests: a ready database instead of HYPERDRIVE
+  DB: D1Database; // the database in use; set from HYPERDRIVE (Postgres) or D1 by withDatabase()
   HYPERDRIVE?: Hyperdrive; // Postgres on Neon
-  D1?: D1Database; // the old D1 database: retired (Phase 1), still bound, never used
-  DATABASE?: "postgres" | "d1"; // must be "postgres"; "d1" is refused since multi-tenancy
+  D1?: D1Database; // the old D1 database, kept as a fallback
+  DATABASE?: "postgres" | "d1"; // which one this deploy uses (wrangler.jsonc vars)
   ASSETS: Fetcher;
   AI?: Ai; // Workers AI binding, for Ask Pulse
   MFA_KEY?: string; // encrypts two-step verification secrets; a Worker secret (.dev.vars locally)

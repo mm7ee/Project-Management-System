@@ -137,14 +137,6 @@ export function useAppData() {
  * @property {string} [ip]
  */
 /**
- * Where you are: one organisation, one open workspace (multi-tenancy, DECISIONS.md).
- * @typedef {Object} Tenant
- * @property {{ id: string; name: string; code: string } | null} organization
- * @property {{ id: string; name: string; key: string } | null} workspace
- * @property {{ id: string; name: string; key: string; role: string }[]} workspaces yours, to switch between (none on a view-only link)
- * @property {boolean} orgAdmin
- */
-/**
  * @typedef {Object} AppData
  * @property {User} me
  * @property {Prefs} prefs
@@ -157,8 +149,7 @@ export function useAppData() {
  * @property {ProjectDocument[]} documents
  * @property {Blocker[]} blockers
  * @property {Limits} limits
- * @property {string[]} workspaces the open workspace's name (pickers that choose a workspace see only it)
- * @property {Tenant} [tenant] the organisation, the open workspace, and the workspaces you can switch to
+ * @property {string[]} workspaces
  * @property {import("./updateRequests").ChannelAvailability} [requestChannels]
  * @property {MfaPolicy} mfaPolicy
  * @property {SigninRules} [signinRules]

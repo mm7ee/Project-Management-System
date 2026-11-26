@@ -353,12 +353,7 @@ export default function UsersPage({ me, users, systems, roleMatrix, limits, mfaP
 
       {section === "signin" && <SigninRulesEditor rules={signinRules ?? DEFAULT_SIGNIN_RULES} onSave={(r) => run(() => api("/settings/signin", "PUT", r))} />}
 
-      {section === "links" && (
-        <>
-          <ShareLinks />
-          <ShareLinks kind="executive" />
-        </>
-      )}
+      {section === "links" && <ShareLinks />}
 
       {section === "limits" && (
         <>

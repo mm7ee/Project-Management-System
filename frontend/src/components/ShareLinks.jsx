@@ -2,41 +2,20 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, Copy, Eye, Link2, Plus } from "lucide-react";
 import { api } from "../data/api";
 import { formatDate, timeAgo } from "../time";
-/** The two kinds of secret link, both for the open workspace only. */
-const KINDS = {
-  view: {
-    endpoint: "/share-links",
-    title: "View-only links",
-    intro:
-      "Let managers or leadership browse this workspace without an account: the dashboard, projects, feature requests, Concept Notes, reports and Ask Pulse, read-only. Anyone with the link can see it until it expires, so share it only with the people it's for. Contact details are hidden and documents can't be downloaded.",
-    days: [1, 7, 30, 90],
-    first: 7,
-  },
-  executive: {
-    endpoint: "/showcase-links",
-    title: "Executive page links",
-    intro:
-      "The executive page shows how Pulse works and this workspace's portfolio as live totals: no names of projects, people or blockers. Anyone with the link can open it until it expires.",
-    days: [7, 30, 90, 365],
-    first: 30,
-  },
-};
 /**
- * Secret links that expire, for people without an account: view-only links (browse this workspace read-only) or
- * executive page links (its totals). The link is shown once, when it's made.
- * @param {{ kind?: keyof typeof KINDS }} props
+ * View-only links: someone without an account (managers, leadership) browses Pulse
+ * read-only through a secret link that expires. The link is shown once, when it's made.
  */
-export default function ShareLinks({ kind = "view" }) {
-  const k = KINDS[kind];
+export default function ShareLinks() {
   const [links, setLinks] = useState(/** @type {ShareLink[] | null | (() => ShareLink[] | null)} */ (null));
   const [label, setLabel] = useState("");
-  const [days, setDays] = useState(k.first);
+  const [days, setDays] = useState(7);
   const [made, setMade] = useState(/** @type {{ url: string; label: string } | null | (() => { url: string; label: string } | null)} */ (null));
   const [copied, setCopied] = useState(false);
   const [confirm, setConfirm] = useState(/** @type {string | null | (() => string | null)} */ (null));
   const [error, setError] = useState("");
   const now = Date.now();
-  const load = useCallback(() => /** @type {Promise<Array<ShareLink>>} */ (/** @type {unknown} */ (api(k.endpoint))).then(setLinks), [k.endpoint]);
+  const load = useCallback(() => /** @type {Promise<Array<ShareLink>>} */ (/** @type {unknown} */ (api("/share-links"))).then(setLinks), []);
   useEffect(() => {
     load().catch((e) => setError(e.message));
   }, [load]);
@@ -57,8 +36,11 @@ export default function ShareLinks({ kind = "view" }) {
           <Link2 size={18} />
         </span>
         <div>
-          <h3>{k.title}</h3>
-          <p>{k.intro}</p>
+          <h3>View-only links</h3>
+          <p>
+            Let managers or leadership browse Pulse without an account: the dashboard, projects, feature requests, Concept Notes, reports and Ask Pulse, read-only. Anyone with the link can see it until it expires, so share it only with the people it's for. Contact details are hidden and documents
+            can't be downloaded.
+          </p>
         </div>
       </header>
 
@@ -67,7 +49,7 @@ export default function ShareLinks({ kind = "view" }) {
         onSubmit={(e) => {
           e.preventDefault();
           run(async () => {
-            const r = await /** @type {Promise<{ url: string; }>} */ (/** @type {unknown} */ (api(k.endpoint, "POST", { label, days })));
+            const r = await /** @type {Promise<{ url: string; }>} */ (/** @type {unknown} */ (api("/share-links", "POST", { label, days })));
             setMade({ url: r.url, label });
             setCopied(false);
             setLabel("");
@@ -81,11 +63,10 @@ export default function ShareLinks({ kind = "view" }) {
         <label className="field">
           <span>Works for</span>
           <select value={days} onChange={(e) => setDays(Number(e.target.value))}>
-            {k.days.map((d) => (
-              <option key={d} value={d}>
-                {d === 1 ? "1 day" : d === 365 ? "1 year" : `${d} days`}
-              </option>
-            ))}
+            <option value={1}>1 day</option>
+            <option value={7}>7 days</option>
+            <option value={30}>30 days</option>
+            <option value={90}>90 days</option>
           </select>
         </label>
         <button type="submit" className="btn btn-navy">
@@ -134,7 +115,7 @@ export default function ShareLinks({ kind = "view" }) {
                     <button className="btn btn-ghost sm" onClick={() => setConfirm(null)}>
                       Keep
                     </button>
-                    <button className="btn btn-danger sm" onClick={() => run(() => api(`${k.endpoint}/${l.id}`, "DELETE")).then(() => setConfirm(null))}>
+                    <button className="btn btn-danger sm" onClick={() => run(() => api(`/share-links/${l.id}`, "DELETE")).then(() => setConfirm(null))}>
                       Turn off now
                     </button>
                   </span>

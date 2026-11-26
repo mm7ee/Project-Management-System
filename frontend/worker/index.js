@@ -31,8 +31,7 @@ import { newChallenge, readClientData, verifyAssertion, verifyRegistration } fro
 import { noteFailure, pause, postToTeams, raise, readDelivery, securityEmail, sendEmail, emailFor } from "./notify";
 import { runBriefing, runDailyDigests } from "./digest";
 import { toFeature } from "./rows";
-import { NO_TENANT, pgDatabase, tenantEnv } from "./pg";
-import { platformApi } from "./platform";
+import { pgDatabase } from "./pg";
 import { HttpError, body, json } from "./http";
 import { KEY_PATTERN, mentionsIn, suggestKey } from "../src/data/workitems";
 import { notifyItem } from "./schemes";
@@ -57,7 +56,6 @@ import { levelsFor } from "./access";
 const VIA_TOKEN = /** @type {WeakMap<Request, string>} */ (/** @type {unknown} */ (new WeakMap()));
 import { EFFECTIVE_WORKFLOW, loadWorkflow } from "./workflowData";
 import { DEFAULT_ROLE_PERMISSIONS, ROLES, ROLE_LABEL, START_KEYS, cleanPrefs, mfaRequiredFor, permissionsFor } from "../src/data/roles";
-import { settingRow, saveSetting, removeSetting, workspacesRow } from "./settings";
 const COOKIE = "omni_session";
 /**
  * Ask Pulse: questions per person per window, kept per Worker instance (a guard, not a quota).
@@ -105,8 +103,6 @@ const guestUser =
     mfa_enabled_at: null,
     locked_until: null,
     locked_at: null,
-    organization_id: l.organization_id,
-    org_admin: 0,
   });
 const toTemplate =
   /**
@@ -156,7 +152,7 @@ function sessionCookie(token, req, maxAge) {
  * @returns {Promise<RolePermissions>}
  */
 async function roleMatrix(db) {
-  const row = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (settingRow(db, "role_permissions")));
+  const row = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT value FROM settings WHERE key = 'role_permissions'").first()));
   return row ? { ...DEFAULT_ROLE_PERMISSIONS, ...JSON.parse(row.value) } : DEFAULT_ROLE_PERMISSIONS;
 }
 // ---------- two-step verification ----------
@@ -176,7 +172,7 @@ function mfaKey(env) {
  * @returns {Promise<MfaPolicy>}
  */
 async function mfaPolicy(db) {
-  const row = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (settingRow(db, "mfa_policy")));
+  const row = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT value FROM settings WHERE key = 'mfa_policy'").first()));
   const roles = row ? /** @type {unknown[]} */ (JSON.parse(row.value).roles) : [];
   return { roles: ROLES.filter((r) => roles.includes(r)) };
 }
@@ -276,19 +272,6 @@ async function issueRecoveryCodes(db, userId) {
  * @returns {Promise<Response>}
  */
 async function startSession(db, req, row, detail) {
-  // The workspaces this person may open. The session opens the first; with more than one the sign-in page asks
-  // which (POST /api/me/workspace). Shown only now, after the password and any second step have been checked.
-  const spaces = /** @type {D1Result<{ id: string; name: string }>} */ (
-    await db
-      .prepare(
-        `SELECT w.id, w.name FROM workspace_members m JOIN workspaces w ON w.id = m.workspace_id AND w.status = 'active'
-         JOIN organizations o ON o.id = w.organization_id AND o.status = 'active'
-         WHERE m.user_id = ? ORDER BY w.position, w.name`,
-      )
-      .bind(row.id)
-      .all()
-  ).results;
-  if (!spaces.length) throw new HttpError(403, "Your account isn't in any workspace yet. Ask your organisation's administrator to add you.", "no_workspace");
   const token = newToken();
   await db.batch([
     db.prepare("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)").bind(await tokenHash(token), row.id, Date.now() + SESSION_DAYS * 86_400_000),
@@ -296,7 +279,7 @@ async function startSession(db, req, row, detail) {
     db.prepare("DELETE FROM login_failures WHERE user_id = ?").bind(row.id),
   ]);
   await audit(db, req, row, "login", null, { ...detail, ...(row.must_change_password ? { temporaryPassword: true } : {}) });
-  return json({ ok: true, workspace: spaces[0], workspaces: spaces }, 200, { "set-cookie": sessionCookie(token, req, SESSION_DAYS * 86_400) });
+  return json({ ok: true }, 200, { "set-cookie": sessionCookie(token, req, SESSION_DAYS * 86_400) });
 }
 // ---------- sign-in lockout ----------
 // Every failed password (and wrong two-step code) is a row in login_failures, so the limits hold
@@ -307,7 +290,7 @@ async function startSession(db, req, row, detail) {
  * @returns {Promise<SigninRules>}
  */
 async function signinRules(db) {
-  const row = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (settingRow(db, "signin_rules")));
+  const row = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT value FROM settings WHERE key = 'signin_rules'").first()));
   return row ? cleanSigninRules(JSON.parse(row.value)) : DEFAULT_SIGNIN_RULES;
 }
 /**
@@ -348,7 +331,7 @@ const DUMMY_HASH = `pbkdf2$100000$${"00".repeat(16)}$${"00".repeat(32)}`;
 /**
  * After a failure on a real account: locks it once it has had too many within the window. Failures
  * from before its last lock ended don't count again. Administrators are told under the bell.
- * @param {Env} env scoped to the account's organisation (see orgDb)
+ * @param {Env} env
  * @param {ExecutionContext} ctx
  * @param {Request} req
  * @param {UserRow} row
@@ -373,9 +356,10 @@ async function lockIfNeeded(env, ctx, req, row, rules, at) {
     minutes,
     until: new Date(until).toISOString(),
   });
-  // The organisation's administrators hear (env.DB is the organisation's handle here: no workspace is open).
-  const people = await /** @type {Promise<D1Result<{ id: string; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT id FROM users WHERE org_admin = 1").all()));
+  const matrix = await roleMatrix(db);
+  const people = await /** @type {Promise<D1Result<{ id: string; role: Role; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT id, role FROM users").all()));
   /** @type {Alert[]} */ const alerts = people.results
+    .filter((u) => permissionsFor(u.role, matrix).includes("manage_users"))
     .map((u) => ({
       userId: u.id,
       kind: /** @type {const} */ ("account_locked"),
@@ -392,7 +376,7 @@ async function lockIfNeeded(env, ctx, req, row, rules, at) {
  * @returns {Promise<string[]>}
  */
 async function workspaceList(db) {
-  const row = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (workspacesRow(db)));
+  const row = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT value FROM settings WHERE key = 'workspaces'").first()));
   return row ? /** @type {string[]} */ (JSON.parse(row.value)) : DEFAULT_WORKSPACES;
 }
 /**
@@ -400,29 +384,23 @@ async function workspaceList(db) {
  * @returns {Promise<Limits>}
  */
 async function workloadLimits(db) {
-  const row = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (settingRow(db, "workload_limits")));
+  const row = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT value FROM settings WHERE key = 'workload_limits'").first()));
   return row ? { ...DEFAULT_LIMITS, ...JSON.parse(row.value) } : DEFAULT_LIMITS;
 }
 /**
  * @param {Request} req
- * @param {D1Database} db the owner handle (the session is found before its tenant is known)
- * @returns {Promise<SessionUser | null>}
+ * @param {D1Database} db
+ * @returns {Promise<UserRow | null>}
  */
 async function currentUser(req, db) {
   const token = cookieToken(req);
   if (!token) return null;
-  // The session's workspace, while the person still belongs to it and it and the organisation are active.
-  // Their role is the one they have there.
-  return /** @type {Promise<SessionUser | null>} */ (
+  return /** @type {Promise<UserRow | null>} */ (
     /** @type {unknown} */ (
       db
         .prepare(
-          `SELECT a.*, m.role AS role, s.workspace_id AS session_workspace FROM sessions s
-           JOIN accounts a ON a.id = s.user_id
-           JOIN workspace_members m ON m.workspace_id = s.workspace_id AND m.user_id = s.user_id
-           JOIN workspaces w ON w.id = s.workspace_id AND w.status = 'active'
-           JOIN organizations o ON o.id = a.organization_id AND o.status = 'active'
-           WHERE s.token_hash = ? AND s.expires_at > ?`,
+          `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
+       WHERE s.token_hash = ? AND s.expires_at > ?`,
         )
         .bind(await tokenHash(token), Date.now())
         .first()
@@ -681,7 +659,7 @@ function checkTeamsWebhook(v) {
 async function deliveryStatus(db) {
   const [delivery, failure, demo] = await Promise.all([
     readDelivery(db),
-    /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (settingRow(db, "delivery_error"))),
+    /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT value FROM settings WHERE key = 'delivery_error'").first())),
     /** @type {Promise<{ n: number; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT COUNT(*) AS n FROM systems WHERE id LIKE 'demo-%'").first())),
   ]);
   return {
@@ -704,7 +682,7 @@ function manifest(start) {
       id: view ?? "/",
       name: "Pulse",
       short_name: "Pulse",
-      description: "Pulse: the project tracker",
+      description: "Omni Contact's project tracker",
       start_url: view ?? "/",
       scope: "/",
       display: "standalone",
@@ -719,28 +697,6 @@ function manifest(start) {
     { headers: { "content-type": "application/manifest+json", "cache-control": view ? "no-store" : "public, max-age=3600" } },
   );
 }
-// ---------- organisations at sign-in ----------
-/**
- * An organisation code as typed: lower case, letters, digits and dashes, or "" if it can't be one.
- * @param {unknown} v
- * @returns {string}
- */
-function cleanOrgCode(v) {
-  const code = String(v ?? "")
-    .trim()
-    .toLowerCase()
-    .slice(0, 32);
-  return /^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/.test(code) ? code : "";
-}
-/**
- * An active organisation by its code (as the owner: before sign-in nobody has a tenant), or null.
- * @param {D1Database} root
- * @param {string} code
- * @returns {Promise<{ id: string; name: string } | null>}
- */
-async function orgByCode(root, code) {
-  return /** @type {{ id: string; name: string } | null} */ (await root.prepare("SELECT id, name FROM organizations WHERE code = ? AND status = 'active'").bind(code).first());
-}
 // ---------- the API ----------
 /**
  * @param {Request} req
@@ -750,42 +706,15 @@ async function orgByCode(root, code) {
  * @returns {Promise<Response>}
  */
 async function api(req, env, path, ctx) {
-  // Until we know who is asking, `db` is the owner (ROOT): sign-in, two-step, password reset and logout look
-  // up sessions, tickets and accounts by their unguessable token or by name, and read nothing else. Once the
-  // person is known (below), `db` and `env.DB` become the handle for their organisation and workspace only.
-  let db = env.ROOT;
+  const db = env.DB;
   const method = req.method;
   if (path === "/api/manifest" && method === "GET") return manifest(new URL(req.url).searchParams.get("start"));
-  // Platform Administrators: their own sign-in and session, outside every organisation (worker/platform.js).
-  const platform = await platformApi(env, req, path);
-  if (platform) return platform;
   if (path === "/api/login" && method === "POST") {
-    const { organization, username, password } = await /** @type {Promise<{ organization?: string; username?: string; password?: string; }>} */ (/** @type {unknown} */ (body(req)));
+    const { username, password } = await /** @type {Promise<{ username?: string; password?: string; }>} */ (/** @type {unknown} */ (body(req)));
     const tried = String(username ?? "")
       .trim()
       .slice(0, 64);
-    // Which organisation: its code (the sign-in page asks for it first, or takes it from #/o/<code>). A username is
-    // unique within an organisation. An unknown, suspended or archived organisation is refused exactly like a wrong
-    // password, after the same work, so the reply never says whether an organisation (or a username) exists.
-    // Without a code (older clients and scripts), a username used in only one active organisation still works.
-    const orgCode = cleanOrgCode(organization);
-    const org = orgCode ? await orgByCode(db, orgCode) : null;
-    const found =
-      orgCode && !org
-        ? { results: [] }
-        : await /** @type {Promise<D1Result<UserRow>>} */ (
-            /** @type {unknown} */ (
-              org
-                ? db.prepare("SELECT * FROM users WHERE organization_id = ? AND lower(username) = lower(?)").bind(org.id, tried).all()
-                : db
-                    .prepare("SELECT u.* FROM users u JOIN organizations o ON o.id = u.organization_id AND o.status = 'active' WHERE lower(u.username) = lower(?) LIMIT 2")
-                    .bind(tried)
-                    .all()
-            )
-          );
-    const row = found.results.length === 1 ? found.results[0] : null;
-    const orgEnv = row ? tenantEnv(env, { orgId: row.organization_id, workspaceId: "" }) : org ? tenantEnv(env, { orgId: org.id, workspaceId: "" }) : null;
-    const rules = orgEnv ? await signinRules(orgEnv.DB) : DEFAULT_SIGNIN_RULES;
+    const rules = await signinRules(db);
     const at = Date.now();
     // Wrong password, unknown username, locked account or a refused address: one message for all,
     // so usernames can't be probed and a lock can't be told apart.
@@ -796,6 +725,7 @@ async function api(req, env, path, ctx) {
       await audit(db, req, { id: null, name: tried || "(blank)" }, "login_failed", null, { username: tried, reason: "too many failed sign-ins from this address" });
       throw refused;
     }
+    const row = await /** @type {Promise<UserRow | null>} */ (/** @type {unknown} */ (db.prepare("SELECT * FROM users WHERE lower(username) = lower(?)").bind(tried).first()));
     const passwordOk = await verifyPassword(String(password ?? ""), row?.password_hash ?? DUMMY_HASH);
     if (row && isLocked(row, at)) {
       // Refused even with the right password, until the lock ends or an administrator lifts it.
@@ -806,7 +736,7 @@ async function api(req, env, path, ctx) {
     if (!row || !passwordOk) {
       await recordFailure(db, req, { username: tried, userId: row?.id ?? null, reason: "password", at });
       await audit(db, req, { id: row?.id ?? null, name: row?.name ?? (tried || "(blank)") }, "login_failed", null, { username: tried });
-      if (row && orgEnv) await lockIfNeeded(orgEnv, ctx, req, row, rules, at);
+      if (row) await lockIfNeeded(env, ctx, req, row, rules, at);
       // Logged once, as the address reaches the limit.
       const fromAddress = await addressFailures(db, req, since);
       if (fromAddress === rules.ipAttempts) {
@@ -850,8 +780,7 @@ async function api(req, env, path, ctx) {
       // Wrong codes count towards the lock too, so someone with the password can't keep guessing codes.
       const at = Date.now();
       await recordFailure(db, req, { username: row.username, userId: row.id, reason: "two_step", at });
-      const orgEnv = tenantEnv(env, { orgId: row.organization_id, workspaceId: "" });
-      await lockIfNeeded(orgEnv, ctx, req, row, await signinRules(orgEnv.DB), at);
+      await lockIfNeeded(env, ctx, req, row, await signinRules(db), at);
       if (attempts >= MFA_MAX_ATTEMPTS) {
         await db.prepare("DELETE FROM mfa_challenges WHERE token_hash = ?").bind(hash).run();
         throw new HttpError(401, "Too many wrong codes. Enter your password again.", "mfa_expired");
@@ -953,7 +882,7 @@ async function api(req, env, path, ctx) {
   // Same reply whatever happened, and the slow work (email) runs after it, so neither the words nor
   // the timing say whether an account exists.
   if (path === "/api/password/forgot" && method === "POST") {
-    const b = await /** @type {Promise<{ login?: string; organization?: string; }>} */ (/** @type {unknown} */ (body(req)));
+    const b = await /** @type {Promise<{ login?: string; }>} */ (/** @type {unknown} */ (body(req)));
     const login = String(b.login ?? "")
       .trim()
       .slice(0, 120);
@@ -973,29 +902,8 @@ async function api(req, env, path, ctx) {
         ).n
       : 0;
     // A username, or an email address that belongs to exactly one person.
-    // Within the organisation whose code was given; an unknown code finds nobody (and the reply is the same). Without
-    // a code (older clients), across active organisations, where a name or address must still be unique.
-    const resetCode = cleanOrgCode(b.organization);
-    const resetOrg = resetCode ? await orgByCode(db, resetCode) : null;
-    const matches =
-      resetCode && !resetOrg
-        ? { results: /** @type {UserRow[]} */ ([]) }
-        : await /** @type {Promise<D1Result<UserRow>>} */ (
-            /** @type {unknown} */ (
-              resetOrg
-                ? db.prepare("SELECT * FROM users WHERE organization_id = ? AND (lower(username) = lower(?) OR lower(email) = lower(?)) LIMIT 2").bind(resetOrg.id, login, login).all()
-                : db
-                    .prepare("SELECT u.* FROM users u JOIN organizations o ON o.id = u.organization_id AND o.status = 'active' WHERE lower(u.username) = lower(?) OR lower(u.email) = lower(?) LIMIT 2")
-                    .bind(login, login)
-                    .all()
-            )
-          );
-    // Within one organisation a username wins over an address; across organisations the match must be unique.
-    const row = resetOrg
-      ? (matches.results.find((u) => u.username.toLowerCase() === login.toLowerCase()) ?? (matches.results.length === 1 ? matches.results[0] : null))
-      : matches.results.length === 1
-        ? matches.results[0]
-        : null;
+    const matches = await /** @type {Promise<D1Result<UserRow>>} */ (/** @type {unknown} */ (db.prepare("SELECT * FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?) LIMIT 2").bind(login, login).all()));
+    const row = matches.results.find((u) => u.username.toLowerCase() === login.toLowerCase()) ?? (matches.results.length === 1 ? matches.results[0] : null);
     const sentToAccount = row
       ? /** @type {{ n: number; }} */ (
           await /** @type {Promise<{ n: number; } | null>} */ (
@@ -1008,9 +916,7 @@ async function api(req, env, path, ctx) {
           )
         ).n
       : 0;
-    // Email is set up per organisation: the person's own, once we know who they are.
-    const orgEnv = row ? tenantEnv(env, { orgId: row.organization_id, workspaceId: "" }) : null;
-    const delivery = orgEnv ? await readDelivery(orgEnv.DB) : {};
+    const delivery = await readDelivery(db);
     const canEmail = !!(row?.email && delivery.resendKey && delivery.from && env.MFA_KEY);
     const outcome = resetOutcome({ found: !!row, fromAddress, sentToAccount, canEmail });
     const token = outcome === "emailed" ? newToken() : null;
@@ -1033,12 +939,12 @@ async function api(req, env, path, ctx) {
         [`Hi ${row.name}, someone (hopefully you) asked to reset the password for your Pulse account, ${row.username}.`, `The link below works once, for the next ${RESET_LINK_MINUTES} minutes. If you didn't ask for this, ignore this email: your password stays as it is.`],
         { label: "Choose a new password", url },
       );
-      ctx.waitUntil(sendEmail(env, delivery, /** @type {NonNullable<typeof row.email>} */ (row.email), mail.subject, mail.html, mail.text).catch((e) => noteFailure(/** @type {Env} */ (orgEnv).DB, "Email", e)));
-    } else if (row && orgEnv && outcome === "admins_told") {
-      // The organisation's administrators confirm it's them and give a temporary password.
-      const people = await /** @type {Promise<D1Result<{ id: string; }>>} */ (/** @type {unknown} */ (orgEnv.DB.prepare("SELECT id FROM users WHERE org_admin = 1").all()));
+      ctx.waitUntil(sendEmail(env, delivery, /** @type {NonNullable<typeof row.email>} */ (row.email), mail.subject, mail.html, mail.text).catch((e) => noteFailure(db, "Email", e)));
+    } else if (row && outcome === "admins_told") {
+      const matrix = await roleMatrix(db);
+      const people = await /** @type {Promise<D1Result<{ id: string; role: Role; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT id, role FROM users").all()));
       /** @type {Alert[]} */ const alerts = people.results
-        .filter((u) => u.id !== row.id)
+        .filter((u) => u.id !== row.id && permissionsFor(u.role, matrix).includes("manage_users"))
         .map((u) => ({
           userId: u.id,
           kind: /** @type {const} */ ("account_locked"),
@@ -1047,7 +953,7 @@ async function api(req, env, path, ctx) {
           link: "view:users",
           dedupe: `pwreset:${row.id}:${new Date(at).toISOString().slice(0, 10)}`,
         }));
-      ctx.waitUntil(raise(orgEnv, alerts).catch((e) => noteFailure(orgEnv.DB, "Notification", e)));
+      ctx.waitUntil(raise(env, alerts).catch((e) => noteFailure(db, "Notification", e)));
     }
     return json({ ok: true, message: RESET_REPLY });
   }
@@ -1089,46 +995,26 @@ async function api(req, env, path, ctx) {
       db.prepare("UPDATE password_resets SET expires_at = ? WHERE user_id = ? AND used_at IS NULL AND expires_at > ?").bind(at, row.id, at),
     ]);
     await audit(db, req, row, "password_reset_by_email", row.id, { name: row.name, ...(isLocked(row, at) ? { unlocked: true } : {}) });
-    const orgDbForMail = orgDb(env, row.organization_id);
-    const delivery = await readDelivery(orgDbForMail);
+    const delivery = await readDelivery(db);
     if (row.email && delivery.resendKey) {
       const mail = securityEmail("Your password was changed", [
         `Hi ${row.name}, the password for your Pulse account, ${row.username}, was just changed using a reset link, and every device was signed out.`,
         "If this was you, there's nothing more to do. If it wasn't, contact your Pulse administrator straight away.",
       ]);
-      ctx.waitUntil(sendEmail(env, delivery, row.email, mail.subject, mail.html, mail.text).catch((e) => noteFailure(orgDbForMail, "Email", e)));
+      ctx.waitUntil(sendEmail(env, delivery, row.email, mail.subject, mail.html, mail.text).catch((e) => noteFailure(db, "Email", e)));
     }
     return json({ ok: true });
   }
   // The public showcase (/executive): totals only, no names. Needs no sign-in.
   if (path === "/api/showcase" && method === "GET") {
-    // The executive page: a secret link per workspace (migration 0016). The link is found by its hash (as the
-    // owner), then the workspace's totals are read through that workspace's own handle. Totals only, as before.
-    const given = req.headers.get("x-showcase-token") ?? "";
-    const link = /^[a-f0-9]{64}$/.test(given)
-      ? /** @type {{ id: string; organization_id: string; workspace_id: string; org: string; ws: string } | null} */ (
-          await db
-            .prepare(
-              `SELECT l.id, l.organization_id, l.workspace_id, o.name AS org, w.name AS ws FROM showcase_links l
-               JOIN workspaces w ON w.id = l.workspace_id AND w.status = 'active'
-               JOIN organizations o ON o.id = l.organization_id AND o.status = 'active'
-               WHERE l.token_hash = ? AND l.revoked_at IS NULL AND l.expires_at > ?`,
-            )
-            .bind(await tokenHash(given), new Date().toISOString())
-            .first()
-        )
-      : null;
-    if (!link) throw new HttpError(404, "This executive page link has expired or been turned off. Ask whoever sent it for a new one.", "showcase_invalid");
-    const sdb = env.ROOT.withScope({ orgId: link.organization_id, workspaceId: link.workspace_id });
     const [systems, users, assigned, features, blocked, limits] = await Promise.all([
-      /** @type {Promise<D1Result<{ data: string; }>>} */ (/** @type {unknown} */ (sdb.prepare("SELECT data FROM systems").all())),
-      /** @type {Promise<D1Result<UserRow>>} */ (/** @type {unknown} */ (sdb.prepare("SELECT * FROM users").all())),
-      /** @type {Promise<D1Result<{ user_id: string; system_id: string; }>>} */ (/** @type {unknown} */ (sdb.prepare("SELECT user_id, system_id FROM assignments").all())),
-      /** @type {Promise<D1Result<FeatureRow>>} */ (/** @type {unknown} */ (sdb.prepare("SELECT * FROM features").all())),
-      /** @type {Promise<D1Result<{ system_id: string; }>>} */ (/** @type {unknown} */ (sdb.prepare("SELECT DISTINCT system_id FROM blockers WHERE resolved_at IS NULL").all())),
-      workloadLimits(sdb),
+      /** @type {Promise<D1Result<{ data: string; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT data FROM systems").all())),
+      /** @type {Promise<D1Result<UserRow>>} */ (/** @type {unknown} */ (db.prepare("SELECT * FROM users").all())),
+      /** @type {Promise<D1Result<{ user_id: string; system_id: string; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT user_id, system_id FROM assignments").all())),
+      /** @type {Promise<D1Result<FeatureRow>>} */ (/** @type {unknown} */ (db.prepare("SELECT * FROM features").all())),
+      /** @type {Promise<D1Result<{ system_id: string; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT DISTINCT system_id FROM blockers WHERE resolved_at IS NULL").all())),
+      workloadLimits(db),
     ]);
-    await sdb.prepare("UPDATE showcase_links SET views = views + 1, last_used_at = ? WHERE id = ?").bind(new Date().toISOString(), link.id).run();
     const projects = /** @param {string} id */ (id) => assigned.results.filter((a) => a.user_id === id).map((a) => a.system_id);
     const showcase = buildShowcase(
       systems.results.map((r) => JSON.parse(r.data)),
@@ -1138,7 +1024,7 @@ async function api(req, env, path, ctx) {
       limits,
       Date.now(),
     );
-    return json({ ...showcase, organization: link.org, workspace: link.ws }, 200, { "cache-control": "private, no-store" });
+    return json(showcase, 200, { "cache-control": "public, max-age=60" });
   }
   // GitHub calls this, signed with the shared secret; the customer portal works by its link. No session.
   if (path === "/api/integrations/github/webhook" && method === "POST") return githubWebhook(env, req);
@@ -1163,7 +1049,7 @@ async function api(req, env, path, ctx) {
     ? await /** @type {Promise<ShareLinkRow | null>} */ (
         /** @type {unknown} */ (
           db
-            .prepare("SELECT l.* FROM share_links l JOIN workspaces w ON w.id = l.workspace_id AND w.status = 'active' JOIN organizations o ON o.id = l.organization_id AND o.status = 'active' WHERE l.token_hash = ? AND l.revoked_at IS NULL AND l.expires_at > ?")
+            .prepare("SELECT * FROM share_links WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?")
             .bind(await tokenHash(shareToken), new Date().toISOString())
             .first()
         )
@@ -1187,36 +1073,11 @@ async function api(req, env, path, ctx) {
   if (guest && !guestAllowed) {
     throw new HttpError(403, "This link is view-only");
   }
-  // A personal API token stands in for its owner, with the owner's permissions (worker/integrations.ts),
-  // in the workspace the token was made in, while the owner still belongs to it.
-  const apiToken = guest ? null : await tokenAuth(env.ROOT, req, path);
-  /** @type {SessionUser | null} */ const me = guest
-    ? { ...guestUser(guest), session_workspace: guest.workspace_id }
-    : apiToken
-      ? await /** @type {Promise<SessionUser | null>} */ (
-          /** @type {unknown} */ (
-            db
-              .prepare(
-                `SELECT a.*, m.role AS role, m.workspace_id AS session_workspace FROM accounts a
-                 JOIN workspace_members m ON m.user_id = a.id AND m.workspace_id = ?
-                 JOIN workspaces w ON w.id = m.workspace_id AND w.status = 'active'
-                 JOIN organizations o ON o.id = a.organization_id AND o.status = 'active'
-                 WHERE a.id = ?`,
-              )
-              .bind(apiToken.workspaceId, apiToken.userId)
-              .first()
-          )
-        )
-      : await currentUser(req, db);
+  // A personal API token stands in for its owner, with the owner's permissions (worker/integrations.ts).
+  const apiToken = guest ? null : await tokenAuth(db, req, path);
+  const me = guest ? guestUser(guest) : apiToken ? await /** @type {Promise<UserRow | null>} */ (/** @type {unknown} */ (db.prepare("SELECT * FROM users WHERE id = ?").bind(apiToken.userId).first())) : await currentUser(req, db);
   if (!me) throw new HttpError(401, "Not signed in");
   if (apiToken) VIA_TOKEN.set(req, apiToken.name);
-  // ---------- the tenant ----------
-  // From here on, every query sees this organisation and this workspace only: db and env.DB are scoped
-  // (worker/pg.js), and row-level security refuses the rest (migration 0014). Background work started
-  // from this request (automation, notifications, webhooks) gets the same scope through env.
-  /** @type {Scope} */ const scope = { orgId: me.organization_id, workspaceId: me.session_workspace };
-  env = tenantEnv(env, scope);
-  db = env.DB;
   if (guest && path === "/api/data") {
     await db.prepare("UPDATE share_links SET views = views + 1, last_used_at = ? WHERE id = ?").bind(new Date().toISOString(), guest.id).run();
   }
@@ -1267,10 +1128,6 @@ async function api(req, env, path, ctx) {
   };
   const need = /** @param {Permission} p */ (p) => {
     if (!can(p)) throw new HttpError(403, "You don't have permission to do that");
-  };
-  /** Organisation settings apply to every workspace: only the organisation's administrators change them. */
-  const needOrgAdmin = () => {
-    if (guest || apiToken || !me.org_admin) throw new HttpError(403, "Only your organisation's administrators can change this: it applies to every workspace", "org_admin_only");
   };
   const now = new Date().toISOString();
   // Tell people what needs them, without holding up the request or failing it. Your own actions
@@ -1355,237 +1212,6 @@ async function api(req, env, path, ctx) {
     if (!match) throw new HttpError(400, `Unknown workspace "${name.slice(0, 40)}"`);
     return match;
   };
-  /**
-   * Project keys in use anywhere in this organisation (keys are unique per organisation, so item keys such as
-   * INFRA-12 name one item in it). Projects of other workspaces can't be seen through `db`, so the keys alone are
-   * read as the owner, for this organisation only. Only the keys: a key in another workspace shows as "taken".
-   * @param {string} [except] a project to leave out (changing its own key)
-   */
-  const orgKeys = async (except = "") =>
-    new Set(
-      (/** @type {D1Result<{ key: string }>} */ (await env.ROOT.prepare("SELECT key FROM systems WHERE organization_id = ? AND id <> ?").bind(scope.orgId, except).all())).results.map((r) => r.key),
-    );
-  // ----- organisation and workspace -----
-  /** Who and where: the organisation, the open workspace, and (for people signed in) the workspaces they belong to. */
-  const tenantInfo = async () => {
-    const [org, ws, mine] = await Promise.all([
-      /** @type {Promise<{ id: string; name: string; code: string } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT id, name, code FROM organizations WHERE id = ?").bind(scope.orgId).first())),
-      /** @type {Promise<{ id: string; name: string; key: string } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT id, name, key FROM workspaces WHERE id = ?").bind(scope.workspaceId).first())),
-      guest || apiToken
-        ? { results: [] }
-        : /** @type {Promise<D1Result<{ id: string; name: string; key: string; role: Role }>>} */ (
-            /** @type {unknown} */ (
-              db
-                .prepare("SELECT w.id, w.name, w.key, m.role FROM workspace_members m JOIN workspaces w ON w.id = m.workspace_id WHERE m.user_id = ? AND w.status = 'active' ORDER BY w.position, w.name")
-                .bind(me.id)
-                .all()
-            )
-          ),
-    ]);
-    return { organization: org, workspace: ws, workspaces: mine.results, orgAdmin: !!me.org_admin };
-  };
-  if (path === "/api/me/workspaces" && method === "GET") {
-    if (guest || apiToken) throw new HttpError(403, "Only a signed-in person can switch workspace");
-    return json(await tenantInfo());
-  }
-  // Switch the open workspace without signing in again. Membership is checked here, on every switch, and the
-  // database refuses a session in a workspace its person doesn't belong to (0013's foreign key). A workspace that
-  // isn't yours, in your organisation or another, gets the same 404 as one that doesn't exist.
-  if (path === "/api/me/workspace" && method === "POST") {
-    if (guest || apiToken) throw new HttpError(403, "Only a signed-in person can switch workspace");
-    const b = await /** @type {Promise<{ workspaceId?: unknown }>} */ (/** @type {unknown} */ (body(req)));
-    const target = String(b.workspaceId ?? "").slice(0, 64);
-    const member = await db
-      .prepare("SELECT w.id, w.name FROM workspace_members m JOIN workspaces w ON w.id = m.workspace_id WHERE m.user_id = ? AND m.workspace_id = ? AND w.status = 'active'")
-      .bind(me.id, target)
-      .first();
-    if (!member) throw new HttpError(404, "Workspace not found");
-    const token = /** @type {string} */ (cookieToken(req));
-    await db.prepare("UPDATE sessions SET workspace_id = ? WHERE token_hash = ? AND user_id = ?").bind(target, await tokenHash(token), me.id).run();
-    await audit(db, req, me, "workspace_switched", target, { from: scope.workspaceId, to: target, name: /** @type {{ name: string }} */ (member).name });
-    return json({ ok: true });
-  }
-  // ----- organisation administration (Organisation Administrators only) -----
-  // Workspaces, people and their role in each workspace. Done with the organisation's handle (no workspace), which
-  // sees every workspace and person of this organisation and nothing of any other.
-  if (path === "/api/org" || path.startsWith("/api/org/")) {
-    needOrgAdmin();
-    const odb = orgDb(env, scope.orgId);
-    const now = new Date().toISOString();
-    const workspaceRow = /** @param {string} id */ async (id) =>
-      /** @type {{ id: string; name: string; key: string; status: string } | null} */ (await odb.prepare("SELECT id, name, key, status FROM workspaces WHERE id = ?").bind(id).first());
-    const checkWsKey = /** @param {unknown} v */ (v) => {
-      const k = String(v ?? "")
-        .trim()
-        .toUpperCase();
-      if (!/^[A-Z][A-Z0-9]{1,9}$/.test(k)) throw new HttpError(400, "A workspace key is 2 to 10 capital letters or digits, starting with a letter, such as HR");
-      return k;
-    };
-    const wsName = /** @param {unknown} v */ (v) => {
-      const n = String(v ?? "").trim();
-      if (!n) throw new HttpError(400, "Name the workspace");
-      return n.slice(0, 40);
-    };
-    const adminsLeft = async () => Number((/** @type {{ n: number }} */ (await odb.prepare("SELECT COUNT(*) AS n FROM accounts WHERE org_admin = 1").first())).n);
-    if (path === "/api/org" && method === "GET") {
-      const [org, spaces, people, members] = await Promise.all([
-        odb.prepare("SELECT id, name, code, status FROM organizations WHERE id = ?").bind(scope.orgId).first(),
-        odb.prepare("SELECT w.id, w.name, w.key, w.status, w.position, (SELECT COUNT(*) FROM workspace_members m WHERE m.workspace_id = w.id) AS members FROM workspaces w ORDER BY w.position, w.name").all(),
-        odb.prepare("SELECT id, username, name, title, email, org_admin, must_change_password, locked_until FROM accounts ORDER BY name").all(),
-        odb.prepare("SELECT workspace_id, user_id, role FROM workspace_members").all(),
-      ]);
-      /** @type {Map<string, { workspaceId: string; role: Role }[]>} */ const byPerson = new Map();
-      for (const m of /** @type {{ workspace_id: string; user_id: string; role: Role }[]} */ (members.results)) byPerson.set(m.user_id, [...(byPerson.get(m.user_id) ?? []), { workspaceId: m.workspace_id, role: m.role }]);
-      return json({
-        organization: org,
-        workspaces: /** @type {Record<string, unknown>[]} */ (spaces.results).map((w) => ({ id: w.id, name: w.name, key: w.key, status: w.status, members: Number(w.members) })),
-        people: /** @type {Record<string, unknown>[]} */ (people.results).map((p) => ({
-          id: p.id,
-          username: p.username,
-          name: p.name,
-          title: p.title,
-          ...(p.email ? { email: p.email } : {}),
-          orgAdmin: !!p.org_admin,
-          ...(p.must_change_password ? { mustChangePassword: true } : {}),
-          ...(isLocked(/** @type {{ locked_until: number | null }} */ (p)) ? { locked: true } : {}),
-          workspaces: byPerson.get(String(p.id)) ?? [],
-        })),
-      });
-    }
-    if (path === "/api/org/workspaces" && method === "POST") {
-      const b = /** @type {{ name?: unknown; key?: unknown }} */ (await body(req));
-      const name = wsName(b.name);
-      const key = checkWsKey(b.key);
-      if (await odb.prepare("SELECT 1 FROM workspaces WHERE lower(name) = lower(?) OR key = ?").bind(name, key).first()) throw new HttpError(409, "Another workspace has that name or key");
-      const id = newToken().slice(0, 16);
-      const pos = Number((/** @type {{ p: number }} */ (await odb.prepare("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM workspaces").first())).p);
-      await odb.batch([
-        odb.prepare("INSERT INTO workspaces (id, name, key, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").bind(id, name, key, pos, now, now),
-        // Whoever makes it is in it, as its administrator, so it can be set up.
-        odb.prepare("INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, 'admin', ?)").bind(id, me.id, now),
-      ]);
-      // The service desk's request types, from the template (the seeding function is the owner's).
-      await env.ROOT.prepare("SELECT tenancy_seed_workspace(?, 'pulse-template-ws')").bind(id).run();
-      await audit(odb, req, me, "workspace_created", id, { name, key });
-      return json({ workspace: { id, name, key, status: "active" } }, 201);
-    }
-    const wsMatch = path.match(/^\/api\/org\/workspaces\/([A-Za-z0-9_-]{1,64})$/);
-    if (wsMatch && method === "PATCH") {
-      const w = await workspaceRow(wsMatch[1]);
-      if (!w) throw new HttpError(404, "Workspace not found");
-      const b = /** @type {{ name?: unknown; key?: unknown; status?: unknown }} */ (await body(req));
-      const name = b.name === undefined ? w.name : wsName(b.name);
-      const key = b.key === undefined ? w.key : checkWsKey(b.key);
-      const status = b.status === undefined ? w.status : String(b.status);
-      if (!["active", "archived"].includes(status)) throw new HttpError(400, "A workspace is active or archived");
-      if (status === "archived" && w.status === "active") {
-        const active = Number((/** @type {{ n: number }} */ (await odb.prepare("SELECT COUNT(*) AS n FROM workspaces WHERE status = 'active'").first())).n);
-        if (active <= 1) throw new HttpError(409, "Keep at least one workspace active");
-        if (w.id === scope.workspaceId) throw new HttpError(409, "Switch to another workspace before archiving this one");
-      }
-      if ((name !== w.name || key !== w.key) && (await odb.prepare("SELECT 1 FROM workspaces WHERE id <> ? AND (lower(name) = lower(?) OR key = ?)").bind(w.id, name, key).first())) {
-        throw new HttpError(409, "Another workspace has that name or key");
-      }
-      const wdb = env.ROOT.withScope({ orgId: scope.orgId, workspaceId: w.id });
-      await odb.batch([
-        odb.prepare("UPDATE workspaces SET name = ?, key = ?, status = ?, updated_at = ? WHERE id = ?").bind(name, key, status, now, w.id),
-        // Archiving ends the sessions open in it.
-        ...(status === "archived" ? [odb.prepare("DELETE FROM sessions WHERE workspace_id = ?").bind(w.id)] : []),
-      ]);
-      if (name !== w.name) {
-        // The workspace's name is also kept on its projects and in the places that pick a workspace by name.
-        await wdb.batch([
-          wdb.prepare("UPDATE systems SET data = jsonb_set(data::jsonb, '{workspace}', to_jsonb(?::text))::text").bind(name),
-          wdb.prepare("UPDATE workspace_workflows SET workspace = ?").bind(name),
-          wdb.prepare("UPDATE boards SET workspace = ?, name = ? WHERE system_id IS NULL").bind(name, `${name} board`),
-          wdb.prepare("UPDATE custom_fields SET workspace = ?").bind(name),
-        ]);
-      }
-      await audit(odb, req, me, "workspace_updated", w.id, { from: { name: w.name, key: w.key, status: w.status }, to: { name, key, status } });
-      return json({ workspace: { id: w.id, name, key, status } });
-    }
-    /** @param {unknown} list */
-    const cleanMemberships = async (list) => {
-      if (!Array.isArray(list)) throw new HttpError(400, "Send the workspaces, each with a role");
-      /** @type {Map<string, Role>} */ const out = new Map();
-      for (const m of list) {
-        const id = String(m?.workspaceId ?? "");
-        if (!(await workspaceRow(id))) throw new HttpError(404, "Workspace not found");
-        out.set(id, checkRole(m?.role));
-      }
-      return out;
-    };
-    if (path === "/api/org/people" && method === "POST") {
-      const b = /** @type {{ username?: unknown; name?: unknown; title?: unknown; email?: unknown; orgAdmin?: unknown; workspaces?: unknown }} */ (await body(req));
-      const username = String(b.username ?? "")
-        .trim()
-        .toLowerCase();
-      if (!/^[a-z0-9._-]{3,32}$/.test(username)) throw new HttpError(400, "Username: 3–32 letters, numbers, dots, dashes");
-      const name = /** @type {string} */ (text(b.name, "Name", true));
-      if (await odb.prepare("SELECT 1 FROM accounts WHERE lower(username) = lower(?)").bind(username).first()) throw new HttpError(409, "That username is taken");
-      const spaces = await cleanMemberships(b.workspaces);
-      if (!spaces.size) throw new HttpError(400, "Add them to at least one workspace");
-      const id = `${slug(username).slice(0, 40)}-${newToken().slice(0, 6)}`;
-      const temp = tempPassword();
-      const first = /** @type {Role} */ ([...spaces.values()][0]);
-      await odb.batch([
-        odb
-          .prepare("INSERT INTO accounts (id, username, name, title, email, role, password_hash, must_change_password, org_admin) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)")
-          .bind(id, username, name, text(b.title, "Title") ?? "", text(b.email, "Email") ?? null, first, await hashPassword(temp), b.orgAdmin ? 1 : 0),
-        ...[...spaces].map(([w, role]) => odb.prepare("INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)").bind(w, id, role, now)),
-      ]);
-      await audit(odb, req, me, "user_created", id, { name, username, orgAdmin: !!b.orgAdmin, workspaces: Object.fromEntries(spaces) });
-      // Shown once to the administrator; only its hash is stored. The person chooses their own at first sign-in.
-      return json({ id, temporaryPassword: temp }, 201);
-    }
-    const personMatch = path.match(/^\/api\/org\/people\/([a-z0-9._-]{1,80})(\/workspaces)?$/);
-    if (personMatch) {
-      const person = /** @type {{ id: string; name: string; org_admin: number } | null} */ (await odb.prepare("SELECT id, name, org_admin FROM accounts WHERE id = ?").bind(personMatch[1]).first());
-      if (!person) throw new HttpError(404, "Person not found");
-      // Which workspaces they're in, and their role in each: the memberships are replaced by this list.
-      if (personMatch[2] && method === "PUT") {
-        const spaces = await cleanMemberships((/** @type {{ workspaces?: unknown }} */ (await body(req))).workspaces);
-        if (!spaces.size) throw new HttpError(400, "Keep them in at least one workspace, or remove them from the organisation");
-        if (person.id === me.id && spaces.get(scope.workspaceId) !== "admin") throw new HttpError(409, "You can't take away your own administrator role in the workspace you're in");
-        const before = /** @type {{ workspace_id: string; role: Role }[]} */ ((await odb.prepare("SELECT workspace_id, role FROM workspace_members WHERE user_id = ?").bind(person.id).all()).results);
-        const gone = before.filter((m) => !spaces.has(m.workspace_id)).map((m) => m.workspace_id);
-        await odb.batch([
-          // Leaving a workspace ends their sessions in it (the sessions' foreign key to the membership).
-          ...gone.map((w) => odb.prepare("DELETE FROM workspace_members WHERE user_id = ? AND workspace_id = ?").bind(person.id, w)),
-          ...[...spaces].map(([w, role]) =>
-            odb.prepare("INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, ?, ?) ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = excluded.role").bind(w, person.id, role, now),
-          ),
-        ]);
-        for (const w of gone) await audit(odb, req, me, "member_removed", person.id, { name: person.name, workspace: w });
-        for (const [w, role] of spaces) {
-          const was = before.find((m) => m.workspace_id === w);
-          if (!was) await audit(odb, req, me, "member_added", person.id, { name: person.name, workspace: w, role });
-          else if (was.role !== role) await audit(odb, req, me, "member_role_changed", person.id, { name: person.name, workspace: w, from: was.role, to: role });
-        }
-        return json({ ok: true });
-      }
-      if (!personMatch[2] && method === "PATCH") {
-        const b = /** @type {{ orgAdmin?: unknown; name?: unknown; title?: unknown; email?: unknown }} */ (await body(req));
-        const orgAdmin = b.orgAdmin === undefined ? !!person.org_admin : !!b.orgAdmin;
-        if (person.org_admin && !orgAdmin && (await adminsLeft()) <= 1) throw new HttpError(409, "Keep at least one Organisation Administrator");
-        await odb
-          .prepare("UPDATE accounts SET org_admin = ?, name = COALESCE(?, name), title = COALESCE(?, title), email = CASE WHEN ? THEN ? ELSE email END WHERE id = ?")
-          .bind(orgAdmin ? 1 : 0, b.name === undefined ? null : text(b.name, "Name", true), b.title === undefined ? null : (text(b.title, "Title") ?? ""), b.email !== undefined, b.email === undefined ? null : (text(b.email, "Email") ?? null), person.id)
-          .run();
-        await audit(odb, req, me, "user_updated", person.id, { name: person.name, ...(orgAdmin !== !!person.org_admin ? { orgAdmin } : {}) });
-        return json({ ok: true });
-      }
-      // Removing someone from the organisation: their account and every membership go; their history stays.
-      if (!personMatch[2] && method === "DELETE") {
-        if (person.id === me.id) throw new HttpError(409, "You can't remove yourself");
-        if (person.org_admin && (await adminsLeft()) <= 1) throw new HttpError(409, "Keep at least one Organisation Administrator");
-        await odb.prepare("DELETE FROM accounts WHERE id = ?").bind(person.id).run();
-        await audit(odb, req, me, "user_deleted", person.id, { name: person.name, fromOrganisation: true });
-        return json({ ok: true });
-      }
-    }
-    throw new HttpError(404, "Not found");
-  }
   // ----- view-only share links (administrators) -----
   if (path === "/api/share-links" && method === "GET") {
     need("manage_users");
@@ -1628,52 +1254,11 @@ async function api(req, env, path, ctx) {
     await audit(db, req, me, "share_link_revoked", null, { label: row.label });
     return json({ ok: true });
   }
-  // ----- executive page links (administrators): /executive/<token>, this workspace's totals only -----
-  if (path === "/api/showcase-links" && method === "GET") {
-    need("manage_users");
-    const rows = /** @type {D1Result<{ id: string; label: string; by_name: string | null; created_at: string; expires_at: string; revoked_at: string | null; last_used_at: string | null; views: number }>} */ (
-      await db.prepare("SELECT l.*, u.name AS by_name FROM showcase_links l LEFT JOIN users u ON u.id = l.created_by ORDER BY l.revoked_at IS NOT NULL, l.created_at DESC LIMIT 50").all()
-    );
-    return json(
-      rows.results.map((r) => ({
-        id: r.id,
-        label: r.label,
-        createdBy: r.by_name ?? "someone",
-        createdAt: r.created_at,
-        expiresAt: r.expires_at,
-        ...(r.revoked_at ? { revokedAt: r.revoked_at } : {}),
-        ...(r.last_used_at ? { lastUsedAt: r.last_used_at } : {}),
-        views: r.views,
-      })),
-    );
-  }
-  if (path === "/api/showcase-links" && method === "POST") {
-    need("manage_users");
-    const b = await /** @type {Promise<{ label?: string; days?: number; }>} */ (/** @type {unknown} */ (body(req)));
-    const label = /** @type {string} */ (text(b.label, "Who it's for", true)).slice(0, 80);
-    const days = [7, 30, 90, 365].includes(Number(b.days)) ? Number(b.days) : 30;
-    const token = newToken();
-    const id = newToken().slice(0, 12);
-    const expires = new Date(Date.now() + days * 86_400_000).toISOString();
-    await db.prepare("INSERT INTO showcase_links (id, token_hash, label, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)").bind(id, await tokenHash(token), label, me.id, now, expires).run();
-    await audit(db, req, me, "showcase_link_created", null, { label, days });
-    // The secret is shown once; only its hash is kept.
-    return json({ id, url: `${env.PUBLIC_URL ?? new URL(req.url).origin}/executive/${token}`, expiresAt: expires }, 201);
-  }
-  const showcaseMatch = path.match(/^\/api\/showcase-links\/([A-Za-z0-9_-]+)$/);
-  if (showcaseMatch && method === "DELETE") {
-    need("manage_users");
-    const row = /** @type {{ label: string } | null} */ (await db.prepare("SELECT label FROM showcase_links WHERE id = ? AND revoked_at IS NULL").bind(showcaseMatch[1]).first());
-    if (!row) throw new HttpError(404, "Link not found");
-    await db.prepare("UPDATE showcase_links SET revoked_at = ? WHERE id = ?").bind(now, showcaseMatch[1]).run();
-    await audit(db, req, me, "showcase_link_revoked", null, { label: row.label });
-    return json({ ok: true });
-  }
   // ----- notifications -----
   if (path === "/api/notifications" && method === "GET") {
     // A view-only link has no inbox of its own: it reads the latest Monday Briefing.
     if (guest) {
-      const saved = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (settingRow(db, "latest_briefing")));
+      const saved = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT value FROM settings WHERE key = 'latest_briefing'").first()));
       const digest = saved ? /** @type {Digest} */ (JSON.parse(saved.value)) : null;
       /** @type {AppNotification[]} */ const items = digest ? [{ id: "latest-briefing", kind: "monday_briefing", title: digest.title, body: digest.summary, digest, createdAt: digest.writtenAt ?? now }] : [];
       return json({ items, unread: 0 });
@@ -1713,7 +1298,6 @@ async function api(req, env, path, ctx) {
   }
   if (path === "/api/settings/delivery" && method === "PUT") {
     need("manage_users");
-    needOrgAdmin();
     const b = await /** @type {Promise<{ resendKey?: string | null; from?: string; teamsWebhook?: string | null; briefingEmails?: string; }>} */ (/** @type {unknown} */ (body(req)));
     /** @type {Delivery} */ const next = await readDelivery(db);
     /** @type {string[]} */ const changed = [];
@@ -1754,7 +1338,7 @@ async function api(req, env, path, ctx) {
       if (list.join() !== (next.briefingEmails ?? []).join()) changed.push("extra briefing addresses");
       next.briefingEmails = list;
     }
-    await saveSetting(db, "delivery").bind(JSON.stringify(next)).run();
+    await db.prepare("INSERT INTO settings (key, value) VALUES ('delivery', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(next)).run();
     // The log says what changed, never the key or the webhook address.
     if (changed.length) await audit(db, req, me, "delivery_updated", null, { changed });
     return json(await deliveryStatus(db));
@@ -1775,7 +1359,7 @@ async function api(req, env, path, ctx) {
     const email = await outcome(!!(delivery.resendKey && delivery.from && me.email), () => sendEmail(env, delivery, /** @type {NonNullable<typeof me.email>} */ (me.email), mail.subject, mail.html, mail.text), `sent to ${me.email}.`);
     const teams = await outcome(!!delivery.teams, () => postToTeams(env, delivery, { title: "Test message from Pulse", body: `Sent by ${me.name}.` }), "posted.");
     // A working connection clears the old failure notice.
-    if (!/refused|fail/i.test(email + teams)) await removeSetting(db, "delivery_error").run();
+    if (!/refused|fail/i.test(email + teams)) await db.prepare("DELETE FROM settings WHERE key = 'delivery_error'").run();
     return json({ email, teams });
   }
   if (path === "/api/digests/run" && method === "POST") {
@@ -1786,10 +1370,45 @@ async function api(req, env, path, ctx) {
     await audit(db, req, me, "digest_sent", null, { kind: b.kind, ...result });
     return json(result);
   }
-  // Workspaces are rows of their organisation now (migration 0013). Adding, renaming and archiving them is the
-  // Organisation Administrator's (phase (d)); a project never changes workspace. The old list editor is refused.
+  // Edit the workspace list. Each entry may say what it was called before ("was"), so a rename
+  // moves its projects along; projects in a removed workspace move to the first one.
   if (path === "/api/settings/workspaces" && method === "PUT") {
-    throw new HttpError(409, "Workspaces are managed by your organisation's administrator, in Organisation settings.", "workspaces_managed_by_org");
+    need("manage_systems");
+    const b = await /** @type {Promise<{ workspaces?: { name?: string; was?: string; }[]; }>} */ (/** @type {unknown} */ (body(req)));
+    if (!Array.isArray(b.workspaces)) throw new HttpError(400, "Send the list of workspaces");
+    const entries = b.workspaces
+      .map((w) => ({
+        name: String(w?.name ?? "")
+          .trim()
+          .slice(0, 40),
+        was: w?.was ? String(w.was) : undefined,
+      }))
+      .filter((w) => w.name);
+    const names = entries.map((w) => w.name);
+    if (new Set(names.map((n) => n.toLowerCase())).size !== names.length) throw new HttpError(400, "Two workspaces have the same name");
+    if (names.length > 30) throw new HttpError(400, "Up to 30 workspaces");
+    if (!names.length) throw new HttpError(400, "Keep at least one workspace");
+    const before = await workspaceList(db);
+    const renames = new Map(entries.filter((w) => w.was && w.was !== w.name && before.includes(w.was)).map((w) => [/** @type {NonNullable<typeof w.was>} */ (w.was), w.name]));
+    const rows = await /** @type {Promise<D1Result<{ id: string; data: string; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT id, data FROM systems").all()));
+    const wfBefore = await workflowsBefore();
+    const stmts = [
+      db.prepare("INSERT INTO settings (key, value) VALUES ('workspaces', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(names)),
+      // A renamed workspace keeps its workflow and its board; a removed one's go.
+      ...[...renames].flatMap(([was, now]) => [db.prepare("UPDATE workspace_workflows SET workspace = ? WHERE workspace = ?").bind(now, was), db.prepare("UPDATE boards SET workspace = ?, name = ? WHERE workspace = ?").bind(now, `${now} board`, was)]),
+      ...before.filter((w) => !names.includes(w) && !renames.has(w)).flatMap((w) => [db.prepare("DELETE FROM workspace_workflows WHERE workspace = ?").bind(w), db.prepare("DELETE FROM boards WHERE workspace = ?").bind(w)]),
+    ];
+    for (const r of rows.results) {
+      const sys = /** @type {System} */ (JSON.parse(r.data));
+      const to = (sys.workspace && (renames.get(sys.workspace) ?? (names.includes(sys.workspace) ? sys.workspace : undefined))) || names[0];
+      if (to === sys.workspace) continue;
+      sys.workspace = to;
+      stmts.push(db.prepare("UPDATE systems SET data = ? WHERE id = ?").bind(JSON.stringify(sys), r.id));
+    }
+    await db.batch(stmts);
+    for (const [id, wf] of wfBefore) await keepWorkflowIfNeeded(id, wf);
+    await audit(db, req, me, "workspaces_updated", null, { from: before, to: names, ...(renames.size ? { renamed: Object.fromEntries(renames) } : {}) });
+    return json({ workspaces: names });
   }
   // ----- two-step verification: your own -----
   if (path === "/api/me/mfa/setup" && method === "POST") {
@@ -1955,7 +1574,6 @@ async function api(req, env, path, ctx) {
   }
   if (path === "/api/settings/mfa" && method === "PUT") {
     need("manage_users");
-    needOrgAdmin();
     const b = await /** @type {Promise<{ roles?: unknown; }>} */ (/** @type {unknown} */ (body(req)));
     if (!Array.isArray(b.roles)) throw new HttpError(400, "Roles must be a list");
     /** @type {MfaPolicy} */ const next = { roles: ROLES.filter((r) => /** @type {unknown[]} */ (b.roles).includes(r)) };
@@ -1963,17 +1581,16 @@ async function api(req, env, path, ctx) {
     if (mfaRequiredFor(me, next) && !(await hasMfa(db, me))) {
       throw new HttpError(400, `Turn on two-step verification for yourself first (Settings), then require it for ${ROLE_LABEL[me.role]}s`);
     }
-    await saveSetting(db, "mfa_policy").bind(JSON.stringify(next)).run();
+    await db.prepare("INSERT INTO settings (key, value) VALUES ('mfa_policy', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(next)).run();
     await audit(db, req, me, "mfa_policy_updated", null, { from: policy.roles, to: next.roles });
     return json(next);
   }
   // How many wrong passwords lock an account, for how long, and the per-address limit.
   if (path === "/api/settings/signin" && method === "PUT") {
     need("manage_users");
-    needOrgAdmin();
     const before = await signinRules(db);
     const next = cleanSigninRules(await /** @type {Promise<Partial<SigninRules>>} */ (/** @type {unknown} */ (body(req))));
-    await saveSetting(db, "signin_rules").bind(JSON.stringify(next)).run();
+    await db.prepare("INSERT INTO settings (key, value) VALUES ('signin_rules', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(next)).run();
     if (JSON.stringify(before) !== JSON.stringify(next)) await audit(db, req, me, "signin_rules_updated", null, { from: before, to: next });
     return json(next);
   }
@@ -2068,7 +1685,6 @@ async function api(req, env, path, ctx) {
       ),
       limits,
       workspaces: await workspaceList(db),
-      tenant: await tenantInfo(),
       requestChannels: requestChannels(await readDelivery(db), !!guest),
       ...(guest ? { viewOnly: { label: guest.label, expiresAt: guest.expires_at } } : {}),
       mfaPolicy: policy,
@@ -2188,9 +1804,7 @@ async function api(req, env, path, ctx) {
       }) +
       itemLines.join("\n");
     try {
-      // Whose data this is: the instructions refer to the first line rather than naming any organisation.
-      const where = await tenantInfo();
-      const stream = await askStream(env.AI, `ORGANISATION: ${where.organization?.name ?? "?"} · WORKSPACE: ${where.workspace?.name ?? "?"}\n${snapshot}`, question, history, mode);
+      const stream = await askStream(env.AI, snapshot, question, history, mode);
       return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store" } });
     } catch (e) {
       console.error("ask failed", e);
@@ -2320,9 +1934,8 @@ async function api(req, env, path, ctx) {
     // Sign-offs only ever happen through /pcn/sign, so a new PCN starts with all of them pending.
     if (pcn) pcn.signatories = await resolveSigners(pcn.signatories.map(({ date: _date, ...s }) => ({ ...s, status: /** @type {const} */ ("PENDING") })));
     const name = /** @type {string} */ (text(b.name ?? pcn?.title, "Name", true));
-    // Ids are unique across every organisation, and another organisation's rows can't be seen from here, so a
-    // readable id gets a random ending instead of "-2" (which would say the name is taken somewhere else).
-    const id = `${slug(name).slice(0, 40)}-${newToken().slice(0, 6)}`;
+    let id = slug(name);
+    for (let n = 2; await db.prepare("SELECT 1 FROM systems WHERE id = ?").bind(id).first(); n++) id = `${slug(name)}-${n}`;
     const status = proposal ? "IDEA" : checkStatus(b.status ?? "WIP");
     if (proposal) {
       delete b.developers;
@@ -2358,7 +1971,7 @@ async function api(req, env, path, ctx) {
     };
     const sort = /** @type {{ s: number; }} */ (await /** @type {Promise<{ s: number; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT COALESCE(MAX(sort), 0) + 1 AS s FROM systems").first()))).s;
     // Its key: the one asked for, or one suggested from the name.
-    const taken = await orgKeys();
+    const taken = new Set((await /** @type {Promise<D1Result<{ key: string; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT key FROM systems").all()))).results.map((r) => r.key));
     const key = b.key ? checkKey(b.key) : suggestKey(name, taken);
     if (taken.has(key)) throw new HttpError(409, `The key ${key} is taken by another project`);
     await db.prepare("INSERT INTO systems (id, sort, data, key) VALUES (?, ?, ?, ?)").bind(id, sort, JSON.stringify(system), key).run();
@@ -2461,7 +2074,7 @@ async function api(req, env, path, ctx) {
       if (await db.prepare("SELECT 1 FROM work_items WHERE system_id = ?").bind(id).first()) {
         throw new HttpError(400, `The key is locked: ${columns.key}-1 already exists`);
       }
-      if ((await orgKeys(id)).has(key)) throw new HttpError(409, `The key ${key} is taken by another project`);
+      if (await db.prepare("SELECT 1 FROM systems WHERE key = ? AND id <> ?").bind(key, id).first()) throw new HttpError(409, `The key ${key} is taken by another project`);
       keyChange = { from: columns.key, to: key };
     }
     let fromItems = !!columns.progress_from_items;
@@ -2790,10 +2403,8 @@ async function api(req, env, path, ctx) {
   // Everything that happened to one project, for its page. Visible to everyone who can see the project.
   const historyMatch = path.match(/^\/api\/systems\/([a-z0-9-]+)\/history$/);
   if (historyMatch && method === "GET") {
-    // A project that isn't in this workspace is 404, the same as one that doesn't exist (not an empty history).
-    if (!(await db.prepare("SELECT 1 FROM systems WHERE id = ?").bind(historyMatch[1]).first())) throw new HttpError(404, "System not found");
     const rows = await /** @type {Promise<D1Result<{ id: number; at: string; user_id: string | null; actor: string; action: string; target: string; detail: string; }>>} */ (
-      /** @type {unknown} */ (db.prepare("SELECT id, at, user_id, actor, action, target, detail FROM activity WHERE target = ? AND workspace_id = ? ORDER BY id DESC LIMIT 100").bind(historyMatch[1], scope.workspaceId).all())
+      /** @type {unknown} */ (db.prepare("SELECT id, at, user_id, actor, action, target, detail FROM activity WHERE target = ? ORDER BY id DESC LIMIT 100").bind(historyMatch[1]).all())
     );
     return json(
       rows.results
@@ -2825,7 +2436,7 @@ async function api(req, env, path, ctx) {
       features: b.features !== undefined ? whole(b.features, "Feature requests per developer", 200) : current.features,
       stallDays: b.stallDays !== undefined ? whole(b.stallDays, "Days without progress", 365) : current.stallDays,
     };
-    await saveSetting(db, "workload_limits").bind(JSON.stringify(next)).run();
+    await db.prepare("INSERT INTO settings (key, value) VALUES ('workload_limits', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(next)).run();
     await audit(db, req, me, "limits_updated", null, { from: current, to: next });
     return json(next);
   }
@@ -2856,8 +2467,8 @@ async function api(req, env, path, ctx) {
         ...(weeks ? { durationWeeks: weeks } : {}),
       };
     }
-    // A random ending, as for projects: ids are unique across organisations.
-    const id = `${slug(name).slice(0, 40)}-${newToken().slice(0, 6)}`;
+    let id = slug(name);
+    for (let n = 2; await db.prepare("SELECT 1 FROM templates WHERE id = ?").bind(id).first(); n++) id = `${slug(name)}-${n}`;
     await db
       .prepare("INSERT INTO templates (id, name, summary, data, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)")
       .bind(id, name, text(b.summary, "Summary") ?? "", JSON.stringify(data), me.id, now)
@@ -3066,14 +2677,12 @@ async function api(req, env, path, ctx) {
     const b = await /** @type {Promise<Partial<User> & { password?: string; }>} */ (/** @type {unknown} */ (body(req)));
     const username = /** @type {string} */ (text(b.username, "Username", true)).toLowerCase();
     if (!/^[a-z0-9._-]{3,32}$/.test(username)) throw new HttpError(400, "Username: 3–32 letters, numbers, dots, dashes");
-    // Usernames are unique in the organisation, including people who aren't in this workspace (who can't be seen
-    // from it): checked organisation-wide.
-    if (await orgDb(env, scope.orgId).prepare("SELECT 1 FROM users WHERE lower(username) = lower(?)").bind(username).first()) throw new HttpError(409, "That username is taken");
+    if (await db.prepare("SELECT 1 FROM users WHERE username = ?").bind(username).first()) throw new HttpError(409, "That username is taken");
     const role = checkRole(b.role ?? "viewer");
     const projectIds = role === "developer" ? await checkProjects(b.projectIds) : [];
     await checkProjectLimit(projectIds, projectIds.length > 0);
-    // A random ending, as for projects: ids are unique across organisations.
-    const id = `${slug(username).slice(0, 40)}-${newToken().slice(0, 6)}`;
+    let id = slug(username);
+    for (let n = 2; await db.prepare("SELECT 1 FROM users WHERE id = ?").bind(id).first(); n++) id = `${slug(username)}-${n}`;
     await db
       .prepare(
         // An administrator-issued password is temporary: the person chooses their own at first sign-in.
@@ -3218,7 +2827,6 @@ async function api(req, env, path, ctx) {
   }
   if (path === "/api/roles" && method === "PUT") {
     need("manage_users");
-    needOrgAdmin();
     const b = await /** @type {Promise<Partial<RolePermissions>>} */ (/** @type {unknown} */ (body(req)));
     const valid = new Set(DEFAULT_ROLE_PERMISSIONS.admin);
     const next = { ...matrix };
@@ -3226,7 +2834,7 @@ async function api(req, env, path, ctx) {
       if (role === "admin" || !Array.isArray(b[role])) continue;
       next[role] = /** @type {Array<Permission>} */ (b[role]).filter(/** @returns {p is Permission} */ (p) => valid.has(/** @type {Permission} */ (p)));
     }
-    await saveSetting(db, "role_permissions").bind(JSON.stringify(next)).run();
+    await db.prepare("INSERT INTO settings (key, value) VALUES ('role_permissions', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(next)).run();
     /** @type {Record<string, { added: Permission[]; removed: Permission[] }>} */ const changes = {};
     for (const role of ROLES) {
       const added = next[role].filter((p) => !matrix[role].includes(p));
@@ -3241,10 +2849,8 @@ async function api(req, env, path, ctx) {
     need("audit_log");
     const q = new URL(req.url).searchParams;
     const limit = Math.min(500, Math.max(1, Number(q.get("limit")) || 100));
-    // The open workspace's entries. Organisation-wide ones (sign-ins, people, organisation settings: no workspace)
-    // only for Organisation Administrators, whichever workspace they're in.
-    /** @type {string[]} */ const where = [me.org_admin ? "(workspace_id = ? OR workspace_id IS NULL)" : "workspace_id = ?"];
-    /** @type {unknown[]} */ const args = [scope.workspaceId];
+    /** @type {string[]} */ const where = [];
+    /** @type {unknown[]} */ const args = [];
     const before = Number(q.get("before"));
     if (before > 0) {
       where.push("id < ?");
@@ -3294,14 +2900,13 @@ async function api(req, env, path, ctx) {
         /** @type {unknown} */ (
           db
             .prepare(
-              // Sign-ins are organisation-wide: counted for Organisation Administrators only. Changes are this workspace's.
               `SELECT
-             (SELECT COUNT(*) FROM activity WHERE ?::int = 1 AND action = 'login' AND at >= ?) AS signins24h,
-             (SELECT COUNT(*) FROM activity WHERE ?::int = 1 AND action = 'login_failed' AND at >= ?) AS failed24h,
-             (SELECT COUNT(DISTINCT user_id) FROM activity WHERE ?::int = 1 AND action = 'login' AND at >= ?) AS active7d,
-             (SELECT COUNT(*) FROM activity WHERE workspace_id = ? AND action NOT IN ('login', 'logout', 'logout_all', 'login_failed') AND at >= ?) AS changes7d`,
+             (SELECT COUNT(*) FROM activity WHERE action = 'login' AND at >= ?) AS signins24h,
+             (SELECT COUNT(*) FROM activity WHERE action = 'login_failed' AND at >= ?) AS failed24h,
+             (SELECT COUNT(DISTINCT user_id) FROM activity WHERE action = 'login' AND at >= ?) AS active7d,
+             (SELECT COUNT(*) FROM activity WHERE action NOT IN ('login', 'logout', 'logout_all', 'login_failed') AND at >= ?) AS changes7d`,
             )
-            .bind(!!me.org_admin, day, !!me.org_admin, day, !!me.org_admin, week, scope.workspaceId, week)
+            .bind(day, day, week, week)
             .first()
         )
       );
@@ -3318,21 +2923,13 @@ async function api(req, env, path, ctx) {
  * @returns {Env}
  */
 function withDatabase(env) {
-  // D1 has no tenants, rows or roles to scope by: it was retired in Phase 1 and can't be switched back to.
-  if (env.DATABASE === "d1") throw new Error("The D1 database is retired; DATABASE must be postgres");
-  const root = env.PG_ROOT ?? (env.HYPERDRIVE ? pgDatabase(env.HYPERDRIVE.connectionString) : null);
-  if (!root) throw new Error("No database: the HYPERDRIVE binding is missing");
-  // DB starts scoped to no tenant, so anything that runs before the tenant is known sees nothing (fails closed).
-  // ROOT is the owner: used on purpose, for identity, the cron's loops and the clean-up.
-  return { ...env, ROOT: root, DB: root.withScope(NO_TENANT) };
+  if (env.DATABASE === "d1") {
+    if (!env.D1) throw new Error("DATABASE is d1 but there's no D1 binding");
+    return { ...env, DB: env.D1 };
+  }
+  if (!env.HYPERDRIVE) throw new Error("No database: the HYPERDRIVE binding is missing");
+  return { ...env, DB: pgDatabase(env.HYPERDRIVE.connectionString) };
 }
-/**
- * A database handle for one organisation's own records (sign-in rules, its administrators), before anyone
- * has a workspace open: signing in, resetting a password.
- * @param {Env} env
- * @param {string} orgId
- */
-const orgDb = (env, orgId) => env.ROOT.withScope({ orgId, workspaceId: "" });
 export default {
   /**
    * @param {Request} req
@@ -3362,25 +2959,15 @@ export default {
   async scheduled(event, rawEnv) {
     const env = withDatabase(rawEnv);
     const due = dueJobs(event.scheduledTime ?? Date.now());
-    // Deleting by age is the same for everyone: done once, as the owner.
-    if (due.dailyDigest) await purgeExpired(env.ROOT).catch((e) => console.error("Retention clean-up failed", e));
-    // Everything else is done for one workspace at a time, with that workspace's handle, so a job can only
-    // read, tell and change that workspace (and its digests reach only its members).
-    const spaces = /** @type {D1Result<{ organization_id: string; id: string }>} */ (
-      await env.ROOT.prepare(
-        `SELECT w.organization_id, w.id FROM workspaces w JOIN organizations o ON o.id = w.organization_id
-         WHERE w.status = 'active' AND o.status = 'active' ORDER BY o.created_at, w.position`,
-      ).all()
-    );
-    for (const w of spaces.results) {
-      const tenv = tenantEnv(env, { orgId: w.organization_id, workspaceId: w.id });
-      if (due.dailyDigest) await runDailyDigests(tenv).catch((e) => noteFailure(tenv.DB, "Daily digest", e));
-      if (due.mondayBriefing) await runBriefing(tenv).catch((e) => noteFailure(tenv.DB, "Monday Briefing", e));
-      await runSubscriptions(tenv).catch((e) => noteFailure(tenv.DB, "Filter subscriptions", e));
-      await runScheduledRules(tenv).catch((e) => console.error("Scheduled automation failed", w.id, e));
-      await runSlaChecks(tenv).catch((e) => noteFailure(tenv.DB, "Service desk SLA alerts", e));
-      await retryWebhooks(tenv).catch((e) => console.error("Webhook retries failed", w.id, e));
+    if (due.dailyDigest) {
+      await purgeExpired(env.DB).catch((e) => console.error("Retention clean-up failed", e));
+      await runDailyDigests(env).catch((e) => noteFailure(env.DB, "Daily digest", e));
     }
+    if (due.mondayBriefing) await runBriefing(env).catch((e) => noteFailure(env.DB, "Monday Briefing", e));
+    await runSubscriptions(env).catch((e) => noteFailure(env.DB, "Filter subscriptions", e));
+    await runScheduledRules(env).catch((e) => console.error("Scheduled automation failed", e));
+    await runSlaChecks(env).catch((e) => noteFailure(env.DB, "Service desk SLA alerts", e));
+    await retryWebhooks(env).catch((e) => console.error("Webhook retries failed", e));
   },
 };
 /** @typedef {"password" | "two_step" | "locked" | "address"} FailureReason */
@@ -3402,12 +2989,6 @@ export default {
  * @property {string | null} mfa_enabled_at
  * @property {number | null} locked_until
  * @property {string | null} locked_at
- * @property {string} organization_id
- * @property {number} org_admin 1: an Organisation Administrator
- */
-/**
- * The person making a request, with their role in the workspace they have open (or the link's or token's).
- * @typedef {UserRow & { session_workspace: string }} SessionUser
  */
 /**
  * @typedef {Object} ShareLinkRow
@@ -3420,8 +3001,6 @@ export default {
  * @property {string | null} revoked_at
  * @property {string | null} last_used_at
  * @property {number} views
- * @property {string} organization_id
- * @property {string} workspace_id the only workspace the link shows
  */
 /**
  * @typedef {Object} TemplateRow

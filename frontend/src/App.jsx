@@ -9,7 +9,7 @@
 /** @import { SignoffStatus } from './data/pcn' */
 /** @import { User } from './data/roles' */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertOctagon, ArrowLeft, Building2, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, LockKeyhole, Menu, Zap, Plug, BellRing, Lock, ListPlus, Headset, Plus, Search, Send, ShieldCheck, Sparkles, Users, Workflow } from "lucide-react";
+import { AlertOctagon, ArrowLeft, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, LockKeyhole, Menu, Zap, Plug, BellRing, Lock, ListPlus, Headset, Plus, Search, Send, ShieldCheck, Sparkles, Users, Workflow } from "lucide-react";
 import { getSchedule } from "./data/systems";
 import { api, useAppData } from "./data/api";
 import { isAssigned } from "./data/roles";
@@ -46,10 +46,6 @@ import ProjectsPage from "./components/ProjectsPage";
 import BoardsPage from "./components/BoardsPage";
 import SearchPage from "./components/SearchPage";
 import CustomDashboards from "./components/CustomDashboards";
-import WorkspaceSwitcher from "./components/WorkspaceSwitcher";
-import PlatformPage from "./components/PlatformPage";
-import OrgAdmin from "./components/OrgAdmin";
-import { setOpenWorkspace } from "./data/tenant";
 import AutomationSettings from "./components/AutomationSettings";
 import ServiceDeskPage from "./components/ServiceDeskPage";
 import ChatPage, { useChatUnread } from "./components/ChatPage";
@@ -69,8 +65,7 @@ import NotificationBell from "./components/NotificationBell";
 /**
  * @returns {boolean}
  */
-const isExecutive = () => /^\/executive(\/[a-f0-9]{64})?\/?$/.test(window.location.pathname);
-const isPlatform = () => /^\/platform\/?$/.test(window.location.pathname);
+const isExecutive = () => /^\/executive\/?$/.test(window.location.pathname);
 /**
  * "Good morning" and so on, by the visitor's own clock.
  * @returns {"Good morning" | "Good afternoon" | "Good evening"}
@@ -124,8 +119,7 @@ const chatInHash = () => window.location.hash.match(/^#\/chat\/([A-Za-z0-9_-]{4,
  */
 export default function App() {
   // The public showcase needs no account, so it skips sign-in entirely.
-  // /platform is for Platform Administrators: its own sign-in, outside every organisation.
-  return isExecutive() ? <ExecutivePage /> : isPlatform() ? <PlatformPage /> : <Tracker />;
+  return isExecutive() ? <ExecutivePage /> : <Tracker />;
 }
 /**
  */
@@ -161,8 +155,6 @@ function Tracker() {
  * @param {{ data: AppData; reload: () => Promise<void> }} props
  */
 function Dashboard({ data, reload }) {
-  // Before anything reads browser storage: what is remembered inside a workspace is kept per workspace.
-  setOpenWorkspace(data.tenant?.workspace?.id ?? "", data.tenant?.organization?.name ?? "");
   const now = useNow();
   const { me, systems, users, requests, features, documents, blockers, limits } = data;
   const can = /** @param {Permission} p */ (p) => data.permissions.includes(p);
@@ -547,7 +539,6 @@ function Dashboard({ data, reload }) {
             </button>
           )}
           <h1>{data.viewOnly ? "Welcome" : `${greeting()}, ${me.name.split(" ")[0]}`}</h1>
-          <WorkspaceSwitcher tenant={data.tenant} />
           <VitalSign
             attention={attention.length}
             total={systems.length}
@@ -717,21 +708,15 @@ function Dashboard({ data, reload }) {
               setView("settings");
             }}
             adminPages={[
-              // Workspaces, people and their roles: the organisation's administrators.
-              ...(data.tenant?.orgAdmin ? [{ key: "organisation", label: "Organisation", icon: Building2, content: <OrgAdmin me={me} /> }] : []),
               ...(can("manage_users")
                 ? [
                     { key: "people", label: "Users", icon: Users, content: <UsersPage section="people" {...usersPageProps} /> },
-                    // Organisation-wide: changed by its administrators only.
-                    ...(data.tenant?.orgAdmin ? [{ key: "roles", label: "Roles & permissions", icon: ShieldCheck, content: <UsersPage section="roles" {...usersPageProps} /> }] : []),
-                    // Organisation-wide: changed by its administrators only.
-                    ...(data.tenant?.orgAdmin ? [{ key: "twostep", label: "Two-step rules", icon: Fingerprint, content: <UsersPage section="twostep" {...usersPageProps} /> }] : []),
-                    // Organisation-wide: changed by its administrators only.
-                    ...(data.tenant?.orgAdmin ? [{ key: "signin", label: "Sign-in security", icon: LockKeyhole, content: <UsersPage section="signin" {...usersPageProps} /> }] : []),
+                    { key: "roles", label: "Roles & permissions", icon: ShieldCheck, content: <UsersPage section="roles" {...usersPageProps} /> },
+                    { key: "twostep", label: "Two-step rules", icon: Fingerprint, content: <UsersPage section="twostep" {...usersPageProps} /> },
+                    { key: "signin", label: "Sign-in security", icon: LockKeyhole, content: <UsersPage section="signin" {...usersPageProps} /> },
                     { key: "limits", label: "Workload limits", icon: Gauge, content: <UsersPage section="limits" {...usersPageProps} /> },
                     { key: "links", label: "View-only links", icon: Link2, content: <UsersPage section="links" {...usersPageProps} /> },
-                    // Organisation-wide: changed by its administrators only.
-                    ...(data.tenant?.orgAdmin ? [{ key: "delivery", label: "Email & Teams", icon: Send, content: <DeliverySection /> }] : []),
+                    { key: "delivery", label: "Email & Teams", icon: Send, content: <DeliverySection /> },
                   ]
                 : []),
               ...(can("manage_workflows") ? [{ key: "workflows", label: "Workflows", icon: Workflow, content: <WorkflowsSettings users={users} workspaces={data.workspaces} canEdit={can("manage_workflows")} /> }] : []),

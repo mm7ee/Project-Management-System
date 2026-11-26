@@ -6,7 +6,7 @@ import { api } from "../data/api";
  * The QR code an authenticator app scans. Drawn locally: the secret never leaves the page.
  * @param {{ uri: string }} props
  */
-export function QrCode({ uri }) {
+function QrCode({ uri }) {
   const qr = qrcode(0, "M");
   qr.addData(uri);
   qr.make();

@@ -3,7 +3,6 @@
 import { useState } from "react";
 import BoardView from "./BoardView";
 import TimelineView from "./TimelineView";
-import { workspaceKey } from "../data/tenant";
 /**
  * Boards: a workspace's board across its projects, or one project's.
  * @param {{
@@ -19,7 +18,7 @@ import { workspaceKey } from "../data/tenant";
 export default function BoardsPage({ workspaces, systems, users, me, now, readOnly, canAssignOthers }) {
   const remembered = (() => {
     try {
-      return localStorage.getItem(workspaceKey("pulse:board")) ?? "";
+      return localStorage.getItem("pulse:board") ?? "";
     } catch {
       return "";
     }
@@ -29,7 +28,7 @@ export default function BoardsPage({ workspaces, systems, users, me, now, readOn
   const setPick = /** @param {string} v */ (v) => {
     setPickState(v);
     try {
-      localStorage.setItem(workspaceKey("pulse:board"), v);
+      localStorage.setItem("pulse:board", v);
     } catch {
       // Only a convenience.
     }

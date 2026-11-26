@@ -15,7 +15,6 @@ import { Columns, Donut } from "./DashCharts";
 import { LineChart } from "./AgileCharts";
 import Panel from "../Panel";
 import CountUp from "../CountUp";
-import { organisationName } from "../../data/tenant";
 const HASH = "#/reports/projects";
 /** @type {Record<Rag, LucideIcon>} */ const RAG_ICON = { RED: AlertOctagon, AMBER: AlertTriangle, GREEN: CheckCircle2, NONE: CircleDashed };
 /** @type {Record<Rag, string>} */ const RAG_COLOR = { RED: "var(--danger)", AMBER: "var(--warning)", GREEN: "var(--success)", NONE: "var(--st-not)" };
@@ -202,7 +201,7 @@ export default function ReportsPage({ me, users, workspaces, now }) {
         {/* Printed first: the cover. */}
         <section className="pr-cover" aria-hidden="true">
           <img src="/omni-logo.png" alt="" className="pr-cover-logo" />
-          <p className="pr-cover-kicker">Pulse{organisationName() ? ` · ${organisationName()}` : ""}</p>
+          <p className="pr-cover-kicker">Pulse · Omni Contact</p>
           <h1>Projects report</h1>
           <p className="pr-cover-period">
             {filters.from} to {filters.to}

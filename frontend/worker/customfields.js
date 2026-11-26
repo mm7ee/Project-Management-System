@@ -7,7 +7,6 @@
 import { newToken } from "./auth";
 import { HttpError, body, json } from "./http";
 import { CUSTOM_FIELD_KINDS, MAX_CUSTOM_FIELDS, MAX_FIELD_OPTIONS } from "../src/data/admin";
-import { workspacesRow } from "./settings";
 /**
  * @param {D1Database} db
  * @param {string} [where="TRUE"]
@@ -293,7 +292,7 @@ export async function customFieldsApi(c, path, method) {
     const b = await /** @type {Promise<Record<string, unknown>>} */ (/** @type {unknown} */ (body(req)));
     const f = checkField(b);
     const workspace = String(b.workspace ?? "");
-    const ws = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (workspacesRow(db)));
+    const ws = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT value FROM settings WHERE key = 'workspaces'").first()));
     if (!(ws ? /** @type {string[]} */ (JSON.parse(ws.value)) : ["Projects", "HR"]).includes(workspace)) throw new HttpError(400, "Choose the workspace");
     const count = await /** @type {Promise<{ n: number; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT COUNT(*) AS n FROM custom_fields WHERE workspace = ?").bind(workspace).first()));
     if (Number(count?.n ?? 0) >= MAX_CUSTOM_FIELDS) throw new HttpError(400, `Up to ${MAX_CUSTOM_FIELDS} custom fields per workspace`);

@@ -642,7 +642,7 @@ export function IntegrationsSection({ systems }) {
   const now = Date.now();
   return (
     <>
-      <Section icon={<GitBranch size={18} />} title="GitHub" sub="For this workspace: commits, branches and pull requests that mention one of its work item keys (like INFRA-12) appear in that item's Development panel. Each workspace connects its own repositories, with its own secret.">
+      <Section icon={<GitBranch size={18} />} title="GitHub" sub="Commits, branches and pull requests that mention a work item's key (like INFRA-12) appear in that item's Development panel.">
         {gh && <p className={gh.connected ? "form-ok" : "muted"}>{gh.connected ? `Connected${gh.updatedAt ? ` since ${formatDate(gh.updatedAt)}` : ""}. ${gh.links} links so far.` : "Not connected."}</p>}
         <ol className="steps">
           <li>
@@ -650,7 +650,7 @@ export function IntegrationsSection({ systems }) {
             <button type="button" className="btn btn-ghost sm" onClick={() => setSecret(randomSecret())}>
               Make one for me
             </button>{" "}
-            or type your own (20 characters or more). Use a different secret in each workspace: the secret tells Pulse which workspace a delivery is for.
+            or type your own (20 characters or more).
           </li>
           <li>Save it here, below. Pulse seals it; it's never shown again.</li>
           <li>
