@@ -47,6 +47,7 @@ import BoardsPage from "./components/BoardsPage";
 import SearchPage from "./components/SearchPage";
 import CustomDashboards from "./components/CustomDashboards";
 import WorkspaceSwitcher from "./components/WorkspaceSwitcher";
+import { setOpenWorkspace } from "./data/tenant";
 import AutomationSettings from "./components/AutomationSettings";
 import ServiceDeskPage from "./components/ServiceDeskPage";
 import ChatPage, { useChatUnread } from "./components/ChatPage";
@@ -156,6 +157,8 @@ function Tracker() {
  * @param {{ data: AppData; reload: () => Promise<void> }} props
  */
 function Dashboard({ data, reload }) {
+  // Before anything reads browser storage: what is remembered inside a workspace is kept per workspace.
+  setOpenWorkspace(data.tenant?.workspace?.id ?? "");
   const now = useNow();
   const { me, systems, users, requests, features, documents, blockers, limits } = data;
   const can = /** @param {Permission} p */ (p) => data.permissions.includes(p);

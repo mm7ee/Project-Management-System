@@ -275,6 +275,19 @@ async function issueRecoveryCodes(db, userId) {
  * @returns {Promise<Response>}
  */
 async function startSession(db, req, row, detail) {
+  // The workspaces this person may open. The session opens the first; with more than one the sign-in page asks
+  // which (POST /api/me/workspace). Shown only now, after the password and any second step have been checked.
+  const spaces = /** @type {D1Result<{ id: string; name: string }>} */ (
+    await db
+      .prepare(
+        `SELECT w.id, w.name FROM workspace_members m JOIN workspaces w ON w.id = m.workspace_id AND w.status = 'active'
+         JOIN organizations o ON o.id = w.organization_id AND o.status = 'active'
+         WHERE m.user_id = ? ORDER BY w.position, w.name`,
+      )
+      .bind(row.id)
+      .all()
+  ).results;
+  if (!spaces.length) throw new HttpError(403, "Your account isn't in any workspace yet. Ask your organisation's administrator to add you.", "no_workspace");
   const token = newToken();
   await db.batch([
     db.prepare("INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)").bind(await tokenHash(token), row.id, Date.now() + SESSION_DAYS * 86_400_000),
@@ -282,7 +295,7 @@ async function startSession(db, req, row, detail) {
     db.prepare("DELETE FROM login_failures WHERE user_id = ?").bind(row.id),
   ]);
   await audit(db, req, row, "login", null, { ...detail, ...(row.must_change_password ? { temporaryPassword: true } : {}) });
-  return json({ ok: true }, 200, { "set-cookie": sessionCookie(token, req, SESSION_DAYS * 86_400) });
+  return json({ ok: true, workspace: spaces[0], workspaces: spaces }, 200, { "set-cookie": sessionCookie(token, req, SESSION_DAYS * 86_400) });
 }
 // ---------- sign-in lockout ----------
 // Every failed password (and wrong two-step code) is a row in login_failures, so the limits hold
@@ -705,6 +718,28 @@ function manifest(start) {
     { headers: { "content-type": "application/manifest+json", "cache-control": view ? "no-store" : "public, max-age=3600" } },
   );
 }
+// ---------- organisations at sign-in ----------
+/**
+ * An organisation code as typed: lower case, letters, digits and dashes, or "" if it can't be one.
+ * @param {unknown} v
+ * @returns {string}
+ */
+function cleanOrgCode(v) {
+  const code = String(v ?? "")
+    .trim()
+    .toLowerCase()
+    .slice(0, 32);
+  return /^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/.test(code) ? code : "";
+}
+/**
+ * An active organisation by its code (as the owner: before sign-in nobody has a tenant), or null.
+ * @param {D1Database} root
+ * @param {string} code
+ * @returns {Promise<{ id: string; name: string } | null>}
+ */
+async function orgByCode(root, code) {
+  return /** @type {{ id: string; name: string } | null} */ (await root.prepare("SELECT id, name FROM organizations WHERE code = ? AND status = 'active'").bind(code).first());
+}
 // ---------- the API ----------
 /**
  * @param {Request} req
@@ -721,15 +756,31 @@ async function api(req, env, path, ctx) {
   const method = req.method;
   if (path === "/api/manifest" && method === "GET") return manifest(new URL(req.url).searchParams.get("start"));
   if (path === "/api/login" && method === "POST") {
-    const { username, password } = await /** @type {Promise<{ username?: string; password?: string; }>} */ (/** @type {unknown} */ (body(req)));
+    const { organization, username, password } = await /** @type {Promise<{ organization?: string; username?: string; password?: string; }>} */ (/** @type {unknown} */ (body(req)));
     const tried = String(username ?? "")
       .trim()
       .slice(0, 64);
-    // A username is unique within an organisation. Until sign-in asks which organisation (phase (c)), a name two
-    // organisations both use is treated like an unknown one: refused the same way, after the same work.
-    const found = await /** @type {Promise<D1Result<UserRow>>} */ (/** @type {unknown} */ (db.prepare("SELECT * FROM users WHERE lower(username) = lower(?) LIMIT 2").bind(tried).all()));
+    // Which organisation: its code (the sign-in page asks for it first, or takes it from #/o/<code>). A username is
+    // unique within an organisation. An unknown, suspended or archived organisation is refused exactly like a wrong
+    // password, after the same work, so the reply never says whether an organisation (or a username) exists.
+    // Without a code (older clients and scripts), a username used in only one active organisation still works.
+    const orgCode = cleanOrgCode(organization);
+    const org = orgCode ? await orgByCode(db, orgCode) : null;
+    const found =
+      orgCode && !org
+        ? { results: [] }
+        : await /** @type {Promise<D1Result<UserRow>>} */ (
+            /** @type {unknown} */ (
+              org
+                ? db.prepare("SELECT * FROM users WHERE organization_id = ? AND lower(username) = lower(?)").bind(org.id, tried).all()
+                : db
+                    .prepare("SELECT u.* FROM users u JOIN organizations o ON o.id = u.organization_id AND o.status = 'active' WHERE lower(u.username) = lower(?) LIMIT 2")
+                    .bind(tried)
+                    .all()
+            )
+          );
     const row = found.results.length === 1 ? found.results[0] : null;
-    const orgEnv = row ? tenantEnv(env, { orgId: row.organization_id, workspaceId: "" }) : null;
+    const orgEnv = row ? tenantEnv(env, { orgId: row.organization_id, workspaceId: "" }) : org ? tenantEnv(env, { orgId: org.id, workspaceId: "" }) : null;
     const rules = orgEnv ? await signinRules(orgEnv.DB) : DEFAULT_SIGNIN_RULES;
     const at = Date.now();
     // Wrong password, unknown username, locked account or a refused address: one message for all,
@@ -898,7 +949,7 @@ async function api(req, env, path, ctx) {
   // Same reply whatever happened, and the slow work (email) runs after it, so neither the words nor
   // the timing say whether an account exists.
   if (path === "/api/password/forgot" && method === "POST") {
-    const b = await /** @type {Promise<{ login?: string; }>} */ (/** @type {unknown} */ (body(req)));
+    const b = await /** @type {Promise<{ login?: string; organization?: string; }>} */ (/** @type {unknown} */ (body(req)));
     const login = String(b.login ?? "")
       .trim()
       .slice(0, 120);
@@ -918,8 +969,29 @@ async function api(req, env, path, ctx) {
         ).n
       : 0;
     // A username, or an email address that belongs to exactly one person.
-    const matches = await /** @type {Promise<D1Result<UserRow>>} */ (/** @type {unknown} */ (db.prepare("SELECT * FROM users WHERE lower(username) = lower(?) OR lower(email) = lower(?) LIMIT 2").bind(login, login).all()));
-    const row = matches.results.find((u) => u.username.toLowerCase() === login.toLowerCase()) ?? (matches.results.length === 1 ? matches.results[0] : null);
+    // Within the organisation whose code was given; an unknown code finds nobody (and the reply is the same). Without
+    // a code (older clients), across active organisations, where a name or address must still be unique.
+    const resetCode = cleanOrgCode(b.organization);
+    const resetOrg = resetCode ? await orgByCode(db, resetCode) : null;
+    const matches =
+      resetCode && !resetOrg
+        ? { results: /** @type {UserRow[]} */ ([]) }
+        : await /** @type {Promise<D1Result<UserRow>>} */ (
+            /** @type {unknown} */ (
+              resetOrg
+                ? db.prepare("SELECT * FROM users WHERE organization_id = ? AND (lower(username) = lower(?) OR lower(email) = lower(?)) LIMIT 2").bind(resetOrg.id, login, login).all()
+                : db
+                    .prepare("SELECT u.* FROM users u JOIN organizations o ON o.id = u.organization_id AND o.status = 'active' WHERE lower(u.username) = lower(?) OR lower(u.email) = lower(?) LIMIT 2")
+                    .bind(login, login)
+                    .all()
+            )
+          );
+    // Within one organisation a username wins over an address; across organisations the match must be unique.
+    const row = resetOrg
+      ? (matches.results.find((u) => u.username.toLowerCase() === login.toLowerCase()) ?? (matches.results.length === 1 ? matches.results[0] : null))
+      : matches.results.length === 1
+        ? matches.results[0]
+        : null;
     const sentToAccount = row
       ? /** @type {{ n: number; }} */ (
           await /** @type {Promise<{ n: number; } | null>} */ (

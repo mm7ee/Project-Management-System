@@ -730,3 +730,36 @@ workspace, enforced by Postgres row-level security. The rules are in DECISIONS.m
    `node scripts/tenancy-dry-run.mjs stage --migration 0014_tenancy_enforcement.sql`.
 2. Back up: `npm run db:backup -- ../backup-before-tenancy-b.sql`, plus a Neon branch.
 3. `npm run db:migrate`, then deploy at once. The phase (a) Worker can't run on 0014.
+
+## Multi-tenancy, phase (c): signing in to an organisation, and choosing a workspace (2026-11-26)
+
+**What was built**
+- **Sign-in asks for the organisation first:**
+  - **Where the code comes from:** typed, or from a link `#/o/<code>`. This device then remembers it, with a
+    "Change" link beside it.
+  - **Then:** username and password, the second step, and, for someone in several workspaces, a choice of which to
+    open, with the last one used on this device first.
+- **The code is never checked on its own:** it goes with the password. An unknown or suspended organisation, a
+  username not in it, a username shared by organisations (when no code is given) and a wrong password all get the
+  same message after the same work. Workspaces are listed only after a correct sign-in, and only your own.
+- **The API:**
+  - `POST /api/login` and `POST /api/password/forgot` take `organization`.
+  - A successful sign-in returns your workspaces.
+  - Someone in no workspace is told so (403 `no_workspace`), after the right password only.
+- **Browser storage:** the last dashboard and the last board are remembered per workspace, so one workspace's
+  choices never appear in another. The organisation code and the last workspace per organisation are remembered
+  per device (`src/data/tenant.js`).
+- **The top-bar switcher** remembers the workspace you switch to.
+
+**Tests:** `tests/tenancy.signin.test.js`, 7 checks on PGlite:
+- the code decides whose account a username is
+- codes match whatever their capitals
+- every refusal is identical
+- workspaces shown only after sign-in, and only yours
+- someone in no workspace
+- forgot password replies identically
+- a suspended organisation's sessions stop working
+
+`npm test`: 146 passed. `vite build` passes.
+
+**To release:** nothing to migrate. It ships with phase (b)'s deploy, or after it.

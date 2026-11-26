@@ -50,6 +50,13 @@ or changed, and asking for it by id or key gives `404`, the same as something th
 
 - **Keys:** project keys, and so item keys such as `INFRA-12`, are unique within an organisation. Another
   organisation may use the same key for its own project.
+- **Signing in:** `POST /api/login` takes `{ organization, username, password }`, where `organization` is the
+  organisation's code (`omnicontact`), in any capitals. Every refusal reads the same, whether the code is unknown,
+  the organisation is suspended, the username isn't in it, or the password is wrong. A correct sign-in returns
+  `{ ok, workspace, workspaces }`, your own workspaces only; with more than one, choose with `POST /api/me/workspace`.
+  Someone in no workspace gets `403`, `code: "no_workspace"`, after the right password only.
+  `POST /api/password/forgot` takes `organization` the same way. Without a code, a username used in only one active
+  organisation still signs in (for older scripts).
 - `GET /api/data` includes `tenant`: `{ organization: { id, name, code }, workspace: { id, name, key },
   workspaces: [{ id, name, key, role }], orgAdmin }`. `workspaces` lists the ones you belong to (empty for links).
 - `GET /api/me/workspaces` returns the same `tenant` object (signed-in people only, not tokens or links).

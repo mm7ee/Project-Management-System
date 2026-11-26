@@ -258,3 +258,14 @@
   background: linear-gradient(90deg, #ffffff 0%, #8fdcfb 55%, #1ba9e1 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
+
+/* ---------- organisation and workspace at sign-in (multi-tenancy) ---------- */
+.lp-org { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: -4px 0 14px; font-size: 13px; color: inherit; opacity: 0.85; }
+.lp-org b { font-weight: 700; }
+.lp-org .lp-link { margin: 0 0 0 4px; padding: 0; }
+.lp-workspaces { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
+.lp-workspace { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.06); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.lp-workspace:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); }
+.lp-workspace:focus-visible { outline: 2px solid #1ba9e1; outline-offset: 2px; }
+.lp-workspace:disabled { opacity: 0.6; cursor: default; }
+.lp-workspace-last { font-size: 12px; opacity: 0.75; }

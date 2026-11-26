@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Layers } from "lucide-react";
 import { api } from "../data/api";
+import { rememberWorkspace } from "../data/tenant";
 
 /**
  * The open workspace, in the top bar. With more than one, choosing another switches to it without signing in
@@ -34,6 +35,7 @@ export default function WorkspaceSwitcher({ tenant }) {
           setError("");
           try {
             await api("/me/workspace", "POST", { workspaceId: e.target.value });
+            if (tenant.organization) rememberWorkspace(tenant.organization.id, e.target.value);
             window.location.hash = "";
             window.location.reload();
           } catch (err) {
