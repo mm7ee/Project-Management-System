@@ -115,7 +115,7 @@ export async function githubWebhook(env, req) {
   // Each workspace connects GitHub with its own secret. A delivery belongs to the workspace whose secret signed
   // it, and everything after this is done with that workspace's handle, so keys can only match its own items.
   const secrets = await /** @type {Promise<D1Result<{ organization_id: string; workspace_id: string; sealed: string; }>>} */ (
-    /** @type {unknown} */ (env.ROOT.prepare("SELECT organization_id, workspace_id, sealed FROM integration_secrets WHERE kind = 'github'").all())
+    /** @type {unknown} */ (env.ROOT.prepare("SELECT s.organization_id, s.workspace_id, s.sealed FROM integration_secrets s JOIN workspaces w ON w.id = s.workspace_id AND w.status = 'active' JOIN organizations o ON o.id = s.organization_id AND o.status = 'active' WHERE s.kind = 'github'").all())
   );
   if (!secrets.results.length) throw new HttpError(404, "GitHub isn't connected");
   const given = req.headers.get("x-hub-signature-256") ?? "";

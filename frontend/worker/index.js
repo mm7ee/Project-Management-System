@@ -32,6 +32,7 @@ import { noteFailure, pause, postToTeams, raise, readDelivery, securityEmail, se
 import { runBriefing, runDailyDigests } from "./digest";
 import { toFeature } from "./rows";
 import { NO_TENANT, pgDatabase, tenantEnv } from "./pg";
+import { platformApi } from "./platform";
 import { HttpError, body, json } from "./http";
 import { KEY_PATTERN, mentionsIn, suggestKey } from "../src/data/workitems";
 import { notifyItem } from "./schemes";
@@ -755,6 +756,9 @@ async function api(req, env, path, ctx) {
   let db = env.ROOT;
   const method = req.method;
   if (path === "/api/manifest" && method === "GET") return manifest(new URL(req.url).searchParams.get("start"));
+  // Platform Administrators: their own sign-in and session, outside every organisation (worker/platform.js).
+  const platform = await platformApi(env, req, path);
+  if (platform) return platform;
   if (path === "/api/login" && method === "POST") {
     const { organization, username, password } = await /** @type {Promise<{ organization?: string; username?: string; password?: string; }>} */ (/** @type {unknown} */ (body(req)));
     const tried = String(username ?? "")
@@ -1160,7 +1164,7 @@ async function api(req, env, path, ctx) {
     ? await /** @type {Promise<ShareLinkRow | null>} */ (
         /** @type {unknown} */ (
           db
-            .prepare("SELECT * FROM share_links WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?")
+            .prepare("SELECT l.* FROM share_links l JOIN workspaces w ON w.id = l.workspace_id AND w.status = 'active' JOIN organizations o ON o.id = l.organization_id AND o.status = 'active' WHERE l.token_hash = ? AND l.revoked_at IS NULL AND l.expires_at > ?")
             .bind(await tokenHash(shareToken), new Date().toISOString())
             .first()
         )
@@ -1264,6 +1268,10 @@ async function api(req, env, path, ctx) {
   };
   const need = /** @param {Permission} p */ (p) => {
     if (!can(p)) throw new HttpError(403, "You don't have permission to do that");
+  };
+  /** Organisation settings apply to every workspace: only the organisation's administrators change them. */
+  const needOrgAdmin = () => {
+    if (guest || apiToken || !me.org_admin) throw new HttpError(403, "Only your organisation's administrators can change this: it applies to every workspace", "org_admin_only");
   };
   const now = new Date().toISOString();
   // Tell people what needs them, without holding up the request or failing it. Your own actions
@@ -1398,6 +1406,187 @@ async function api(req, env, path, ctx) {
     await audit(db, req, me, "workspace_switched", target, { from: scope.workspaceId, to: target, name: /** @type {{ name: string }} */ (member).name });
     return json({ ok: true });
   }
+  // ----- organisation administration (Organisation Administrators only) -----
+  // Workspaces, people and their role in each workspace. Done with the organisation's handle (no workspace), which
+  // sees every workspace and person of this organisation and nothing of any other.
+  if (path === "/api/org" || path.startsWith("/api/org/")) {
+    needOrgAdmin();
+    const odb = orgDb(env, scope.orgId);
+    const now = new Date().toISOString();
+    const workspaceRow = /** @param {string} id */ async (id) =>
+      /** @type {{ id: string; name: string; key: string; status: string } | null} */ (await odb.prepare("SELECT id, name, key, status FROM workspaces WHERE id = ?").bind(id).first());
+    const checkWsKey = /** @param {unknown} v */ (v) => {
+      const k = String(v ?? "")
+        .trim()
+        .toUpperCase();
+      if (!/^[A-Z][A-Z0-9]{1,9}$/.test(k)) throw new HttpError(400, "A workspace key is 2 to 10 capital letters or digits, starting with a letter, such as HR");
+      return k;
+    };
+    const wsName = /** @param {unknown} v */ (v) => {
+      const n = String(v ?? "").trim();
+      if (!n) throw new HttpError(400, "Name the workspace");
+      return n.slice(0, 40);
+    };
+    const adminsLeft = async () => Number((/** @type {{ n: number }} */ (await odb.prepare("SELECT COUNT(*) AS n FROM accounts WHERE org_admin = 1").first())).n);
+    if (path === "/api/org" && method === "GET") {
+      const [org, spaces, people, members] = await Promise.all([
+        odb.prepare("SELECT id, name, code, status FROM organizations WHERE id = ?").bind(scope.orgId).first(),
+        odb.prepare("SELECT w.id, w.name, w.key, w.status, w.position, (SELECT COUNT(*) FROM workspace_members m WHERE m.workspace_id = w.id) AS members FROM workspaces w ORDER BY w.position, w.name").all(),
+        odb.prepare("SELECT id, username, name, title, email, org_admin, must_change_password, locked_until FROM accounts ORDER BY name").all(),
+        odb.prepare("SELECT workspace_id, user_id, role FROM workspace_members").all(),
+      ]);
+      /** @type {Map<string, { workspaceId: string; role: Role }[]>} */ const byPerson = new Map();
+      for (const m of /** @type {{ workspace_id: string; user_id: string; role: Role }[]} */ (members.results)) byPerson.set(m.user_id, [...(byPerson.get(m.user_id) ?? []), { workspaceId: m.workspace_id, role: m.role }]);
+      return json({
+        organization: org,
+        workspaces: /** @type {Record<string, unknown>[]} */ (spaces.results).map((w) => ({ id: w.id, name: w.name, key: w.key, status: w.status, members: Number(w.members) })),
+        people: /** @type {Record<string, unknown>[]} */ (people.results).map((p) => ({
+          id: p.id,
+          username: p.username,
+          name: p.name,
+          title: p.title,
+          ...(p.email ? { email: p.email } : {}),
+          orgAdmin: !!p.org_admin,
+          ...(p.must_change_password ? { mustChangePassword: true } : {}),
+          ...(isLocked(/** @type {{ locked_until: number | null }} */ (p)) ? { locked: true } : {}),
+          workspaces: byPerson.get(String(p.id)) ?? [],
+        })),
+      });
+    }
+    if (path === "/api/org/workspaces" && method === "POST") {
+      const b = /** @type {{ name?: unknown; key?: unknown }} */ (await body(req));
+      const name = wsName(b.name);
+      const key = checkWsKey(b.key);
+      if (await odb.prepare("SELECT 1 FROM workspaces WHERE lower(name) = lower(?) OR key = ?").bind(name, key).first()) throw new HttpError(409, "Another workspace has that name or key");
+      const id = newToken().slice(0, 16);
+      const pos = Number((/** @type {{ p: number }} */ (await odb.prepare("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM workspaces").first())).p);
+      await odb.batch([
+        odb.prepare("INSERT INTO workspaces (id, name, key, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").bind(id, name, key, pos, now, now),
+        // Whoever makes it is in it, as its administrator, so it can be set up.
+        odb.prepare("INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, 'admin', ?)").bind(id, me.id, now),
+      ]);
+      // The service desk's request types, from the template (the seeding function is the owner's).
+      await env.ROOT.prepare("SELECT tenancy_seed_workspace(?, 'pulse-template-ws')").bind(id).run();
+      await audit(odb, req, me, "workspace_created", id, { name, key });
+      return json({ workspace: { id, name, key, status: "active" } }, 201);
+    }
+    const wsMatch = path.match(/^\/api\/org\/workspaces\/([A-Za-z0-9_-]{1,64})$/);
+    if (wsMatch && method === "PATCH") {
+      const w = await workspaceRow(wsMatch[1]);
+      if (!w) throw new HttpError(404, "Workspace not found");
+      const b = /** @type {{ name?: unknown; key?: unknown; status?: unknown }} */ (await body(req));
+      const name = b.name === undefined ? w.name : wsName(b.name);
+      const key = b.key === undefined ? w.key : checkWsKey(b.key);
+      const status = b.status === undefined ? w.status : String(b.status);
+      if (!["active", "archived"].includes(status)) throw new HttpError(400, "A workspace is active or archived");
+      if (status === "archived" && w.status === "active") {
+        const active = Number((/** @type {{ n: number }} */ (await odb.prepare("SELECT COUNT(*) AS n FROM workspaces WHERE status = 'active'").first())).n);
+        if (active <= 1) throw new HttpError(409, "Keep at least one workspace active");
+        if (w.id === scope.workspaceId) throw new HttpError(409, "Switch to another workspace before archiving this one");
+      }
+      if ((name !== w.name || key !== w.key) && (await odb.prepare("SELECT 1 FROM workspaces WHERE id <> ? AND (lower(name) = lower(?) OR key = ?)").bind(w.id, name, key).first())) {
+        throw new HttpError(409, "Another workspace has that name or key");
+      }
+      const wdb = env.ROOT.withScope({ orgId: scope.orgId, workspaceId: w.id });
+      await odb.batch([
+        odb.prepare("UPDATE workspaces SET name = ?, key = ?, status = ?, updated_at = ? WHERE id = ?").bind(name, key, status, now, w.id),
+        // Archiving ends the sessions open in it.
+        ...(status === "archived" ? [odb.prepare("DELETE FROM sessions WHERE workspace_id = ?").bind(w.id)] : []),
+      ]);
+      if (name !== w.name) {
+        // The workspace's name is also kept on its projects and in the places that pick a workspace by name.
+        await wdb.batch([
+          wdb.prepare("UPDATE systems SET data = jsonb_set(data::jsonb, '{workspace}', to_jsonb(?::text))::text").bind(name),
+          wdb.prepare("UPDATE workspace_workflows SET workspace = ?").bind(name),
+          wdb.prepare("UPDATE boards SET workspace = ?, name = ? WHERE system_id IS NULL").bind(name, `${name} board`),
+          wdb.prepare("UPDATE custom_fields SET workspace = ?").bind(name),
+        ]);
+      }
+      await audit(odb, req, me, "workspace_updated", w.id, { from: { name: w.name, key: w.key, status: w.status }, to: { name, key, status } });
+      return json({ workspace: { id: w.id, name, key, status } });
+    }
+    /** @param {unknown} list */
+    const cleanMemberships = async (list) => {
+      if (!Array.isArray(list)) throw new HttpError(400, "Send the workspaces, each with a role");
+      /** @type {Map<string, Role>} */ const out = new Map();
+      for (const m of list) {
+        const id = String(m?.workspaceId ?? "");
+        if (!(await workspaceRow(id))) throw new HttpError(404, "Workspace not found");
+        out.set(id, checkRole(m?.role));
+      }
+      return out;
+    };
+    if (path === "/api/org/people" && method === "POST") {
+      const b = /** @type {{ username?: unknown; name?: unknown; title?: unknown; email?: unknown; orgAdmin?: unknown; workspaces?: unknown }} */ (await body(req));
+      const username = String(b.username ?? "")
+        .trim()
+        .toLowerCase();
+      if (!/^[a-z0-9._-]{3,32}$/.test(username)) throw new HttpError(400, "Username: 3–32 letters, numbers, dots, dashes");
+      const name = /** @type {string} */ (text(b.name, "Name", true));
+      if (await odb.prepare("SELECT 1 FROM accounts WHERE lower(username) = lower(?)").bind(username).first()) throw new HttpError(409, "That username is taken");
+      const spaces = await cleanMemberships(b.workspaces);
+      if (!spaces.size) throw new HttpError(400, "Add them to at least one workspace");
+      const id = `${slug(username).slice(0, 40)}-${newToken().slice(0, 6)}`;
+      const temp = tempPassword();
+      const first = /** @type {Role} */ ([...spaces.values()][0]);
+      await odb.batch([
+        odb
+          .prepare("INSERT INTO accounts (id, username, name, title, email, role, password_hash, must_change_password, org_admin) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)")
+          .bind(id, username, name, text(b.title, "Title") ?? "", text(b.email, "Email") ?? null, first, await hashPassword(temp), b.orgAdmin ? 1 : 0),
+        ...[...spaces].map(([w, role]) => odb.prepare("INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)").bind(w, id, role, now)),
+      ]);
+      await audit(odb, req, me, "user_created", id, { name, username, orgAdmin: !!b.orgAdmin, workspaces: Object.fromEntries(spaces) });
+      // Shown once to the administrator; only its hash is stored. The person chooses their own at first sign-in.
+      return json({ id, temporaryPassword: temp }, 201);
+    }
+    const personMatch = path.match(/^\/api\/org\/people\/([a-z0-9._-]{1,80})(\/workspaces)?$/);
+    if (personMatch) {
+      const person = /** @type {{ id: string; name: string; org_admin: number } | null} */ (await odb.prepare("SELECT id, name, org_admin FROM accounts WHERE id = ?").bind(personMatch[1]).first());
+      if (!person) throw new HttpError(404, "Person not found");
+      // Which workspaces they're in, and their role in each: the memberships are replaced by this list.
+      if (personMatch[2] && method === "PUT") {
+        const spaces = await cleanMemberships((/** @type {{ workspaces?: unknown }} */ (await body(req))).workspaces);
+        if (!spaces.size) throw new HttpError(400, "Keep them in at least one workspace, or remove them from the organisation");
+        if (person.id === me.id && spaces.get(scope.workspaceId) !== "admin") throw new HttpError(409, "You can't take away your own administrator role in the workspace you're in");
+        const before = /** @type {{ workspace_id: string; role: Role }[]} */ ((await odb.prepare("SELECT workspace_id, role FROM workspace_members WHERE user_id = ?").bind(person.id).all()).results);
+        const gone = before.filter((m) => !spaces.has(m.workspace_id)).map((m) => m.workspace_id);
+        await odb.batch([
+          // Leaving a workspace ends their sessions in it (the sessions' foreign key to the membership).
+          ...gone.map((w) => odb.prepare("DELETE FROM workspace_members WHERE user_id = ? AND workspace_id = ?").bind(person.id, w)),
+          ...[...spaces].map(([w, role]) =>
+            odb.prepare("INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, ?, ?) ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = excluded.role").bind(w, person.id, role, now),
+          ),
+        ]);
+        for (const w of gone) await audit(odb, req, me, "member_removed", person.id, { name: person.name, workspace: w });
+        for (const [w, role] of spaces) {
+          const was = before.find((m) => m.workspace_id === w);
+          if (!was) await audit(odb, req, me, "member_added", person.id, { name: person.name, workspace: w, role });
+          else if (was.role !== role) await audit(odb, req, me, "member_role_changed", person.id, { name: person.name, workspace: w, from: was.role, to: role });
+        }
+        return json({ ok: true });
+      }
+      if (!personMatch[2] && method === "PATCH") {
+        const b = /** @type {{ orgAdmin?: unknown; name?: unknown; title?: unknown; email?: unknown }} */ (await body(req));
+        const orgAdmin = b.orgAdmin === undefined ? !!person.org_admin : !!b.orgAdmin;
+        if (person.org_admin && !orgAdmin && (await adminsLeft()) <= 1) throw new HttpError(409, "Keep at least one Organisation Administrator");
+        await odb
+          .prepare("UPDATE accounts SET org_admin = ?, name = COALESCE(?, name), title = COALESCE(?, title), email = CASE WHEN ? THEN ? ELSE email END WHERE id = ?")
+          .bind(orgAdmin ? 1 : 0, b.name === undefined ? null : text(b.name, "Name", true), b.title === undefined ? null : (text(b.title, "Title") ?? ""), b.email !== undefined, b.email === undefined ? null : (text(b.email, "Email") ?? null), person.id)
+          .run();
+        await audit(odb, req, me, "user_updated", person.id, { name: person.name, ...(orgAdmin !== !!person.org_admin ? { orgAdmin } : {}) });
+        return json({ ok: true });
+      }
+      // Removing someone from the organisation: their account and every membership go; their history stays.
+      if (!personMatch[2] && method === "DELETE") {
+        if (person.id === me.id) throw new HttpError(409, "You can't remove yourself");
+        if (person.org_admin && (await adminsLeft()) <= 1) throw new HttpError(409, "Keep at least one Organisation Administrator");
+        await odb.prepare("DELETE FROM accounts WHERE id = ?").bind(person.id).run();
+        await audit(odb, req, me, "user_deleted", person.id, { name: person.name, fromOrganisation: true });
+        return json({ ok: true });
+      }
+    }
+    throw new HttpError(404, "Not found");
+  }
   // ----- view-only share links (administrators) -----
   if (path === "/api/share-links" && method === "GET") {
     need("manage_users");
@@ -1484,6 +1673,7 @@ async function api(req, env, path, ctx) {
   }
   if (path === "/api/settings/delivery" && method === "PUT") {
     need("manage_users");
+    needOrgAdmin();
     const b = await /** @type {Promise<{ resendKey?: string | null; from?: string; teamsWebhook?: string | null; briefingEmails?: string; }>} */ (/** @type {unknown} */ (body(req)));
     /** @type {Delivery} */ const next = await readDelivery(db);
     /** @type {string[]} */ const changed = [];
@@ -1725,6 +1915,7 @@ async function api(req, env, path, ctx) {
   }
   if (path === "/api/settings/mfa" && method === "PUT") {
     need("manage_users");
+    needOrgAdmin();
     const b = await /** @type {Promise<{ roles?: unknown; }>} */ (/** @type {unknown} */ (body(req)));
     if (!Array.isArray(b.roles)) throw new HttpError(400, "Roles must be a list");
     /** @type {MfaPolicy} */ const next = { roles: ROLES.filter((r) => /** @type {unknown[]} */ (b.roles).includes(r)) };
@@ -1739,6 +1930,7 @@ async function api(req, env, path, ctx) {
   // How many wrong passwords lock an account, for how long, and the per-address limit.
   if (path === "/api/settings/signin" && method === "PUT") {
     need("manage_users");
+    needOrgAdmin();
     const before = await signinRules(db);
     const next = cleanSigninRules(await /** @type {Promise<Partial<SigninRules>>} */ (/** @type {unknown} */ (body(req))));
     await saveSetting(db, "signin_rules").bind(JSON.stringify(next)).run();
@@ -2984,6 +3176,7 @@ async function api(req, env, path, ctx) {
   }
   if (path === "/api/roles" && method === "PUT") {
     need("manage_users");
+    needOrgAdmin();
     const b = await /** @type {Promise<Partial<RolePermissions>>} */ (/** @type {unknown} */ (body(req)));
     const valid = new Set(DEFAULT_ROLE_PERMISSIONS.admin);
     const next = { ...matrix };

@@ -827,6 +827,152 @@
                   ]
                 }
               }
+            },
+            {
+              "name": "Organisation Administrator sees workspaces and people",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                      "const o = pm.response.json();",
+                      "pm.test(\"lists workspaces and people\", () => { pm.expect(o.workspaces).to.be.an(\"array\").that.is.not.empty; pm.expect(o.people).to.be.an(\"array\").that.is.not.empty; });"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Cookie",
+                    "value": "omni_session={{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/org",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "org"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Platform routes need a platform session",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status is 401\", () => pm.response.to.have.status(401));",
+                      "pm.test(\"an organisation session is no platform session\", () => pm.expect(pm.response.json().code).to.eql(\"platform_signin\"));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Cookie",
+                    "value": "omni_session={{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/platform/organizations",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "platform",
+                    "organizations"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Platform sign-in refuses an unknown name like a wrong password",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status is 401\", () => pm.response.to.have.status(401));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"username\": \"no-such-platform-admin\",\n  \"password\": \"Wrong-Pass-123!\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/platform/login",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "platform",
+                    "login"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Sign-in with an unknown organisation code reads like a wrong password",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status is 401\", () => pm.response.to.have.status(401));",
+                      "pm.test(\"no session\", () => pm.expect(pm.response.headers.get(\"Set-Cookie\") || \"\").not.to.match(/omni_session=[a-f0-9]{64}/));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"organization\": \"no-such-organisation\",\n  \"username\": \"qa-admin\",\n  \"password\": \"{{qaPassword}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/login",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "login"
+                  ]
+                }
+              }
             }
           ]
         },

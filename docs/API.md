@@ -184,3 +184,40 @@ reads pushes, branch creation and pull requests, and links each one that mention
 Each workspace connects GitHub with its own secret; a delivery belongs to the workspace whose secret signed it, and
 links only to that workspace's items.
 The setup steps are in **Settings → Administration → Integrations**.
+
+## Organisation administration
+
+For Organisation Administrators, signed in (not with a token or link). Others get `403`, `code: "org_admin_only"`.
+Another organisation's workspace or person is `404`.
+
+- `GET /api/org`: the organisation, every workspace (`id, name, key, status, members`), and every person with their
+  workspaces and role in each (`workspaces: [{ workspaceId, role }]`) and `orgAdmin`.
+- `POST /api/org/workspaces` `{ name, key }`: a new workspace. You become its administrator.
+- `PATCH /api/org/workspaces/:id` `{ name?, key?, status?: "active" | "archived" }`. The last active workspace, and
+  the one you have open, can't be archived.
+- `POST /api/org/people` `{ username, name, title?, email?, orgAdmin?, workspaces: [{ workspaceId, role }] }`:
+  returns `{ id, temporaryPassword }`, shown once.
+- `PUT /api/org/people/:id/workspaces` `{ workspaces: [{ workspaceId, role }] }`: replaces their memberships.
+  Leaving a workspace ends their sessions in it.
+- `PATCH /api/org/people/:id` `{ orgAdmin?, name?, title?, email? }`. `DELETE /api/org/people/:id` removes them from
+  the organisation. There must always be one Organisation Administrator.
+- **Organisation-wide settings:** `PUT /api/settings/signin`, `/api/settings/mfa`, `/api/settings/delivery` and
+  `/api/roles` also need an Organisation Administrator.
+
+## Platform administration
+
+Platform Administrators only, at `/api/platform/…`, with their own session cookie (`pulse_platform`, sent only to
+`/api/platform`). The first one is made with `node scripts/platform-admin.mjs`.
+
+- `POST /api/platform/login` `{ username, password }` → `{ ticket, setup? }`. `setup` (`{ secret, uri }`) comes the
+  first time: an authenticator app must be set up. Then `POST /api/platform/login/code` `{ ticket, code }` signs
+  in. Every refusal reads the same.
+- `GET /api/platform/me`; `POST /api/platform/me/password` `{ current, password }` (required before anything else
+  after a temporary password); `POST /api/platform/logout`.
+- `GET /api/platform/organizations`: each organisation's `name, code, status, createdAt` and its counts of
+  workspaces, people and administrators. Nothing inside an organisation.
+- `POST /api/platform/organizations` `{ name, code, admin: { username, name, email? } }` → the organisation, the
+  administrator's temporary password (shown once) and the sign-in link.
+- `PATCH /api/platform/organizations/:id` `{ name?, status?: "active" | "suspended" | "archived" }`. Leaving active
+  ends its sessions.
+- `POST /api/platform/organizations/:id/admins` `{ username, name, email? }`: another Organisation Administrator.

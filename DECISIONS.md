@@ -839,3 +839,44 @@ section 12. Rules every later feature must follow:
   - **Proven:** switching one table's RLS off makes the suite fail (checked for `saved_filters`).
 - **Test-only adapter options** (`idle_timeout`, `retry_dropped`) are for running against Neon from far away. The
   Worker never sets them and never retries a query.
+
+## Multi-tenancy, phase (d): Platform and Organisation Administrators (2026-11-26)
+
+- **Platform Administrators** are separate accounts (`platform_admins`), outside every organisation:
+  - **What they do:** make, rename, suspend and archive organisations, and give each an administrator.
+  - **What they see:** each organisation's name, code, status, and counts of workspaces, people and administrators.
+    Never anything inside one.
+  - **Signing in:** `/platform`, a password and **always** an authenticator app, set up at the first sign-in. A
+    temporary password must be replaced first.
+  - **Their session:** its own cookie (`pulse_platform`, `Path=/api/platform`, `SameSite=Strict`, 8 hours), so it
+    can't reach the rest of the API, and an organisation's session can't reach theirs.
+  - **Access:** their tables are the owner's only (revoked from `pulse_app`), and they have their own activity log
+    (`platform_activity`).
+  - **The first one** is made from the command line (`scripts/platform-admin.mjs`) by whoever holds the connection
+    string.
+- **A new organisation** starts in one transaction, with:
+  - a copy of the **template**
+  - one workspace, "Projects"
+  - its first Organisation Administrator, with a temporary password shown once, and its sign-in link (`#/o/<code>`)
+- **The template** (`pulse-template`, archived, so nobody can sign in to it) holds only the configuration the
+  migrations seeded, by its fixed ids, as Omnicontact had it at migration 0015: 11 statuses, 3 workflows with their
+  moves and rules, 2 security levels (role grants only), notification schemes, holidays, and 4 request types with
+  questions and SLA targets. Anything Omnicontact made itself, and any rule naming one of its people, is left out.
+  **New workspaces** start from the template workspace's request types.
+- **Suspending or archiving an organisation** ends its sessions at once. Its links, portal links and tokens stop
+  working (every identity checks the organisation's status). Nothing is deleted. Organisation codes don't change.
+- **Organisation Administrators** (`accounts.org_admin`) manage their organisation in Settings → Organisation (the
+  `/api/org` routes), with the organisation-wide handle:
+  - **Workspaces:** add, rename (the name is kept in step on projects, boards, workflow choices and custom fields),
+    archive. Not the last active one, nor the one you have open.
+  - **People:** add (temporary password), memberships and a role per workspace, Organisation Administrator or not,
+    remove.
+  - **Rules:** there must always be one Organisation Administrator. You can't remove yourself, or take away your own
+    administrator role in the workspace you have open.
+  - **Leaving a workspace** ends that person's sessions in it (the sessions' foreign key to the membership).
+  - **Organisation-wide settings** (roles & permissions, two-step rules, sign-in security, email & Teams) are changed
+    by Organisation Administrators only. The server refuses others with 403 `org_admin_only`, and the screens show
+    those pages only to them.
+- **The workspace Administrator role** keeps everything inside its workspace (workflows, boards, automation, fields,
+  integrations, service desk, its People page). The People page there adds and removes members of that workspace.
+- **Admin guide:** `docs/admin-guide-organisations.md`.

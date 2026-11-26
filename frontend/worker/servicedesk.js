@@ -879,7 +879,7 @@ export async function portalApi(env, req, path, waitUntil) {
     ? await /** @type {Promise<(PortalLinkRow & { organization_id: string; workspace_id: string }) | null>} */ (
         /** @type {unknown} */ (
           env.ROOT
-            .prepare("SELECT id, label, created_by, expires_at, organization_id, workspace_id FROM portal_links WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?")
+            .prepare("SELECT l.id, l.label, l.created_by, l.expires_at, l.organization_id, l.workspace_id FROM portal_links l JOIN workspaces w ON w.id = l.workspace_id AND w.status = 'active' JOIN organizations o ON o.id = l.organization_id AND o.status = 'active' WHERE l.token_hash = ? AND l.revoked_at IS NULL AND l.expires_at > ?")
             .bind(await tokenHash(token), new Date().toISOString())
             .first()
         )

@@ -763,3 +763,44 @@ workspace, enforced by Postgres row-level security. The rules are in DECISIONS.m
 `npm test`: 146 passed. `vite build` passes.
 
 **To release:** nothing to migrate. It ships with phase (b)'s deploy, or after it.
+
+## Multi-tenancy, phase (d): Platform and Organisation administration (2026-11-26)
+
+**What was built**
+- **Migration `migrations/0015_platform_admin.sql`** (reverse: `migrations/down/0015_platform_admin.down.sql`):
+  - `platform_admins`, `platform_sessions`, `platform_challenges` and `platform_activity`, none of them readable by
+    `pulse_app`
+  - the template organisation and workspace, from the seeded configuration only
+- **`/platform`** (`src/components/PlatformPage.jsx`, `worker/platform.js`):
+  - signing in: password, authenticator app (set up at the first sign-in), then your own password
+  - organisations: a table with counts, a new organisation (configuration from the template, a Projects workspace,
+    its first administrator), rename, suspend, reactivate, archive, add an administrator
+- **`scripts/platform-admin.mjs create|list dev|stage|main`:** makes the first Platform Administrator.
+- **Settings → Organisation** (`src/components/OrgAdmin.jsx`, the `/api/org` routes in `worker/index.js`), for
+  Organisation Administrators:
+  - workspaces: add, rename, archive, reactivate
+  - people: add (temporary password), a role per workspace in a table, Organisation Administrator or not, remove
+- **Organisation-wide settings** (roles, two-step, sign-in security, email & Teams) are Organisation Administrators'
+  only, in the server and the screens.
+- **Docs:** `docs/admin-guide-organisations.md`, the admin guide. `docs/API.md` has organisation and platform
+  administration. Postman: 4 more requests in "Workspaces (multi-tenancy)".
+
+**Tests:** `tests/tenancy.admin.test.js`, 10 checks on PGlite:
+- **Platform sign-in:** the authenticator app is required, the same code can't be used twice, and refusals are
+  identical.
+- **Temporary password:** must be replaced first.
+- **Platform and organisation sessions** can't reach each other's API.
+- **New organisations:** the template's configuration, a Projects workspace, and the first administrator, who must
+  choose a password.
+- **The platform list** shows counts only.
+- **Organisation administration:** workspaces, people, roles per workspace, and sessions ending on leaving a
+  workspace.
+- **Isolation:** no reaching another organisation's workspaces or people.
+- **Organisation settings** for Organisation Administrators only, with the last one protected.
+- **Suspending** ends sessions and refuses sign-ins; reactivating restores them.
+
+`npm test`: 156 passed. `tsc` (app and Worker): 0 errors. `vite build` passes. On the Neon dev branch, 0015 applied,
+undone and applied again; its template matches PGlite's.
+
+**To release:** apply 0015 with 0014, before the deploy. Then make the first Platform Administrator with
+`node scripts/platform-admin.mjs create main <username> "<Full name>"`.
