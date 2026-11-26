@@ -592,3 +592,315 @@ Choices made during the Pulse upgrade that later phases must follow. Newest last
   when it was generated and what it was filtered to. Paper always gets the light palette, whatever the screen theme;
   the slicer and filter chips stay on screen (the letterhead names the filters). Page 1 holds the figures and six
   charts, page 2 the portfolio map.
+
+## Dashboard design system (2026-11-25)
+
+- **Use the tokens.** New styles take spacing, type, radius, elevation, semantic and chart colours from the tokens
+  at the top of `src/styles.css` (`--sp-*`, `--fs-*`, `--r-*`, `--e-*`, `--success/warning/danger/info/neutral`,
+  `--cat-*`, `--focus`). A theme changes values only, never names.
+- **Omni Contact colours:** Penn Blue #011f5b (sidebar, sign-in, buttons, headings, avatars), royal blue #0039a6
+  (links, focus, information), sky #1ba9e1 and gold #f2a900 as accents, the signature red #ed0000 for the heartbeat.
+  Omni Contact's site refuses automated reads, so these come from what Pulse already used; swap in official hex
+  codes if they differ.
+- **Chart colour by job:** series identity uses `--cat-1…8` in that fixed order (never cycled; a ninth series
+  folds into "Other"). Status colours (`--st-*`, `--danger` etc.) are for meaning only and always come with a word
+  or an icon. Both palettes were checked with the dataviz validator (colour-blind separation of neighbours, light
+  on #ffffff, dark on #13163a); re-run it if a value changes.
+- **One card:** header (icon, title, actions) → body → optional footer ("Updated …", "View all"). Gadgets always
+  have a skeleton, an empty state and an inline error with Retry.
+- **Layout:** a 12-column grid. Saved custom dashboards keep their column choice (12, 6 or 4 spans) so nobody's
+  dashboard reorders.
+- **Focus is always visible:** never `outline: 0` without a replacement (`box-shadow: var(--ring)` or the global
+  ring). Small text must reach 4.5:1 in both themes.
+- **Themes:** there are two, light and dark (`data-theme="futuristic"`, shown as "Dark"). Dark keeps a restrained
+  glow (card hairline, hover glow), never at the cost of contrast.
+
+## Chat: files, emoji, GIFs, stickers, reactions, replies, pins and search (2026-11-25)
+
+- **Migration `0012_chat_rich.sql`:** `chat_messages` gains `meta` (JSON: a GIF or a sticker), `reply_to`, `pinned_at`
+  and `pinned_by`; new tables `chat_files` + `chat_file_chunks` (1 MB chunks in Postgres, like project documents) and
+  `chat_reactions` (one row per person, emoji and message).
+- **Files:** up to 10 files of up to 10 MB each per message. They're uploaded first (`POST /api/chat/:id/files`) and
+  attached when the message is sent; until then only the uploader can fetch them, and the weekday clean-up deletes
+  any not sent within a day. Served from `GET /api/chat/:id/files/:fileId` to anyone who may read the conversation,
+  with the same rules as documents: only PNG, JPEG, GIF, WebP and PDF open in the browser; everything else downloads;
+  `nosniff` and a sandboxing CSP on every file. Deleting a message deletes its files and reactions.
+- **GIFs:** GIPHY search, proxied by the Worker (`GET /api/chat/gifs?q=`), so the key never reaches the browser and
+  only search words leave Pulse. Rating G only. **Off until an administrator sets the `GIPHY_API_KEY` Worker secret**
+  (`npx wrangler secret put GIPHY_API_KEY`); the picker says so until then. A sent GIF keeps only GIPHY's id and its
+  `media*.giphy.com` address (checked on the server, so a "GIF" can't load an image from anywhere else). The picker
+  shows "Powered by GIPHY", as GIPHY's terms ask. People can always attach their own GIF files.
+- **Stickers:** Pulse's own set of 16 (original artwork: icons, brand gradients, short phrases), drawn in the UI
+  (`src/components/ChatExtras.tsx`). The server accepts only their ids (`STICKERS` in `src/data/chat.ts`).
+- **Emoji:** a built-in picker (`src/data/emoji.ts`, search words per emoji, recently used remembered per browser),
+  drawn by the system's emoji font, so nothing is downloaded.
+- **Reactions:** click to add, again to remove (`POST /api/chat/:id/messages/:mid/reactions`). Only real emoji are
+  accepted (`isEmoji`), up to 20 different ones per message. Reacting in a project channel joins it, like writing.
+- **Replies** quote the original (who and the first words, or "Message deleted"); clicking the quote scrolls to it.
+- **Pins:** anyone in the conversation pins or unpins a message for everyone (`POST …/pin`); `GET /api/chat/:id/pins`
+  lists them. Deleting a message unpins it.
+- **Search in a conversation:** `GET /api/chat/:id/search?q=` (2+ characters) matches words and file names, newest
+  first, 50 at most. `%` and `_` match literally.
+- **How others see changes:** reactions, pins, edits and deletions all move `updated_at`, so the next poll's
+  `changed` list carries them (no new polling).
+- **Not logged:** like messages, files, reactions and pins aren't written to the activity log.
+
+## Reports → Projects: health (RAG), shared figures and exports (2026-11-25)
+
+- **Health is RAG, named `rag` in code** (`System.health` already means Stable / Maintenance). One rule,
+  `src/data/projectHealth.ts`, used by the Worker and the browser alike. Only projects being built are rated;
+  ideas, upcoming, live and completed projects are "Not rated". Thresholds (`RAG_RULES`), change them only there:
+  - **Red (Off track)** if any of: past the due date; an open blocker older than 7 days; no progress update for
+    2 × the stall limit; more than 25 points behind the expected pace; more than 20% of open work items overdue.
+  - **Amber (At risk)** if any of: due within 7 days and below 80%; any open blocker; stalled (the stall limit);
+    more than 10 points behind pace; more than 10% of open work items overdue.
+  - **Green (On track)** otherwise.
+  - Expected pace is the share of the time from start to due date that has passed. Every reason is kept, red
+    first, and shown on hover and in the export.
+- **"Overdue update request":** open for more than 3 working days (Mon–Fri).
+- **"Needs attention" is one rule everywhere** (`needsAttention`): overdue, due within 7 days, blocked, or
+  stalled. The dashboard, the top bar, the executive page and Reports all call it. The executive page used to
+  leave out "due within 7 days", so its count can rise by the projects due this week.
+- **The report is worked out by the Worker** (`worker/projectReports.ts`): a handful of grouped queries (no query
+  per project), work items always through `itemAccess`, then `buildProjectReport` (`src/data/projectReport.ts`)
+  turns the counts into rows, health and totals. The screen and the exports show that one result, so they match.
+- **Who:** signed in with "Generate reports" only. View-only links are refused, even though they carry `reports`
+  for the screens they can open.
+- **Which projects:** delivered projects whose life overlaps the period; open projects started by its end; and
+  every project not started yet (the pipeline). Default period: the last 90 days.
+- **Progress over time** comes from the activity log's `system_progress` entries (kept 365 days): each project's
+  progress at the end of each week, averaged over the projects under way that week.
+- **Exports:**
+  - **Excel**, built by the Worker with a small writer of its own (`worker/xlsx.ts`, no dependency), one sheet
+    per section plus every visible work item as raw rows.
+  - **PDF** through the browser's print dialog ("Save as PDF"), not a PDF library: a branded cover (logo, period,
+    filters, generated by and at), A4 landscape, the light palette whatever the theme, "Page n of m" in the footer.
+  - Every export is written to the activity log.
+- **Not done yet:** emailing the report on a schedule.
+
+## JavaScript with JSDoc types, not TypeScript (2026-11-25)
+
+- **The code is JavaScript:** `.js` for logic and the Worker, `.jsx` for React components. Types are written as JSDoc
+  and still checked: `npm run build` runs `tsc` with `allowJs` + `checkJs` (strict) for the app and the Worker, so a
+  type mistake still fails the build before deploy.
+- **Earlier entries name `.ts` / `.tsx` files:** read them as `.js` / `.jsx` (same folder, same name).
+- **One file stays TypeScript:** `worker/env.d.ts`, a declaration file describing the Cloudflare runtime (`D1Database`,
+  `Env`, `ExecutionContext`). It never runs, and JSDoc can't declare global types.
+- **How types are written:**
+  - Types and interfaces: `/** @typedef {…} Name */` (or `@typedef {Object}` with `@property`). An interface that
+    extended another is `@typedef {Base & NameOwn} Name`, its own fields in `NameOwn`.
+  - Types from another file: `/** @import { Name } from './file' */` at the top. When the first thing after those
+    lines is a commented declaration, put `export {};` between them, or TypeScript reads the imports as that
+    declaration's documentation and can't see them elsewhere in the file.
+  - Casts: `/** @type {T} */ (value)`; the brackets are required. An explicit generic call such as `api<T>(…)` is
+    written `/** @type {Promise<T>} */ (/** @type {unknown} */ (api(…)))`.
+  - React state and refs: type the starting value, `useState(/** @type {T[]} */ ([]))`,
+    `useRef(/** @type {HTMLDivElement | null} */ (null))`.
+  - Generic helpers: `@template {keyof X} K` with its constraint, as TypeScript's `<K extends keyof X>` had.
+  - Rest parameters: `@param {...unknown} values` (the element type, not an array).
+
+## @mentions while typing, and in feature requests (2026-11-25)
+
+- **Suggestions:** typing `@` and a letter in a work item's comment, comment edit or description box, or a feature
+  request's Details or Developer notes, lists up to 6 people (username, or any word of their name, starting with the
+  letters). ↑/↓ and Enter/Tab insert `@username `; Escape closes the list only. One component,
+  `MentionTextarea` (`src/components/WorkItemBits.jsx`); chat keeps its own composer.
+- **Feature requests notify mentions:** a request's endpoints create and edit its work item quietly (they send their
+  own "assigned to you" alerts), so mentions in its Details or Developer notes are handled there: the people
+  **newly** mentioned are told, as named recipients (`extra`) of `item_created` (new request) or `item_updated`
+  (edited). So it works whatever the scheme's "mentioned" switch says; the scheme still decides email, and
+  visibility and personal opt-outs still apply. You're never told about your own mention.
+
+## Multi-tenancy (2026-11-26, phase (a) of five)
+
+The plan, with the audit behind it, is `docs/multi-tenancy-plan.md`. The owner approved every recommendation in its
+section 12. Rules every later feature must follow:
+
+- **Three levels.** Platform (organisations, Platform Administrators), organisation (people, sign-in, two-step,
+  delivery, roles, and shared configuration: statuses, workflows, security levels, notification schemes, holidays,
+  templates) and workspace (all project data and everything made from it).
+- **Every new table says whose it is:**
+  - Organisation tables: `organization_id`, `NOT NULL`, with a foreign key to `organizations`.
+  - Workspace tables: also `workspace_id`, `NOT NULL`, indexed, with a foreign key `(organization_id, workspace_id)`
+    to `workspaces (organization_id, id)`.
+  - A child table points at its parent by `(workspace_id, parent_id)` → `parent (workspace_id, id)`, so the database
+    refuses a row in another workspace than its parent's. The parent needs `UNIQUE (workspace_id, id)`.
+  - Organisation-level references (statuses, workflows, levels) use `(organization_id, …)` the same way.
+- **Unique per tenant, never globally:** usernames and project keys per organisation; workspace names and keys per
+  organisation; everything else per workspace.
+- **People are referenced without foreign keys** (assignee, owner, author …): a removed person's history stays, shown
+  as "Former user", as before.
+- **The activity log** is per workspace. Events about people, sign-in and organisation settings have no workspace and
+  are for Organisation Administrators only.
+- **Workspace scoping decisions (approved):**
+  - Sign-in: organisation code → username and password → two-step → choose among your own workspaces.
+  - Row-level security will back up the code, once its cost through Hyperdrive is measured (phase (b)).
+  - Chat (direct and group too), digests, the Monday Briefing, tokens, share links and the portal are per workspace.
+  - No view across workspaces for now.
+  - Projects don't move between workspaces.
+  - `/executive` becomes a per-workspace secret link.
+  - Platform Administrators are separate accounts that can't open an organisation's data.
+  - The Admin role becomes a workspace role, and "Organisation Administrator" is the `users.org_admin` flag.
+- **Migration `0013_tenancy_schema.sql`:**
+  - Creates Omnicontact, turns the old workspace list into rows, and makes every existing person a member of every
+    workspace with their current role. Administrators become Organisation Administrators.
+  - Places every row by its parent. Rows with no parent of their own go to "Projects"; projects with no workspace go
+    to the first workspace, as the app showed them.
+  - Nothing is dropped silently. Placements that need a look are in `tenancy_report`. Rows that can't be kept (parent
+    gone, or linking two workspaces) are copied whole into `tenancy_orphans` before removal, and the reverse script
+    puts them back.
+- **Until phase (b) ships, the old code runs on the new schema:**
+  - Insert triggers fill `organization_id` and `workspace_id` from the parent.
+  - Renaming or removing a workspace, and moving a project to another workspace, are refused (the database can't tell
+    a rename from a remove-and-add). Adding a workspace works, and everyone joins it.
+  - Phase (b) sets the columns in code and replaces these triggers.
+- **Reverse migrations** live in `migrations/down/` and are run by hand (`node scripts/db.mjs exec dev
+  migrations/down/<file>`). `db.mjs migrate` only reads `migrations/*.sql`, so it never runs them.
+- **Dry run before any real database:** `node scripts/tenancy-dry-run.mjs dev|stage` runs the migration in a
+  transaction, reports rows per table per workspace, and rolls back. It refuses the live database. `stage` is a Neon
+  branch made from production (`PG_STAGE` in `.dev.vars`).
+- **Database tests:**
+  - `tests/helpers/worker.js` runs the real Worker against a real database. They refuse the live database.
+  - Superseded in phase (b): they run on PGlite by default (below).
+
+## Multi-tenancy, phase (b): the database enforces the tenant (2026-11-26)
+
+- **Row-level security is the enforcement, not only a backstop.** About 710 raw SQL strings can't be made to
+  filter reliably by hand, so Postgres does it:
+  - **The role:** migration 0014 adds `pulse_app`, which can't bypass RLS and can't sign in. The Worker's own role
+    (`neondb_owner`) bypasses RLS, so it switches to `pulse_app` per query.
+  - **Per query:** each query runs in its own short transaction, `SET LOCAL ROLE pulse_app` plus
+    `set_config('app.org_id' / 'app.workspace_id', …, true)`, pipelined with the query (`worker/pg.js`).
+    `SET LOCAL` is what Hyperdrive's transaction pooling keeps. No Hyperdrive or credential change was needed.
+  - **Fails closed:** `env.DB` starts with no tenant, and with no tenant RLS shows nothing and accepts nothing.
+  - **The owner handle:** `env.ROOT` skips RLS, and is used on purpose only for:
+    - working out who is asking (sessions, tokens, links, portal links, GitHub secrets, by their hash)
+    - sign-in and password reset
+    - the cron's list of workspaces
+    - retention clean-up
+    - the organisation's project keys (the uniqueness check)
+    - the legacy `/executive`, which reads each workspace through its own handle
+  - **Everything after identity:** `db`, `env.DB` and the background work started from a request (automation,
+    notifications, webhooks) get the request's scope.
+- **Every new table needs a policy:**
+  - **Workspace tables:** `USING (workspace_id = current_setting('app.workspace_id', true))` and the same
+    `WITH CHECK`, plus the organisation.
+  - **Organisation tables:** the same on `organization_id`.
+  - **Grants:** never grant a table to `pulse_app` without its policy.
+  - **Defaults:** the tenant columns default to the request's tenant, so inserts don't repeat them.
+- **Views run with the reader's rights** (`security_invoker = true`), or RLS doesn't apply through them
+  (`features`, `users`).
+- **People:**
+  - **Tables:** the table is `accounts`, one row per person per organisation. The `users` view shows each person
+    with their role in the open workspace, and only that workspace's members. Outside a workspace it shows the
+    account's own role.
+  - **Writes through the view:** a role change goes to the membership. Removing someone removes their membership
+    here, and the account once they have no workspace left.
+  - **Organisation-wide uniqueness:** usernames are checked organisation-wide (organisation-scoped handle), because
+    members of other workspaces can't be seen from this one.
+- **Roles are per workspace** (`workspace_members.role`). Organisation-wide alerts (an account locked, a forgotten
+  password) go to Organisation Administrators (`org_admin`), each under the bell of their first workspace.
+- **Configuration ids are unique per tenant:**
+  - **Per organisation:** statuses, workflows, moves, security levels.
+  - **Per workspace:** request types, their questions and choices, and automation rules and actions.
+  - **Why:** every tenant can have its own `TODO` or `service-desk`, which the code names.
+  - **Seeding:** `tenancy_seed_organization` and `tenancy_seed_workspace` copy configuration into a new tenant with
+    the same ids. Phase (d) should seed from a clean template, not from Omnicontact's own.
+- **Settings by level:** `org_settings` (roles, two-step policy, sign-in rules, delivery) and `workspace_settings`
+  (workload limits, the Monday Briefing), only through `worker/settings.js`. `pulse_app` can't read the old
+  `settings` table.
+- **New ids** for projects, templates and people get a random ending (`hr-portal-3f9a1c`). A "-2" would say the name
+  is taken in another organisation.
+- **Project keys are unique per organisation:**
+  - The "taken" check reads the organisation's keys as the owner, so a key used in another workspace of the same
+    organisation shows as "taken". Nothing else about that project is revealed.
+  - Two organisations may use the same key.
+- **The 404 rule** comes mostly from RLS: another workspace's row isn't found. An endpoint that reads only the
+  children of an id (a project's history) must check the parent first.
+- **The activity log:**
+  - The open workspace's entries, plus organisation-wide ones (no workspace) for Organisation Administrators only.
+  - Sign-in counts are for Organisation Administrators.
+  - `tenancy_org_action()` in the database decides which actions are organisation-wide.
+- **Tokens, view-only links, portal links and GitHub each work in one workspace:**
+  - **Tokens and links:** the one they were made in.
+  - **GitHub:** the one whose secret signed the delivery.
+- **Switching workspace:** `POST /api/me/workspace` checks membership every time. A workspace that isn't yours, in
+  your organisation or another, is 404. The sessions foreign key to `workspace_members` refuses it in the database
+  too.
+- **The cron** loops over active organisations × active workspaces, each job with that workspace's handle. Digests
+  and the Monday Briefing are per workspace, to its members. Retention runs once, as the owner.
+- **`/executive` until phase (e):** Omnicontact's totals across its workspaces, never cached by shared caches.
+- **The workspace list editor** (`PUT /api/settings/workspaces`) is refused with 409. Organisation Administrators
+  manage workspaces (phase (d)).
+- **Tests run on PGlite by default** (`@electric-sql/pglite` 0.5.16, pinned):
+  - **How:** every migration is applied to an in-process Postgres, the real Worker is called, and the same adapter
+    code (`databaseOver` in `worker/pg.js`) runs over a small PGlite shim (`tests/helpers/pglite.js`).
+  - **Where:** `npm test` runs them, here and in CI. `PULSE_DB=dev` runs them against the Neon dev branch instead.
+  - **Proven:** switching one table's RLS off makes the suite fail (checked for `saved_filters`).
+- **Test-only adapter options** (`idle_timeout`, `retry_dropped`) are for running against Neon from far away. The
+  Worker never sets them and never retries a query.
+
+## Multi-tenancy, phase (d): Platform and Organisation Administrators (2026-11-26)
+
+- **Platform Administrators** are separate accounts (`platform_admins`), outside every organisation:
+  - **What they do:** make, rename, suspend and archive organisations, and give each an administrator.
+  - **What they see:** each organisation's name, code, status, and counts of workspaces, people and administrators.
+    Never anything inside one.
+  - **Signing in:** `/platform`, a password and **always** an authenticator app, set up at the first sign-in. A
+    temporary password must be replaced first.
+  - **Their session:** its own cookie (`pulse_platform`, `Path=/api/platform`, `SameSite=Strict`, 8 hours), so it
+    can't reach the rest of the API, and an organisation's session can't reach theirs.
+  - **Access:** their tables are the owner's only (revoked from `pulse_app`), and they have their own activity log
+    (`platform_activity`).
+  - **The first one** is made from the command line (`scripts/platform-admin.mjs`) by whoever holds the connection
+    string.
+- **A new organisation** starts in one transaction, with:
+  - a copy of the **template**
+  - one workspace, "Projects"
+  - its first Organisation Administrator, with a temporary password shown once, and its sign-in link (`#/o/<code>`)
+- **The template** (`pulse-template`, archived, so nobody can sign in to it) holds only the configuration the
+  migrations seeded, by its fixed ids, as Omnicontact had it at migration 0015: 11 statuses, 3 workflows with their
+  moves and rules, 2 security levels (role grants only), notification schemes, holidays, and 4 request types with
+  questions and SLA targets. Anything Omnicontact made itself, and any rule naming one of its people, is left out.
+  **New workspaces** start from the template workspace's request types.
+- **Suspending or archiving an organisation** ends its sessions at once. Its links, portal links and tokens stop
+  working (every identity checks the organisation's status). Nothing is deleted. Organisation codes don't change.
+- **Organisation Administrators** (`accounts.org_admin`) manage their organisation in Settings → Organisation (the
+  `/api/org` routes), with the organisation-wide handle:
+  - **Workspaces:** add, rename (the name is kept in step on projects, boards, workflow choices and custom fields),
+    archive. Not the last active one, nor the one you have open.
+  - **People:** add (temporary password), memberships and a role per workspace, Organisation Administrator or not,
+    remove.
+  - **Rules:** there must always be one Organisation Administrator. You can't remove yourself, or take away your own
+    administrator role in the workspace you have open.
+  - **Leaving a workspace** ends that person's sessions in it (the sessions' foreign key to the membership).
+  - **Organisation-wide settings** (roles & permissions, two-step rules, sign-in security, email & Teams) are changed
+    by Organisation Administrators only. The server refuses others with 403 `org_admin_only`, and the screens show
+    those pages only to them.
+- **The workspace Administrator role** keeps everything inside its workspace (workflows, boards, automation, fields,
+  integrations, service desk, its People page). The People page there adds and removes members of that workspace.
+- **Admin guide:** `docs/admin-guide-organisations.md`.
+
+## Multi-tenancy, phase (e): what goes outside Pulse stays in one workspace (2026-11-26)
+
+- **The executive page is a secret link per workspace** (`showcase_links`, migration 0016):
+  - **Who makes them:** people who manage users, for the open workspace, with the token shown once and kept as a
+    hash. They expire after 7 to 365 days and can be revoked.
+  - **What it shows:** that workspace's totals only, read through its own handle, with the organisation and
+    workspace names. Nothing is cached by shared caches.
+  - **Refusals:** no link, a wrong, revoked or expired one, or a suspended organisation's all get the same 404.
+  - **Gone:** the public `/executive` (Omnicontact's totals, with no link). Send leadership a link instead.
+- **GitHub:** each workspace connects with its own secret, and a secret already used by another workspace is
+  refused (409). The others are decrypted only to compare. A delivery is handled by the workspace whose secret
+  signed it, so a key that exists in two organisations (SAME-1) is linked only in the signer's.
+- **Digests and the Monday Briefing** are per workspace, titled with its name ("Monday Briefing for HR: …"). The
+  briefing's extra email list is an organisation setting, so those addresses get one briefing per workspace.
+- **Pulse never tells an organisation it is someone else's:**
+  - **Ask Pulse and the digest openings:** their instructions are neutral, and each snapshot begins with
+    `ORGANISATION: … · WORKSPACE: …`.
+  - **Visible wording:** email footers, the app's install description, the Excel report header (the workspace), the
+    printed report cover (the organisation), the service desk portal heading (the organisation) and the forced
+    password change message name the organisation or nothing.
+  - **Not changed:** the Omni Contact logos (sidebar, sign-in page, reports, executive page) are Pulse's own
+    branding as a product. Branding each organisation (white-labelling) would be a separate decision.
+- **API tokens** can't use executive links or organisation administration, as for view-only links.

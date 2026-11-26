@@ -1,6 +1,6 @@
-# Pulse
+# Project Management System (Pulse)
 
-Omni Contact's projects tracker. Pulse follows every project from idea to live: progress, feature requests from
+Omni Contact's project management system, known in the app as **Pulse**. It follows every project from idea to live: progress, feature requests from
 clients, work items on boards and sprints, blockers, documents, Concept Notes and sign-offs, a service desk, and
 team chat. Managers get reports and insights on top of it all, and **Ask Pulse** answers questions about the live
 data in plain English.
@@ -33,14 +33,14 @@ Browser ──► "pulse" Worker (gateway) ──► "omni-tracker" Worker ─�
                                            └─► Workers AI (Ask Pulse) · Resend (email) · Teams webhook
 ```
 
-- **Front end:** React 18, TypeScript and Vite, with hand-written SVG charts. Routing uses the URL hash.
+- **Front end:** React 18 and Vite, in JavaScript with JSDoc types that `npm run build` checks (`tsc --checkJs`), with hand-written SVG charts. Routing uses the URL hash.
 - **API:** one Cloudflare Worker, `frontend/worker/`. Every permission check happens here; the UI only hides what
   a user can't do.
-- **Database:** Postgres 18 on Neon, reached through Cloudflare Hyperdrive. `worker/pg.ts` gives it a small
+- **Database:** Postgres 18 on Neon, reached through Cloudflare Hyperdrive. `worker/pg.js` gives it a small
   D1-shaped API (`prepare` → `bind` → `first`/`all`/`run`, and `batch` as one transaction).
 - **Placement:** the Worker is pinned to `aws:ap-southeast-1`, next to the database, so each page's queries are
   short hops.
-- **Scheduled jobs:** one hourly cron trigger. `worker/schedule.ts` decides what's due: daily digests, the Monday
+- **Scheduled jobs:** one hourly cron trigger. `worker/schedule.js` decides what's due: daily digests, the Monday
   briefing, filter subscriptions, automation rules and the retention clean-up.
 
 ## Repository layout
@@ -48,7 +48,7 @@ Browser ──► "pulse" Worker (gateway) ──► "omni-tracker" Worker ─�
 ```
 frontend/              the app: everything is built and deployed from here
   src/                 React app (components/, data/ for types and shared logic)
-  worker/              the API Worker (index.ts routes; a module per area)
+  worker/              the API Worker (index.js routes; a module per area)
   migrations/          Postgres schema changes, applied in order
   scripts/db.mjs       migrate, status, backup and run SQL against a database
   scripts/demo-data.mjs  demo records for presentations (every id starts "demo-")
@@ -64,9 +64,10 @@ UPGRADE-LOG.md         what each upgrade phase built
 
 You need Node 22 and access to the Neon project.
 
-1. Install dependencies:
+1. Clone the repository and install dependencies:
    ```sh
-   cd frontend
+   git clone https://github.com/mm7ee/Project-Management-System.git "Project Management System"
+   cd "Project Management System/frontend"
    npm install
    ```
 2. Create `frontend/.dev.vars` with these values. Ask the project owner for them; never commit this file.
@@ -90,7 +91,8 @@ You need Node 22 and access to the Neon project.
 ## Deploying
 
 Every push to `main` deploys. GitHub Actions (`.github/workflows/deploy.yml`) runs `npm ci`, `npm test`, then
-`wrangler deploy` for the `omni-tracker` Worker. It needs the repository secrets `CLOUDFLARE_API_TOKEN` and
+`wrangler deploy` for the `omni-tracker` Worker (it keeps its original name: renaming the repository didn't change
+it, and the two-step verification key is stored on it). It needs the repository secrets `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_ACCOUNT_ID`.
 
 The pipeline does **not** touch the database. When a change adds a migration, release it in this order:

@@ -1,8 +1,8 @@
-/* Landing / sign-in page: dark Omni navy, cyan + amber light, glass card, motion that
+/* Landing / sign-in page: Penn Blue (#011f5b), cyan + amber light, glass card, motion that
    switches off for prefers-reduced-motion. */
 
 .landing {
-  --lp-bg: #040c22;
+  --lp-bg: #011f5b;
   --lp-ink: #e8f1fb;
   --lp-dim: #9fb3cc;
   --lp-line: rgba(140, 200, 240, 0.16);
@@ -11,7 +11,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: radial-gradient(120% 90% at 70% 10%, #0b2a5c 0%, #071a3d 38%, var(--lp-bg) 100%);
+  background: radial-gradient(120% 90% at 70% 10%, #0a2d75 0%, var(--lp-bg) 45%, #011647 100%);
   color: var(--lp-ink);
   isolation: isolate;
 }
@@ -84,7 +84,7 @@
   --angle: 0deg;
   position: relative; width: min(400px, 100%); display: flex; flex-direction: column; gap: 16px;
   padding: 30px 28px 24px; border-radius: 20px;
-  background: rgba(8, 24, 56, 0.62); backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%);
+  background: rgba(1, 22, 71, 0.6); backdrop-filter: blur(18px) saturate(140%); -webkit-backdrop-filter: blur(18px) saturate(140%);
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 .lp-card::before {
@@ -120,15 +120,15 @@
 .lp-submit {
   position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; gap: 8px;
   margin-top: 4px; padding: 13px; border: 0; border-radius: 12px; cursor: pointer;
-  background: linear-gradient(135deg, #1ba9e1, #0a5fb4); color: #fff; font-size: 16px; font-weight: 800;
-  box-shadow: 0 10px 30px rgba(27, 169, 225, 0.3); transition: transform .15s, box-shadow .15s;
+  background: #011f5b; color: #fff; font-size: 16px; font-weight: 800; border: 1px solid rgba(143, 220, 251, 0.35);
+  box-shadow: 0 10px 30px rgba(1, 31, 91, 0.5); transition: transform .15s, box-shadow .15s;
 }
 .lp-submit::after {
   content: ""; position: absolute; top: 0; left: -60%; width: 40%; height: 100%;
   background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.35), transparent);
   transform: skewX(-20deg); animation: lp-shine 3.8s ease-in-out infinite;
 }
-.lp-submit:hover { transform: translateY(-1px); box-shadow: 0 14px 36px rgba(27, 169, 225, 0.45); }
+.lp-submit:hover { transform: translateY(-1px); background: #0a2d75; box-shadow: 0 14px 36px rgba(1, 31, 91, 0.6); }
 .lp-submit:disabled { opacity: .45; cursor: not-allowed; transform: none; box-shadow: none; filter: grayscale(.6); }
 .lp-submit svg { transition: transform .2s; }
 .lp-submit:hover svg { transform: translateX(3px); }
@@ -258,3 +258,14 @@
   background: linear-gradient(90deg, #ffffff 0%, #8fdcfb 55%, #1ba9e1 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
+
+/* ---------- organisation and workspace at sign-in (multi-tenancy) ---------- */
+.lp-org { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: -4px 0 14px; font-size: 13px; color: inherit; opacity: 0.85; }
+.lp-org b { font-weight: 700; }
+.lp-org .lp-link { margin: 0 0 0 4px; padding: 0; }
+.lp-workspaces { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 8px; }
+.lp-workspace { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.06); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.lp-workspace:hover:not(:disabled) { background: rgba(255, 255, 255, 0.12); }
+.lp-workspace:focus-visible { outline: 2px solid #1ba9e1; outline-offset: 2px; }
+.lp-workspace:disabled { opacity: 0.6; cursor: default; }
+.lp-workspace-last { font-size: 12px; opacity: 0.75; }

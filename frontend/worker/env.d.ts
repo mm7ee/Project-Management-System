@@ -19,6 +19,22 @@ interface D1Database {
   batch(statements: D1PreparedStatement[]): Promise<D1Result[]>;
 }
 
+/** Whose data a query may see: one organisation and, within it, one workspace ("" for organisation-wide work). */
+interface Scope {
+  orgId: string;
+  workspaceId: string;
+}
+
+/**
+ * The Postgres database (worker/pg.js). A handle with a scope runs every query as the pulse_app role with that
+ * tenant set, so row-level security shows and accepts only that tenant's rows. The root handle (no scope) is the
+ * owner and sees everything: only for working out who is asking, the cron's loops and the clean-up.
+ */
+interface TenantDatabase extends D1Database {
+  readonly scope: Scope | null;
+  withScope(scope: Scope): TenantDatabase;
+}
+
 interface Fetcher {
   fetch(request: Request): Promise<Response>;
 }
@@ -35,14 +51,17 @@ interface Hyperdrive {
 }
 
 interface Env {
-  DB: D1Database; // the database in use; set from HYPERDRIVE (Postgres) or D1 by withDatabase()
+  DB: TenantDatabase; // scoped to the request's tenant once known; before that, to no tenant (sees nothing). Set by withDatabase()
+  ROOT: TenantDatabase; // the owner: identity, cron loops, clean-up. Never for reading a tenant's data on its behalf
+  PG_ROOT?: TenantDatabase; // tests: a ready database instead of HYPERDRIVE
   HYPERDRIVE?: Hyperdrive; // Postgres on Neon
-  D1?: D1Database; // the old D1 database, kept as a fallback
-  DATABASE?: "postgres" | "d1"; // which one this deploy uses (wrangler.jsonc vars)
+  D1?: D1Database; // the old D1 database: retired (Phase 1), still bound, never used
+  DATABASE?: "postgres" | "d1"; // must be "postgres"; "d1" is refused since multi-tenancy
   ASSETS: Fetcher;
   AI?: Ai; // Workers AI binding, for Ask Pulse
   MFA_KEY?: string; // encrypts two-step verification secrets; a Worker secret (.dev.vars locally)
   PUBLIC_URL?: string; // Pulse's address, for links in emails and Teams posts
+  GIPHY_API_KEY?: string; // turns on GIF search in chat; a Worker secret (wrangler secret put GIPHY_API_KEY)
 }
 
 interface ExecutionContext {

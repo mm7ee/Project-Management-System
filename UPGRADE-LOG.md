@@ -515,3 +515,354 @@ Everyone signed in can search and keep private filters and dashboards. View-only
 - on the item page: Security level, More fields, Development, the service desk request, and "Reply to the customer"
 - on the create form: "More fields" (custom fields and the security level)
 - custom fields on board cards
+
+## Dashboard design pass (2026-11-25)
+
+**Why:** the owner asked for a visual upgrade of the home dashboard and the custom dashboards, in Omni Contact's
+colours, with no change to behaviour, data or permissions.
+
+**What changed**
+- **Design tokens** at the top of `src/styles.css`, with the same names in light and dark: a 4px spacing scale
+  (`--sp-*`), a type scale (`--fs-page`, `--fs-section`, `--fs-gadget`, `--fs-body`, `--fs-small`, `--fs-caption`,
+  `--fs-kpi`), radii (`--r-sm/md/lg/pill`), three elevations (`--e-1/2/3`), semantic colours
+  (`--success/warning/danger/info/neutral` with `-ink` and `-tint`), a categorical chart palette (`--cat-1…8`,
+  `--cat-other`), a focus colour (`--focus`, `--ring`) and motion (`--dur`, `--ease`).
+- **One card style** for overview panels and gadgets: header (icon, title, actions), body, optional footer.
+  `Panel` takes optional `icon` and `footer`; Reports cards pick up the same look.
+- **Page header** for every dashboard: name, one line about it, and the picker, Edit and New dashboard grouped on
+  the right. The old breadcrumb is gone.
+- **Overview:** a full-width KPI row (In progress, Due this week, Need attention, Live). Each tile leads with its
+  number, names itself with an icon, and states its trend in words with an icon. "Due this week" replaced the
+  Projects total, which the stage donut still shows. "View all" on Needs attention, Upcoming deadlines and Your
+  projects opens the matching Projects tab.
+- **12-column grid:** the overview's rows are 8 + 4 and 4 + 4 + 4 (6 + 6 + 12 under 1100px, one column under
+  700px). Custom dashboards keep their saved one, two or three columns, drawn as 12, 6 or 4 spans.
+- **Gadgets:** a skeleton while loading, an empty state (icon, a line, and "Edit dashboard" for its owner), an
+  inline error with Retry, and an "Updated …" footer. Pie slices beyond eight fold into "Other".
+- **Charts and tables:** series use the categorical palette; status colours are kept for meaning (stage, schedule,
+  overdue, late). Numbers are right-aligned in tabular figures, headers stick when a table scrolls, rows highlight
+  on hover.
+- **Accessibility:** a visible focus ring on every control in both themes; `--faint` darkened to #676c85 (AA on
+  cards and the canvas); `--gold-ink` to #8a6000; gadget titles use `--heading` (they failed AA in dark);
+  red text uses `--danger-ink`; timeline entries with nothing to open are text, not buttons.
+- **Dark theme:** a sky-to-royal hairline on each card and a soft glow on hover; the same contrast as before.
+- Removed dead CSS (`.dash-hero`, `.dash-kpis`, `.dash-kpi`, `.dash-list`, `.dash-deadline`, `.dash-picker`).
+
+Files: `src/styles.css`, `src/components/DashboardPage.tsx`, `src/components/CustomDashboards.tsx`,
+`src/components/Panel.tsx`. No API, query, permission or route changed.
+
+## Chat: files, emoji, GIFs, stickers and more (2026-11-25)
+
+**Why:** the owner asked for documents, emoji, GIFs and stickers in chat, plus other useful chat features.
+
+**What was built**
+- **Attach files** with the paperclip, by pasting, or by dragging onto the conversation: up to 10 per message, 10 MB
+  each. Images show in the message (click for full size); PDFs open in a new tab; other files download.
+- **Emoji picker** with search, groups and recently used; emoji go in at the cursor.
+- **GIFs** from GIPHY (search and trending), once an administrator adds a `GIPHY_API_KEY` Worker secret.
+- **Stickers:** 16 Pulse stickers (Thank you!, Shipped!, Looks good, Blocked, Coffee break …).
+- **Reactions** on any message: three quick ones on the toolbar, or any emoji; counts show who reacted on hover.
+- **Reply** to a message with a quote that jumps back to the original.
+- **Pin** messages; a Pinned panel lists them.
+- **Search** a conversation by words or file names; results jump to the message.
+- **Copy text** from a message's toolbar.
+- The conversation list previews GIFs, stickers and files ("GIF", "Sticker: Shipped!", "📎 plan.pdf").
+- Notifications for a message with no words say what was sent.
+
+**New endpoints:** `GET /api/chat/gifs`, `POST /api/chat/:id/files`, `GET /api/chat/:id/files/:fileId`,
+`POST /api/chat/:id/messages/:mid/reactions`, `POST /api/chat/:id/messages/:mid/pin`, `GET /api/chat/:id/pins`,
+`GET /api/chat/:id/search`. `POST /api/chat/:id/messages` also takes `files`, `gif`, `sticker` and `replyTo`.
+
+**Migration:** `0012_chat_rich.sql`. Run `npm run db:migrate` before deploying.
+
+**Tests:** `tests/chatRich.test.ts` (emoji-only reactions, GIPHY-only GIFs, sticker ids, previews).
+
+## Reports → Projects, rebuilt (2026-11-25)
+
+**Why:** the owner asked for a Projects report that shows quickly how every project is doing, with exports
+managers can present.
+
+**What was built**
+- **Server-side figures:** new endpoints `GET /api/reports/projects/summary`, `/trends` and `/export.xlsx`.
+  Before, the page added everything up in the browser from `/api/data`, so the `reports` permission wasn't
+  enforced and work items weren't counted at all.
+- **Health (RAG)** for every project being built, with its reasons on hover. The rule is in DECISIONS.md.
+- **Layout:** six figures, then charts (health, stage, schedule, progress over time, items created vs resolved,
+  burn-up, throughput by project), then resourcing (developers over the workload limit flagged), then a sortable,
+  searchable project table with progress against the expected pace.
+- **Filters** for period, stage, schedule, health, lead and workspace, kept in the address
+  (`#/reports/projects?…`) so a filtered report can be bookmarked and shared.
+- **Exports:** an Excel workbook (6 sheets, including every visible work item) and a branded PDF via the print
+  dialog. They replace the two CSVs and the plain print.
+- **One "needs attention" rule** for the dashboard, top bar, executive page and Reports.
+- Every chart and table has loading, empty and error states (with Retry).
+
+**Files**
+- New: `src/data/projectHealth.ts`, `src/data/projectReport.ts`, `worker/projectReports.ts`, `worker/xlsx.ts`,
+  `tests/projectReport.test.ts`.
+- Rewritten: `src/components/reports/ReportsPage.tsx`.
+- Changed:
+  - `src/components/reports/ReportsHub.tsx`, `src/App.tsx`: the route and the signed-in user.
+  - `src/components/DashboardPage.tsx`, `src/data/showcase.ts`: the shared attention rule.
+  - `src/data/project.ts`, `src/components/SystemCard.tsx`: `lastUpdateOf`, shared with the Worker.
+  - `src/components/reports/Charts.tsx`: charts used only by the old page removed.
+  - `src/styles.css`, `worker/index.ts`, `docs/API.md`, `postman/Pulse.postman_collection.json`.
+
+**No migration.**
+
+## TypeScript → JavaScript (2026-11-25)
+
+**Why:** the owner asked for the code to be JavaScript.
+
+**What changed**
+- All 143 source files and the two configs (`vite.config`, `neon`) are now `.js` / `.jsx`, with their types as JSDoc.
+  `tsc --checkJs` still checks them on every build: 0 errors, as before.
+- `tsconfig.json` and `worker/tsconfig.json` gain `allowJs` and `checkJs`; `wrangler.jsonc` points at
+  `worker/index.js`; `index.html` at `src/main.jsx`.
+- Done mechanically, then checked: the TypeScript compiler annotated every cast, generic call, non-null assertion
+  and typed arrow function as JSDoc first, `ts-to-jsdoc` converted the files, and the last ~90 type errors were
+  fixed by hand against the original TypeScript (commit before this one on `main`).
+- Verified: `npm run build` (type check + production bundle), all 117 tests, the Worker bundles (`wrangler deploy
+  --dry-run`), and the app loads in the browser from both the dev server and the production build.
+- No behaviour changes intended; no migration.
+
+## Multi-tenancy, phase (a): organisations and workspaces in the schema (2026-11-26)
+
+**Why:** the owner asked for Pulse to hold several organisations, each with several workspaces, strictly
+separated. The plan is `docs/multi-tenancy-plan.md`, and the rules are in DECISIONS.md. This phase is the schema
+only; nothing changes for people using Pulse, except that workspaces can't be renamed and projects can't move
+between workspaces until phase (b).
+
+**What was built**
+- **Migration `migrations/0013_tenancy_schema.sql`:**
+  - **New tables:** `organizations`, `workspaces`, `workspace_members`. Also `tenancy_legacy`, `tenancy_report` and
+    `tenancy_orphans`, which record the move.
+  - **Organisation columns:** `organization_id` on the 19 organisation tables and `users`, and `users.org_admin`.
+  - **Workspace columns:** `organization_id` and `workspace_id` on the 57 workspace tables.
+  - **Database rules:** composite foreign keys between workspace rows; usernames and project keys unique per
+    organisation; insert triggers for the old code; the rename and move guard.
+- **Reverse:** `migrations/down/0013_tenancy_schema.down.sql`.
+- **Dry run:** `scripts/tenancy-dry-run.mjs` (see DECISIONS.md).
+- **Tests:**
+  - `tests/helpers/worker.js` runs the real Worker against a real database.
+  - `tests/tenancy.phaseA.test.js` has 10 checks that the current code works on the migrated schema and writes every
+    row to the right workspace.
+
+**Tested on the Neon dev branch**
+- Dry run: 0 rows set aside, 0 references cleared, and 27 placements to check (12 projects with no workspace, 6
+  filters, 6 dashboards, 3 example automation rules). The migration took 4.9 s.
+- Applied, undone with the reverse script, and applied again.
+- `PULSE_DB=dev npx vitest run tests/tenancy.phaseA.test.js`: 9 of 10 passed in a full run. The tenth (the main
+  pages load) failed on a dropped network connection to Neon, then passed when run again.
+- `npm test`: 117 passed and the 10 database tests were skipped. `tsc` on the app and the Worker: 0 errors.
+
+**To release this phase** (by hand, before any phase (b) code):
+1. Make a Neon branch from `production`, put its address in `.dev.vars` as `PG_STAGE`, and run
+   `node scripts/tenancy-dry-run.mjs stage --out tenancy-dry-run.md`. Read the placements.
+2. Back up: `npm run db:backup -- ../backup-before-tenancy.sql`, and make a Neon branch `backup-before-tenancy`.
+3. `npm run db:migrate`. No deploy is needed: the Worker is unchanged.
+
+**New permissions, endpoints, screens:** none.
+
+## Multi-tenancy, phase (b): the Worker and the database scope everything (2026-11-26)
+
+**Why:** phase (b) of the plan. Every request, background job and integration sees one organisation and one
+workspace, enforced by Postgres row-level security. The rules are in DECISIONS.md.
+
+**What was built**
+- **Migration `migrations/0014_tenancy_enforcement.sql`** (reverse: `migrations/down/0014_tenancy_enforcement.down.sql`):
+  - **Access:** the `pulse_app` role and RLS policies on every tenant table.
+  - **Defaults:** tenant columns default to the request's tenant.
+  - **Phase (a)'s stopgaps go:** the triggers and guards are replaced by `tenancy_derive`.
+  - **People:** `users` becomes `accounts` plus the `users` view.
+  - **Ids and keys:** configuration ids and global keys become per tenant.
+  - **Settings:** split into `org_settings` and `workspace_settings`.
+  - **Service desk:** every workspace gets its own request types.
+  - **Seeding:** seed functions for new tenants.
+- **Worker:**
+  - **`worker/pg.js`:** scoped handles, a transaction per query, and batches that refuse mixed tenants.
+  - **`worker/settings.js`:** settings by level.
+  - **`worker/index.js`:**
+    - identity first, then everything scoped
+    - sessions carry their workspace, and the role comes from the membership
+    - `GET /api/me/workspaces` and `POST /api/me/workspace`, and `tenant` in `/api/data`
+    - organisation-wide project keys
+    - random endings on new ids
+    - activity by level
+    - the cron per workspace
+    - the workspace list editor refused
+  - **Other modules:** tokens, portal links and GitHub each scoped to their workspace; organisation-wide alerts;
+    conflict targets for the new keys; the service desk set-up inserted when missing; project history 404s for
+    another workspace.
+- **App:** a workspace switcher in the top bar (`src/components/WorkspaceSwitcher.jsx`).
+- **Tests:**
+  - **`tests/tenancy.isolation.test.js`, 13 checks:** two organisations × two workspaces, five people. It covers:
+    - lists, the bell, chat, reports and activity
+    - people
+    - 404s, read or changed
+    - PQL (the same key in two organisations)
+    - gadgets, Ask Pulse and @mentions
+    - view-only links and tokens
+    - switching
+    - the database's own refusals
+  - **`tests/tenantScope.test.js`, 9 checks:** the adapter's tenant checks.
+  - **Retired:** `tests/tenancy.phaseA.test.js` (phase (a)'s stopgaps are gone).
+- **New dev dependency:** `@electric-sql/pglite` 0.5.16 (exact). The database tests run in `npm test` and CI.
+- **Docs:** `docs/API.md` (organisations and workspaces; token, link and GitHub scope); Postman: a "Workspaces
+  (multi-tenancy)" folder with 4 requests.
+
+**Tested**
+- `npm test`: 139 passed in 12 files, including the 13 isolation checks on PGlite in about 7 seconds.
+- **The suite catches leaks:** with RLS switched off on `saved_filters`, 4 checks fail. With it off on `work_items`,
+  the database check fails while the API stays isolated through the `systems` policy.
+- `tsc` on the app and the Worker: 0 errors. `vite build` passes.
+- **Neon dev branch:** 0014 applied, undone and applied again. Against dev the isolation run kept losing this
+  laptop's connection to Singapore (DNS too), so it is verified on PGlite.
+
+**Not done yet**
+- **RLS cost through Hyperdrive:** two extra round trips per query (BEGIN and COMMIT), measured only once deployed.
+- **Ask Pulse wording:** the prompt still calls Pulse "Omni Contact's project tracker" for every organisation
+  (phase (e)).
+- **Phases (c)–(e).**
+
+**To release** (by hand, with 0013 already applied):
+1. Dry run on a Neon branch of production:
+   `node scripts/tenancy-dry-run.mjs stage --migration 0014_tenancy_enforcement.sql`.
+2. Back up: `npm run db:backup -- ../backup-before-tenancy-b.sql`, plus a Neon branch.
+3. `npm run db:migrate`, then deploy at once. The phase (a) Worker can't run on 0014.
+
+## Multi-tenancy, phase (c): signing in to an organisation, and choosing a workspace (2026-11-26)
+
+**What was built**
+- **Sign-in asks for the organisation first:**
+  - **Where the code comes from:** typed, or from a link `#/o/<code>`. This device then remembers it, with a
+    "Change" link beside it.
+  - **Then:** username and password, the second step, and, for someone in several workspaces, a choice of which to
+    open, with the last one used on this device first.
+- **The code is never checked on its own:** it goes with the password. An unknown or suspended organisation, a
+  username not in it, a username shared by organisations (when no code is given) and a wrong password all get the
+  same message after the same work. Workspaces are listed only after a correct sign-in, and only your own.
+- **The API:**
+  - `POST /api/login` and `POST /api/password/forgot` take `organization`.
+  - A successful sign-in returns your workspaces.
+  - Someone in no workspace is told so (403 `no_workspace`), after the right password only.
+- **Browser storage:** the last dashboard and the last board are remembered per workspace, so one workspace's
+  choices never appear in another. The organisation code and the last workspace per organisation are remembered
+  per device (`src/data/tenant.js`).
+- **The top-bar switcher** remembers the workspace you switch to.
+
+**Tests:** `tests/tenancy.signin.test.js`, 7 checks on PGlite:
+- the code decides whose account a username is
+- codes match whatever their capitals
+- every refusal is identical
+- workspaces shown only after sign-in, and only yours
+- someone in no workspace
+- forgot password replies identically
+- a suspended organisation's sessions stop working
+
+`npm test`: 146 passed. `vite build` passes.
+
+**To release:** nothing to migrate. It ships with phase (b)'s deploy, or after it.
+
+## Multi-tenancy, phase (d): Platform and Organisation administration (2026-11-26)
+
+**What was built**
+- **Migration `migrations/0015_platform_admin.sql`** (reverse: `migrations/down/0015_platform_admin.down.sql`):
+  - `platform_admins`, `platform_sessions`, `platform_challenges` and `platform_activity`, none of them readable by
+    `pulse_app`
+  - the template organisation and workspace, from the seeded configuration only
+- **`/platform`** (`src/components/PlatformPage.jsx`, `worker/platform.js`):
+  - signing in: password, authenticator app (set up at the first sign-in), then your own password
+  - organisations: a table with counts, a new organisation (configuration from the template, a Projects workspace,
+    its first administrator), rename, suspend, reactivate, archive, add an administrator
+- **`scripts/platform-admin.mjs create|list dev|stage|main`:** makes the first Platform Administrator.
+- **Settings → Organisation** (`src/components/OrgAdmin.jsx`, the `/api/org` routes in `worker/index.js`), for
+  Organisation Administrators:
+  - workspaces: add, rename, archive, reactivate
+  - people: add (temporary password), a role per workspace in a table, Organisation Administrator or not, remove
+- **Organisation-wide settings** (roles, two-step, sign-in security, email & Teams) are Organisation Administrators'
+  only, in the server and the screens.
+- **Docs:** `docs/admin-guide-organisations.md`, the admin guide. `docs/API.md` has organisation and platform
+  administration. Postman: 4 more requests in "Workspaces (multi-tenancy)".
+
+**Tests:** `tests/tenancy.admin.test.js`, 10 checks on PGlite:
+- **Platform sign-in:** the authenticator app is required, the same code can't be used twice, and refusals are
+  identical.
+- **Temporary password:** must be replaced first.
+- **Platform and organisation sessions** can't reach each other's API.
+- **New organisations:** the template's configuration, a Projects workspace, and the first administrator, who must
+  choose a password.
+- **The platform list** shows counts only.
+- **Organisation administration:** workspaces, people, roles per workspace, and sessions ending on leaving a
+  workspace.
+- **Isolation:** no reaching another organisation's workspaces or people.
+- **Organisation settings** for Organisation Administrators only, with the last one protected.
+- **Suspending** ends sessions and refuses sign-ins; reactivating restores them.
+
+`npm test`: 156 passed. `tsc` (app and Worker): 0 errors. `vite build` passes. On the Neon dev branch, 0015 applied,
+undone and applied again; its template matches PGlite's.
+
+**To release:** apply 0015 with 0014, before the deploy. Then make the first Platform Administrator with
+`node scripts/platform-admin.mjs create main <username> "<Full name>"`.
+
+## Multi-tenancy, phase (e): links, GitHub, digests and wording (2026-11-26)
+
+**What was built**
+- **Migration `migrations/0016_showcase_links.sql`** (reverse in `migrations/down/`): executive page links, with
+  row-level security.
+- **`/executive/<link>`:**
+  - the page reads its link and shows that workspace's totals, named for its organisation and workspace
+  - Settings → View-only links → Executive page links makes and revokes them (`src/components/ShareLinks.jsx` now
+    serves both kinds)
+  - the public `/executive` without a link is gone
+- **GitHub:** one secret per workspace, a secret another workspace uses is refused, and the set-up screen explains
+  it.
+- **Digests and the Monday Briefing:** titled with their workspace.
+- **Wording:**
+  - Ask Pulse and the digest openings no longer say "Omni Contact's project tracker"; the snapshot names the
+    organisation and workspace
+  - neutral email footers and install description
+  - workspace and organisation names on the Excel report, the printed report cover and the service desk portal
+- **Docs:** `docs/API.md` (executive page links), `docs/admin-guide-organisations.md` (inside each workspace).
+  Postman: a public check that the executive page needs its link.
+
+**Tests:** `tests/tenancy.integrations.test.js`, 5 checks on PGlite:
+- an executive link shows its own workspace's totals only, and no names
+- every refusal is the same 404
+- Ask Pulse names the right organisation and never "Omni Contact"
+- GitHub: a shared secret is refused, and a delivery links only in the signing workspace even when another
+  organisation has the same key
+- the Monday Briefing goes out per workspace, named for it, from the real hourly cron
+
+`npm test`: 161 passed in 15 files. `tsc` (app and Worker): 0 errors. `vite build` passes. Migration 0016 is applied
+on the Neon dev branch.
+
+## Releasing multi-tenancy phases (b) to (e) together
+
+Phase (a) (migration 0013) is on main. Phases (b)–(e) are committed locally, not pushed, because pushing deploys and
+the deployed Worker needs 0014–0016 in the live database.
+
+1. **Dry run on a copy of production:**
+   - Make a Neon branch from `production`.
+   - Put its address in `.dev.vars` as `PG_STAGE`.
+   - If 0013 isn't live yet, run `node scripts/tenancy-dry-run.mjs stage` and read the placements.
+   - Apply the migrations to the branch in order with `node scripts/db.mjs exec stage migrations/<file>`. (Or point
+     `PG_DEV` at the branch and run `npm run db:migrate:dev`.)
+   - Optionally run `PULSE_DB=stage npx vitest run tests/tenancy` against it. It's slow from a laptop (see phase
+     (b)); the same suite runs on PGlite in `npm test`.
+2. **Back up live:** `npm run db:backup -- ../backup-before-tenancy.sql`, plus a Neon branch
+   `backup-before-tenancy` from `production`.
+3. **Migrate live:** `npm run db:migrate` applies 0014, 0015 and 0016 (and 0013, if not yet applied).
+4. **Deploy straight away:** `git push`. CI runs `npm test`, including the PGlite isolation suite, then deploys. The
+   Worker running before this push can't work on 0014.
+5. **Make the first Platform Administrator:** `node scripts/platform-admin.mjs create main <username> "<Full name>"`.
+   They sign in at `/platform`.
+6. **Tell people:**
+   - The sign-in page now asks for the organisation code: `omnicontact`, or send the link `…/#/o/omnicontact`.
+   - Old `/executive` addresses stop working; make links in Settings → View-only links.
+   - API tokens reach only the workspace they were made in.
+7. **Afterwards:** watch response times. Each query now has two extra round trips to the database (BEGIN and
+   COMMIT), next to the Worker.
+
+**If something goes wrong:** the reverse migrations are in `migrations/down/` (0016, 0015, 0014, newest first). They
+refuse to run once a second organisation exists. Otherwise restore the backup or the Neon branch.

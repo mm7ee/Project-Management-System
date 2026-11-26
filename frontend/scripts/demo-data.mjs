@@ -73,7 +73,6 @@ const out = ["-- Pulse demo data. Remove with scripts/demo-data.mjs remove.", RE
 
 // ---------- people ----------
 const PEOPLE = [
-  ["Vimbai Mutasa", "manager", "Projects Manager"],
   ["Tarisai Shumba", "team_lead", "Team Leader"],
   ["Thamani", "assistant", "Projects Assistant"],
   ["Michael Mukwekezeke", "developer", "Developer"],
@@ -350,7 +349,7 @@ for (let i = 0; i < reqCount; i++) {
     onHold: status === "ON_HOLD",
     priority: priority === "CRITICAL" ? "HIGHEST" : priority,
     assignee,
-    reporter: pick([P.Vimbai, P.Tarisai, P.Thamani]),
+    reporter: pick([P.Tarisai, P.Thamani]),
     due: dateAgo(dueDays),
     created,
     updated,
@@ -396,7 +395,7 @@ const EPICS = [
 ];
 const SUBTASKS = ["Front end", "Back end", "Tests"];
 const COMMENTS = [
-  "@demo.vimbai can you confirm the client signed off the design before we start?",
+  "@demo.tarisai can you confirm the client signed off the design before we start?",
   "Done on my side. **Ready for review**; the test steps are in the description.",
   "Blocked until we get test data. @demo.tarisai please chase the client.",
   "Found the cause: the index on `customer_name` was missing. Fixed and re-tested.",
@@ -451,7 +450,7 @@ for (const sys of inFlight) {
         resolution: status === "DONE" ? "DONE" : null,
         priority: type === "BUG" ? pick(["HIGHEST", "HIGH"]) : pick(["HIGH", "MEDIUM", "MEDIUM", "LOW"]),
         assignee,
-        reporter: pick([P.Vimbai, P.Tarisai, sys.lead]),
+        reporter: pick([P.Tarisai, sys.lead]),
         created,
         updated,
         resolved: status === "DONE" ? updated : null,
@@ -498,7 +497,7 @@ for (const sys of inFlight) {
       }
       if (rand() < 0.45) {
         for (let c = 0; c < between(1, 3); c++) {
-          comments.push({ itemId: item.id, authorId: pick([assignee, P.Vimbai, P.Tarisai, sys.lead]), body: pick(COMMENTS), at: addDays(created, c + 1) });
+          comments.push({ itemId: item.id, authorId: pick([assignee, P.Tarisai, sys.lead]), body: pick(COMMENTS), at: addDays(created, c + 1) });
         }
       }
       done.push(item);
@@ -606,7 +605,7 @@ items
   .filter((it) => it.type === "BUG" && it.status !== "DONE")
   .slice(0, 2)
   .forEach((it) => out.push(`UPDATE work_items SET security_level = 'managers-only' WHERE id = ${q(it.id)};`));
-out.push(`INSERT INTO security_level_grants (level_id, user_id) VALUES ('hr-only', ${q(P.Vimbai)}) ON CONFLICT DO NOTHING;`);
+out.push(`INSERT INTO security_level_grants (level_id, user_id) VALUES ('hr-only', ${q(P.Tarisai)}) ON CONFLICT DO NOTHING;`);
 
 // A "Client tier" select and an "Estimated value" number in the Projects workspace, on some items.
 out.push(
@@ -650,7 +649,7 @@ const REQUESTS_SD = [
   ["incident", "BUG", "Wallboard shows yesterday's figures", "HIGH", "TODO", 1.5, "Farai Ncube", "farai.ncube@example.com", [["Which system is affected?", "Wallboard"], ["How many people are affected?", "My team"]], false],
   ["service-request", "TASK", "New CRM accounts for five agents", "MEDIUM", "TODO", 0.5, "Tendai Chikwanha", "tendai@example.com", [["What do you need?", "A new account"]], false],
   ["service-request", "TASK", "Headset for the Bulawayo team lead", "LOW", "DONE", 6, "Nyasha Dube", "nyasha.dube@example.com", [["What do you need?", "Equipment"]], true],
-  ["change", "TASK", "Move the IVR prompts to the new voice", "MEDIUM", "IN_PROGRESS", 3, "Vimbai Mutasa", null, [["System to change", "IVR"], ["Preferred change window", "Saturday 18:00–20:00"], ["How would it be rolled back?", "Switch back to the old prompt set"], ["Risk", "Low"]], true],
+  ["change", "TASK", "Move the IVR prompts to the new voice", "MEDIUM", "IN_PROGRESS", 3, "Tarisai Shumba", null, [["System to change", "IVR"], ["Preferred change window", "Saturday 18:00–20:00"], ["How would it be rolled back?", "Switch back to the old prompt set"], ["Risk", "Low"]], true],
   ["question", "TASK", "Can we export call notes to Excel?", "LOW", "DONE", 4, "Kuda Sibanda", "kuda.sibanda@example.com", [], true],
 ];
 REQUESTS_SD.forEach(([typeId, type, summary, priority, status, daysAgo, customer, email, answers, replied], i) => {
@@ -662,11 +661,11 @@ REQUESTS_SD.forEach(([typeId, type, summary, priority, status, daysAgo, customer
   const assignee = status === "TODO" ? null : P.Michael;
   out.push(
     `INSERT INTO work_items (id, system_id, number, type, summary, description, status, resolution, priority, assignee, reporter, created_at, updated_at, resolved_at, source) VALUES (${[
-      q(id), q(SD.id), sdNumber, q(type), q(summary), q("Raised on the service desk portal."), q(status), q(done ? "DONE" : null), q(priority), q(assignee), q(P.Vimbai), q(created), q(resolved ?? created), q(resolved), "'service_desk'",
+      q(id), q(SD.id), sdNumber, q(type), q(summary), q("Raised on the service desk portal."), q(status), q(done ? "DONE" : null), q(priority), q(assignee), q(P.Tarisai), q(created), q(resolved ?? created), q(resolved), "'service_desk'",
     ].join(", ")});`,
-    `INSERT INTO status_history (item_id, from_status, to_status, changed_by, changed_at) VALUES (${q(id)}, NULL, 'TODO', ${q(P.Vimbai)}, ${q(created)});`,
+    `INSERT INTO status_history (item_id, from_status, to_status, changed_by, changed_at) VALUES (${q(id)}, NULL, 'TODO', ${q(P.Tarisai)}, ${q(created)});`,
     `INSERT INTO sd_requests (item_id, request_type_id, customer_name, customer_email, customer_user_id, portal_link_id, first_response_at, created_at) VALUES (${[
-      q(id), q(typeId), q(customer), q(email), q(email ? null : P.Vimbai), q(email ? "demo-pl-1" : null), q(replied ? new Date(Date.parse(created) + 0.05 * DAY).toISOString() : null), q(created),
+      q(id), q(typeId), q(customer), q(email), q(email ? null : P.Tarisai), q(email ? "demo-pl-1" : null), q(replied ? new Date(Date.parse(created) + 0.05 * DAY).toISOString() : null), q(created),
     ].join(", ")});`,
     ...answers.map(([label, value], k) => `INSERT INTO sd_answers (item_id, field_id, label, value, position) VALUES (${q(id)}, ${q(`demo-q-${k}`)}, ${q(label)}, ${q(value)}, ${k + 1});`),
   );
@@ -678,7 +677,7 @@ REQUESTS_SD.forEach(([typeId, type, summary, priority, status, daysAgo, customer
 });
 // A portal link for the demo client (its secret is unknown, so it can't be used) and a revoked API token.
 out.push(
-  `INSERT INTO portal_links (id, token_hash, label, created_by, created_at, expires_at, requests) VALUES ('demo-pl-1', ${q(`demo-${slug("unused portal secret")}`)}, 'Demo client operations (demo)', ${q(P.Vimbai)}, ${q(ago(10))}, ${q(new Date(NOW + 80 * DAY).toISOString())}, 5);`,
+  `INSERT INTO portal_links (id, token_hash, label, created_by, created_at, expires_at, requests) VALUES ('demo-pl-1', ${q(`demo-${slug("unused portal secret")}`)}, 'Demo client operations (demo)', ${q(P.Tarisai)}, ${q(ago(10))}, ${q(new Date(NOW + 80 * DAY).toISOString())}, 5);`,
   `INSERT INTO api_tokens (id, user_id, name, token_hash, prefix, scope, created_at, expires_at, revoked_at, revoked_by) VALUES ('demo-tok-1', ${q(P.Tarisai)}, 'Reporting script (demo)', ${q(`demo-${slug("unused token")}`)}, 'pulse_demo00', 'read', ${q(ago(20))}, ${q(new Date(NOW + 10 * DAY).toISOString())}, ${q(ago(2))}, ${q(P.Tarisai)});`,
   `INSERT INTO notification_optouts (user_id, event) VALUES (${q(P.Michael)}, 'item_updated') ON CONFLICT DO NOTHING;`,
 );
@@ -854,7 +853,7 @@ systems.forEach((s, i) => {
   ["demo-recruitment-onboarding-portal", "HR needs a go-live date for the new intake.", 1],
 ].forEach(([sys, message, days], i) => {
   out.push(
-    `INSERT INTO requests (id, system_id, requested_by, message, created_at) VALUES (${q(`demo-rq-${i + 1}`)}, ${q(sys)}, ${q(P.Vimbai)}, ${q(message)}, ${q(ago(days, 9))});`,
+    `INSERT INTO requests (id, system_id, requested_by, message, created_at) VALUES (${q(`demo-rq-${i + 1}`)}, ${q(sys)}, ${q(P.Tarisai)}, ${q(message)}, ${q(ago(days, 9))});`,
   );
 });
 
@@ -884,18 +883,18 @@ out.push(
 // viewer still sees only the work items they're allowed to see.
 const FILTERS = [
   ["demo-flt-open-bugs", "Open bugs (demo)", "type = Bug AND statusCategory != Done ORDER BY priority DESC", P.Tarisai, "everyone", null],
-  ["demo-flt-urgent", "Urgent and open (demo)", "priority in (Highest, High) AND statusCategory != Done ORDER BY due ASC", P.Vimbai, "everyone", null],
+  ["demo-flt-urgent", "Urgent and open (demo)", "priority in (Highest, High) AND statusCategory != Done ORDER BY due ASC", P.Tarisai, "everyone", null],
   ["demo-flt-sprint", "In running sprints (demo)", "sprint in openSprints() ORDER BY status", P.Tarisai, "role", "developer"],
-  ["demo-flt-all-open", "All open work (demo)", "statusCategory != Done", P.Vimbai, "everyone", null],
-  ["demo-flt-mine", "My open work (demo)", "assignee = currentUser() AND statusCategory != Done ORDER BY due ASC", P.Vimbai, "private", null],
+  ["demo-flt-all-open", "All open work (demo)", "statusCategory != Done", P.Tarisai, "everyone", null],
+  ["demo-flt-mine", "My open work (demo)", "assignee = currentUser() AND statusCategory != Done ORDER BY due ASC", P.Tarisai, "private", null],
 ];
 for (const [id, name, pql, owner, scope, value] of FILTERS) {
   const at = ago(between(3, 20), 10);
   out.push(`INSERT INTO saved_filters (id, name, description, pql, owner_id, share_scope, share_value, created_at, updated_at) VALUES (${[q(id), q(name), "'Demo filter'", q(pql), q(owner), q(scope), q(value), q(at), q(at)].join(", ")});`);
 }
-out.push(`INSERT INTO filter_favourites (filter_id, user_id, created_at) VALUES ('demo-flt-urgent', ${q(P.Vimbai)}, ${q(ago(2))}), ('demo-flt-open-bugs', ${q(P.Tarisai)}, ${q(ago(2))});`);
-out.push(`INSERT INTO filter_subscriptions (id, filter_id, user_id, frequency, weekday, hour, created_at) VALUES ('demo-sub-1', 'demo-flt-urgent', ${q(P.Vimbai)}, 'weekly', 1, 8, ${q(ago(2))});`);
-out.push(`INSERT INTO dashboards (id, name, owner_id, share_scope, share_value, layout, created_at, updated_at) VALUES ('demo-dash-delivery', 'Delivery (demo)', ${q(P.Vimbai)}, 'everyone', NULL, 'two', ${q(ago(2))}, ${q(ago(2))});`);
+out.push(`INSERT INTO filter_favourites (filter_id, user_id, created_at) VALUES ('demo-flt-urgent', ${q(P.Tarisai)}, ${q(ago(2))}), ('demo-flt-open-bugs', ${q(P.Tarisai)}, ${q(ago(2))});`);
+out.push(`INSERT INTO filter_subscriptions (id, filter_id, user_id, frequency, weekday, hour, created_at) VALUES ('demo-sub-1', 'demo-flt-urgent', ${q(P.Tarisai)}, 'weekly', 1, 8, ${q(ago(2))});`);
+out.push(`INSERT INTO dashboards (id, name, owner_id, share_scope, share_value, layout, created_at, updated_at) VALUES ('demo-dash-delivery', 'Delivery (demo)', ${q(P.Tarisai)}, 'everyone', NULL, 'two', ${q(ago(2))}, ${q(ago(2))});`);
 [
   ["urgent", "filter_results", "demo-flt-urgent", "Urgent and open", 0, null, null, 8],
   ["pie", "pie", "demo-flt-all-open", "Open work by status", 0, "status", null, 10],

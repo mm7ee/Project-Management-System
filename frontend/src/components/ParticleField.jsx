@@ -1,0 +1,135 @@
+import { useEffect, useRef } from "react";
+import { reduceMotion } from "../prefs";
+/**
+ * Drifting network of points joined by faint lines (the "omnichannel" backdrop on the
+ * landing page). Draws one still frame when the visitor prefers reduced motion, and
+ * pauses while the tab is hidden.
+ */
+// Ink per backdrop: the sign-in page's glowing cyan, and for inside the app, Omni Contact's
+// indigo with a few red points, kept faint so the pages stay calm.
+const PALETTES = {
+  dark: { link: "27, 169, 225", linkAlpha: 0.16, reach: "242, 169, 0", reachAlpha: 0.3, dot: "rgba(140, 214, 245, 0.75)", accent: "rgba(242, 169, 0, 0.9)" },
+  light: { link: "11, 111, 176", linkAlpha: 0.2, reach: "27, 169, 225", reachAlpha: 0.55, dot: "rgba(11, 111, 176, 0.5)", accent: "rgba(242, 169, 0, 0.85)" },
+  appLight: { link: "44, 50, 128", linkAlpha: 0.13, reach: "0, 57, 166", reachAlpha: 0.32, dot: "rgba(44, 50, 128, 0.32)", accent: "rgba(237, 0, 0, 0.6)" },
+  appDark: { link: "128, 149, 255", linkAlpha: 0.13, reach: "180, 190, 255", reachAlpha: 0.3, dot: "rgba(180, 190, 255, 0.45)", accent: "rgba(255, 59, 59, 0.8)" },
+  sidebar: { link: "150, 168, 255", linkAlpha: 0.26, reach: "180, 190, 255", reachAlpha: 0.4, dot: "rgba(190, 200, 255, 0.65)", accent: "rgba(255, 59, 59, 0.85)" },
+};
+/**
+ * @param {{ className?: string; palette?: keyof typeof PALETTES }} props
+ */
+export default function ParticleField({ className, palette = "dark" }) {
+  const ref = useRef(/** @type {HTMLCanvasElement | null} */ (null));
+  useEffect(() => {
+    const ink = PALETTES[palette];
+    const canvas = /** @type {NonNullable<typeof ref.current>} */ (ref.current);
+    const ctx = /** @type {CanvasRenderingContext2D} */ (canvas.getContext("2d"));
+    const still = reduceMotion();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let w = 0;
+    let h = 0;
+    let frame = 0;
+    const mouse = { x: -9999, y: -9999 };
+    /** @type {P[]} */ let points = [];
+    const resize = () => {
+      w = canvas.clientWidth;
+      h = canvas.clientHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // Denser in narrow spaces (the sidebar) so the web still reads; none while hidden.
+      const count = w && h ? Math.round(Math.min(90, Math.max((w * h) / 16000, 24))) : 0;
+      points = Array.from({ length: count }, () => ({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        vx: (Math.random() - 0.5) * 0.25,
+        vy: (Math.random() - 0.5) * 0.25,
+        r: Math.random() * 1.6 + 0.6,
+        amber: Math.random() < 0.08,
+      }));
+    };
+    const LINK = 130;
+    const draw = () => {
+      ctx.clearRect(0, 0, w, h);
+      for (const p of points) {
+        if (!still) {
+          p.x += p.vx;
+          p.y += p.vy;
+          if (p.x < -20) p.x = w + 20;
+          if (p.x > w + 20) p.x = -20;
+          if (p.y < -20) p.y = h + 20;
+          if (p.y > h + 20) p.y = -20;
+        }
+      }
+      for (let i = 0; i < points.length; i++) {
+        const a = points[i];
+        for (let j = i + 1; j < points.length; j++) {
+          const b = points[j];
+          const d = Math.hypot(a.x - b.x, a.y - b.y);
+          if (d < LINK) {
+            ctx.strokeStyle = `rgba(${ink.link}, ${ink.linkAlpha * (1 - d / LINK)})`;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+          }
+        }
+        // Points near the pointer reach out to it.
+        const dm = Math.hypot(a.x - mouse.x, a.y - mouse.y);
+        if (dm < LINK * 1.4) {
+          ctx.strokeStyle = `rgba(${ink.reach}, ${ink.reachAlpha * (1 - dm / (LINK * 1.4))})`;
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(mouse.x, mouse.y);
+          ctx.stroke();
+        }
+        ctx.fillStyle = a.amber ? ink.accent : ink.dot;
+        ctx.beginPath();
+        ctx.arc(a.x, a.y, a.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (!still && !document.hidden) frame = requestAnimationFrame(draw);
+    };
+    const onMove = /** @param {PointerEvent} e */ (e) => {
+      const r = canvas.getBoundingClientRect();
+      mouse.x = e.clientX - r.left;
+      mouse.y = e.clientY - r.top;
+    };
+    const onLeave = () => {
+      mouse.x = mouse.y = -9999;
+    };
+    const onVisible = () => {
+      cancelAnimationFrame(frame);
+      if (!document.hidden) draw();
+    };
+    const onResize = () => {
+      resize();
+      if (still) draw();
+    };
+    resize();
+    draw();
+    // Its own size, not the window's: it also starts when a hidden canvas is shown (theme change).
+    const watch = new ResizeObserver(onResize);
+    watch.observe(canvas);
+    window.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerleave", onLeave);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelAnimationFrame(frame);
+      watch.disconnect();
+      window.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerleave", onLeave);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [palette]);
+  return <canvas ref={ref} className={className} aria-hidden="true" />;
+}
+/**
+ * @typedef {Object} P
+ * @property {number} x
+ * @property {number} y
+ * @property {number} vx
+ * @property {number} vy
+ * @property {number} r
+ * @property {boolean} amber
+ */

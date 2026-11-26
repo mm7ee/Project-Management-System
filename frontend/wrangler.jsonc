@@ -4,7 +4,7 @@
 // changes with `npm run db:migrate` (live Postgres) before deploying code that depends on them.
 {
   "name": "omni-tracker",
-  "main": "worker/index.ts",
+  "main": "worker/index.js",
   "compatibility_date": "2026-10-06",
   // The Postgres driver needs Node's Buffer and sockets.
   "compatibility_flags": ["nodejs_compat"],
