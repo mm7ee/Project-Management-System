@@ -46,6 +46,7 @@ import ProjectsPage from "./components/ProjectsPage";
 import BoardsPage from "./components/BoardsPage";
 import SearchPage from "./components/SearchPage";
 import CustomDashboards from "./components/CustomDashboards";
+import WorkspaceSwitcher from "./components/WorkspaceSwitcher";
 import AutomationSettings from "./components/AutomationSettings";
 import ServiceDeskPage from "./components/ServiceDeskPage";
 import ChatPage, { useChatUnread } from "./components/ChatPage";
@@ -539,6 +540,7 @@ function Dashboard({ data, reload }) {
             </button>
           )}
           <h1>{data.viewOnly ? "Welcome" : `${greeting()}, ${me.name.split(" ")[0]}`}</h1>
+          <WorkspaceSwitcher tenant={data.tenant} />
           <VitalSign
             attention={attention.length}
             total={systems.length}

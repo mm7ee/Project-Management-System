@@ -1,11 +1,12 @@
-// Runs the real Worker (worker/index.js) in the test process against a real Postgres: the Neon "dev"
-// branch, or a branch of production for staging (never the live database). Database tests only run when
-// PULSE_DB says which: `PULSE_DB=dev npx vitest run tests/tenancy` (npm test skips them).
+// Runs the real Worker (worker/index.js) in the test process against a real Postgres. By default that is PGlite,
+// in this process, with every migration applied (tests/helpers/pglite.js): npm test runs it, here and in CI. With
+// PULSE_DB=dev (or stage) it is the Neon "dev" branch (or a branch of production), never the live database.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
 import worker from "../../worker/index.js";
-import { pgDatabase } from "../../worker/pg.js";
+import { databaseOver, pgDatabase } from "../../worker/pg.js";
+import { migratedPglite, pgliteClient, pgliteSql } from "./pglite.js";
 
 const VARS = fileURLToPath(new URL("../../.dev.vars", import.meta.url));
 /** @param {string} key */
@@ -20,10 +21,10 @@ export function devVar(key) {
     return undefined;
   }
 }
-/** Which database the database tests use, or null to skip them. Refuses the live database. */
+/** Which database the database tests use: "pglite" (the default), or a Neon address. Refuses the live database. */
 export function testDatabase() {
   const which = process.env.PULSE_DB;
-  if (!which) return null;
+  if (!which || which === "pglite") return "pglite";
   const key = { dev: "PG_DEV", stage: "PG_STAGE" }[which];
   if (!key) throw new Error(`PULSE_DB must be dev or stage, not "${which}"`);
   const url = devVar(key);
@@ -34,18 +35,43 @@ export function testDatabase() {
 }
 
 /**
- * A client for one test file: calls the Worker as a browser would, keeping each person's cookie.
- * @param {string} url
+ * One test file's database: `root`, the Worker's own adapter over it (handed to the Worker as PG_ROOT), and
+ * `sql`, a direct postgres.js-style connection for setting up and checking rows.
+ * @param {string} target "pglite" or a Neon address (testDatabase)
  */
-export function workerClient(url) {
+export async function testBackend(target) {
+  if (target === "pglite") {
+    const pg = await migratedPglite();
+    const client = pgliteClient(pg);
+    return { root: databaseOver(() => client), sql: /** @type {any} */ (pgliteSql(pg)), close: () => pg.close() };
+  }
+  // From a laptop the database is far away: connections are closed when idle and a dropped query is tried again.
+  const sql = postgres(target, { max: 2, idle_timeout: 10, onnotice: () => undefined });
+  return { root: pgDatabase(target, { idle_timeout: 10, retry_dropped: true }), sql, close: () => sql.end() };
+}
+
+/**
+ * A client for one test file: calls the Worker as a browser would, keeping each person's cookie.
+ * @param {{ root: TenantDatabase }} backend
+ */
+export function workerClient(backend) {
   /** @type {Promise<unknown>[]} */ let pending = [];
-  // In Workers each request's connection ends with the request. Here they would pile up until the database
-  // refused more, so one adapter is shared, handed over through the Worker's "use env.D1 as the database"
-  // switch (withDatabase in worker/index.js). It is the same Postgres adapter the Worker builds itself.
-  const shared = pgDatabase(url);
+  // In Workers each request's connection ends with the request. Here they would pile up, so one adapter is shared,
+  // handed to the Worker as PG_ROOT (withDatabase in worker/index.js). It is the same adapter code the Worker uses,
+  // and it scopes each request the same way.
+  const shared = backend.root;
+  /** Everything sent to the stand-in Workers AI (Ask Pulse), to check what a question could reveal. */
+  /** @type {unknown[]} */ const aiInputs = [];
   const env = /** @type {any} */ ({
-    D1: shared,
-    DATABASE: "d1",
+    PG_ROOT: shared,
+    DATABASE: "postgres",
+    AI: {
+      run: async (/** @type {string} */ _model, /** @type {Record<string, unknown>} */ input) => {
+        aiInputs.push(input);
+        if (input.stream) return new ReadableStream({ start: (c) => c.close() });
+        return { response: "project = NOPE" };
+      },
+    },
     MFA_KEY: devVar("MFA_KEY") ?? "test-only-key",
     PUBLIC_URL: "http://localhost",
     ASSETS: { fetch: async () => new Response("", { status: 404 }) },
@@ -77,8 +103,6 @@ export function workerClient(url) {
     if (r.status !== 200 || !r.cookie) throw new Error(`Sign-in as ${username} failed: ${r.status} ${JSON.stringify(r.data)}`);
     return r.cookie;
   }
-  return { call, signIn };
+  return { call, signIn, root: shared, aiInputs };
 }
 
-/** A direct database connection, for setting up and checking rows. */
-export const database = (/** @type {string} */ url) => postgres(url, { max: 2, onnotice: () => undefined });

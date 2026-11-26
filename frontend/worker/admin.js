@@ -99,7 +99,7 @@ export async function adminApi(c, path, method) {
           .prepare(
             `INSERT INTO notification_schemes (event, notify_assignee, notify_reporter, notify_watchers, notify_lead, notify_mentioned, notify_role, by_bell, by_email, by_teams, updated_by, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT (event) DO UPDATE SET notify_assignee = excluded.notify_assignee, notify_reporter = excluded.notify_reporter, notify_watchers = excluded.notify_watchers,
+             ON CONFLICT (organization_id, event) DO UPDATE SET notify_assignee = excluded.notify_assignee, notify_reporter = excluded.notify_reporter, notify_watchers = excluded.notify_watchers,
                notify_lead = excluded.notify_lead, notify_mentioned = excluded.notify_mentioned, notify_role = excluded.notify_role, by_bell = excluded.by_bell,
                by_email = excluded.by_email, by_teams = excluded.by_teams, updated_by = excluded.updated_by, updated_at = excluded.updated_at`,
           )

@@ -661,6 +661,176 @@
           }
         },
         {
+          "name": "Workspaces (multi-tenancy)",
+          "item": [
+            {
+              "name": "Admin sees their organisation and open workspace",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                      "const t = pm.response.json();",
+                      "pm.test(\"names the organisation and the open workspace\", () => { pm.expect(t.organization.name).to.be.a(\"string\"); pm.expect(t.workspace.id).to.be.a(\"string\"); });",
+                      "pm.test(\"the open workspace is one of theirs\", () => pm.expect(t.workspaces.map((w) => w.id)).to.include(t.workspace.id));",
+                      "pm.environment.set(\"workspaceId\", t.workspace.id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Cookie",
+                    "value": "omni_session={{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/me/workspaces",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "me",
+                    "workspaces"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Switching to a workspace you do not belong to is 404",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status is 404\", () => pm.response.to.have.status(404));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Cookie",
+                    "value": "omni_session={{adminToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"workspaceId\": \"no-such-workspace\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/me/workspace",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "me",
+                    "workspace"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Switching to your own workspace works",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Cookie",
+                    "value": "omni_session={{adminToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"workspaceId\": \"{{workspaceId}}\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/me/workspace",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "me",
+                    "workspace"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "The old workspace list editor is refused",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status is 409\", () => pm.response.to.have.status(409));",
+                      "pm.test(\"says where workspaces are managed\", () => pm.expect(pm.response.json().code).to.eql(\"workspaces_managed_by_org\"));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Cookie",
+                    "value": "omni_session={{adminToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"workspaces\": [\n    {\n      \"name\": \"Projects\"\n    }\n  ]\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/settings/workspaces",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "settings",
+                    "workspaces"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
           "name": "Authenticated route rejects invalid JSON",
           "event": [
             {

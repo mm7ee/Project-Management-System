@@ -663,3 +663,70 @@ between workspaces until phase (b).
 3. `npm run db:migrate`. No deploy is needed: the Worker is unchanged.
 
 **New permissions, endpoints, screens:** none.
+
+## Multi-tenancy, phase (b): the Worker and the database scope everything (2026-11-26)
+
+**Why:** phase (b) of the plan. Every request, background job and integration sees one organisation and one
+workspace, enforced by Postgres row-level security. The rules are in DECISIONS.md.
+
+**What was built**
+- **Migration `migrations/0014_tenancy_enforcement.sql`** (reverse: `migrations/down/0014_tenancy_enforcement.down.sql`):
+  - **Access:** the `pulse_app` role and RLS policies on every tenant table.
+  - **Defaults:** tenant columns default to the request's tenant.
+  - **Phase (a)'s stopgaps go:** the triggers and guards are replaced by `tenancy_derive`.
+  - **People:** `users` becomes `accounts` plus the `users` view.
+  - **Ids and keys:** configuration ids and global keys become per tenant.
+  - **Settings:** split into `org_settings` and `workspace_settings`.
+  - **Service desk:** every workspace gets its own request types.
+  - **Seeding:** seed functions for new tenants.
+- **Worker:**
+  - **`worker/pg.js`:** scoped handles, a transaction per query, and batches that refuse mixed tenants.
+  - **`worker/settings.js`:** settings by level.
+  - **`worker/index.js`:**
+    - identity first, then everything scoped
+    - sessions carry their workspace, and the role comes from the membership
+    - `GET /api/me/workspaces` and `POST /api/me/workspace`, and `tenant` in `/api/data`
+    - organisation-wide project keys
+    - random endings on new ids
+    - activity by level
+    - the cron per workspace
+    - the workspace list editor refused
+  - **Other modules:** tokens, portal links and GitHub each scoped to their workspace; organisation-wide alerts;
+    conflict targets for the new keys; the service desk set-up inserted when missing; project history 404s for
+    another workspace.
+- **App:** a workspace switcher in the top bar (`src/components/WorkspaceSwitcher.jsx`).
+- **Tests:**
+  - **`tests/tenancy.isolation.test.js`, 13 checks:** two organisations × two workspaces, five people. It covers:
+    - lists, the bell, chat, reports and activity
+    - people
+    - 404s, read or changed
+    - PQL (the same key in two organisations)
+    - gadgets, Ask Pulse and @mentions
+    - view-only links and tokens
+    - switching
+    - the database's own refusals
+  - **`tests/tenantScope.test.js`, 9 checks:** the adapter's tenant checks.
+  - **Retired:** `tests/tenancy.phaseA.test.js` (phase (a)'s stopgaps are gone).
+- **New dev dependency:** `@electric-sql/pglite` 0.5.16 (exact). The database tests run in `npm test` and CI.
+- **Docs:** `docs/API.md` (organisations and workspaces; token, link and GitHub scope); Postman: a "Workspaces
+  (multi-tenancy)" folder with 4 requests.
+
+**Tested**
+- `npm test`: 139 passed in 12 files, including the 13 isolation checks on PGlite in about 7 seconds.
+- **The suite catches leaks:** with RLS switched off on `saved_filters`, 4 checks fail. With it off on `work_items`,
+  the database check fails while the API stays isolated through the `systems` policy.
+- `tsc` on the app and the Worker: 0 errors. `vite build` passes.
+- **Neon dev branch:** 0014 applied, undone and applied again. Against dev the isolation run kept losing this
+  laptop's connection to Singapore (DNS too), so it is verified on PGlite.
+
+**Not done yet**
+- **RLS cost through Hyperdrive:** two extra round trips per query (BEGIN and COMMIT), measured only once deployed.
+- **Ask Pulse wording:** the prompt still calls Pulse "Omni Contact's project tracker" for every organisation
+  (phase (e)).
+- **Phases (c)–(e).**
+
+**To release** (by hand, with 0013 already applied):
+1. Dry run on a Neon branch of production:
+   `node scripts/tenancy-dry-run.mjs stage --migration 0014_tenancy_enforcement.sql`.
+2. Back up: `npm run db:backup -- ../backup-before-tenancy-b.sql`, plus a Neon branch.
+3. `npm run db:migrate`, then deploy at once. The phase (a) Worker can't run on 0014.

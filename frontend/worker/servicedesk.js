@@ -12,6 +12,7 @@
 // or a page for signed-in staff. The portal shows people only their own requests and the public replies
 // on them; never internal items or notes. The team works the requests in queues.
 import { newToken, tokenHash } from "./auth";
+import { tenantEnv } from "./pg";
 import { HttpError, body, json } from "./http";
 import { canSeeItem, itemAccess, roleMatrix, viewersOf } from "./access";
 import { permissionsFor } from "../src/data/roles";
@@ -438,7 +439,7 @@ export async function serviceDeskApi(c, path, method) {
         await db.prepare("UPDATE systems SET workflow_id = ? WHERE id = ?").bind(SD_WORKFLOW, sys.id).run();
       }
     }
-    await db.prepare("UPDATE service_desk_config SET system_id = ?, updated_by = ?, updated_at = ? WHERE id = 1").bind(systemId, c.me.id, c.now).run();
+    await db.prepare("INSERT INTO service_desk_config (id, system_id, updated_by, updated_at) VALUES (1, ?, ?, ?) ON CONFLICT (workspace_id, id) DO UPDATE SET system_id = excluded.system_id, updated_by = excluded.updated_by, updated_at = excluded.updated_at").bind(systemId, c.me.id, c.now).run();
     await c.audit("service_desk_updated", systemId, { from: { project: before }, to: { project: systemId } });
     return json({ systemId });
   }
@@ -870,20 +871,23 @@ function portalContext(env, req, link, customerName, waitUntil) {
  */
 export async function portalApi(env, req, path, waitUntil) {
   if (!path.startsWith("/api/portal")) return null;
-  const db = env.DB;
   const method = req.method;
   const token = req.headers.get("x-portal-token") ?? "";
+  // The link is found by its hash (as the owner, before its tenant is known); everything after is done with
+  // the handle of the workspace the link belongs to, so a customer only ever reaches that workspace's desk.
   const link = token
-    ? await /** @type {Promise<PortalLinkRow | null>} */ (
+    ? await /** @type {Promise<(PortalLinkRow & { organization_id: string; workspace_id: string }) | null>} */ (
         /** @type {unknown} */ (
-          db
-            .prepare("SELECT id, label, created_by, expires_at FROM portal_links WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?")
+          env.ROOT
+            .prepare("SELECT id, label, created_by, expires_at, organization_id, workspace_id FROM portal_links WHERE token_hash = ? AND revoked_at IS NULL AND expires_at > ?")
             .bind(await tokenHash(token), new Date().toISOString())
             .first()
         )
       )
     : null;
   if (!link) throw new HttpError(401, "This service desk link has expired or been turned off. Ask whoever sent it for a new one.", "portal_invalid");
+  env = tenantEnv(env, { orgId: link.organization_id, workspaceId: link.workspace_id });
+  const db = env.DB;
   const key = req.headers.get("x-requester-key") ?? "";
   const keyHash = /^[a-f0-9]{32,64}$/.test(key) ? await tokenHash(key) : null;
   if (path === "/api/portal" && method === "GET") {

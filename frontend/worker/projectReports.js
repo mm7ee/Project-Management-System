@@ -18,6 +18,7 @@ import { DEFAULT_LIMITS } from "../src/data/project";
 import { RAG_RULES } from "../src/data/projectHealth";
 import { STAGE_KEYS, STAGE_LABEL, buildProjectReport, describeFilters, parseFilters, progressByWeek, weekOf, weeksBetween } from "../src/data/projectReport";
 import { xlsx } from "./xlsx";
+import { settingRow } from "./settings";
 /**
  * Open, overdue and done work items per project, as `viewer` may see them. Exported for the tests.
  * @param {Viewer} viewer
@@ -61,7 +62,7 @@ async function loadReport(c, f) {
     /** @type {Promise<D1Result<{ system_id: string; raised_at: string; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT system_id, raised_at FROM blockers WHERE resolved_at IS NULL").all())),
     /** @type {Promise<D1Result<{ system_id: string; created_at: string; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT system_id, created_at FROM requests").all())),
     /** @type {Promise<D1Result<{ assignee: string; n: number; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT assignee, COUNT(*) AS n FROM features WHERE assignee IS NOT NULL AND status NOT IN ('COMPLETED', 'CANCELLED') GROUP BY assignee").all())),
-    /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT value FROM settings WHERE key = 'workload_limits'").first())),
+    /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (settingRow(db, "workload_limits"))),
   ]);
   /** @type {Limits} */ const limits = limitsRow ? { ...DEFAULT_LIMITS, ...JSON.parse(limitsRow.value) } : DEFAULT_LIMITS;
   const all = systems.results.map((r) => /** @type {System} */ (JSON.parse(r.data)));

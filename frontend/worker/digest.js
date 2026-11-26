@@ -17,6 +17,7 @@ import { ASK_MODEL, buildWorkFocus, clean, day, dueIn, rankFeatures } from "./as
 import { emailFor, noteFailure, pause, raise, readDelivery, sendEmail } from "./notify";
 import { toFeature } from "./rows";
 import { sprintHealth } from "./sprints";
+import { settingRow, saveSetting } from "./settings";
 const DAY = 86_400_000;
 /** Pulse's day runs on Harare time (UTC+2), whichever server wakes up. */
 const localDate =
@@ -43,7 +44,7 @@ function isoWeek(now) {
  * @returns {Promise<Work>}
  */
 async function loadWork(db, now) {
-  const setting = /** @param {string} key */ (key) => /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT value FROM settings WHERE key = ?").bind(key).first()));
+  const setting = /** @param {"workload_limits" | "role_permissions"} key */ (key) => settingRow(db, key);
   const [systems, people, assignments, features, blockers, requests, limits, roles] = await Promise.all([
     /** @type {Promise<D1Result<{ data: string; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT data FROM systems ORDER BY sort, rowid").all())),
     /** @type {Promise<D1Result<AskPerson>>} */ (/** @type {unknown} */ (db.prepare("SELECT id, name, username, role FROM users ORDER BY name").all())),
@@ -326,7 +327,7 @@ export async function runBriefing(env, now = Date.now()) {
   const { period, monday } = isoWeek(now);
   const dedupe = `briefing:${period}`;
   // Written once a week: a second run sends the same briefing to anyone who missed it.
-  const saved = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT value FROM settings WHERE key = 'latest_briefing'").first()));
+  const saved = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (settingRow(db, "latest_briefing")));
   let digest = saved ? /** @type {Digest} */ (JSON.parse(saved.value)) : null;
   if (digest?.period !== period) {
     const { sections, counts } = await briefingSections(db, w);
@@ -340,7 +341,7 @@ export async function runBriefing(env, now = Date.now()) {
       aiWritten: !!opening,
       sections,
     };
-    await db.prepare("INSERT INTO settings (key, value) VALUES ('latest_briefing', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(digest)).run();
+    await saveSetting(db, "latest_briefing").bind(JSON.stringify(digest)).run();
   }
   // Everyone who can see Reports: managers, team leaders, the Projects Assistant and administrators.
   const readers = w.people.filter((p) => permissionsFor(/** @type {Role} */ (p.role), w.matrix).includes("reports"));

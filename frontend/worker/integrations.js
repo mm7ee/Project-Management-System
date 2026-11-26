@@ -110,14 +110,24 @@ function linksFromGitHub(event, p) {
  * @returns {Promise<Response>}
  */
 export async function githubWebhook(env, req) {
-  const db = env.DB;
   const raw = await req.text();
   if (raw.length > 5_000_000) throw new HttpError(413, "Too large");
-  const row = await /** @type {Promise<{ sealed: string; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT sealed FROM integration_secrets WHERE kind = 'github'").first()));
-  if (!row) throw new HttpError(404, "GitHub isn't connected");
-  const secret = await openSecret(row.sealed, mfaKey(env));
+  // Each workspace connects GitHub with its own secret. A delivery belongs to the workspace whose secret signed
+  // it, and everything after this is done with that workspace's handle, so keys can only match its own items.
+  const secrets = await /** @type {Promise<D1Result<{ organization_id: string; workspace_id: string; sealed: string; }>>} */ (
+    /** @type {unknown} */ (env.ROOT.prepare("SELECT organization_id, workspace_id, sealed FROM integration_secrets WHERE kind = 'github'").all())
+  );
+  if (!secrets.results.length) throw new HttpError(404, "GitHub isn't connected");
   const given = req.headers.get("x-hub-signature-256") ?? "";
-  if (!sameText(given, `sha256=${await hmacHex(secret, raw)}`)) throw new HttpError(401, "The signature doesn't match");
+  /** @type {{ organization_id: string; workspace_id: string } | null} */ let owner = null;
+  for (const s of secrets.results) {
+    if (sameText(given, `sha256=${await hmacHex(await openSecret(s.sealed, mfaKey(env)), raw)}`)) {
+      owner = s;
+      break;
+    }
+  }
+  if (!owner) throw new HttpError(401, "The signature doesn't match");
+  const db = env.ROOT.withScope({ orgId: owner.organization_id, workspaceId: owner.workspace_id });
   const event = req.headers.get("x-github-event") ?? "";
   const delivery = (req.headers.get("x-github-delivery") ?? "").slice(0, 80);
   if (event === "ping") return json({ ok: true, message: "Pulse is listening" });
@@ -171,21 +181,22 @@ const TOKEN_BLOCKED = [/^\/api\/me(\/|$)/, /^\/api\/tokens/, /^\/api\/logout/, /
 /**
  * A request with "Authorization: Bearer pulse_…": the token's owner, or an error. Read tokens may only
  * read. Each token may make API_RATE_LIMIT requests a minute.
- * @param {D1Database} db
+ * The token belongs to one workspace (the one it was made in): the request is scoped to it.
+ * @param {TenantDatabase} root the owner handle: a token is found by its hash before its tenant is known
  * @param {Request} req
  * @param {string} path
  * @returns {Promise<TokenAuth | null>}
  */
-export async function tokenAuth(db, req, path) {
+export async function tokenAuth(root, req, path) {
   const header = req.headers.get("authorization") ?? "";
   const m = header.match(/^Bearer\s+(\S+)$/i);
   if (!m) return null;
   const token = m[1];
   if (!token.startsWith(TOKEN_PREFIX)) throw new HttpError(401, "That isn't a Pulse API token");
-  const row = await /** @type {Promise<{ id: string; user_id: string; name: string; scope: TokenScope; expires_at: string; revoked_at: string | null; last_used_at: string | null; } | null>} */ (
+  const row = await /** @type {Promise<{ id: string; user_id: string; name: string; scope: TokenScope; expires_at: string; revoked_at: string | null; last_used_at: string | null; organization_id: string; workspace_id: string; } | null>} */ (
     /** @type {unknown} */ (
-      db
-        .prepare("SELECT t.id, t.user_id, t.name, t.scope, t.expires_at, t.revoked_at, t.last_used_at FROM api_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ?")
+      root
+        .prepare("SELECT t.id, t.user_id, t.name, t.scope, t.expires_at, t.revoked_at, t.last_used_at, t.organization_id, t.workspace_id FROM api_tokens t JOIN accounts u ON u.id = t.user_id WHERE t.token_hash = ?")
         .bind(await tokenHash(token))
         .first()
     )
@@ -193,6 +204,7 @@ export async function tokenAuth(db, req, path) {
   if (!row || row.revoked_at || row.expires_at <= new Date().toISOString()) throw new HttpError(401, "This API token has expired or been revoked", "token_invalid");
   if (TOKEN_BLOCKED.some((r) => r.test(path))) throw new HttpError(403, "API tokens can't be used for accounts, sign-in, tokens, links or integrations");
   if (row.scope === "read" && !["GET", "HEAD"].includes(req.method)) throw new HttpError(403, "This token can only read. Make a write token to change things.");
+  const db = root.withScope({ orgId: row.organization_id, workspaceId: row.workspace_id });
   const minute = Math.floor(Date.now() / 60_000);
   const used = await /** @type {Promise<{ requests: number; } | null>} */ (
     /** @type {unknown} */ (db.prepare("INSERT INTO api_token_usage (token_id, minute, requests) VALUES (?, ?, 1) ON CONFLICT (token_id, minute) DO UPDATE SET requests = api_token_usage.requests + 1 RETURNING requests").bind(row.id, minute).first())
@@ -201,7 +213,7 @@ export async function tokenAuth(db, req, path) {
     throw new HttpError(429, `Too many requests: up to ${API_RATE_LIMIT} a minute per token`, "rate_limited", { retryAfter: 60 - (Math.floor(Date.now() / 1000) % 60) });
   }
   if (Number(used?.requests ?? 1) === 1) await db.prepare("UPDATE api_tokens SET last_used_at = ? WHERE id = ?").bind(new Date().toISOString(), row.id).run();
-  return { tokenId: row.id, name: row.name, scope: row.scope, userId: row.user_id };
+  return { tokenId: row.id, name: row.name, scope: row.scope, userId: row.user_id, orgId: row.organization_id, workspaceId: row.workspace_id };
 }
 const toToken =
   /**
@@ -447,7 +459,7 @@ export async function integrationsApi(c, env, path, method) {
     const secret = String((await /** @type {Promise<{ secret?: unknown; }>} */ (/** @type {unknown} */ (body(req)))).secret ?? "").trim();
     if (secret.length < 20 || secret.length > 200 || /\s/.test(secret)) throw new HttpError(400, "Use a secret of 20 to 200 characters, with no spaces");
     await db
-      .prepare("INSERT INTO integration_secrets (kind, sealed, updated_by, updated_at) VALUES ('github', ?, ?, ?) ON CONFLICT (kind) DO UPDATE SET sealed = excluded.sealed, updated_by = excluded.updated_by, updated_at = excluded.updated_at")
+      .prepare("INSERT INTO integration_secrets (kind, sealed, updated_by, updated_at) VALUES ('github', ?, ?, ?) ON CONFLICT (workspace_id, kind) DO UPDATE SET sealed = excluded.sealed, updated_by = excluded.updated_by, updated_at = excluded.updated_at")
       .bind(await sealSecret(secret, mfaKey(env)), c.me.id, c.now)
       .run();
     // The log says what changed, never the secret.
@@ -653,6 +665,8 @@ export async function askIntegrationLines(c) {
  * @property {string} name
  * @property {TokenScope} scope
  * @property {string} userId
+ * @property {string} orgId
+ * @property {string} workspaceId the workspace the token was made in, and the only one it reaches
  */
 /**
  * @typedef {Object} TokenRow

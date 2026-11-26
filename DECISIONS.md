@@ -760,6 +760,82 @@ section 12. Rules every later feature must follow:
   transaction, reports rows per table per workspace, and rolls back. It refuses the live database. `stage` is a Neon
   branch made from production (`PG_STAGE` in `.dev.vars`).
 - **Database tests:**
-  - `tests/helpers/worker.js` runs the real Worker against a real database. Run them with
-    `PULSE_DB=dev npx vitest run tests/tenancy…`. They refuse the live database, and `npm test` skips them.
-  - PGlite (an in-process Postgres, so CI could run them) is not added. A new dependency needs the owner's OK.
+  - `tests/helpers/worker.js` runs the real Worker against a real database. They refuse the live database.
+  - Superseded in phase (b): they run on PGlite by default (below).
+
+## Multi-tenancy, phase (b): the database enforces the tenant (2026-11-26)
+
+- **Row-level security is the enforcement, not only a backstop.** About 710 raw SQL strings can't be made to
+  filter reliably by hand, so Postgres does it:
+  - **The role:** migration 0014 adds `pulse_app`, which can't bypass RLS and can't sign in. The Worker's own role
+    (`neondb_owner`) bypasses RLS, so it switches to `pulse_app` per query.
+  - **Per query:** each query runs in its own short transaction, `SET LOCAL ROLE pulse_app` plus
+    `set_config('app.org_id' / 'app.workspace_id', …, true)`, pipelined with the query (`worker/pg.js`).
+    `SET LOCAL` is what Hyperdrive's transaction pooling keeps. No Hyperdrive or credential change was needed.
+  - **Fails closed:** `env.DB` starts with no tenant, and with no tenant RLS shows nothing and accepts nothing.
+  - **The owner handle:** `env.ROOT` skips RLS, and is used on purpose only for:
+    - working out who is asking (sessions, tokens, links, portal links, GitHub secrets, by their hash)
+    - sign-in and password reset
+    - the cron's list of workspaces
+    - retention clean-up
+    - the organisation's project keys (the uniqueness check)
+    - the legacy `/executive`, which reads each workspace through its own handle
+  - **Everything after identity:** `db`, `env.DB` and the background work started from a request (automation,
+    notifications, webhooks) get the request's scope.
+- **Every new table needs a policy:**
+  - **Workspace tables:** `USING (workspace_id = current_setting('app.workspace_id', true))` and the same
+    `WITH CHECK`, plus the organisation.
+  - **Organisation tables:** the same on `organization_id`.
+  - **Grants:** never grant a table to `pulse_app` without its policy.
+  - **Defaults:** the tenant columns default to the request's tenant, so inserts don't repeat them.
+- **Views run with the reader's rights** (`security_invoker = true`), or RLS doesn't apply through them
+  (`features`, `users`).
+- **People:**
+  - **Tables:** the table is `accounts`, one row per person per organisation. The `users` view shows each person
+    with their role in the open workspace, and only that workspace's members. Outside a workspace it shows the
+    account's own role.
+  - **Writes through the view:** a role change goes to the membership. Removing someone removes their membership
+    here, and the account once they have no workspace left.
+  - **Organisation-wide uniqueness:** usernames are checked organisation-wide (organisation-scoped handle), because
+    members of other workspaces can't be seen from this one.
+- **Roles are per workspace** (`workspace_members.role`). Organisation-wide alerts (an account locked, a forgotten
+  password) go to Organisation Administrators (`org_admin`), each under the bell of their first workspace.
+- **Configuration ids are unique per tenant:**
+  - **Per organisation:** statuses, workflows, moves, security levels.
+  - **Per workspace:** request types, their questions and choices, and automation rules and actions.
+  - **Why:** every tenant can have its own `TODO` or `service-desk`, which the code names.
+  - **Seeding:** `tenancy_seed_organization` and `tenancy_seed_workspace` copy configuration into a new tenant with
+    the same ids. Phase (d) should seed from a clean template, not from Omnicontact's own.
+- **Settings by level:** `org_settings` (roles, two-step policy, sign-in rules, delivery) and `workspace_settings`
+  (workload limits, the Monday Briefing), only through `worker/settings.js`. `pulse_app` can't read the old
+  `settings` table.
+- **New ids** for projects, templates and people get a random ending (`hr-portal-3f9a1c`). A "-2" would say the name
+  is taken in another organisation.
+- **Project keys are unique per organisation:**
+  - The "taken" check reads the organisation's keys as the owner, so a key used in another workspace of the same
+    organisation shows as "taken". Nothing else about that project is revealed.
+  - Two organisations may use the same key.
+- **The 404 rule** comes mostly from RLS: another workspace's row isn't found. An endpoint that reads only the
+  children of an id (a project's history) must check the parent first.
+- **The activity log:**
+  - The open workspace's entries, plus organisation-wide ones (no workspace) for Organisation Administrators only.
+  - Sign-in counts are for Organisation Administrators.
+  - `tenancy_org_action()` in the database decides which actions are organisation-wide.
+- **Tokens, view-only links, portal links and GitHub each work in one workspace:**
+  - **Tokens and links:** the one they were made in.
+  - **GitHub:** the one whose secret signed the delivery.
+- **Switching workspace:** `POST /api/me/workspace` checks membership every time. A workspace that isn't yours, in
+  your organisation or another, is 404. The sessions foreign key to `workspace_members` refuses it in the database
+  too.
+- **The cron** loops over active organisations × active workspaces, each job with that workspace's handle. Digests
+  and the Monday Briefing are per workspace, to its members. Retention runs once, as the owner.
+- **`/executive` until phase (e):** Omnicontact's totals across its workspaces, never cached by shared caches.
+- **The workspace list editor** (`PUT /api/settings/workspaces`) is refused with 409. Organisation Administrators
+  manage workspaces (phase (d)).
+- **Tests run on PGlite by default** (`@electric-sql/pglite` 0.5.16, pinned):
+  - **How:** every migration is applied to an in-process Postgres, the real Worker is called, and the same adapter
+    code (`databaseOver` in `worker/pg.js`) runs over a small PGlite shim (`tests/helpers/pglite.js`).
+  - **Where:** `npm test` runs them, here and in CI. `PULSE_DB=dev` runs them against the Neon dev branch instead.
+  - **Proven:** switching one table's RLS off makes the suite fail (checked for `saved_filters`).
+- **Test-only adapter options** (`idle_timeout`, `retry_dropped`) are for running against Neon from far away. The
+  Worker never sets them and never retries a query.

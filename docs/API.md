@@ -21,6 +21,9 @@ Authorization: Bearer pulse_3f9c…
 
 - **Who it acts as:** a token acts as its owner, with the owner's permissions and visibility rules. A developer's
   token sees only their own items, and no token sees an item at a security level its owner isn't in.
+- **Which workspace:** a token reaches **only the workspace it was made in**, with the owner's role there, even if
+  the owner belongs to other workspaces too. It stops working if the owner leaves that workspace, or the workspace
+  or organisation is archived or suspended. To work in two workspaces, make a token in each.
 - **Read tokens** may only `GET`.
 - **Rate limit:** up to **120 requests a minute** per token. Over that, Pulse answers `429` with
   `{"error": …, "code": "rate_limited", "retryAfter": <seconds>}`.
@@ -35,8 +38,26 @@ Errors come back as JSON, `{"error": "…"}`, with a 4xx status:
 | 400 | The request isn't valid |
 | 401 | The token is missing, expired or revoked |
 | 403 | Not allowed |
-| 404 | Not found, or not visible to the token's owner |
+| 404 | Not found, not visible to the token's owner, or in another workspace or organisation (these look the same) |
 | 429 | Over the rate limit |
+
+## Organisations and workspaces
+
+Pulse holds several organisations, each with its own workspaces (for example Projects, HR, Finance). Everything the
+API returns belongs to **one organisation and one workspace**: the one your session has open, or the one a token,
+view-only link or portal link was made in. Nothing from another workspace or organisation is ever returned, counted
+or changed, and asking for it by id or key gives `404`, the same as something that doesn't exist.
+
+- **Keys:** project keys, and so item keys such as `INFRA-12`, are unique within an organisation. Another
+  organisation may use the same key for its own project.
+- `GET /api/data` includes `tenant`: `{ organization: { id, name, code }, workspace: { id, name, key },
+  workspaces: [{ id, name, key, role }], orgAdmin }`. `workspaces` lists the ones you belong to (empty for links).
+- `GET /api/me/workspaces` returns the same `tenant` object (signed-in people only, not tokens or links).
+- `POST /api/me/workspace` with `{ "workspaceId": "…" }` switches the open workspace without signing in again.
+  Membership is checked on every switch: a workspace you don't belong to, in your organisation or another, is
+  `404`. Signed-in people only.
+- `PUT /api/settings/workspaces` (the old workspace list) is refused with `409`, `code: "workspaces_managed_by_org"`:
+  workspaces are managed in Organisation settings.
 
 ## Work items
 
@@ -153,4 +174,6 @@ An administrator adds them in **Settings → Administration → Integrations**.
 
 GitHub calls `POST /api/integrations/github/webhook`, signed with the shared secret in `X-Hub-Signature-256`. Pulse
 reads pushes, branch creation and pull requests, and links each one that mentions a key (INFRA-12) to that item.
+Each workspace connects GitHub with its own secret; a delivery belongs to the workspace whose secret signed it, and
+links only to that workspace's items.
 The setup steps are in **Settings → Administration → Integrations**.
