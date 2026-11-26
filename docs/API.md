@@ -21,6 +21,9 @@ Authorization: Bearer pulse_3f9c…
 
 - **Who it acts as:** a token acts as its owner, with the owner's permissions and visibility rules. A developer's
   token sees only their own items, and no token sees an item at a security level its owner isn't in.
+- **Which workspace:** a token reaches **only the workspace it was made in**, with the owner's role there, even if
+  the owner belongs to other workspaces too. It stops working if the owner leaves that workspace, or the workspace
+  or organisation is archived or suspended. To work in two workspaces, make a token in each.
 - **Read tokens** may only `GET`.
 - **Rate limit:** up to **120 requests a minute** per token. Over that, Pulse answers `429` with
   `{"error": …, "code": "rate_limited", "retryAfter": <seconds>}`.
@@ -35,8 +38,33 @@ Errors come back as JSON, `{"error": "…"}`, with a 4xx status:
 | 400 | The request isn't valid |
 | 401 | The token is missing, expired or revoked |
 | 403 | Not allowed |
-| 404 | Not found, or not visible to the token's owner |
+| 404 | Not found, not visible to the token's owner, or in another workspace or organisation (these look the same) |
 | 429 | Over the rate limit |
+
+## Organisations and workspaces
+
+Pulse holds several organisations, each with its own workspaces (for example Projects, HR, Finance). Everything the
+API returns belongs to **one organisation and one workspace**: the one your session has open, or the one a token,
+view-only link or portal link was made in. Nothing from another workspace or organisation is ever returned, counted
+or changed, and asking for it by id or key gives `404`, the same as something that doesn't exist.
+
+- **Keys:** project keys, and so item keys such as `INFRA-12`, are unique within an organisation. Another
+  organisation may use the same key for its own project.
+- **Signing in:** `POST /api/login` takes `{ organization, username, password }`, where `organization` is the
+  organisation's code (`omnicontact`), in any capitals. Every refusal reads the same, whether the code is unknown,
+  the organisation is suspended, the username isn't in it, or the password is wrong. A correct sign-in returns
+  `{ ok, workspace, workspaces }`, your own workspaces only; with more than one, choose with `POST /api/me/workspace`.
+  Someone in no workspace gets `403`, `code: "no_workspace"`, after the right password only.
+  `POST /api/password/forgot` takes `organization` the same way. Without a code, a username used in only one active
+  organisation still signs in (for older scripts).
+- `GET /api/data` includes `tenant`: `{ organization: { id, name, code }, workspace: { id, name, key },
+  workspaces: [{ id, name, key, role }], orgAdmin }`. `workspaces` lists the ones you belong to (empty for links).
+- `GET /api/me/workspaces` returns the same `tenant` object (signed-in people only, not tokens or links).
+- `POST /api/me/workspace` with `{ "workspaceId": "…" }` switches the open workspace without signing in again.
+  Membership is checked on every switch: a workspace you don't belong to, in your organisation or another, is
+  `404`. Signed-in people only.
+- `PUT /api/settings/workspaces` (the old workspace list) is refused with `409`, `code: "workspaces_managed_by_org"`:
+  workspaces are managed in Organisation settings.
 
 ## Work items
 
@@ -153,4 +181,56 @@ An administrator adds them in **Settings → Administration → Integrations**.
 
 GitHub calls `POST /api/integrations/github/webhook`, signed with the shared secret in `X-Hub-Signature-256`. Pulse
 reads pushes, branch creation and pull requests, and links each one that mentions a key (INFRA-12) to that item.
+Each workspace connects GitHub with its own secret; a delivery belongs to the workspace whose secret signed it, and
+links only to that workspace's items.
 The setup steps are in **Settings → Administration → Integrations**.
+
+## Organisation administration
+
+For Organisation Administrators, signed in (not with a token or link). Others get `403`, `code: "org_admin_only"`.
+Another organisation's workspace or person is `404`.
+
+- `GET /api/org`: the organisation, every workspace (`id, name, key, status, members`), and every person with their
+  workspaces and role in each (`workspaces: [{ workspaceId, role }]`) and `orgAdmin`.
+- `POST /api/org/workspaces` `{ name, key }`: a new workspace. You become its administrator.
+- `PATCH /api/org/workspaces/:id` `{ name?, key?, status?: "active" | "archived" }`. The last active workspace, and
+  the one you have open, can't be archived.
+- `POST /api/org/people` `{ username, name, title?, email?, orgAdmin?, workspaces: [{ workspaceId, role }] }`:
+  returns `{ id, temporaryPassword }`, shown once.
+- `PUT /api/org/people/:id/workspaces` `{ workspaces: [{ workspaceId, role }] }`: replaces their memberships.
+  Leaving a workspace ends their sessions in it.
+- `PATCH /api/org/people/:id` `{ orgAdmin?, name?, title?, email? }`. `DELETE /api/org/people/:id` removes them from
+  the organisation. There must always be one Organisation Administrator.
+- **Organisation-wide settings:** `PUT /api/settings/signin`, `/api/settings/mfa`, `/api/settings/delivery` and
+  `/api/roles` also need an Organisation Administrator.
+
+## Platform administration
+
+Platform Administrators only, at `/api/platform/…`, with their own session cookie (`pulse_platform`, sent only to
+`/api/platform`). The first one is made with `node scripts/platform-admin.mjs`.
+
+- `POST /api/platform/login` `{ username, password }` → `{ ticket, setup? }`. `setup` (`{ secret, uri }`) comes the
+  first time: an authenticator app must be set up. Then `POST /api/platform/login/code` `{ ticket, code }` signs
+  in. Every refusal reads the same.
+- `GET /api/platform/me`; `POST /api/platform/me/password` `{ current, password }` (required before anything else
+  after a temporary password); `POST /api/platform/logout`.
+- `GET /api/platform/organizations`: each organisation's `name, code, status, createdAt` and its counts of
+  workspaces, people and administrators. Nothing inside an organisation.
+- `POST /api/platform/organizations` `{ name, code, admin: { username, name, email? } }` → the organisation, the
+  administrator's temporary password (shown once) and the sign-in link.
+- `PATCH /api/platform/organizations/:id` `{ name?, status?: "active" | "suspended" | "archived" }`. Leaving active
+  ends its sessions.
+- `POST /api/platform/organizations/:id/admins` `{ username, name, email? }`: another Organisation Administrator.
+
+## Executive page links
+
+The executive page (`/executive/<link>`) shows one workspace's portfolio as totals, with no names, to anyone
+holding its link. People who manage users make the links, for the open workspace:
+
+- `GET /api/showcase-links` lists this workspace's links.
+- `POST /api/showcase-links` `{ label, days: 7 | 30 | 90 | 365 }` → `{ id, url, expiresAt }`. The `url` is shown
+  once; only its hash is kept.
+- `DELETE /api/showcase-links/:id` turns a link off.
+- `GET /api/showcase` with the header `x-showcase-token: <the link's secret>` returns the totals plus the
+  `organization` and `workspace` names. No link, a wrong, expired or revoked one, or a suspended organisation's all
+  give the same `404` (`code: "showcase_invalid"`). The old public `/executive` without a link is gone.

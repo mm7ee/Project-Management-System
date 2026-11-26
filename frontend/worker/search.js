@@ -19,6 +19,7 @@ import { itemAccess, roleMatrix, viewerOfUser } from "./access";
 import { GADGETS, shareLabel } from "../src/data/search";
 import { TYPE_META, WORK_PRIORITY_META } from "../src/data/workitems";
 import { daysLeft } from "../src/data/sprints";
+import { workspacesRow } from "./settings";
 /** @type {ShareScope[]} */ const SCOPES = ["private", "role", "workspace", "everyone"];
 const MAX_PAGE = 100;
 /**
@@ -133,7 +134,7 @@ async function checkShare(c, scope, value) {
     return { scope: s, value: String(value) };
   }
   if (s === "workspace") {
-    const ws = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (c.db.prepare("SELECT value FROM settings WHERE key = 'workspaces'").first()));
+    const ws = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (workspacesRow(c.db)));
     const list = ws ? /** @type {string[]} */ (JSON.parse(ws.value)) : ["Projects", "HR"];
     if (!list.includes(String(value))) throw new HttpError(400, "Choose the workspace to share with");
     return { scope: s, value: String(value) };
@@ -170,7 +171,7 @@ async function fieldValues(c) {
           .all()
       )
     ),
-    /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (c.db.prepare("SELECT value FROM settings WHERE key = 'workspaces'").first())),
+    /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (workspacesRow(c.db))),
   ]);
   return {
     project: projects.results.map((r) => r.key),

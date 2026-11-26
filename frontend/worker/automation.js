@@ -23,6 +23,7 @@ import { dispatchWebhooks } from "./integrations";
 import { ACTIONS, MAX_AUTOMATION_DEPTH, SETTABLE_FIELDS, TRIGGERS } from "../src/data/search";
 import { LINK_TYPES, WORK_PRIORITIES, cleanLabel } from "../src/data/workitems";
 import { checkTransition, transitionsFrom } from "../src/data/workflows";
+import { workspacesRow } from "./settings";
 /** @type {Viewer} */ const AUTOMATION_VIEWER = { id: "automation", role: /** @type {Role} */ ("admin"), ownOnly: false, all: true };
 /**
  * @param {D1Database} db
@@ -571,7 +572,7 @@ async function checkRule(c, b) {
     scopeValue = String(b.scopeValue);
   }
   if (scope === "workspace") {
-    const ws = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (c.db.prepare("SELECT value FROM settings WHERE key = 'workspaces'").first()));
+    const ws = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (workspacesRow(c.db)));
     if (!(ws ? /** @type {string[]} */ (JSON.parse(ws.value)) : ["Projects", "HR"]).includes(String(b.scopeValue))) throw new HttpError(400, "Choose the workspace");
     scopeValue = String(b.scopeValue);
   }

@@ -8,6 +8,7 @@
 // 2. An item with a security level is seen only by administrators, its assignee and reporter, and the
 //    roles and people the level grants. A view-only link never sees items with a security level.
 import { DEFAULT_ROLE_PERMISSIONS, permissionsFor } from "../src/data/roles";
+import { settingRow } from "./settings";
 /** Nobody in particular: what may go to people outside Pulse or to everyone (webhooks, the briefing). */
 /** @type {Viewer} */ export const PUBLIC_VIEWER = { id: "", role: "viewer", ownOnly: false, guest: true };
 /**
@@ -67,7 +68,7 @@ export async function levelsFor(db, v) {
  * @returns {Promise<RolePermissions>}
  */
 export async function roleMatrix(db) {
-  const row = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT value FROM settings WHERE key = 'role_permissions'").first()));
+  const row = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (settingRow(db, "role_permissions")));
   return row ? { ...DEFAULT_ROLE_PERMISSIONS, .../** @type {Partial<RolePermissions>} */ (JSON.parse(row.value)) } : DEFAULT_ROLE_PERMISSIONS;
 }
 /**

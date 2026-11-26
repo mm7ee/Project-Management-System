@@ -8,6 +8,7 @@
 // Tables are aliased as in worker/workitems.ts: w = work_items, st = work_statuses, s = systems.
 import { PqlError, didYouMean, relativeDate, weekBounds } from "../src/data/pql";
 import { TYPE_META, WORK_PRIORITIES } from "../src/data/workitems";
+import { workspacesRow } from "./settings";
 const PRIORITY_RANK = `(CASE w.priority WHEN 'HIGHEST' THEN 5 WHEN 'HIGH' THEN 4 WHEN 'MEDIUM' THEN 3 WHEN 'LOW' THEN 2 ELSE 1 END)`;
 /** @type {Record<string, number>} */ const RANK = { HIGHEST: 5, HIGH: 4, MEDIUM: 3, LOW: 2, LOWEST: 1 };
 /** @type {Record<string, string>} */ const TYPE_ALIASES = { epic: "EPIC", story: "STORY", task: "TASK", bug: "BUG", "sub-task": "SUBTASK", subtask: "SUBTASK" };
@@ -375,7 +376,7 @@ export async function loadLookup(db, q, meId, now) {
     /** @type {Promise<D1Result<{ id: string; username: string; name: string; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT id, username, name FROM users").all())),
     /** @type {Promise<D1Result<{ key: string; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT key FROM systems").all())),
     /** @type {Promise<D1Result<{ id: string; name: string; state: string; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT id, name, state FROM sprints").all())),
-    /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT value FROM settings WHERE key = 'workspaces'").first())),
+    /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (workspacesRow(db))),
     keys.length
       ? /** @type {Promise<D1Result<{ id: string; k: string; }>>} */ (
           /** @type {unknown} */ (

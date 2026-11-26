@@ -17,6 +17,7 @@ import { ASK_MODEL, buildWorkFocus, clean, day, dueIn, rankFeatures } from "./as
 import { emailFor, noteFailure, pause, raise, readDelivery, sendEmail } from "./notify";
 import { toFeature } from "./rows";
 import { sprintHealth } from "./sprints";
+import { currentWorkspace, settingRow, saveSetting } from "./settings";
 const DAY = 86_400_000;
 /** Pulse's day runs on Harare time (UTC+2), whichever server wakes up. */
 const localDate =
@@ -43,7 +44,7 @@ function isoWeek(now) {
  * @returns {Promise<Work>}
  */
 async function loadWork(db, now) {
-  const setting = /** @param {string} key */ (key) => /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT value FROM settings WHERE key = ?").bind(key).first()));
+  const setting = /** @param {"workload_limits" | "role_permissions"} key */ (key) => settingRow(db, key);
   const [systems, people, assignments, features, blockers, requests, limits, roles] = await Promise.all([
     /** @type {Promise<D1Result<{ data: string; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT data FROM systems ORDER BY sort, rowid").all())),
     /** @type {Promise<D1Result<AskPerson>>} */ (/** @type {unknown} */ (db.prepare("SELECT id, name, username, role FROM users ORDER BY name").all())),
@@ -132,7 +133,7 @@ const projectLink =
    * @returns {string}
    */ (id) => `#/projects/${id}`;
 // ---------- the developer's daily digest ----------
-const DAILY_OPENING = `You write the opening of a developer's daily digest in Pulse, Omni Contact's project tracker.
+const DAILY_OPENING = `You write the opening of a developer's daily digest in Pulse, their organisation's project tracker.
 Using ONLY the FACTS, write 2 or 3 plain sentences to the developer as "you": what to start with today and why (follow the suggested working order), then anything else waiting on them.
 Write names exactly as given. Never count or total anything, and don't mention list positions. Dates and day counts may be quoted exactly as written. No greeting, headings, lists or markdown. Don't invent causes or advice.`;
 /**
@@ -193,6 +194,8 @@ function dailySections(w, me) {
  */
 export async function runDailyDigests(env, now = Date.now()) {
   const db = env.DB;
+  // Someone in several workspaces gets one digest from each: the title says which.
+  const space = await currentWorkspace(db);
   const w = await loadWork(db, now);
   const date = localDate(now);
   const total = { created: 0, emailed: 0 };
@@ -215,7 +218,7 @@ export async function runDailyDigests(env, now = Date.now()) {
     });
     const opening = await writeOpening(env.AI, DAILY_OPENING, focus);
     const plain = open.length ? `You have ${open.length} open request${open.length === 1 ? "" : "s"}. Start with "${clean(open[0].title, 100)}".` : "You have no open feature requests today; see what's waiting on your projects below.";
-    /** @type {Digest} */ const digest = { title: `Your day: ${day(`${date}T00:00:00Z`)}`, period: date, summary: opening ?? plain, aiWritten: !!opening, sections };
+    /** @type {Digest} */ const digest = { title: `Your day in ${space.name}: ${day(`${date}T00:00:00Z`)}`, period: date, summary: opening ?? plain, aiWritten: !!opening, sections };
     const sent = await raise(env, [{ userId: me.id, kind: "daily_digest", title: digest.title, body: digest.summary, digest, dedupe }]);
     total.created += sent.created;
     total.emailed += sent.emailed;
@@ -223,7 +226,7 @@ export async function runDailyDigests(env, now = Date.now()) {
   return total;
 }
 // ---------- the Monday Briefing ----------
-const BRIEFING_OPENING = `You write the opening of the Monday Briefing for managers at Omni Contact, from Pulse, their project tracker.
+const BRIEFING_OPENING = `You write the opening of the Monday Briefing for an organisation's managers, from Pulse, their project tracker.
 Using ONLY the FACTS, write 3 or 4 plain sentences: one for each of What moved, What slipped and Needs a decision, each drawn only from its own list. A project is only said to have moved if it's listed under What moved; if that list says nothing moved, say so plainly. Don't reword a list's meaning: a project's percentage in What slipped is where it stands, not progress. Name the specific projects and people instead. Write names exactly as given. Never count or total anything: no "three projects" or "35 items". Dates, percentages and day counts may be quoted exactly as written. No greeting, headings, lists or markdown. Don't invent causes or advice.`;
 /**
  * @param {D1Database} db
@@ -322,25 +325,27 @@ async function briefingSections(db, w) {
  */
 export async function runBriefing(env, now = Date.now()) {
   const db = env.DB;
+  // One briefing per workspace, to its readers: the title says which.
+  const space = await currentWorkspace(db);
   const w = await loadWork(db, now);
   const { period, monday } = isoWeek(now);
   const dedupe = `briefing:${period}`;
   // Written once a week: a second run sends the same briefing to anyone who missed it.
-  const saved = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT value FROM settings WHERE key = 'latest_briefing'").first()));
+  const saved = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (settingRow(db, "latest_briefing")));
   let digest = saved ? /** @type {Digest} */ (JSON.parse(saved.value)) : null;
   if (digest?.period !== period) {
     const { sections, counts } = await briefingSections(db, w);
     const facts = `TODAY: ${day(new Date(now).toISOString())}\n\n${sectionsToFacts(sections)}`;
     const opening = await writeOpening(env.AI, BRIEFING_OPENING, facts);
     digest = {
-      title: `Monday Briefing: week of ${day(monday)}`,
+      title: `Monday Briefing for ${space.name}: week of ${day(monday)}`,
       period,
       writtenAt: new Date(now).toISOString(),
       summary: opening ?? `Last week ${counts[0]} thing${counts[0] === 1 ? "" : "s"} moved, ${counts[1]} slipped and ${counts[2]} need${counts[2] === 1 ? "s" : ""} a decision.`,
       aiWritten: !!opening,
       sections,
     };
-    await db.prepare("INSERT INTO settings (key, value) VALUES ('latest_briefing', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(digest)).run();
+    await saveSetting(db, "latest_briefing").bind(JSON.stringify(digest)).run();
   }
   // Everyone who can see Reports: managers, team leaders, the Projects Assistant and administrators.
   const readers = w.people.filter((p) => permissionsFor(/** @type {Role} */ (p.role), w.matrix).includes("reports"));

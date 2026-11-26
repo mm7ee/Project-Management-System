@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { ArrowRight, BellRing, FileBarChart, Fingerprint, KeyRound, LifeBuoy, LockKeyhole, Radio, ShieldCheck, Sparkles, UserRound } from "lucide-react";
+/** @import { Tenant } from '../data/api' */
+import { ArrowRight, BellRing, Building2, FileBarChart, Fingerprint, KeyRound, Layers, LifeBuoy, LockKeyhole, Radio, ShieldCheck, Sparkles, UserRound } from "lucide-react";
 import { ApiError, api } from "../data/api";
+import { cleanCode, forgetOrg, initialOrgCode, lastWorkspace, rememberOrg, rememberWorkspace } from "../data/tenant";
 import { passkeysSupported, signWithPasskey } from "../data/passkeys";
 import { COMPANY_URL } from "../brand";
 import PulseMark from "./PulseMark";
@@ -64,6 +66,27 @@ function PulseAI() {
  * @param {{ onSignedIn: () => void }} arg1
  */
 export default function Login({ onSignedIn }) {
+  // Which organisation: from a link (#/o/<code>), else the last one used on this device, else asked first.
+  // The code isn't checked on its own (that would let anyone test codes); it goes with the password, and a wrong
+  // code gets the same message as a wrong password.
+  const [orgCode, setOrgCode] = useState(initialOrgCode);
+  const [orgDraft, setOrgDraft] = useState("");
+  // After signing in, someone in several workspaces chooses which to open.
+  const [choices, setChoices] = useState(/** @type {Tenant | null} */ (null));
+  const finish = async () => {
+    rememberOrg(orgCode);
+    try {
+      const t = /** @type {Tenant} */ (/** @type {unknown} */ (await api("/me/workspaces")));
+      if (t.workspaces.length > 1) {
+        setChoices(t);
+        return;
+      }
+      if (t.workspace && t.organization) rememberWorkspace(t.organization.id, t.workspace.id);
+    } catch {
+      // Nothing to choose: go on with the workspace the session opened.
+    }
+    onSignedIn();
+  };
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -165,10 +188,54 @@ export default function Login({ onSignedIn }) {
 
           {resetToken ? (
             <ResetPassword token={resetToken} onDone={() => leaveReset("Your password has been changed and every device signed out. Sign in with your new password.", true)} onBack={(m) => leaveReset(m)} />
+          ) : choices ? (
+            <ChooseWorkspace tenant={choices} onChosen={onSignedIn} />
+          ) : !orgCode ? (
+            <form
+              className="lp-card"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const code = cleanCode(orgDraft);
+                if (!code) {
+                  setError("Enter your organisation's code: letters, numbers and dashes, as your administrator gave it to you.");
+                  return;
+                }
+                setError("");
+                setOrgCode(code);
+              }}
+            >
+              <div className="lp-card-head">
+                <span className="lp-card-icon">
+                  <Building2 size={20} />
+                </span>
+                <div>
+                  <h2>Welcome</h2>
+                  <p>Which organisation are you signing in to?</p>
+                </div>
+              </div>
+              <label className="lp-field">
+                <span>Organisation code</span>
+                <span className="lp-input">
+                  <Building2 size={17} />
+                  <input autoFocus autoComplete="organization" autoCapitalize="none" spellCheck={false} required value={orgDraft} onChange={(e) => setOrgDraft(e.target.value)} placeholder="e.g. omnicontact" aria-describedby="org-help" />
+                </span>
+              </label>
+              <p className="lp-help" id="org-help">
+                Your administrator gives you this code, or a sign-in link with it. This device remembers it.
+              </p>
+              {error && (
+                <p className="lp-error" role="alert">
+                  {error}
+                </p>
+              )}
+              <button type="submit" className="lp-submit">
+                Continue <ArrowRight size={18} />
+              </button>
+            </form>
           ) : forgot ? (
-            <ForgotPassword initial={username} onBack={() => leaveReset()} />
+            <ForgotPassword initial={username} organization={orgCode} onBack={() => leaveReset()} />
           ) : ticket ? (
-            <SecondStep ticket={ticket} methods={methods} onSignedIn={onSignedIn} onBack={backToPassword} />
+            <SecondStep ticket={ticket} methods={methods} onSignedIn={finish} onBack={backToPassword} />
           ) : (
             <form
               className="lp-card"
@@ -178,14 +245,14 @@ export default function Login({ onSignedIn }) {
                 setError("");
                 setNotice("");
                 try {
-                  const r = await /** @type {Promise<{ ok?: boolean; mfa?: boolean; ticket?: string; methods?: Methods; }>} */ (/** @type {unknown} */ (api("/login", "POST", { username, password })));
+                  const r = await /** @type {Promise<{ ok?: boolean; mfa?: boolean; ticket?: string; methods?: Methods; }>} */ (/** @type {unknown} */ (api("/login", "POST", { organization: orgCode, username, password })));
                   if (r.mfa && r.ticket) {
                     setMethods(r.methods ?? { app: true, passkey: false });
                     setTicket(r.ticket);
                     setBusy(false);
                     return;
                   }
-                  onSignedIn();
+                  await finish();
                 } catch (err) {
                   setError(err instanceof Error ? err.message : "Sign-in failed");
                   setBusy(false);
@@ -201,6 +268,22 @@ export default function Login({ onSignedIn }) {
                   <p>Sign in to Pulse</p>
                 </div>
               </div>
+              <p className="lp-org">
+                <Building2 size={15} aria-hidden="true" /> Organisation <b>{orgCode}</b>
+                <button
+                  type="button"
+                  className="lp-link"
+                  onClick={() => {
+                    forgetOrg();
+                    setOrgDraft(orgCode);
+                    setOrgCode("");
+                    setError("");
+                    setNotice("");
+                  }}
+                >
+                  Change
+                </button>
+              </p>
 
               <label className="lp-field">
                 <span>Username</span>
@@ -252,6 +335,61 @@ export default function Login({ onSignedIn }) {
           omnicontact.biz
         </a>
       </footer>
+    </div>
+  );
+}
+/**
+ * After signing in: which of your workspaces to open, the last one used on this device first. Only your own are
+ * listed, and only now, after the password and any second step.
+ * @param {{ tenant: Tenant; onChosen: () => void }} props
+ */
+function ChooseWorkspace({ tenant, onChosen }) {
+  const orgId = tenant.organization?.id ?? "";
+  const last = lastWorkspace(orgId);
+  const ordered = [...tenant.workspaces].sort((a, b) => Number(b.id === last) - Number(a.id === last));
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
+  const open = /** @param {string} id */ async (id) => {
+    setBusy(id);
+    setError("");
+    try {
+      if (id !== tenant.workspace?.id) await api("/me/workspace", "POST", { workspaceId: id });
+      rememberWorkspace(orgId, id);
+      onChosen();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't open that workspace");
+      setBusy("");
+    }
+  };
+  return (
+    <div className="lp-card">
+      <div className="lp-card-head">
+        <span className="lp-card-icon">
+          <Layers size={20} />
+        </span>
+        <div>
+          <h2>Choose a workspace</h2>
+          <p>{tenant.organization?.name ?? "Your organisation"}: you can switch later from the top bar.</p>
+        </div>
+      </div>
+      <ul className="lp-workspaces" aria-label="Your workspaces">
+        {ordered.map((w, i) => (
+          <li key={w.id}>
+            <button type="button" className="lp-workspace" autoFocus={i === 0} disabled={!!busy} onClick={() => open(w.id)}>
+              <span>
+                <b>{w.name}</b>
+                {w.id === last && <span className="lp-workspace-last"> · last used</span>}
+              </span>
+              {busy === w.id ? <span aria-live="polite">Opening…</span> : <ArrowRight size={18} aria-hidden="true" />}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {error && (
+        <p className="lp-error" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

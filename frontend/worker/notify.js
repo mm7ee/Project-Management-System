@@ -4,12 +4,15 @@
 // Pulse. The API key and webhook address are sealed with MFA_KEY and never sent back to the browser.
 import { newToken, openSecret } from "./auth";
 import { START_KEYS, cleanPrefs } from "../src/data/roles";
+import { settingRow, saveSetting } from "./settings";
 /**
  * @param {D1Database} db
  * @returns {Promise<Delivery>}
  */
 export async function readDelivery(db) {
-  const row = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT value FROM settings WHERE key = 'delivery'").first()));
+  // Email and Teams are set up per organisation; with none known there's nothing to send through.
+  if (!(/** @type {TenantDatabase} */ (db).scope?.orgId)) return {};
+  const row = await /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (settingRow(db, "delivery")));
   return row ? /** @type {Delivery} */ (JSON.parse(row.value)) : {};
 }
 /**
@@ -22,8 +25,9 @@ export async function readDelivery(db) {
 export async function noteFailure(db, channel, e) {
   const message = (e instanceof Error ? e.message : String(e)).slice(0, 300);
   console.error(`${channel} delivery failed: ${message}`);
-  await db
-    .prepare("INSERT INTO settings (key, value) VALUES ('delivery_error', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+  // Kept for the organisation's administrators; a handle with no organisation has nowhere to keep it.
+  if (!(/** @type {TenantDatabase} */ (db).scope?.orgId)) return;
+  await saveSetting(db, "delivery_error")
     .bind(JSON.stringify({ channel, message, at: new Date().toISOString() }))
     .run()
     .catch(() => undefined);
@@ -55,7 +59,7 @@ function emailHtml(env, title, intro, digest, link) {
 ${intro ? `<p style="margin:0">${esc(intro)}</p>` : ""}
 ${sections}
 <p style="margin:24px 0"><a href="${esc(fullLink(env, link))}" style="background:#2c3280;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">Open Pulse</a></p>
-<p style="margin:0;font-size:12px;color:#6b7a90">Sent by Pulse, Omni Contact's project tracker. You can turn these emails off in Settings.${digest?.aiWritten ? " The opening paragraph is AI-written; the lists come straight from Pulse's data." : ""}</p>
+<p style="margin:0;font-size:12px;color:#6b7a90">Sent by Pulse. You can turn these emails off in Settings.${digest?.aiWritten ? " The opening paragraph is AI-written; the lists come straight from Pulse's data." : ""}</p>
 </div>`;
 }
 /**
@@ -105,7 +109,7 @@ export function securityEmail(title, lines, button) {
 <h2 style="margin:0 0 10px;font-size:20px;color:#101553">${esc(title)}</h2>
 ${lines.map((l) => `<p style="margin:0 0 10px">${esc(l)}</p>`).join("")}
 ${button ? `<p style="margin:22px 0"><a href="${esc(button.url)}" style="background:#2c3280;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">${esc(button.label)}</a></p>` : ""}
-<p style="margin:0;font-size:12px;color:#6b7a90">Sent by Pulse, Omni Contact's project tracker, about your account's security. Nobody from Pulse will ever ask for your password.</p>
+<p style="margin:0;font-size:12px;color:#6b7a90">Sent by Pulse about your account's security. Nobody from Pulse will ever ask for your password.</p>
 </div>`;
   const text = [title, ...lines, ...(button ? [`${button.label}: ${button.url}`] : [])].join("\n\n");
   return { subject: `Pulse: ${title}`, html, text };
@@ -178,16 +182,38 @@ export async function raise(env, alerts, channel) {
   // Email-only alerts (a scheme with the bell off) aren't stored; they go straight to email.
   const rows = all.filter((a) => a.bell !== false);
   const emailOnly = all.filter((a) => a.bell === false && a.email !== false);
-  const results = rows.length
-    ? await db.batch(
-        rows.map((a) =>
-          db
-            .prepare("INSERT INTO notifications (id, user_id, kind, title, body, link, digest, dedupe, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING")
-            .bind(a.id, a.userId, a.kind, a.title.slice(0, 200), (a.body ?? "").slice(0, 500), a.link ?? null, a.digest ? JSON.stringify(a.digest) : null, a.dedupe ?? null, at),
-        ),
-      )
-    : [];
-  const stored = rows.filter((_, i) => results[i]?.meta.changes);
+  // The bell belongs to a workspace. Alerts raised with one open land there; organisation-wide ones (an account
+  // locked, a forgotten password: raised before anyone has a workspace open) land in each person's first workspace.
+  const scope = /** @type {TenantDatabase} */ (db).scope;
+  /** @type {Map<string, TenantDatabase>} */ const where = new Map();
+  if (rows.length && scope?.orgId && !scope.workspaceId) {
+    const ids = [...new Set(rows.map((a) => a.userId))];
+    const homes = /** @type {D1Result<{ user_id: string; workspace_id: string }>} */ (
+      await db
+        .prepare(`SELECT m.user_id, m.workspace_id FROM workspace_members m JOIN workspaces w ON w.id = m.workspace_id WHERE w.status = 'active' AND m.user_id IN (${ids.map(() => "?").join(", ")}) ORDER BY w.position, w.name`)
+        .bind(...ids)
+        .all()
+    );
+    for (const h of homes.results) if (!where.has(h.user_id)) where.set(h.user_id, env.ROOT.withScope({ orgId: scope.orgId, workspaceId: h.workspace_id }));
+  }
+  /** @type {Set<string>} */ const created = new Set();
+  /** @type {Map<TenantDatabase | D1Database, typeof rows>} */ const groups = new Map();
+  for (const a of rows) {
+    const target = scope?.workspaceId ? db : where.get(a.userId);
+    if (!target) continue; // no workspace to show it in
+    groups.set(target, [...(groups.get(target) ?? []), a]);
+  }
+  for (const [target, group] of groups) {
+    const results = await target.batch(
+      group.map((a) =>
+        target
+          .prepare("INSERT INTO notifications (id, user_id, kind, title, body, link, digest, dedupe, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING")
+          .bind(a.id, a.userId, a.kind, a.title.slice(0, 200), (a.body ?? "").slice(0, 500), a.link ?? null, a.digest ? JSON.stringify(a.digest) : null, a.dedupe ?? null, at),
+      ),
+    );
+    group.forEach((a, i) => results[i]?.meta.changes && created.add(a.id));
+  }
+  const stored = rows.filter((a) => created.has(a.id));
   const fresh = [...stored, ...emailOnly];
   if (!fresh.length) return { created: 0, emailed: 0 };
   const delivery = await readDelivery(db);
