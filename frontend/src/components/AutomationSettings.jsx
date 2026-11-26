@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Play, Plus, Trash2, X, Zap } from "lucide-react";
 import { api } from "../data/api";
-import { ROLES, ROLE_LABEL } from "../data/roles";
+import { ROLES, ROLE_LABEL, assignable } from "../data/roles";
 import { LINK_META, LINK_TYPES, WORK_PRIORITIES, WORK_PRIORITY_META } from "../data/workitems";
 import { ACTIONS, ACTION_KINDS, MAX_AUTOMATION_DEPTH, PLACEHOLDERS, SETTABLE_FIELDS, TRIGGERS, TRIGGER_KINDS, WEEKDAYS } from "../data/search";
 import { timeAgo } from "../time";
@@ -211,7 +211,7 @@ function RuleEditor({ draft, users, systems, workspaces, onCancel, onSaved }) {
   const [busy, setBusy] = useState(false);
   const set = /** @param {Partial<Draft>} patch */ (patch) => setR((x) => ({ ...x, ...patch }));
   const setAction = /** @param {number} i @param {Partial<AutomationAction>} patch */ (i, patch) => set({ actions: r.actions.map((a, j) => (j === i ? { ...a, ...patch } : a)) });
-  const people = users.filter((u) => u.role !== "viewer");
+  const people = users.filter((u) => assignable(u.role));
   const save = async () => {
     setError("");
     setBusy(true);
@@ -243,7 +243,7 @@ function RuleEditor({ draft, users, systems, workspaces, onCancel, onSaved }) {
               <option value="nobody">Nobody (unassign)</option>
               <option value="reporter">The reporter</option>
               <option value="lead">The project lead</option>
-              {ROLES.filter((x) => x !== "viewer").map((x) => (
+              {ROLES.filter(assignable).map((x) => (
                 <option key={x} value={`role:${x}`}>
                   A {ROLE_LABEL[x]} on the project
                 </option>
@@ -334,7 +334,7 @@ function RuleEditor({ draft, users, systems, workspaces, onCancel, onSaved }) {
                 <option value="reporter">The reporter</option>
                 <option value="watchers">Its watchers</option>
                 <option value="teams">The Teams channel</option>
-                {ROLES.filter((x) => x !== "viewer").map((x) => (
+                {ROLES.filter(assignable).map((x) => (
                   <option key={x} value={`role:${x}`}>
                     Everyone who is a {ROLE_LABEL[x]}
                   </option>

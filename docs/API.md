@@ -190,19 +190,72 @@ The setup steps are in **Settings → Administration → Integrations**.
 For Organisation Administrators, signed in (not with a token or link). Others get `403`, `code: "org_admin_only"`.
 Another organisation's workspace or person is `404`.
 
-- `GET /api/org`: the organisation, every workspace (`id, name, key, status, members`), and every person with their
-  workspaces and role in each (`workspaces: [{ workspaceId, role }]`) and `orgAdmin`.
-- `POST /api/org/workspaces` `{ name, key }`: a new workspace. You become its administrator.
-- `PATCH /api/org/workspaces/:id` `{ name?, key?, status?: "active" | "archived" }`. The last active workspace, and
-  the one you have open, can't be archived.
+- `GET /api/org`:
+  - the organisation
+  - every workspace (`id, name, key, status, members, icon, colour?, description, visibility`)
+  - every person with:
+    - their workspaces and role in each (`workspaces: [{ workspaceId, role }]`)
+    - `orgAdmin`
+    - `deactivated?`
+    - `invited?: "pending" | "expired"`
+- `POST /api/org/workspaces` `{ name, key, icon?, colour?, description?, visibility?, cloneFrom? }`: a new workspace.
+  - You become its administrator.
+  - `visibility` is `"private"` (the default) or `"organization"`: anyone in the organisation may open it as a Viewer.
+  - `cloneFrom`, another workspace's id, copies its configuration without its work: its workflow, custom fields,
+    automation rules (switched off) and workload limits. The reply's `copied` says how much was copied.
+  - `icon` is one of `src/data/orgAdmin.js` `WORKSPACE_ICONS`.
+- `PATCH /api/org/workspaces/:id` `{ name?, key?, status?: "active" | "archived", icon?, colour?, description?, visibility? }`.
+  The last active workspace, and the one you have open, can't be archived.
 - `POST /api/org/people` `{ username, name, title?, email?, orgAdmin?, workspaces: [{ workspaceId, role }] }`:
   returns `{ id, temporaryPassword }`, shown once.
 - `PUT /api/org/people/:id/workspaces` `{ workspaces: [{ workspaceId, role }] }`: replaces their memberships.
   Leaving a workspace ends their sessions in it.
 - `PATCH /api/org/people/:id` `{ orgAdmin?, name?, title?, email? }`. `DELETE /api/org/people/:id` removes them from
-  the organisation. There must always be one Organisation Administrator.
+  the organisation. There must always be one active Organisation Administrator.
+- `POST /api/org/people/:id/deactivate`, `POST /api/org/people/:id/reactivate`:
+  - A deactivated account can't sign in; its sessions, reset links and API tokens stop working.
+  - Its memberships and history stay.
+  - Sign-in treats it like an unknown username (the same message).
+- `POST /api/org/invites` `{ email, name, username?, title?, orgAdmin?, workspaces: [{ workspaceId, role }] }` →
+  `{ id, username, emailed, link? }`.
+  - It makes the account and a one-time "choose your password" link, valid 72 hours. The link is emailed when email is
+    set up; otherwise it is returned as `link`, shown once.
+  - `role` is a role key or the name Pulse shows ("Developer", "Viewer" …).
+  - `username` comes from the email address when not given.
+- `POST /api/org/people/import` `{ csv, check? }`: invitations from CSV.
+  - Columns: `email, name, workspace, role`, and optionally `username, title, orgadmin`.
+  - `workspace` is a key or name, several separated by `;`. Several rows with one email put that person in several
+    workspaces.
+  - Every row is checked first. Any problem → `400`, `code: "import_invalid"`, `problems: [{ line, problem }]`, and
+    nobody is invited.
+  - With `check: true` it only reports who would be invited. At most 200 people.
+- `GET /api/org/profile`, `PUT /api/org/profile` `{ colour?, timeZone?, workDays?, workStart?, workEnd?, contactEmail?, logo? }`:
+  - `logo` is a PNG, JPEG or WebP `data:` URL under 100 KB, or `null` to remove it.
+  - `workDays` are ISO weekdays (1 = Monday).
+  - `timeZone` is an IANA name such as `Africa/Harare`.
+- `GET /api/org/logo`: the logo image, for anyone signed in to the organisation (`404` if there is none).
+  `/api/me/workspaces` gives its address and the colour once signed in.
+- `GET /api/org/audit?workspace=&action=&before=` → `{ entries: [{ id, at, actor, actorId, action, targetType, targetId, workspace, before, after, ip }], more }`:
+  - the administration audit log, newest first, 100 at a time
+  - `before` is the last `id` seen
+  - entries can't be changed or removed
 - **Organisation-wide settings:** `PUT /api/settings/signin`, `/api/settings/mfa`, `/api/settings/delivery` and
   `/api/roles` also need an Organisation Administrator.
+
+**A workspace's own audit log:** `GET /api/audit-log?before=` returns the open workspace's entries, for people with
+the `audit_log` permission there.
+
+**Viewers.** The `reader` role ("Viewer (read-only)") has no permissions, whatever Roles & permissions says. Any
+request other than GET returns `403`, `code: "read_only"`, except:
+- their own account (`/api/me…`, sign-out)
+- notifications
+- chat
+- searching and Ask Pulse
+
+Viewers can't be assigned work.
+
+**Organisation-wide workspaces.** `GET /api/me/workspaces` also lists workspaces open to the organisation that you
+aren't in, with `open: true`. `POST /api/me/workspace` to one makes you its Viewer.
 
 ## Platform administration
 
@@ -221,6 +274,11 @@ Platform Administrators only, at `/api/platform/…`, with their own session coo
 - `PATCH /api/platform/organizations/:id` `{ name?, status?: "active" | "suspended" | "archived" }`. Leaving active
   ends its sessions.
 - `POST /api/platform/organizations/:id/admins` `{ username, name, email? }`: another Organisation Administrator.
+- `POST /api/platform/organizations/:id/deletion` `{ code }`: deletes an **archived** organisation 30 days later.
+  - `code` must be the organisation's code, typed to confirm.
+  - Every row it holds is removed then, by the hourly job.
+  - `DELETE` on the same address calls it off, and so does reactivating or suspending it.
+  - `GET /api/platform/organizations` shows `deleteAfter`.
 
 ## Executive page links
 

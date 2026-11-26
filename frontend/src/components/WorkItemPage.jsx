@@ -14,6 +14,7 @@ import { LINK_META, LINK_TYPES, RESOLUTION_META, TYPE_META, WORK_PRIORITIES, WOR
 import Markdown from "./Markdown";
 import { ItemPriority, ItemStatusPill, MarkdownField, Rollup, TypeIcon, itemHref } from "./WorkItemBits";
 import MoveDialog from "./MoveDialog";
+import { assignable as canHaveWork } from "../data/roles";
 /**
  * One work item's page: #/projects/<id>/items/<KEY-n>.
  * @param {Props} props
@@ -81,7 +82,7 @@ export default function WorkItemPage({ system, itemKey, users, me, now, readOnly
     );
   if (!item) return <p className="lead-none">{error || "Loading…"}</p>;
   const can = readOnly ? { edit: false, delete: false, comment: false, logTime: false, assignOthers: false, replyToCustomer: false } : item.can;
-  const people = users.filter((u) => u.role !== "viewer" && (item.source !== "client_request" || u.role === "developer")).sort((a, b) => a.name.localeCompare(b.name));
+  const people = users.filter((u) => canHaveWork(u.role) && (item.source !== "client_request" || u.role === "developer")).sort((a, b) => a.name.localeCompare(b.name));
   const assignable = can.assignOthers ? people : people.filter((u) => u.id === me.id);
   const done = isDone(item);
   return (

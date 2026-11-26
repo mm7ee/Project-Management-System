@@ -3512,3 +3512,51 @@ th[aria-sort="ascending"] .pr-sort svg, th[aria-sort="descending"] .pr-sort svg 
 .org-handover { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: var(--r-md, 8px); background: var(--info-tint, #e8f1fb); color: var(--heading); margin-bottom: 12px; }
 .org-handover code { font-size: 16px; overflow-wrap: anywhere; }
 .org-admin select:focus-visible, .org-admin input:focus-visible { outline: none; box-shadow: var(--ring); }
+
+/* ---------- Administrator module, phase 1: the admin console's pieces ---------- */
+.admin-help { margin: 0 0 12px; color: var(--muted); font-size: 13px; line-height: 1.5; max-width: 72ch; }
+.admin-empty { display: flex; flex-direction: column; gap: 4px; padding: 24px; border: 1px dashed var(--border); border-radius: var(--r-md, 10px); text-align: center; color: var(--muted); }
+.admin-empty b { color: var(--heading); }
+.org-boxed { margin: 0 0 16px; padding: 14px; border: 1px solid var(--border); border-radius: var(--r-md, 10px); border-top: 1px solid var(--border); }
+.org-new textarea, .org-new select { padding: 8px 10px; border: 1px solid var(--input-line, var(--border)); border-radius: var(--r-sm, 6px); background: var(--input-bg, var(--card)); color: var(--text); font: inherit; }
+.org-new textarea { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; resize: vertical; }
+.org-new .field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--heading); }
+.org-ws { display: inline-flex; align-items: center; gap: 8px; }
+.org-ws-icon { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; background: var(--penn-blue); color: #fff; flex: none; }
+.org-icon-pick { display: inline-grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; color: var(--heading); }
+.org-icon-pick.on { border-color: var(--penn-blue); box-shadow: inset 0 0 0 1px var(--penn-blue); background: var(--info-tint, #e8f1fb); }
+.org-icon-pick:focus-within { box-shadow: var(--ring); }
+.org-colour { display: inline-flex; align-items: center; gap: 8px; }
+.org-colour input[type="color"] { width: 40px; height: 32px; padding: 2px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); cursor: pointer; }
+.org-logo { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.org-logo img { height: 44px; max-width: 160px; object-fit: contain; border: 1px solid var(--border); border-radius: 6px; padding: 4px; background: #fff; }
+.org-file { align-self: flex-start; cursor: pointer; }
+.org-file:focus-within, .org-logo label:focus-within { box-shadow: var(--ring); }
+.org-off th, .org-off td { opacity: .6; }
+.org-audit td { font-size: 13px; }
+.org-kv { overflow-wrap: anywhere; }
+.org-error ul { margin: 4px 0 0; padding-left: 18px; }
+/* Toasts: bottom right, above everything, read out politely. */
+.toasts { position: fixed; right: 16px; bottom: 16px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; max-width: min(420px, calc(100vw - 32px)); pointer-events: none; }
+.toast { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: var(--r-md, 10px); background: var(--card); color: var(--heading); box-shadow: 0 8px 24px rgba(1, 31, 91, .18); border-left: 4px solid var(--success); font-size: 14px; pointer-events: auto; }
+.toast.bad { border-left-color: var(--danger); }
+.toast.ok svg { color: var(--success-ink); flex: none; margin-top: 2px; }
+.toast.bad svg { color: var(--danger-ink); flex: none; margin-top: 2px; }
+.toast span { flex: 1; }
+.toast-x { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 2px; border-radius: 4px; }
+.toast-x:focus-visible { outline: none; box-shadow: var(--ring); }
+/* The confirmation dialog (a native <dialog>: focus stays inside, Esc cancels). */
+.confirm-dialog { border: 0; border-radius: var(--r-lg, 14px); padding: 20px; width: min(440px, calc(100vw - 32px)); background: var(--card); color: var(--text); box-shadow: 0 16px 48px rgba(1, 31, 91, .28); }
+.confirm-dialog::backdrop { background: rgba(1, 15, 45, .45); }
+.confirm-dialog h2 { margin: 0 0 8px; font-size: 18px; color: var(--heading); }
+.confirm-dialog-body { margin: 0 0 14px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+.confirm-dialog .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; font-size: 13px; }
+.confirm-dialog input { padding: 8px 10px; border: 1px solid var(--input-line, var(--border)); border-radius: var(--r-sm, 6px); background: var(--input-bg, var(--card)); color: var(--text); font: inherit; }
+.confirm-dialog .org-row { justify-content: flex-end; }
+/* The organisation's logo and colour in the sidebar. */
+.brand.org-tinted { box-shadow: inset 0 -3px 0 var(--org-accent); }
+.org-logo-chip { display: inline-flex; padding: 6px 10px; background: #fff; border-radius: 10px; }
+.org-logo-chip img { height: 40px; max-width: 170px; object-fit: contain; }
+.ws-switch-icon { display: inline-flex; }
+@media (prefers-reduced-motion: no-preference) { .toast { animation: toast-in .18s ease-out; } }
+@keyframes toast-in { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }

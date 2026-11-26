@@ -904,3 +904,72 @@ section 12. Rules every later feature must follow:
   - **Not changed:** the Omni Contact logos (sidebar, sign-in page, reports, executive page) are Pulse's own
     branding as a product. Branding each organisation (white-labelling) would be a separate decision.
 - **API tokens** can't use executive links or organisation administration, as for view-only links.
+
+## Administrator module, phase 1: roles, and organisation and workspace administration (2026-11-26)
+
+The plan, and the 13 recommendations approved with "continue", are in `docs/admin-module-plan.md`.
+
+- **Roles stay the six keys, plus a read-only Viewer (`reader`, migration 0017):**
+  - The six keys are what existing data and permissions use. The Administrator role in a workspace is the brief's
+    "Workspace Admin".
+  - **Viewer** has no permissions, whatever Roles & permissions says. The Worker refuses its every request other
+    than GET (`403 read_only`), except:
+    - their own account
+    - notifications
+    - chat
+    - searching and Ask Pulse (reads sent as POST)
+  - The check comes before any route, so a route that forgets a permission check still can't be used.
+  - Viewers, like Standard users, can't be assigned work.
+  - The brief's granular names map to the existing permission keys:
+    - `workflow.edit` → `manage_workflows`
+    - `automation.create` → `manage_automation`
+    - `user.invite` → Organisation Administrator
+    - fields → `manage_schemes`
+  - New keys come with the phases that need them.
+- **One admin console, in the Settings menu:**
+  - **Organisation:** Profile, Workspaces, Members & roles, Roles & permissions, Audit log.
+  - **This workspace:** Workflows, Fields, Automations, Users, Audit log, Activity log.
+  - **Settings:** the rest.
+  - Not a second menu beside Settings. Templates joins "This workspace" in phase 2.
+- **Organisation profile:**
+  - Logo (PNG, JPEG or WebP under 100 KB, never SVG), colour, time zone, working days and hours, and contact email.
+  - The app's role may update only those columns (a column grant and an UPDATE policy). Name, code and status stay
+    with the Platform Administrators.
+  - The logo and colour show **only after sign-in**: in the sidebar, served from `/api/org/logo` to the
+    organisation's own people. The sign-in page stays plain, so it never reveals which organisations exist.
+  - The time zone is stored now and used by schedules from phase 3. Until then, Harare time is used as before.
+- **Workspaces:**
+  - Icon (from a fixed list), colour, description, and visibility: members only, or the whole organisation.
+  - Opening an organisation-wide workspace makes you its **Viewer** (a membership the administrators see and can
+    change), never more.
+  - "Start from a copy of …" copies the workflow choice, custom fields with their options, automation rules
+    (**switched off**, to be checked) and workload limits. It copies no projects, items or history.
+- **People:**
+  - **Invite by email:** the account plus a one-time "choose your password" link (the password reset mechanism),
+    valid 72 hours. It is emailed when email is set up. Otherwise the administrator gets the link once, like a
+    temporary password.
+  - **CSV import:** checks every row first and invites nobody if any row is wrong.
+  - **Deactivate:**
+    - It keeps the account, memberships and history.
+    - It ends sessions and makes reset links and API tokens stop working.
+    - Sign-in treats it like an unknown username: same message, same work.
+  - **Remove** stays as it was. There must always be one *active* Organisation Administrator.
+- **Audit log (`audit_log`):**
+  - Every administration change, with who, when, from which address, and the values before and after (only what
+    changed; a new logo is recorded as "replaced", not the image).
+  - Each entry is saved in the same transaction as its change.
+  - **Append-only:** the app's role may only insert and read, and a trigger refuses UPDATE, DELETE and TRUNCATE even
+    to the owner.
+  - The one exception is deleting the whole organisation.
+  - Organisation Administrators see all of it. People with `audit_log` in a workspace see that workspace's entries.
+  - The older activity log stays for everything else.
+- **Deleting an organisation (changes "nothing is deleted"):**
+  - Only an archived organisation, after its code is typed, and only **30 days later**, by the hourly job.
+  - Until then it can be called off, and reactivating or suspending it calls it off too.
+  - `tenancy_purge_organization` removes every row carrying its `organization_id` in one transaction, or nothing.
+  - A record stays in `platform_activity`.
+- **Toasts and a confirmation dialog** (`components/AdminKit.jsx`):
+  - The dialog is a native `<dialog>`, which keeps focus inside and closes on Esc.
+  - Cancel is focused first.
+  - Destructive actions say what happens. Removing a person or deleting an organisation needs the name or code
+    typed.

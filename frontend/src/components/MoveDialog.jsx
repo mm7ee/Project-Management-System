@@ -7,6 +7,7 @@ import { api } from "../data/api";
 import { cleanLabel, parseDuration } from "../data/workitems";
 import { FIELD_RULE_LABEL } from "../data/workflows";
 import { MarkdownField } from "./WorkItemBits";
+import { assignable } from "../data/roles";
 /**
  * Asks for what a workflow move needs (a comment, an assignee, a field) and then makes it. The server
  * checks everything again; its message shows here when it refuses.
@@ -26,7 +27,7 @@ export default function MoveDialog({ move, users, me, canAssignOthers, onDone, o
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const people = users
-    .filter((u) => u.role !== "viewer" && (move.source !== "client_request" || u.role === "developer"))
+    .filter((u) => assignable(u.role) && (move.source !== "client_request" || u.role === "developer"))
     .filter((u) => canAssignOthers || u.id === me.id)
     .sort((a, b) => a.name.localeCompare(b.name));
   const submit = /** @param {FormEvent} e */ async (e) => {

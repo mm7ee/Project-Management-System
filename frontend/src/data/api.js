@@ -139,9 +139,9 @@ export function useAppData() {
 /**
  * Where you are: one organisation, one open workspace (multi-tenancy, DECISIONS.md).
  * @typedef {Object} Tenant
- * @property {{ id: string; name: string; code: string } | null} organization
- * @property {{ id: string; name: string; key: string } | null} workspace
- * @property {{ id: string; name: string; key: string; role: string }[]} workspaces yours, to switch between (none on a view-only link)
+ * @property {{ id: string; name: string; code: string; colour?: string; logo?: string } | null} organization  colour and logo: its profile, shown once signed in
+ * @property {{ id: string; name: string; key: string; icon?: string; colour?: string | null } | null} workspace
+ * @property {{ id: string; name: string; key: string; role: string; icon?: string; colour?: string; open?: boolean }[]} workspaces yours to switch between, and (`open`) the organisation-wide ones you'd open as a Viewer (none on a view-only link)
  * @property {boolean} orgAdmin
  */
 /**

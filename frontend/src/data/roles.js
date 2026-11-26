@@ -1,7 +1,9 @@
 // Roles and permissions, shared by the Worker (which enforces them) and the UI (which hides
 // what you can't do). The administrator can change which permissions each role has; these
 // are the defaults a fresh database starts with.
-/** @type {Role[]} */ export const ROLES = ["admin", "manager", "team_lead", "assistant", "developer", "viewer"];
+/** @type {Role[]} */ export const ROLES = ["admin", "manager", "team_lead", "assistant", "developer", "viewer", "reader"];
+/** Read-only in a workspace: sees what it shows, changes nothing but their own account (enforced in worker/index.js). */
+export const READ_ONLY_ROLE = /** @type {const} */ ("reader");
 /** @type {Record<Role, string>} */ export const ROLE_LABEL = {
   admin: "Administrator",
   manager: "Manager",
@@ -9,6 +11,7 @@
   assistant: "Projects Assistant",
   developer: "Developer",
   viewer: "Standard user",
+  reader: "Viewer (read-only)",
 };
 /** @type {{ key: Permission; label: string }[]} */ export const PERMISSIONS = [
   { key: "edit_assigned", label: "Update their assigned projects" },
@@ -60,6 +63,7 @@
   assistant: ["request_updates", "propose_projects", "reports", "create_work_items", "share_searches", "use_api", "work_service_desk"],
   developer: ["edit_assigned", "propose_projects", "log_features", "create_work_items", "log_time", "use_api", "work_service_desk"],
   viewer: [],
+  reader: [],
 };
 /**
  * The one account two-step verification is never required for: the default administrator.
@@ -82,8 +86,15 @@ export function mfaRequiredFor(user, policy) {
  * @returns {Permission[]}
  */
 export function permissionsFor(role, matrix) {
-  return role === "admin" ? PERMISSIONS.map((p) => p.key) : (matrix[role] ?? []);
+  // A Viewer never has a permission, whatever the matrix says.
+  return role === "admin" ? PERMISSIONS.map((p) => p.key) : role === "reader" ? [] : (matrix[role] ?? []);
 }
+/**
+ * Whether work can be assigned to someone with this role: not Standard users or Viewers.
+ * @param {Role} role
+ * @returns {boolean}
+ */
+export const assignable = (role) => role !== "viewer" && role !== "reader";
 /**
  * A developer on the project, or its lead: what "Assigned to me" shows.
  * @param {User} user
@@ -122,7 +133,7 @@ export function cleanPrefs(raw, startKeys) {
   return out;
 }
 export const START_KEYS = /** @type {const} */ (["DASHBOARD", "ALL", "MINE", "BLOCKED", "LIVE", "WIP", "TESTING", "TO_DEPLOY", "UPCOMING", "COMPLETED", "IDEA", "MAINTENANCE", "OVERDUE", "REQUESTED"]);
-/** @typedef {"admin" | "manager" | "team_lead" | "assistant" | "developer" | "viewer"} Role */
+/** @typedef {"admin" | "manager" | "team_lead" | "assistant" | "developer" | "viewer" | "reader"} Role */
 /**
  * @typedef {| "edit_assigned" // update status/progress of the projects you're assigned to
  *   | "edit_any" // update status/progress of any project

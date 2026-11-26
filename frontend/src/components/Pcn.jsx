@@ -8,7 +8,7 @@ import { ROLE_LABEL } from "../data/roles";
 import { PCN_STATUS_META, PCN_TYPES, PILLARS, pcnMissing, pcnStatus } from "../data/pcn";
 import { formatDate } from "../time";
 const EXTERNAL = "__external__";
-/** @type {User["role"][]} */ const SIGNER_ORDER = ["manager", "admin", "team_lead", "assistant", "developer", "viewer"];
+/** @type {User["role"][]} */ const SIGNER_ORDER = ["manager", "admin", "team_lead", "assistant", "developer", "viewer", "reader"];
 /**
  * @param {{ n: string; title: string; children: ReactNode }} props
  */

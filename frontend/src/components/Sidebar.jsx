@@ -23,10 +23,17 @@ export default function Sidebar(p) {
         <button className="sidebar-close" onClick={p.onClose} aria-label="Close menu">
           <X size={18} />
         </button>
-        <div className="brand">
-          <a href={COMPANY_URL} target="_blank" rel="noopener noreferrer" className="logo-link" title="Omni Contact website">
-            <img src="/omni-logo-white.png" alt="Omni Contact" />
-          </a>
+        {/* The organisation's own logo and colour when it has set them (Settings → Organisation → Profile). */}
+        <div className={`brand ${p.org?.colour ? "org-tinted" : ""}`} style={p.org?.colour ? /** @type {import('react').CSSProperties} */ ({ "--org-accent": p.org.colour }) : undefined}>
+          {p.org?.logo ? (
+            <span className="logo-link org-logo-chip" title={p.org.name}>
+              <img src={p.org.logo} alt={p.org.name} />
+            </span>
+          ) : (
+            <a href={COMPANY_URL} target="_blank" rel="noopener noreferrer" className="logo-link" title="Omni Contact website">
+              <img src="/omni-logo-white.png" alt="Omni Contact" />
+            </a>
+          )}
           {/* The system's name, beside the company logo. */}
           <PulseMark />
         </div>
@@ -162,6 +169,7 @@ export default function Sidebar(p) {
 /**
  * @typedef {Object} Props
  * @property {User} me
+ * @property {{ name: string; logo?: string; colour?: string } | null} [org]  the organisation's logo and colour, if set
  * @property {View} view
  * @property {Record<Filter, number>} counts
  * @property {Object} features

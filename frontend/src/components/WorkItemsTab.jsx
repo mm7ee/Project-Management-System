@@ -11,6 +11,7 @@ import { formatDate, timeAgo } from "../time";
 import { KEY_PATTERN, PAGE_SIZE, TYPE_META, WORK_PRIORITIES, WORK_PRIORITY_META, WORK_TYPES, isDone } from "../data/workitems";
 import { ItemPriority, ItemStatusPill, Rollup, TypeIcon, itemHref } from "./WorkItemBits";
 import { CustomFieldInput } from "./WorkItemExtras";
+import { assignable } from "../data/roles";
 /** @type {{ key: string; label: string }[]} */ const SORTS = [
   { key: "key", label: "Key" },
   { key: "priority", label: "Priority" },
@@ -99,7 +100,7 @@ export default function WorkItemsTab({ system, users, now, canCreate, canManage,
     setQuery("");
     setState("open");
   };
-  const people = users.filter((u) => u.role !== "viewer").sort((a, b) => a.name.localeCompare(b.name));
+  const people = users.filter((u) => assignable(u.role)).sort((a, b) => a.name.localeCompare(b.name));
   return (
     <div className="wi-tab">
       <ProjectWorkSettings system={system} canManage={canManage && !readOnly} hasItems={!!system.hasWorkItems} onChanged={onChanged} />

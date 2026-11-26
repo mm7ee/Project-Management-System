@@ -866,3 +866,65 @@ the deployed Worker needs 0014–0016 in the live database.
 
 **If something goes wrong:** the reverse migrations are in `migrations/down/` (0016, 0015, 0014, newest first). They
 refuse to run once a second organisation exists. Otherwise restore the backup or the Neon branch.
+
+## Administrator module, phase 1: roles, and organisation and workspace administration (2026-11-26)
+
+**What was built** (plan: `docs/admin-module-plan.md`; decisions: DECISIONS.md)
+- **Migration `migrations/0017_admin_console.sql`** (reverse in `migrations/down/`):
+  - the Viewer role
+  - organisation profile columns, workspace icon, colour, description and visibility
+  - `accounts.deactivated_at`
+  - the append-only `audit_log`
+  - `organizations.delete_after`, and `tenancy_purge_organization`
+- **Worker:**
+  - `worker/orgadmin.js`: profile and logo, invitations, CSV import, deactivate and reactivate, copying a workspace's
+    configuration, the audit log
+  - `worker/audit.js`: one audit helper, saved with each change
+  - `worker/index.js`:
+    - the Viewer gate
+    - deactivated accounts refused at sign-in, sessions, reset links and tokens
+    - organisation-wide workspaces in the switcher
+    - before/after entries for workspaces, people, memberships and role permissions
+  - `worker/platform.js`: deleting an organisation 30 days after asking, and the hourly purge
+- **Screens:**
+  - Settings is now grouped: Organisation / This workspace / Settings
+  - `OrgAdmin.jsx` is split into Profile, Workspaces (with an edit form, icons, colours, visibility, start-from-copy),
+    Members & roles (invite, CSV import, deactivate) and Audit log
+  - `AdminKit.jsx`: toasts, confirmation dialog, help text, empty states
+  - the workspace switcher shows icons and organisation-wide workspaces
+  - the sidebar shows the organisation's logo and colour
+  - the Platform page can delete archived organisations
+- **Docs:**
+  - `docs/API.md` (organisation administration, Viewers, platform deletion)
+  - `docs/admin-guide-organisations.md`
+  - Postman (organisation profile, invites, CSV check, audit log)
+
+**Tests:**
+- `tests/admin.rbac.test.js`, 12 checks:
+  - a Viewer can't change anything, can't be assigned, and can't be given permissions
+  - Marketing and Development don't see each other's work
+  - only Organisation Administrators reach organisation administration, and never another organisation's
+  - profile and logo
+  - invitation through to sign-in
+  - CSV import that checks first
+  - deactivate and reactivate
+  - copying a workspace
+  - organisation-wide workspaces
+  - the audit log can't be changed even by the owner
+  - deleting an organisation removes it alone, only when due
+- `tests/csvImport.test.js`, 4 unit checks.
+- Switching off the Viewer gate makes the suite fail.
+
+`npm test`: 177 passed in 17 files. `tsc` (app and Worker): 0 errors. `vite build` passes.
+
+Migration 0017 is applied on the Neon dev branch. Its reverse was run there, then it was applied again.
+
+**Not yet checked:** the new screens in a browser (the tests drive the Worker's API, not the pages).
+
+**Release (before pushing, see the 2026-11-26 incident):**
+1. In `frontend`, run `npm run db:status`. Only 0017 should be pending.
+2. `npm run db:backup -- ../backup-before-0017.sql`
+3. `npm run db:migrate`
+4. `npm run db:status` again.
+5. Push.
+6. Check sign-in and Settings → Organisation on the live site.

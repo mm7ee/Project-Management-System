@@ -19,6 +19,35 @@ const REFUSED = "Wrong username, password or code.";
 const DUMMY_HASH = `pbkdf2$100000$${"00".repeat(16)}$${"00".repeat(32)}`;
 const TEMPLATE_ORG = "pulse-template";
 const TEMPLATE_WORKSPACE = "pulse-template-ws";
+/** Days between a Platform Administrator asking to delete an organisation and it being deleted. */
+export const DELETE_AFTER_DAYS = 30;
+
+/**
+ * Deletes the archived organisations whose deletion date has passed (the hourly job). Each one goes in its own
+ * transaction (tenancy_purge_organization, migration 0017), entirely or not at all; a failure is logged and tried
+ * again the next hour.
+ * @param {TenantDatabase} root  the owner's handle
+ * @returns {Promise<number>}  how many were deleted
+ */
+export async function purgeDueOrganizations(root) {
+  const due = /** @type {{ id: string; name: string; code: string }[]} */ (
+    (await root.prepare("SELECT id, name, code FROM organizations WHERE status = 'archived' AND delete_after IS NOT NULL AND delete_after <= ? AND id <> ?").bind(new Date().toISOString(), TEMPLATE_ORG).all()).results
+  );
+  let n = 0;
+  for (const o of due) {
+    try {
+      const rows = /** @type {{ n: number } | null} */ (await root.prepare("SELECT tenancy_purge_organization(?) AS n").bind(o.id).first());
+      await root
+        .prepare("INSERT INTO platform_activity (at, admin_id, actor, action, target, detail, ip) VALUES (?, NULL, 'Pulse', 'organization_deleted', ?, ?, NULL)")
+        .bind(new Date().toISOString(), o.id, JSON.stringify({ name: o.name, code: o.code, rows: Number(rows?.n ?? 0) }))
+        .run();
+      n += 1;
+    } catch (e) {
+      console.error("Deleting an organisation failed", o.id, e);
+    }
+  }
+  return n;
+}
 
 /**
  * @param {Request} req
@@ -218,7 +247,7 @@ export async function platformApi(env, req, path) {
     const rows = /** @type {D1Result<Record<string, unknown>>} */ (
       await db
         .prepare(
-          `SELECT o.id, o.name, o.code, o.status, o.created_at,
+          `SELECT o.id, o.name, o.code, o.status, o.created_at, o.delete_after,
                   (SELECT COUNT(*) FROM workspaces w WHERE w.organization_id = o.id AND w.status = 'active') AS workspaces,
                   (SELECT COUNT(*) FROM accounts a WHERE a.organization_id = o.id) AS people,
                   (SELECT COUNT(*) FROM accounts a WHERE a.organization_id = o.id AND a.org_admin = 1) AS admins
@@ -228,7 +257,17 @@ export async function platformApi(env, req, path) {
         .all()
     );
     return json({
-      organizations: rows.results.map((r) => ({ id: r.id, name: r.name, code: r.code, status: r.status, createdAt: r.created_at, workspaces: Number(r.workspaces), people: Number(r.people), admins: Number(r.admins) })),
+      organizations: rows.results.map((r) => ({
+        id: r.id,
+        name: r.name,
+        code: r.code,
+        status: r.status,
+        createdAt: r.created_at,
+        ...(r.delete_after ? { deleteAfter: r.delete_after } : {}),
+        workspaces: Number(r.workspaces),
+        people: Number(r.people),
+        admins: Number(r.admins),
+      })),
     });
   }
   if (path === "/api/platform/organizations" && method === "POST") {
@@ -267,12 +306,29 @@ export async function platformApi(env, req, path) {
       201,
     );
   }
-  const orgMatch = path.match(/^\/api\/platform\/organizations\/([A-Za-z0-9_-]{1,64})(\/admins)?$/);
+  const orgMatch = path.match(/^\/api\/platform\/organizations\/([A-Za-z0-9_-]{1,64})(\/admins|\/deletion)?$/);
   if (orgMatch) {
-    const org = /** @type {{ id: string; name: string; code: string; status: string } | null} */ (
-      orgMatch[1] === TEMPLATE_ORG ? null : await db.prepare("SELECT id, name, code, status FROM organizations WHERE id = ?").bind(orgMatch[1]).first()
+    const org = /** @type {{ id: string; name: string; code: string; status: string; delete_after: string | null } | null} */ (
+      orgMatch[1] === TEMPLATE_ORG ? null : await db.prepare("SELECT id, name, code, status, delete_after FROM organizations WHERE id = ?").bind(orgMatch[1]).first()
     );
     if (!org) throw new HttpError(404, "Organisation not found");
+    // Deleting, for good: only an archived organisation, confirmed by typing its code, and only DELETE_AFTER_DAYS
+    // later (the hourly job does it; worker/index.js scheduled). Until then it can be called off, or reactivated.
+    if (orgMatch[2] === "/deletion" && method === "POST") {
+      const b = /** @type {{ code?: unknown }} */ (await body(req));
+      if (org.status !== "archived") throw new HttpError(409, "Archive the organisation before deleting it");
+      if (String(b.code ?? "").trim().toLowerCase() !== org.code) throw new HttpError(400, `Type the organisation's code, ${org.code}, to confirm`);
+      const when = new Date(Date.now() + DELETE_AFTER_DAYS * 86_400_000).toISOString();
+      await db.prepare("UPDATE organizations SET delete_after = ?, updated_at = ? WHERE id = ?").bind(when, new Date().toISOString(), org.id).run();
+      await log(db, req, me, "organization_deletion_scheduled", org.id, { name: org.name, code: org.code, deleteAfter: when });
+      return json({ organization: { ...org, deleteAfter: when } });
+    }
+    if (orgMatch[2] === "/deletion" && method === "DELETE") {
+      if (!org.delete_after) return json({ ok: true });
+      await db.prepare("UPDATE organizations SET delete_after = NULL, updated_at = ? WHERE id = ?").bind(new Date().toISOString(), org.id).run();
+      await log(db, req, me, "organization_deletion_cancelled", org.id, { name: org.name, code: org.code });
+      return json({ ok: true });
+    }
     // Rename, suspend (nobody in it can sign in or use a link or token until it's active again), or archive.
     if (!orgMatch[2] && method === "PATCH") {
       const b = /** @type {{ name?: unknown; status?: unknown }} */ (await body(req));
@@ -280,7 +336,8 @@ export async function platformApi(env, req, path) {
       const status = b.status === undefined ? org.status : String(b.status);
       if (!["active", "suspended", "archived"].includes(status)) throw new HttpError(400, "Status is active, suspended or archived");
       await db.batch([
-        db.prepare("UPDATE organizations SET name = ?, status = ?, updated_at = ? WHERE id = ?").bind(name, status, new Date().toISOString(), org.id),
+        // Anything but archived calls off a planned deletion.
+        db.prepare("UPDATE organizations SET name = ?, status = ?, delete_after = CASE WHEN ? = 'archived' THEN delete_after END, updated_at = ? WHERE id = ?").bind(name, status, status, new Date().toISOString(), org.id),
         // Leaving "active" ends every session in it at once (they would stop working anyway).
         ...(status !== "active" ? [db.prepare("DELETE FROM sessions WHERE organization_id = ?").bind(org.id)] : []),
       ]);

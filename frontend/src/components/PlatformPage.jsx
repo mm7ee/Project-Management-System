@@ -6,9 +6,10 @@ import { Building2, KeyRound, LogOut, Plus, ShieldCheck } from "lucide-react";
 import { ApiError, api } from "../data/api";
 import { QrCode } from "./MfaSetup";
 import PulseMark from "./PulseMark";
+import { useConfirm } from "./AdminKit";
 
 /**
- * @typedef {{ id: string; name: string; code: string; status: "active" | "suspended" | "archived"; createdAt: string; workspaces: number; people: number; admins: number }} Org
+ * @typedef {{ id: string; name: string; code: string; status: "active" | "suspended" | "archived"; createdAt: string; deleteAfter?: string; workspaces: number; people: number; admins: number }} Org
  * @typedef {{ id: string; name: string; username: string; mustChangePassword: boolean }} Admin
  */
 
@@ -189,6 +190,7 @@ function Organisations() {
   const [orgs, setOrgs] = useState(/** @type {Org[] | null} */ (null));
   const [error, setError] = useState("");
   const [adding, setAdding] = useState(false);
+  const [dialog, ask] = useConfirm();
   /** What a new organisation's (or a new) administrator needs: shown once. */
   const [handover, setHandover] = useState(/** @type {{ title: string; username: string; temporaryPassword: string; signInLink: string } | null} */ (null));
   const reload = async () => {
@@ -213,6 +215,7 @@ function Organisations() {
   };
   return (
     <div className="platform-wide">
+      {dialog}
       <div className="platform-head">
         <h1>
           <Building2 size={20} aria-hidden="true" /> Organisations
@@ -295,6 +298,7 @@ function Organisations() {
                   </td>
                   <td>
                     <span className={`platform-status ${o.status}`}>{o.status === "active" ? "Active" : o.status === "suspended" ? "Suspended" : "Archived"}</span>
+                    {o.deleteAfter && <span className="platform-muted"> · deleted on {new Date(o.deleteAfter).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>}
                   </td>
                   <td className="num">{o.workspaces}</td>
                   <td className="num">{o.people}</td>
@@ -324,6 +328,47 @@ function Organisations() {
                         Archive
                       </button>
                     )}
+                    {/* Deleting: only an archived organisation, 30 days after asking, and it can be called off until then. */}
+                    {o.status === "archived" &&
+                      (o.deleteAfter ? (
+                        <button
+                          className="btn btn-ghost sm"
+                          onClick={async () => {
+                            setError("");
+                            try {
+                              await api(`/platform/organizations/${o.id}/deletion`, "DELETE");
+                              await reload();
+                            } catch (e) {
+                              setError(e instanceof Error ? e.message : "Couldn't call it off");
+                            }
+                          }}
+                        >
+                          Keep it
+                        </button>
+                      ) : (
+                        <button
+                          className="btn btn-danger sm"
+                          onClick={async () => {
+                            const ok = await ask({
+                              title: `Delete ${o.name}?`,
+                              body: "In 30 days everything it holds is deleted for good: its workspaces, people, projects, work items and history. You can call it off until then.",
+                              confirm: "Delete in 30 days",
+                              danger: true,
+                              typed: o.code,
+                            });
+                            if (!ok) return;
+                            setError("");
+                            try {
+                              await api(`/platform/organizations/${o.id}/deletion`, "POST", { code: o.code });
+                              await reload();
+                            } catch (e) {
+                              setError(e instanceof Error ? e.message : "Couldn't plan the deletion");
+                            }
+                          }}
+                        >
+                          Delete…
+                        </button>
+                      ))}
                     <button
                       className="btn btn-ghost sm"
                       onClick={async () => {

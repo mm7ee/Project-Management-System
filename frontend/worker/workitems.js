@@ -22,6 +22,7 @@ import { MAX_DOCUMENT_BYTES, formatBytes } from "../src/data/project";
 import { ITEM_KEY_PATTERN, KIND_LABELS, LINK_META, LINK_TYPES, MAX_COMMENT, MAX_DESCRIPTION, MAX_LABELS, MAX_SUMMARY, PAGE_SIZE, RESOLUTION_META, TYPE_META, WORK_PRIORITIES, WORK_TYPES, childTypesOf, cleanLabel, formatMinutes, mentionsIn, parentProblem } from "../src/data/workitems";
 import { checkTransition, needsInput, transitionsFrom } from "../src/data/workflows";
 import { initialStatus, loadWorkflow, workflowIdFor } from "./workflowData";
+import { assignable } from "../src/data/roles";
 /**
  * Everything a list or page needs about an item, in one query. Cancelled ("won't do") children don't count.
  */
@@ -466,7 +467,7 @@ export async function transitionItem(c, r, m, opts = {}) {
   for (const rule of t.rules.filter((x) => x.kind === "post_function")) {
     if (rule.rule === "assign_user" && rule.value) {
       const u = await /** @type {Promise<{ role: Role; } | null>} */ (/** @type {unknown} */ (c.db.prepare("SELECT role FROM users WHERE id = ?").bind(rule.value).first()));
-      if (u && u.role !== "viewer") patch.assignee = rule.value;
+      if (u && assignable(u.role)) patch.assignee = rule.value;
     }
     if (rule.rule === "assign_role" && rule.value) patch.assignee = (await personWithRole(c, rule.value, r.system_id)) ?? patch.assignee;
     if (rule.rule === "assign_reporter") patch.assignee = r.reporter;
@@ -696,7 +697,7 @@ async function checkAssignee(c, v, source) {
   const u = await /** @type {Promise<{ role: Role; } | null>} */ (/** @type {unknown} */ (c.db.prepare("SELECT role FROM users WHERE id = ?").bind(id).first()));
   if (!u) throw new HttpError(400, "Unknown assignee");
   if (source === "client_request" && u.role !== "developer") throw new HttpError(400, "Only users with the developer role can be assigned");
-  if (u.role === "viewer") throw new HttpError(400, "Standard users can't be assigned work");
+  if (!assignable(u.role)) throw new HttpError(400, "Standard users and Viewers can't be assigned work");
   return id;
 }
 /**

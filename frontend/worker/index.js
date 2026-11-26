@@ -32,8 +32,10 @@ import { noteFailure, pause, postToTeams, raise, readDelivery, securityEmail, se
 import { runBriefing, runDailyDigests } from "./digest";
 import { toFeature } from "./rows";
 import { NO_TENANT, pgDatabase, tenantEnv } from "./pg";
-import { platformApi } from "./platform";
+import { platformApi, purgeDueOrganizations } from "./platform";
 import { HttpError, body, json } from "./http";
+import { adminAudit, auditEntry, changed } from "./audit";
+import { cleanWorkspaceStyle, cloneWorkspaceConfig, orgAdminApi } from "./orgadmin";
 import { KEY_PATTERN, mentionsIn, suggestKey } from "../src/data/workitems";
 import { notifyItem } from "./schemes";
 import { applyChange, askItemLines, createItem, deleteItem, featureToItem, afterChange, moveFeatureTo, itemById, itemsApi, recomputeProgress } from "./workitems";
@@ -56,7 +58,7 @@ import { levelsFor } from "./access";
  */
 const VIA_TOKEN = /** @type {WeakMap<Request, string>} */ (/** @type {unknown} */ (new WeakMap()));
 import { EFFECTIVE_WORKFLOW, loadWorkflow } from "./workflowData";
-import { DEFAULT_ROLE_PERMISSIONS, ROLES, ROLE_LABEL, START_KEYS, cleanPrefs, mfaRequiredFor, permissionsFor } from "../src/data/roles";
+import { DEFAULT_ROLE_PERMISSIONS, ROLES, ROLE_LABEL, START_KEYS, assignable, cleanPrefs, mfaRequiredFor, permissionsFor } from "../src/data/roles";
 import { settingRow, saveSetting, removeSetting, workspacesRow } from "./settings";
 const COOKIE = "omni_session";
 /**
@@ -422,7 +424,7 @@ async function currentUser(req, db) {
            JOIN workspace_members m ON m.workspace_id = s.workspace_id AND m.user_id = s.user_id
            JOIN workspaces w ON w.id = s.workspace_id AND w.status = 'active'
            JOIN organizations o ON o.id = a.organization_id AND o.status = 'active'
-           WHERE s.token_hash = ? AND s.expires_at > ?`,
+           WHERE s.token_hash = ? AND s.expires_at > ? AND a.deactivated_at IS NULL`,
         )
         .bind(await tokenHash(token), Date.now())
         .first()
@@ -776,9 +778,9 @@ async function api(req, env, path, ctx) {
         : await /** @type {Promise<D1Result<UserRow>>} */ (
             /** @type {unknown} */ (
               org
-                ? db.prepare("SELECT * FROM users WHERE organization_id = ? AND lower(username) = lower(?)").bind(org.id, tried).all()
+                ? db.prepare("SELECT * FROM users WHERE organization_id = ? AND lower(username) = lower(?) AND deactivated_at IS NULL").bind(org.id, tried).all()
                 : db
-                    .prepare("SELECT u.* FROM users u JOIN organizations o ON o.id = u.organization_id AND o.status = 'active' WHERE lower(u.username) = lower(?) LIMIT 2")
+                    .prepare("SELECT u.* FROM users u JOIN organizations o ON o.id = u.organization_id AND o.status = 'active' WHERE lower(u.username) = lower(?) AND u.deactivated_at IS NULL LIMIT 2")
                     .bind(tried)
                     .all()
             )
@@ -983,9 +985,9 @@ async function api(req, env, path, ctx) {
         : await /** @type {Promise<D1Result<UserRow>>} */ (
             /** @type {unknown} */ (
               resetOrg
-                ? db.prepare("SELECT * FROM users WHERE organization_id = ? AND (lower(username) = lower(?) OR lower(email) = lower(?)) LIMIT 2").bind(resetOrg.id, login, login).all()
+                ? db.prepare("SELECT * FROM users WHERE organization_id = ? AND (lower(username) = lower(?) OR lower(email) = lower(?)) AND deactivated_at IS NULL LIMIT 2").bind(resetOrg.id, login, login).all()
                 : db
-                    .prepare("SELECT u.* FROM users u JOIN organizations o ON o.id = u.organization_id AND o.status = 'active' WHERE lower(u.username) = lower(?) OR lower(u.email) = lower(?) LIMIT 2")
+                    .prepare("SELECT u.* FROM users u JOIN organizations o ON o.id = u.organization_id AND o.status = 'active' WHERE (lower(u.username) = lower(?) OR lower(u.email) = lower(?)) AND u.deactivated_at IS NULL LIMIT 2")
                     .bind(login, login)
                     .all()
             )
@@ -1020,7 +1022,7 @@ async function api(req, env, path, ctx) {
       db
         .prepare("INSERT INTO password_resets (id, created_at, login, user_id, ip, outcome, token_hash, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
         .bind(newToken().slice(0, 16), at, login.toLowerCase(), row?.id ?? null, ip, outcome, token ? await tokenHash(token) : null, token ? at + RESET_LINK_MINUTES * 60_000 : null),
-      db.prepare("DELETE FROM password_resets WHERE created_at < ?").bind(at - RESET_KEEP_HOURS * 3_600_000),
+      db.prepare("DELETE FROM password_resets WHERE created_at < ? AND (expires_at IS NULL OR expires_at < ?)").bind(at - RESET_KEEP_HOURS * 3_600_000, at),
     ]);
     await audit(db, req, { id: row?.id ?? null, name: row?.name ?? login.slice(0, 64) }, "password_reset_requested", row?.id ?? null, {
       login: login.slice(0, 64),
@@ -1058,7 +1060,7 @@ async function api(req, env, path, ctx) {
         db
           .prepare(
             `SELECT pr.id AS reset_id, u.* FROM password_resets pr JOIN users u ON u.id = pr.user_id
-         WHERE pr.token_hash = ? AND pr.used_at IS NULL AND pr.expires_at > ?`,
+         WHERE pr.token_hash = ? AND pr.used_at IS NULL AND pr.expires_at > ? AND u.deactivated_at IS NULL`,
           )
           .bind(await tokenHash(String(token ?? "")), Date.now())
           .first()
@@ -1201,7 +1203,7 @@ async function api(req, env, path, ctx) {
                  JOIN workspace_members m ON m.user_id = a.id AND m.workspace_id = ?
                  JOIN workspaces w ON w.id = m.workspace_id AND w.status = 'active'
                  JOIN organizations o ON o.id = a.organization_id AND o.status = 'active'
-                 WHERE a.id = ?`,
+                 WHERE a.id = ? AND a.deactivated_at IS NULL`,
               )
               .bind(apiToken.workspaceId, apiToken.userId)
               .first()
@@ -1239,6 +1241,12 @@ async function api(req, env, path, ctx) {
   if (me.must_change_password) mfaSetupPaths.push("/api/me/password");
   if (!guest && mfaRequiredFor(me, policy) && !mfaSetupPaths.includes(path) && !(await hasMfa(db, me))) {
     throw new HttpError(403, `Hi ${me.name}, your organisation requires two-step verification. Set it up to continue.`, "mfa_setup_required");
+  }
+  // A Viewer (the read-only role) reads; the only changes they make are to their own account, their notifications
+  // and chat. Searching and asking Ask Pulse are reads sent as POST. Checked here, before any route, so a route that
+  // forgets a permission check still can't be used to change anything.
+  if (!guest && me.role === "reader" && !["GET", "HEAD"].includes(method) && !readerMayWrite(path)) {
+    throw new HttpError(403, "You have view-only access in this workspace", "read_only");
   }
   const matrix = await roleMatrix(db);
   // A view-only link sees everything, including Reports, and may request updates; it changes nothing else.
@@ -1369,20 +1377,34 @@ async function api(req, env, path, ctx) {
   /** Who and where: the organisation, the open workspace, and (for people signed in) the workspaces they belong to. */
   const tenantInfo = async () => {
     const [org, ws, mine] = await Promise.all([
-      /** @type {Promise<{ id: string; name: string; code: string } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT id, name, code FROM organizations WHERE id = ?").bind(scope.orgId).first())),
-      /** @type {Promise<{ id: string; name: string; key: string } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT id, name, key FROM workspaces WHERE id = ?").bind(scope.workspaceId).first())),
+      /** @type {Promise<{ id: string; name: string; code: string; colour: string | null; has_logo: boolean; updated_at: string } | null>} */ (
+        /** @type {unknown} */ (db.prepare("SELECT id, name, code, colour, logo IS NOT NULL AS has_logo, updated_at FROM organizations WHERE id = ?").bind(scope.orgId).first())
+      ),
+      /** @type {Promise<{ id: string; name: string; key: string; icon: string; colour: string | null } | null>} */ (
+        /** @type {unknown} */ (db.prepare("SELECT id, name, key, icon, colour FROM workspaces WHERE id = ?").bind(scope.workspaceId).first())
+      ),
       guest || apiToken
         ? { results: [] }
-        : /** @type {Promise<D1Result<{ id: string; name: string; key: string; role: Role }>>} */ (
+        : // Theirs, and the organisation-wide ones anyone in the organisation may open read-only (`open`).
+          /** @type {Promise<D1Result<{ id: string; name: string; key: string; icon: string; colour: string | null; role: Role | null }>>} */ (
             /** @type {unknown} */ (
-              db
-                .prepare("SELECT w.id, w.name, w.key, m.role FROM workspace_members m JOIN workspaces w ON w.id = m.workspace_id WHERE m.user_id = ? AND w.status = 'active' ORDER BY w.position, w.name")
+              orgDb(env, scope.orgId)
+                .prepare(
+                  `SELECT w.id, w.name, w.key, w.icon, w.colour, m.role FROM workspaces w
+                   LEFT JOIN workspace_members m ON m.workspace_id = w.id AND m.user_id = ?
+                   WHERE w.status = 'active' AND (m.user_id IS NOT NULL OR w.visibility = 'organization') ORDER BY w.position, w.name`,
+                )
                 .bind(me.id)
                 .all()
             )
           ),
     ]);
-    return { organization: org, workspace: ws, workspaces: mine.results, orgAdmin: !!me.org_admin };
+    return {
+      organization: org && { id: org.id, name: org.name, code: org.code, ...(org.colour ? { colour: org.colour } : {}), ...(org.has_logo ? { logo: `/api/org/logo?v=${encodeURIComponent(org.updated_at)}` } : {}) },
+      workspace: ws,
+      workspaces: mine.results.map((w) => ({ id: w.id, name: w.name, key: w.key, icon: w.icon, ...(w.colour ? { colour: w.colour } : {}), role: w.role ?? "reader", ...(w.role ? {} : { open: true }) })),
+      orgAdmin: !!me.org_admin,
+    };
   };
   if (path === "/api/me/workspaces" && method === "GET") {
     if (guest || apiToken) throw new HttpError(403, "Only a signed-in person can switch workspace");
@@ -1395,16 +1417,39 @@ async function api(req, env, path, ctx) {
     if (guest || apiToken) throw new HttpError(403, "Only a signed-in person can switch workspace");
     const b = await /** @type {Promise<{ workspaceId?: unknown }>} */ (/** @type {unknown} */ (body(req)));
     const target = String(b.workspaceId ?? "").slice(0, 64);
-    const member = await db
-      .prepare("SELECT w.id, w.name FROM workspace_members m JOIN workspaces w ON w.id = m.workspace_id WHERE m.user_id = ? AND m.workspace_id = ? AND w.status = 'active'")
-      .bind(me.id, target)
-      .first();
-    if (!member) throw new HttpError(404, "Workspace not found");
+    const odb = orgDb(env, scope.orgId);
+    const member = /** @type {{ id: string; name: string; visibility: string; role: Role | null } | null} */ (
+      await odb
+        .prepare("SELECT w.id, w.name, w.visibility, m.role FROM workspaces w LEFT JOIN workspace_members m ON m.workspace_id = w.id AND m.user_id = ? WHERE w.id = ? AND w.status = 'active'")
+        .bind(me.id, target)
+        .first()
+    );
+    if (!member || (!member.role && member.visibility !== "organization")) throw new HttpError(404, "Workspace not found");
+    // An organisation-wide workspace they aren't in: they join it as a Viewer, which the organisation's administrators
+    // see (and can change) like any other membership.
+    if (!member.role) {
+      await odb.prepare("INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, 'reader', ?) ON CONFLICT (workspace_id, user_id) DO NOTHING").bind(target, me.id, new Date().toISOString()).run();
+      await adminAudit(odb, req, me, { action: "member_joined_open_workspace", type: "membership", id: me.id, workspaceId: target, after: { workspace: member.name, role: "reader" } });
+    }
     const token = /** @type {string} */ (cookieToken(req));
     await db.prepare("UPDATE sessions SET workspace_id = ? WHERE token_hash = ? AND user_id = ?").bind(target, await tokenHash(token), me.id).run();
     await audit(db, req, me, "workspace_switched", target, { from: scope.workspaceId, to: target, name: /** @type {{ name: string }} */ (member).name });
     return json({ ok: true });
   }
+  // The organisation profile and logo, invitations, CSV import, deactivating, and the audit log (worker/orgadmin.js).
+  const orgRoutes = await orgAdminApi({
+    env,
+    req,
+    ctx,
+    path,
+    method,
+    me,
+    scope,
+    odb: orgDb(env, scope.orgId),
+    orgAdmin: !guest && !apiToken && !!me.org_admin,
+    canAudit: !guest && can("audit_log"),
+  });
+  if (orgRoutes) return orgRoutes;
   // ----- organisation administration (Organisation Administrators only) -----
   // Workspaces, people and their role in each workspace. Done with the organisation's handle (no workspace), which
   // sees every workspace and person of this organisation and nothing of any other.
@@ -1413,7 +1458,9 @@ async function api(req, env, path, ctx) {
     const odb = orgDb(env, scope.orgId);
     const now = new Date().toISOString();
     const workspaceRow = /** @param {string} id */ async (id) =>
-      /** @type {{ id: string; name: string; key: string; status: string } | null} */ (await odb.prepare("SELECT id, name, key, status FROM workspaces WHERE id = ?").bind(id).first());
+      /** @type {{ id: string; name: string; key: string; status: string; icon: string; colour: string | null; description: string; visibility: string } | null} */ (
+        await odb.prepare("SELECT id, name, key, status, icon, colour, description, visibility FROM workspaces WHERE id = ?").bind(id).first()
+      );
     const checkWsKey = /** @param {unknown} v */ (v) => {
       const k = String(v ?? "")
         .trim()
@@ -1426,19 +1473,35 @@ async function api(req, env, path, ctx) {
       if (!n) throw new HttpError(400, "Name the workspace");
       return n.slice(0, 40);
     };
-    const adminsLeft = async () => Number((/** @type {{ n: number }} */ (await odb.prepare("SELECT COUNT(*) AS n FROM accounts WHERE org_admin = 1").first())).n);
+    // Active Organisation Administrators: there must always be one.
+    const adminsLeft = async () => Number((/** @type {{ n: number }} */ (await odb.prepare("SELECT COUNT(*) AS n FROM accounts WHERE org_admin = 1 AND deactivated_at IS NULL").first())).n);
     if (path === "/api/org" && method === "GET") {
-      const [org, spaces, people, members] = await Promise.all([
+      const [org, spaces, people, members, invited] = await Promise.all([
         odb.prepare("SELECT id, name, code, status FROM organizations WHERE id = ?").bind(scope.orgId).first(),
-        odb.prepare("SELECT w.id, w.name, w.key, w.status, w.position, (SELECT COUNT(*) FROM workspace_members m WHERE m.workspace_id = w.id) AS members FROM workspaces w ORDER BY w.position, w.name").all(),
-        odb.prepare("SELECT id, username, name, title, email, org_admin, must_change_password, locked_until FROM accounts ORDER BY name").all(),
+        odb
+          .prepare("SELECT w.id, w.name, w.key, w.status, w.position, w.icon, w.colour, w.description, w.visibility, (SELECT COUNT(*) FROM workspace_members m WHERE m.workspace_id = w.id) AS members FROM workspaces w ORDER BY w.position, w.name")
+          .all(),
+        odb.prepare("SELECT id, username, name, title, email, org_admin, must_change_password, locked_until, deactivated_at FROM accounts ORDER BY name").all(),
         odb.prepare("SELECT workspace_id, user_id, role FROM workspace_members").all(),
+        // Invited and not yet signed in: their link is still unused (and may have expired).
+        odb.prepare("SELECT user_id, MAX(expires_at) AS until FROM password_resets WHERE outcome = 'invited' AND used_at IS NULL GROUP BY user_id").all(),
       ]);
+      const pending = new Map((/** @type {{ user_id: string; until: number }[]} */ (invited.results)).map((r) => [r.user_id, Number(r.until)]));
       /** @type {Map<string, { workspaceId: string; role: Role }[]>} */ const byPerson = new Map();
       for (const m of /** @type {{ workspace_id: string; user_id: string; role: Role }[]} */ (members.results)) byPerson.set(m.user_id, [...(byPerson.get(m.user_id) ?? []), { workspaceId: m.workspace_id, role: m.role }]);
       return json({
         organization: org,
-        workspaces: /** @type {Record<string, unknown>[]} */ (spaces.results).map((w) => ({ id: w.id, name: w.name, key: w.key, status: w.status, members: Number(w.members) })),
+        workspaces: /** @type {Record<string, unknown>[]} */ (spaces.results).map((w) => ({
+          id: w.id,
+          name: w.name,
+          key: w.key,
+          status: w.status,
+          members: Number(w.members),
+          icon: w.icon,
+          ...(w.colour ? { colour: w.colour } : {}),
+          description: w.description,
+          visibility: w.visibility,
+        })),
         people: /** @type {Record<string, unknown>[]} */ (people.results).map((p) => ({
           id: p.id,
           username: p.username,
@@ -1448,35 +1511,47 @@ async function api(req, env, path, ctx) {
           orgAdmin: !!p.org_admin,
           ...(p.must_change_password ? { mustChangePassword: true } : {}),
           ...(isLocked(/** @type {{ locked_until: number | null }} */ (p)) ? { locked: true } : {}),
+          ...(p.deactivated_at ? { deactivated: true } : {}),
+          ...(pending.has(String(p.id)) ? { invited: (pending.get(String(p.id)) ?? 0) > Date.now() ? "pending" : "expired" } : {}),
           workspaces: byPerson.get(String(p.id)) ?? [],
         })),
       });
     }
     if (path === "/api/org/workspaces" && method === "POST") {
-      const b = /** @type {{ name?: unknown; key?: unknown }} */ (await body(req));
+      const b = /** @type {{ name?: unknown; key?: unknown; cloneFrom?: unknown } & Record<string, unknown>} */ (await body(req));
       const name = wsName(b.name);
       const key = checkWsKey(b.key);
+      const style = cleanWorkspaceStyle(b);
       if (await odb.prepare("SELECT 1 FROM workspaces WHERE lower(name) = lower(?) OR key = ?").bind(name, key).first()) throw new HttpError(409, "Another workspace has that name or key");
+      // Copy another workspace's configuration (no work): it must be one of this organisation's.
+      const source = b.cloneFrom ? await workspaceRow(String(b.cloneFrom)) : null;
+      if (b.cloneFrom && !source) throw new HttpError(404, "Workspace not found");
       const id = newToken().slice(0, 16);
       const pos = Number((/** @type {{ p: number }} */ (await odb.prepare("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM workspaces").first())).p);
+      const made = { name, key, icon: style.icon ?? "layers", colour: style.colour ?? null, description: style.description ?? "", visibility: style.visibility ?? "private" };
       await odb.batch([
-        odb.prepare("INSERT INTO workspaces (id, name, key, position, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)").bind(id, name, key, pos, now, now),
+        odb
+          .prepare("INSERT INTO workspaces (id, name, key, position, icon, colour, description, visibility, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+          .bind(id, name, key, pos, made.icon, made.colour, made.description, made.visibility, now, now),
         // Whoever makes it is in it, as its administrator, so it can be set up.
         odb.prepare("INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, 'admin', ?)").bind(id, me.id, now),
+        auditEntry(odb, req, me, { action: "workspace_created", type: "workspace", id, workspaceId: id, after: { ...made, ...(source ? { copiedFrom: source.name } : {}) } }),
       ]);
       // The service desk's request types, from the template (the seeding function is the owner's).
       await env.ROOT.prepare("SELECT tenancy_seed_workspace(?, 'pulse-template-ws')").bind(id).run();
-      await audit(odb, req, me, "workspace_created", id, { name, key });
-      return json({ workspace: { id, name, key, status: "active" } }, 201);
+      const copied = source ? await cloneWorkspaceConfig(env, scope.orgId, source.id, id) : null;
+      await audit(odb, req, me, "workspace_created", id, { name, key, ...(source ? { copiedFrom: source.name } : {}) });
+      return json({ workspace: { id, ...made, status: "active" }, ...(copied ? { copied } : {}) }, 201);
     }
     const wsMatch = path.match(/^\/api\/org\/workspaces\/([A-Za-z0-9_-]{1,64})$/);
     if (wsMatch && method === "PATCH") {
       const w = await workspaceRow(wsMatch[1]);
       if (!w) throw new HttpError(404, "Workspace not found");
-      const b = /** @type {{ name?: unknown; key?: unknown; status?: unknown }} */ (await body(req));
+      const b = /** @type {{ name?: unknown; key?: unknown; status?: unknown } & Record<string, unknown>} */ (await body(req));
       const name = b.name === undefined ? w.name : wsName(b.name);
       const key = b.key === undefined ? w.key : checkWsKey(b.key);
       const status = b.status === undefined ? w.status : String(b.status);
+      const style = { icon: w.icon, colour: w.colour, description: w.description, visibility: w.visibility, ...cleanWorkspaceStyle(b) };
       if (!["active", "archived"].includes(status)) throw new HttpError(400, "A workspace is active or archived");
       if (status === "archived" && w.status === "active") {
         const active = Number((/** @type {{ n: number }} */ (await odb.prepare("SELECT COUNT(*) AS n FROM workspaces WHERE status = 'active'").first())).n);
@@ -1487,10 +1562,15 @@ async function api(req, env, path, ctx) {
         throw new HttpError(409, "Another workspace has that name or key");
       }
       const wdb = env.ROOT.withScope({ orgId: scope.orgId, workspaceId: w.id });
+      const diff = changed({ name: w.name, key: w.key, status: w.status, icon: w.icon, colour: w.colour, description: w.description, visibility: w.visibility }, { name, key, status, ...style });
+      if (!diff) return json({ workspace: { id: w.id, name, key, status, ...style } });
       await odb.batch([
-        odb.prepare("UPDATE workspaces SET name = ?, key = ?, status = ?, updated_at = ? WHERE id = ?").bind(name, key, status, now, w.id),
+        odb
+          .prepare("UPDATE workspaces SET name = ?, key = ?, status = ?, icon = ?, colour = ?, description = ?, visibility = ?, updated_at = ? WHERE id = ?")
+          .bind(name, key, status, style.icon, style.colour, style.description, style.visibility, now, w.id),
         // Archiving ends the sessions open in it.
         ...(status === "archived" ? [odb.prepare("DELETE FROM sessions WHERE workspace_id = ?").bind(w.id)] : []),
+        auditEntry(odb, req, me, { action: "workspace_updated", type: "workspace", id: w.id, workspaceId: w.id, ...diff }),
       ]);
       if (name !== w.name) {
         // The workspace's name is also kept on its projects and in the places that pick a workspace by name.
@@ -1502,7 +1582,7 @@ async function api(req, env, path, ctx) {
         ]);
       }
       await audit(odb, req, me, "workspace_updated", w.id, { from: { name: w.name, key: w.key, status: w.status }, to: { name, key, status } });
-      return json({ workspace: { id: w.id, name, key, status } });
+      return json({ workspace: { id: w.id, name, key, status, ...style } });
     }
     /** @param {unknown} list */
     const cleanMemberships = async (list) => {
@@ -1533,6 +1613,7 @@ async function api(req, env, path, ctx) {
           .prepare("INSERT INTO accounts (id, username, name, title, email, role, password_hash, must_change_password, org_admin) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)")
           .bind(id, username, name, text(b.title, "Title") ?? "", text(b.email, "Email") ?? null, first, await hashPassword(temp), b.orgAdmin ? 1 : 0),
         ...[...spaces].map(([w, role]) => odb.prepare("INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, ?, ?)").bind(w, id, role, now)),
+        auditEntry(odb, req, me, { action: "person_created", type: "person", id, after: { name, username, orgAdmin: !!b.orgAdmin, workspaces: Object.fromEntries(spaces) } }),
       ]);
       await audit(odb, req, me, "user_created", id, { name, username, orgAdmin: !!b.orgAdmin, workspaces: Object.fromEntries(spaces) });
       // Shown once to the administrator; only its hash is stored. The person chooses their own at first sign-in.
@@ -1555,6 +1636,12 @@ async function api(req, env, path, ctx) {
           ...[...spaces].map(([w, role]) =>
             odb.prepare("INSERT INTO workspace_members (workspace_id, user_id, role, joined_at) VALUES (?, ?, ?, ?) ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = excluded.role").bind(w, person.id, role, now),
           ),
+          // One entry per workspace whose membership changed, in that workspace.
+          ...[...new Set([...before.map((m) => m.workspace_id), ...spaces.keys()])].flatMap((w) => {
+            const was = before.find((m) => m.workspace_id === w)?.role ?? null;
+            const is = spaces.get(w) ?? null;
+            return was === is ? [] : [auditEntry(odb, req, me, { action: !was ? "member_added" : !is ? "member_removed" : "member_role_changed", type: "membership", id: person.id, workspaceId: w, before: { name: person.name, role: was }, after: { name: person.name, role: is } })];
+          }),
         ]);
         for (const w of gone) await audit(odb, req, me, "member_removed", person.id, { name: person.name, workspace: w });
         for (const [w, role] of spaces) {
@@ -1568,10 +1655,18 @@ async function api(req, env, path, ctx) {
         const b = /** @type {{ orgAdmin?: unknown; name?: unknown; title?: unknown; email?: unknown }} */ (await body(req));
         const orgAdmin = b.orgAdmin === undefined ? !!person.org_admin : !!b.orgAdmin;
         if (person.org_admin && !orgAdmin && (await adminsLeft()) <= 1) throw new HttpError(409, "Keep at least one Organisation Administrator");
-        await odb
-          .prepare("UPDATE accounts SET org_admin = ?, name = COALESCE(?, name), title = COALESCE(?, title), email = CASE WHEN ? THEN ? ELSE email END WHERE id = ?")
-          .bind(orgAdmin ? 1 : 0, b.name === undefined ? null : text(b.name, "Name", true), b.title === undefined ? null : (text(b.title, "Title") ?? ""), b.email !== undefined, b.email === undefined ? null : (text(b.email, "Email") ?? null), person.id)
-          .run();
+        const was = /** @type {{ name: string; title: string; email: string | null }} */ (await odb.prepare("SELECT name, title, email FROM accounts WHERE id = ?").bind(person.id).first());
+        const next = {
+          name: b.name === undefined ? was.name : /** @type {string} */ (text(b.name, "Name", true)),
+          title: b.title === undefined ? was.title : (text(b.title, "Title") ?? ""),
+          email: b.email === undefined ? was.email : (text(b.email, "Email") ?? null),
+          orgAdmin,
+        };
+        const diff = changed({ ...was, orgAdmin: !!person.org_admin }, next);
+        await odb.batch([
+          odb.prepare("UPDATE accounts SET org_admin = ?, name = ?, title = ?, email = ? WHERE id = ?").bind(orgAdmin ? 1 : 0, next.name, next.title, next.email, person.id),
+          ...(diff ? [auditEntry(odb, req, me, { action: "person_updated", type: "person", id: person.id, ...diff })] : []),
+        ]);
         await audit(odb, req, me, "user_updated", person.id, { name: person.name, ...(orgAdmin !== !!person.org_admin ? { orgAdmin } : {}) });
         return json({ ok: true });
       }
@@ -1579,7 +1674,10 @@ async function api(req, env, path, ctx) {
       if (!personMatch[2] && method === "DELETE") {
         if (person.id === me.id) throw new HttpError(409, "You can't remove yourself");
         if (person.org_admin && (await adminsLeft()) <= 1) throw new HttpError(409, "Keep at least one Organisation Administrator");
-        await odb.prepare("DELETE FROM accounts WHERE id = ?").bind(person.id).run();
+        await odb.batch([
+          odb.prepare("DELETE FROM accounts WHERE id = ?").bind(person.id),
+          auditEntry(odb, req, me, { action: "person_removed", type: "person", id: person.id, before: { name: person.name, orgAdmin: !!person.org_admin } }),
+        ]);
         await audit(odb, req, me, "user_deleted", person.id, { name: person.name, fromOrganisation: true });
         return json({ ok: true });
       }
@@ -3175,7 +3273,7 @@ async function api(req, env, path, ctx) {
     if (role !== "developer" && row.role === "developer") {
       await db.prepare("UPDATE work_items SET assignee = NULL WHERE assignee = ? AND source = 'client_request'").bind(row.id).run();
     }
-    if (role === "viewer" && row.role !== "viewer") await db.prepare("UPDATE work_items SET assignee = NULL WHERE assignee = ?").bind(row.id).run();
+    if (!assignable(role) && assignable(row.role)) await db.prepare("UPDATE work_items SET assignee = NULL WHERE assignee = ?").bind(row.id).run();
     // A password reset signs the user out everywhere.
     if (b.password) await db.prepare("DELETE FROM sessions WHERE user_id = ?").bind(row.id).run();
     const fieldsChanged = /** @type {const} */ (["name", "title", "email", "phone"]).filter((f) => {
@@ -3223,17 +3321,32 @@ async function api(req, env, path, ctx) {
     const valid = new Set(DEFAULT_ROLE_PERMISSIONS.admin);
     const next = { ...matrix };
     for (const role of ROLES) {
-      if (role === "admin" || !Array.isArray(b[role])) continue;
+      // Administrators have everything and Viewers nothing, whatever is sent.
+      if (role === "admin" || role === "reader" || !Array.isArray(b[role])) continue;
       next[role] = /** @type {Array<Permission>} */ (b[role]).filter(/** @returns {p is Permission} */ (p) => valid.has(/** @type {Permission} */ (p)));
     }
-    await saveSetting(db, "role_permissions").bind(JSON.stringify(next)).run();
     /** @type {Record<string, { added: Permission[]; removed: Permission[] }>} */ const changes = {};
     for (const role of ROLES) {
       const added = next[role].filter((p) => !matrix[role].includes(p));
       const removed = matrix[role].filter((p) => !next[role].includes(p));
       if (added.length || removed.length) changes[role] = { added, removed };
     }
-    if (Object.keys(changes).length) await audit(db, req, me, "roles_updated", null, { changes });
+    const roleDiff = Object.keys(changes);
+    await db.batch([
+      saveSetting(db, "role_permissions").bind(JSON.stringify(next)),
+      ...(roleDiff.length
+        ? [
+            // Organisation-wide (no workspace on the entry); the log's policy checks the organisation only.
+            auditEntry(db, req, me, {
+              action: "role_permissions_updated",
+              type: "roles",
+              before: Object.fromEntries(roleDiff.map((r) => [r, matrix[/** @type {Role} */ (r)]])),
+              after: Object.fromEntries(roleDiff.map((r) => [r, next[/** @type {Role} */ (r)]])),
+            }),
+          ]
+        : []),
+    ]);
+    if (roleDiff.length) await audit(db, req, me, "roles_updated", null, { changes });
     return json(next);
   }
   // ----- activity log -----
@@ -3333,6 +3446,25 @@ function withDatabase(env) {
  * @param {string} orgId
  */
 const orgDb = (env, orgId) => env.ROOT.withScope({ orgId, workspaceId: "" });
+/**
+ * What a Viewer may send other than GET: their own account, notifications, chat, and reads sent as POST.
+ * @param {string} path
+ * @returns {boolean}
+ */
+function readerMayWrite(path) {
+  return (
+    path === "/api/me" ||
+    path.startsWith("/api/me/") ||
+    path === "/api/logout" ||
+    path === "/api/logout-all" ||
+    path.startsWith("/api/notifications") ||
+    path === "/api/chat" ||
+    path.startsWith("/api/chat/") ||
+    path === "/api/search" ||
+    path === "/api/ask" ||
+    path === "/api/ask/pql"
+  );
+}
 export default {
   /**
    * @param {Request} req
@@ -3364,6 +3496,8 @@ export default {
     const due = dueJobs(event.scheduledTime ?? Date.now());
     // Deleting by age is the same for everyone: done once, as the owner.
     if (due.dailyDigest) await purgeExpired(env.ROOT).catch((e) => console.error("Retention clean-up failed", e));
+    // Archived organisations whose 30 days have passed are deleted, for good (worker/platform.js).
+    await purgeDueOrganizations(env.ROOT).catch((e) => console.error("Deleting organisations failed", e));
     // Everything else is done for one workspace at a time, with that workspace's handle, so a job can only
     // read, tell and change that workspace (and its digests reach only its members).
     const spaces = /** @type {D1Result<{ organization_id: string; id: string }>} */ (

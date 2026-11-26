@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ArrowDown, ArrowRight, ArrowUp, Plus, Save, Trash2, X } from "lucide-react";
 import { api, ApiError } from "../data/api";
-import { ROLES, ROLE_LABEL } from "../data/roles";
+import { ROLES, ROLE_LABEL, assignable } from "../data/roles";
 import { CATEGORY_META, FIELD_RULE_LABEL, KIND_LABEL, RULES, describeRule } from "../data/workflows";
 /**
  * Settings → Administration → Workflows.
@@ -521,7 +521,7 @@ function RulesCell({ rules, users, userName, canEdit, onChange, label }) {
             <select value={value} onChange={(e) => setValue(e.target.value)} aria-label="Person">
               <option value="">Person…</option>
               {users
-                .filter((u) => u.role !== "viewer")
+                .filter((u) => assignable(u.role))
                 .map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.name}

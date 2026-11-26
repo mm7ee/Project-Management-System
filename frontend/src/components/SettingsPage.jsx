@@ -140,7 +140,11 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
         <nav className="set-nav" aria-label="Settings pages" ref={navRef}>
           {[
             { group: viewOnly ? "This link" : "Your account", items: pages },
-            { group: "Administration", items: /** @type {SettingsPageInfo[]} */ (adminPages) },
+            // Administration pages under their own headings (Organisation, This workspace, Settings), in the order given.
+            ...[...new Set(adminPages.map((p) => p.group ?? "Administration"))].map((group) => ({
+              group,
+              items: /** @type {SettingsPageInfo[]} */ (adminPages.filter((p) => (p.group ?? "Administration") === group)),
+            })),
           ]
             .filter((g) => g.items.length)
             .map(({ group, items }) => (
@@ -779,12 +783,13 @@ function TwoStepSection({ me, required, recoveryCodesLeft, twoStep, onChanged })
  * @property {(key: string) => void} [onPage]
  */
 /**
- * A page in the menu's Administration group, drawn by the caller.
+ * An administration page, drawn by the caller, under its group's heading in the menu (Administration if none).
  * @typedef {Object} AdminPage
  * @property {string} key
  * @property {string} label
  * @property {LucideIcon} icon
  * @property {ReactNode} content
+ * @property {string} [group]
  */
 /**
  * @typedef {Object} SettingsPageInfo

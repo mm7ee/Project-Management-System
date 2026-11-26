@@ -893,6 +893,199 @@
               }
             },
             {
+              "name": "Organisation profile",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                      "const p = pm.response.json().profile;",
+                      "pm.test(\"has a time zone and working hours\", () => { pm.expect(p.timeZone).to.be.a(\"string\"); pm.expect(p.workDays).to.be.an(\"array\"); pm.expect(p.workStart).to.match(/^dd:dd$/); });"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Cookie",
+                    "value": "omni_session={{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/org/profile",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "org",
+                    "profile"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "A bad time zone is refused",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status is 400\", () => pm.response.to.have.status(400));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Cookie",
+                    "value": "omni_session={{adminToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"timeZone\":\"Mars/Olympus\"}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/org/profile",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "org",
+                    "profile"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "CSV import: a wrong row stops the whole import (check only)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                      "const r = pm.response.json();",
+                      "pm.test(\"lists the problem line\", () => { pm.expect(r.code).to.eql(\"import_invalid\"); pm.expect(r.problems[0].line).to.eql(2); });"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Cookie",
+                    "value": "omni_session={{adminToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\"csv\":\"email,name,workspace,role\\npostman@example.test,Postman Check,NO-SUCH-WORKSPACE,Developer\",\"check\":true}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/org/people/import",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "org",
+                    "people",
+                    "import"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Audit log, newest first",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                      "const r = pm.response.json();",
+                      "pm.test(\"entries are newest first\", () => { pm.expect(r.entries).to.be.an(\"array\"); r.entries.forEach((e, i) => { if (i) pm.expect(r.entries[i - 1].id).to.be.above(e.id); }); });"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Cookie",
+                    "value": "omni_session={{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/org/audit",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "org",
+                    "audit"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Organisation logo (404 when none is set)",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"200 or 404\", () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Cookie",
+                    "value": "omni_session={{adminToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/api/org/logo",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "org",
+                    "logo"
+                  ]
+                }
+              }
+            },
+            {
               "name": "Platform routes need a platform session",
               "event": [
                 {

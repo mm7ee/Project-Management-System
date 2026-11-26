@@ -9,7 +9,7 @@
 /** @import { SignoffStatus } from './data/pcn' */
 /** @import { User } from './data/roles' */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertOctagon, ArrowLeft, Building2, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, LockKeyhole, Menu, Zap, Plug, BellRing, Lock, ListPlus, Headset, Plus, Search, Send, ShieldCheck, Sparkles, Users, Workflow } from "lucide-react";
+import { AlertOctagon, ArrowLeft, Building2, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, LockKeyhole, Menu, Zap, Plug, BellRing, Lock, ListPlus, Headset, Layers, Plus, ScrollText, Search, Send, ShieldCheck, Sparkles, Users, Workflow } from "lucide-react";
 import { getSchedule } from "./data/systems";
 import { api, useAppData } from "./data/api";
 import { isAssigned } from "./data/roles";
@@ -502,6 +502,7 @@ function Dashboard({ data, reload }) {
       {/* The drifting web behind the pages. Keyed on motion and theme: the canvas decides once how to draw. */}
       <ParticleField key={prefs.motion + resolveTheme(prefs.theme)} className="app-web no-print" palette={resolveTheme(prefs.theme) === "futuristic" ? "appDark" : "appLight"} />
       <Sidebar
+        org={data.tenant?.organization ?? null}
         me={me}
         view={selectedId ? "project" : view}
         counts={counts}
@@ -716,37 +717,56 @@ function Dashboard({ data, reload }) {
               window.history.replaceState({ ...s, pulse: { ...s.pulse, view: "settings" } }, "");
               setView("settings");
             }}
-            adminPages={[
-              // Workspaces, people and their roles: the organisation's administrators.
-              ...(data.tenant?.orgAdmin ? [{ key: "organisation", label: "Organisation", icon: Building2, content: <OrgAdmin me={me} /> }] : []),
-              ...(can("manage_users")
-                ? [
-                    { key: "people", label: "Users", icon: Users, content: <UsersPage section="people" {...usersPageProps} /> },
-                    // Organisation-wide: changed by its administrators only.
-                    ...(data.tenant?.orgAdmin ? [{ key: "roles", label: "Roles & permissions", icon: ShieldCheck, content: <UsersPage section="roles" {...usersPageProps} /> }] : []),
-                    // Organisation-wide: changed by its administrators only.
-                    ...(data.tenant?.orgAdmin ? [{ key: "twostep", label: "Two-step rules", icon: Fingerprint, content: <UsersPage section="twostep" {...usersPageProps} /> }] : []),
-                    // Organisation-wide: changed by its administrators only.
-                    ...(data.tenant?.orgAdmin ? [{ key: "signin", label: "Sign-in security", icon: LockKeyhole, content: <UsersPage section="signin" {...usersPageProps} /> }] : []),
-                    { key: "limits", label: "Workload limits", icon: Gauge, content: <UsersPage section="limits" {...usersPageProps} /> },
-                    { key: "links", label: "View-only links", icon: Link2, content: <UsersPage section="links" {...usersPageProps} /> },
-                    // Organisation-wide: changed by its administrators only.
-                    ...(data.tenant?.orgAdmin ? [{ key: "delivery", label: "Email & Teams", icon: Send, content: <DeliverySection /> }] : []),
-                  ]
-                : []),
-              ...(can("manage_workflows") ? [{ key: "workflows", label: "Workflows", icon: Workflow, content: <WorkflowsSettings users={users} workspaces={data.workspaces} canEdit={can("manage_workflows")} /> }] : []),
-              ...(can("manage_integrations") ? [{ key: "integrations", label: "Integrations", icon: Plug, content: <IntegrationsSection systems={systems} /> }] : []),
-              ...(can("manage_schemes")
-                ? [
-                    { key: "schemes", label: "Notification schemes", icon: BellRing, content: <NotificationSchemesSection /> },
-                    { key: "levels", label: "Security levels", icon: Lock, content: <SecurityLevelsSection users={users} /> },
-                    { key: "fields", label: "Custom fields", icon: ListPlus, content: <CustomFieldsSection workspaces={data.workspaces} /> },
-                  ]
-                : []),
-              ...(can("manage_service_desk") ? [{ key: "service-desk", label: "Service desk", icon: Headset, content: <ServiceDeskSettings systems={systems} /> }] : []),
-              ...(can("manage_automation") ? [{ key: "automation", label: "Automation", icon: Zap, content: <AutomationSettings users={users} systems={systems} workspaces={data.workspaces} now={now} /> }] : []),
-              ...(can("audit_log") ? [{ key: "activity", label: "Activity log", icon: History, content: <ActivityPage users={users} systems={systems} now={now} /> }] : []),
-            ]}
+            adminPages={(() => {
+              // The admin console, in three groups: the organisation (its administrators only), the open workspace,
+              // and the remaining settings. Organisation-wide settings are changed by its administrators only.
+              const orgAdmin = !!data.tenant?.orgAdmin;
+              const ORG = "Organisation";
+              const WS = `This workspace${data.tenant?.workspace?.name ? `: ${data.tenant.workspace.name}` : ""}`;
+              const SET = "Settings";
+              return [
+                ...(orgAdmin
+                  ? [
+                      { group: ORG, key: "org-profile", label: "Profile", icon: Building2, content: <OrgAdmin me={me} section="profile" /> },
+                      { group: ORG, key: "organisation", label: "Workspaces", icon: Layers, content: <OrgAdmin me={me} section="workspaces" /> },
+                      { group: ORG, key: "org-people", label: "Members & roles", icon: Users, content: <OrgAdmin me={me} section="people" /> },
+                      ...(can("manage_users") ? [{ group: ORG, key: "roles", label: "Roles & permissions", icon: ShieldCheck, content: <UsersPage section="roles" {...usersPageProps} /> }] : []),
+                      { group: ORG, key: "org-audit", label: "Audit log", icon: ScrollText, content: <OrgAdmin me={me} section="audit" /> },
+                    ]
+                  : []),
+                ...(can("manage_workflows") ? [{ group: WS, key: "workflows", label: "Workflows", icon: Workflow, content: <WorkflowsSettings users={users} workspaces={data.workspaces} canEdit={can("manage_workflows")} /> }] : []),
+                ...(can("manage_schemes") ? [{ group: WS, key: "fields", label: "Fields", icon: ListPlus, content: <CustomFieldsSection workspaces={data.workspaces} /> }] : []),
+                ...(can("manage_automation") ? [{ group: WS, key: "automation", label: "Automations", icon: Zap, content: <AutomationSettings users={users} systems={systems} workspaces={data.workspaces} now={now} /> }] : []),
+                ...(can("manage_users") ? [{ group: WS, key: "people", label: "Users", icon: Users, content: <UsersPage section="people" {...usersPageProps} /> }] : []),
+                ...(can("audit_log")
+                  ? [
+                      { group: WS, key: "ws-audit", label: "Audit log", icon: ScrollText, content: <OrgAdmin me={me} section="workspace-audit" /> },
+                      { group: WS, key: "activity", label: "Activity log", icon: History, content: <ActivityPage users={users} systems={systems} now={now} /> },
+                    ]
+                  : []),
+                ...(can("manage_users") && orgAdmin
+                  ? [
+                      { group: SET, key: "twostep", label: "Two-step rules", icon: Fingerprint, content: <UsersPage section="twostep" {...usersPageProps} /> },
+                      { group: SET, key: "signin", label: "Sign-in security", icon: LockKeyhole, content: <UsersPage section="signin" {...usersPageProps} /> },
+                      { group: SET, key: "delivery", label: "Email & Teams", icon: Send, content: <DeliverySection /> },
+                    ]
+                  : []),
+                ...(can("manage_users")
+                  ? [
+                      { group: SET, key: "limits", label: "Workload limits", icon: Gauge, content: <UsersPage section="limits" {...usersPageProps} /> },
+                      { group: SET, key: "links", label: "View-only links", icon: Link2, content: <UsersPage section="links" {...usersPageProps} /> },
+                    ]
+                  : []),
+                ...(can("manage_integrations") ? [{ group: SET, key: "integrations", label: "Integrations", icon: Plug, content: <IntegrationsSection systems={systems} /> }] : []),
+                ...(can("manage_schemes")
+                  ? [
+                      { group: SET, key: "schemes", label: "Notification schemes", icon: BellRing, content: <NotificationSchemesSection /> },
+                      { group: SET, key: "levels", label: "Security levels", icon: Lock, content: <SecurityLevelsSection users={users} /> },
+                    ]
+                  : []),
+                ...(can("manage_service_desk") ? [{ group: SET, key: "service-desk", label: "Service desk", icon: Headset, content: <ServiceDeskSettings systems={systems} /> }] : []),
+              ];
+            })()}
           />
         ) : view === "chat" && !data.viewOnly ? (
           <ChatPage me={me} users={users} canModerate={can("manage_users")} openId={chatOpen} onUnread={setChatUnread} />
