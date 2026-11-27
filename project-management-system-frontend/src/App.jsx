@@ -2,35 +2,32 @@
 // The app's entry: which page this address is, and, for the main app, whether someone is signed in. Kept small: the
 // sign-in page (and the platform page before an organisation is chosen) must paint fast, so everything else loads on
 // demand: the signed-in app (SignedInApp.jsx), the Platform Administrators' page and the executive page.
-import { Suspense, lazy } from "react";
+import { Suspense } from "react";
 import { Eye } from "lucide-react";
-import { BRAND } from "./data/brand";
 import { shareToken, useAppData } from "./data/api";
 import Login from "./components/Login";
 import ForcePasswordChange from "./components/ForcePasswordChange";
 import ForceMfaSetup from "./components/ForceMfaSetup";
 import UpdateBanner from "./components/UpdateBanner";
+import { LoadBoundary, Splash, lazyRetry } from "./loadable";
 
-const SignedInApp = lazy(() => import("./SignedInApp"));
-const ExecutivePage = lazy(() => import("./components/ExecutivePage"));
-const PlatformPage = lazy(() => import("./components/PlatformPage"));
+const SignedInApp = lazyRetry(() => import("./SignedInApp"));
+const ExecutivePage = lazyRetry(() => import("./components/ExecutivePage"));
+const PlatformPage = lazyRetry(() => import("./components/PlatformPage"));
 
 // /executive is a public showcase for leadership: totals only, no sign-in, linked from nowhere.
 const isExecutive = () => /^\/executive(\/[a-f0-9]{64})?\/?$/.test(window.location.pathname);
 // /platform is for Platform Administrators: its own sign-in, outside every organisation.
 const isPlatform = () => /^\/platform\/?$/.test(window.location.pathname);
 
-/** While data or a page's code loads: the neutral PMS mark (nobody knows which organisation yet). */
-export function Splash() {
-  return (
-    <div className="splash" role="status" aria-label="Loading">
-      <span className="splash-pms">{BRAND.shortName}</span>
-    </div>
-  );
-}
+export { Splash };
 
 export default function App() {
-  return <Suspense fallback={<Splash />}>{isExecutive() ? <ExecutivePage /> : isPlatform() ? <PlatformPage /> : <Tracker />}</Suspense>;
+  return (
+    <LoadBoundary>
+      <Suspense fallback={<Splash />}>{isExecutive() ? <ExecutivePage /> : isPlatform() ? <PlatformPage /> : <Tracker />}</Suspense>
+    </LoadBoundary>
+  );
 }
 
 function Tracker() {
