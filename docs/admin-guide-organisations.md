@@ -75,6 +75,9 @@ can do the same from `/platform`: **Branding** on the organisation's row.
 - **Square icon:** the browser tab and small places.
 - **Accent colour:** main buttons, links, the active page, focus rings.
 - **Sign-in background tint** (optional).
+- **Sidebar colour and sidebar highlight** (optional): your own sidebar, and the colour of the page you're on in it.
+  Without them the sidebar is neutral graphite with your accent. Both are adjusted if needed, so text stays
+  readable.
 
 **How it behaves:**
 - **The contrast check:** if the accent is too light or too dark for a theme, a safe shade of it is used there. The

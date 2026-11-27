@@ -146,7 +146,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .brand { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 0 8px 18px; }
 .brand .org-logo.md { width: 170px; height: 44px; justify-content: flex-start; }
 .brand-pms { font-size: 26px; font-weight: 900; letter-spacing: -0.03em; color: #fff; }
-.ws-pill { max-width: 100%; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--accent-dark) 18%, transparent); color: #e6ebf1; font-size: 12px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ws-pill { max-width: 100%; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--sb-hi, var(--accent-dark)) 20%, transparent); color: #e6ebf1; font-size: 12px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .logo-link { display: inline-block; border-radius: 6px; transition: opacity .15s; }
 .logo-link:hover { opacity: .85; }
 .logo-link:focus-visible { outline: 2px solid var(--cyan); outline-offset: 4px; }
@@ -663,7 +663,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .progress-fill { position: relative; overflow: hidden; }
 .sidebar { position: relative; isolation: isolate; }
 /* The sidebar is always deep indigo, so its accents use the dark theme's lighter blue in either theme. */
-.sidebar { --cyan: var(--accent-dark); --tint-cyan: color-mix(in srgb, var(--accent-dark) 16%, transparent); --cyan-ink: var(--accent-dark); }
 .nav-item.active { position: relative; overflow: hidden; }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -2854,12 +2853,15 @@ span.backlog-points { border-color: transparent; background: var(--track); }
   .bi-page .bi-donut { width: 140px; height: 140px; }
 }
 
-/* ---------- Sidebar: neutral graphite in every organisation ----------
-   The organisation shows through its logo at the top and its accent on the active page (--accent-dark, checked
-   for contrast on dark surfaces). The sidebar itself never takes an organisation's colours. */
+/* ---------- Sidebar ----------
+   Neutral graphite, with the organisation's accent on the active page, unless the organisation sets its own sidebar
+   and highlight colours (Settings → Organisation → Branding; src/brandTheme.js sets --org-sb-*). Every one is
+   checked: the sidebar keeps its light text at AA, the highlight reaches 3:1 and its ink AA. */
 .sidebar {
-  --cyan: var(--accent-dark); --tint-cyan: color-mix(in srgb, var(--accent-dark) 16%, transparent); --cyan-ink: var(--accent-dark);
-  background: radial-gradient(170% 90% at 20% 0%, #253141 0%, #18202b 45%, #121821 100%);
+  --sb-top: var(--org-sb-top, #253141); --sb: var(--org-sb, #18202b); --sb-end: var(--org-sb-end, #121821);
+  --sb-hi: var(--org-sb-hi, var(--accent-dark)); --sb-ink: var(--org-sb-ink, var(--accent-dark));
+  --cyan: var(--sb-ink); --tint-cyan: color-mix(in srgb, var(--sb-hi) 16%, transparent); --cyan-ink: var(--sb-ink);
+  background: radial-gradient(170% 90% at 20% 0%, var(--sb-top) 0%, var(--sb) 45%, var(--sb-end) 100%);
   border-right: 1px solid rgba(255, 255, 255, 0.06);
   color: #e6ebf1;
 }
@@ -2872,20 +2874,29 @@ span.backlog-points { border-color: transparent; background: var(--track); }
 .sidebar .nav-item { color: #c6cfda; }
 .sidebar .nav-item:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
 .sidebar .nav-item.active {
-  background: color-mix(in srgb, var(--accent-dark) 16%, transparent); border-color: var(--accent-dark); color: #fff;
-  box-shadow: inset 3px 0 0 var(--accent-dark);
+  background: color-mix(in srgb, var(--sb-hi) 14%, transparent); border-color: var(--sb-hi); color: #fff;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sb-hi) 14%, transparent), inset 0 0 18px color-mix(in srgb, var(--sb-hi) 12%, transparent);
 }
-.sidebar .nav-item.active .nav-icon { color: var(--accent-dark); }
+.sidebar .nav-item.active .nav-icon { color: var(--sb-ink); }
+/* An organisation's own sidebar gets a fine grid in its highlight. */
+:root[data-org-sidebar] .sidebar::before {
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--sb-ink) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--sb-ink) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(color-mix(in srgb, var(--sb-ink) 3%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--sb-ink) 3%, transparent) 1px, transparent 1px);
+  background-size: 100px 100px, 100px 100px, 20px 20px, 20px 20px;
+}
 .sidebar .nav-section { color: rgba(176, 188, 202, 0.8); }
 .sidebar .nav-count { background: rgba(255, 255, 255, 0.12); color: #e6ebf1; }
 .sidebar .nav-count.alert { background: #c8102e; color: #fff; }
-.sidebar .add-btn { border-color: color-mix(in srgb, var(--accent-dark) 45%, transparent); color: var(--accent-dark); }
-.sidebar .add-btn:hover { background: color-mix(in srgb, var(--accent-dark) 12%, transparent); border-color: var(--accent-dark); }
+.sidebar .add-btn { border-color: color-mix(in srgb, var(--sb-ink) 45%, transparent); color: var(--sb-ink); }
+.sidebar .add-btn:hover { background: color-mix(in srgb, var(--sb-hi) 12%, transparent); border-color: var(--sb-hi); }
 .sidebar .profile { border-top-color: rgba(255, 255, 255, 0.1); }
 .sidebar .profile:hover, .sidebar .profile.on { background: rgba(255, 255, 255, 0.06); }
-.sidebar .profile-avatar { background: var(--penn-blue); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-dark) 55%, transparent), 0 4px 14px rgba(0, 0, 0, 0.3); }
+.sidebar .profile-avatar { background: var(--penn-blue); box-shadow: 0 0 0 2px color-mix(in srgb, var(--sb-ink) 55%, transparent), 0 4px 14px rgba(0, 0, 0, 0.3); }
 /* In the sidebar profile the role is a plain label, flush with the name above it (no pill, so no inset). */
-.sidebar .profile .role-tag { margin-top: 2px; padding: 0; border-radius: 0; background: none; color: var(--accent-dark); font-size: 10.5px; letter-spacing: 0.08em; line-height: 1.3; }
+.sidebar .profile .role-tag { margin-top: 2px; padding: 0; border-radius: 0; background: none; color: var(--sb-ink); font-size: 10.5px; letter-spacing: 0.08em; line-height: 1.3; }
 .sidebar .profile-text { gap: 0; }
 
 /* ======================= Dashboard design system (2026-11-25) =======================
@@ -2894,7 +2905,7 @@ span.backlog-points { border-color: transparent; background: var(--track); }
 
 /* Focus: one visible ring for every keyboard-focusable control. Darker surfaces swap the ring colour. */
 :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.sidebar { --focus: var(--accent-dark); }
+.sidebar { --focus: var(--sb-ink); }
 
 /* ---------- Page header: name, description, actions grouped on the right ---------- */
 .dash-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--sp-3) var(--sp-6); flex-wrap: wrap; margin-bottom: var(--sp-5); }
@@ -3660,7 +3671,7 @@ th[aria-sort="ascending"] .pr-sort svg, th[aria-sort="descending"] .pr-sort svg 
 .bp-dark .bp-btn-neutral, .bp-futuristic .bp-btn-neutral { background: #e3e8ee; color: #111821; }
 .bp-powered { font-size: 9px; color: var(--bp-dim); }
 .bp-c { display: grid; grid-template-columns: 92px 1fr; }
-.bp-side { display: flex; flex-direction: column; gap: 6px; padding: 10px 8px; background: #18202b; color: #c6cfda; --accent-dark: var(--bp-ink); }
+.bp-side { display: flex; flex-direction: column; gap: 6px; padding: 10px 8px; background: var(--bp-sb, #18202b); color: #c6cfda; --accent-dark: var(--bp-ink); }
 .bp-side .org-logo.sm { width: 76px; height: 24px; }
 .bp-pill { align-self: flex-start; padding: 1px 7px; border-radius: 999px; font-size: 9.5px; font-weight: 700; color: #e6ebf1; background: color-mix(in srgb, var(--bp-dark-ink, #8fb3d4) 22%, transparent); }
 .bp-nav { padding: 4px 6px; border-radius: 5px; font-size: 10.5px; }

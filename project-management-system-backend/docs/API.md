@@ -392,9 +392,11 @@ Another organisation's workspace or person is `404`.
   - `workDays` are ISO weekdays (1 = Monday).
   - `timeZone` is an IANA name such as `Africa/Harare`.
   - The logo and colour moved to the branding (below); the old `GET /api/org/logo` is gone.
-- `GET /api/org/branding` → `{ branding }`, `PUT /api/org/branding` `{ displayName?, accent?, tint?, logo?, logoDark?, icon? }`
+- `GET /api/org/branding` → `{ branding }`, `PUT /api/org/branding` `{ displayName?, accent?, tint?, sidebar?, highlight?, logo?, logoDark?, icon? }`
   → `{ branding }`: the organisation's branding (see [Branding](#branding)).
   - `accent` and `tint` are `#rrggbb` (`#rgb` is accepted); `tint: null` uses the accent.
+  - `sidebar` and `highlight` (optional, `#rrggbb`, `null` to clear): the organisation's own sidebar colour and its
+    highlight (the active page). Without them the sidebar is neutral graphite with the accent.
   - `logo`, `logoDark` and `icon` are PNG, WebP or JPEG `data:` URLs, or `null` to remove one. **SVG is refused.** The
     type is read from the bytes, not the label. At most 200 KB each; a logo fits in 480 × 160 pixels, the icon in
     256 × 256 (the settings page resizes them before sending).
@@ -433,6 +435,7 @@ A branding view, wherever it appears:
 ```json
 { "name": "Omnicontact", "code": "omnicontact", "accent": "#2c3280",
   "shades": { "light": "#2c3280", "dark": "#757cd0", "futuristic": "#757cd0" }, "tint": null,
+  "sidebar": "#011f5b", "highlight": "#1ba9e1",
   "logo": "/api/public/org/omnicontact/logo?v=2", "logoDark": "/api/public/org/omnicontact/logo-dark?v=2", "icon": null }
 ```
 

@@ -1271,3 +1271,16 @@ claims.
 **Not done:**
 - No Privacy link: there is no privacy page yet.
 - The footer's Help link appears once `BRAND.supportEmail` is set.
+
+## An organisation's own sidebar (2026-11-27)
+
+- **What's new:** an organisation may set its own **sidebar colour** and **sidebar highlight** (Settings → Organisation →
+  Branding, with the preview). Without them the sidebar stays neutral graphite with the accent.
+- **Made safe:** `src/data/branding.js` `sidebarTheme` darkens the sidebar until its text reaches AA, and lightens the
+  highlight to 3:1 and its ink to AA. Status colours are unchanged.
+- **Migration `0023_branding_sidebar.sql`** (reverse in `migrations/down/`) adds the two columns and gives Omnicontact
+  its colours from before the rename: Penn blue `#011f5b` with sky blue `#1ba9e1`. With them comes the fine grid and the
+  glow on the active page.
+- **Tests:** any sidebar and highlight is readable, and Omnicontact's come through; saving, clearing and refusing
+  them; the public lookup carries them. `npm test`: 271 passed.
+- **Where it was tried:** applied on the Neon dev branch, reversed there, then applied again.

@@ -102,7 +102,7 @@ describe("branding per organisation", () => {
   it("before sign-in, an organisation's code gives its name, colours and image addresses, and nothing else", async () => {
     const r = await pub(orgs.a.code);
     expect(r.status).toBe(200);
-    expect(Object.keys(r.data).sort()).toEqual(["accent", "code", "icon", "logo", "logoDark", "name", "shades", "tint"]);
+    expect(Object.keys(r.data).sort()).toEqual(["accent", "code", "highlight", "icon", "logo", "logoDark", "name", "shades", "sidebar", "tint"]);
     expect(r.data).toMatchObject({ name: orgs.a.name, code: orgs.a.code, logo: null, logoDark: null, icon: null, tint: null });
     expect(r.data.accent).toMatch(/^#[0-9a-f]{6}$/);
     expect(Object.keys(r.data.shades).sort()).toEqual(["dark", "futuristic", "light"]);
@@ -210,6 +210,19 @@ describe("branding per organisation", () => {
     const removed = await as("ada", "/api/org/branding", { method: "PUT", body: { icon: null } });
     expect(removed.data.branding.icon).toBeNull();
     expect(removed.data.branding.logo).not.toBeNull();
+  }, SLOW);
+
+  it("an organisation may colour its own sidebar and highlight, and clear them again", async () => {
+    expect((await as("ada", "/api/org/branding", { method: "PUT", body: { sidebar: "navy" } })).status).toBe(400);
+    expect((await as("ada", "/api/org/branding", { method: "PUT", body: { highlight: "#12" } })).status).toBe(400);
+    const set = await as("ada", "/api/org/branding", { method: "PUT", body: { sidebar: "#011F5B", highlight: "#1ba9e1" } });
+    expect(set.status, JSON.stringify(set.data)).toBe(200);
+    expect(set.data.branding).toMatchObject({ sidebar: "#011f5b", highlight: "#1ba9e1" });
+    expect((await pub(orgs.a.code)).data).toMatchObject({ sidebar: "#011f5b", highlight: "#1ba9e1" });
+    const [entry] = await db`SELECT after FROM audit_log WHERE organization_id = ${orgs.a.id} AND action = 'organization_branding_updated' ORDER BY id DESC LIMIT 1`;
+    expect(JSON.parse(entry.after)).toMatchObject({ sidebar: "#011f5b", highlight: "#1ba9e1" });
+    const cleared = await as("ada", "/api/org/branding", { method: "PUT", body: { sidebar: null, highlight: "" } });
+    expect(cleared.data.branding).toMatchObject({ sidebar: null, highlight: null });
   }, SLOW);
 
   it("nothing of one organisation's branding reaches another", async () => {

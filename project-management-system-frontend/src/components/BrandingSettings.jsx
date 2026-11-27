@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, FileUp, ImageOff, Palette, TriangleAlert } from "lucide-react";
 import { api } from "../data/api";
 import { BRAND } from "../data/brand";
-import { IMAGE_BOX, IMAGE_TYPES, STORED_MAX_BYTES, THEMES, UPLOAD_MAX_BYTES, accentShades, cleanHex, contrast, initials, solidShade } from "../data/branding";
+import { IMAGE_BOX, IMAGE_TYPES, STORED_MAX_BYTES, THEMES, UPLOAD_MAX_BYTES, accentShades, cleanHex, contrast, initials, sidebarTheme, solidShade } from "../data/branding";
 import { applyBranding } from "../brandTheme";
 import OrgMark from "./OrgMark";
 import Panel from "./Panel";
@@ -66,6 +66,9 @@ export default function BrandingSettings({ orgName, endpoint = "/org/branding", 
   const [displayName, setDisplayName] = useState("");
   const [accent, setAccent] = useState("#3e5c76");
   const [tint, setTint] = useState(/** @type {string | null} */ (null));
+  // Its own sidebar (optional): the colour, and the highlight on the active page.
+  const [sidebar, setSidebar] = useState(/** @type {string | null} */ (null));
+  const [highlight, setHighlight] = useState(/** @type {string | null} */ (null));
   // A new image (data: URL), null to remove it, or undefined: unchanged.
   const [images, setImages] = useState(/** @type {Partial<Record<Slot, string | null>>} */ ({}));
   const [saving, setSaving] = useState(false);
@@ -76,6 +79,8 @@ export default function BrandingSettings({ orgName, endpoint = "/org/branding", 
     setDisplayName(b.name);
     setAccent(b.accent);
     setTint(b.tint);
+    setSidebar(b.sidebar ?? null);
+    setHighlight(b.highlight ?? null);
     setImages({});
   };
   useEffect(() => {
@@ -93,12 +98,20 @@ export default function BrandingSettings({ orgName, endpoint = "/org/branding", 
     accent: cleanAccent,
     shades: check.shades,
     tint: tint ? cleanHex(tint) : null,
+    sidebar: sidebar ? cleanHex(sidebar) : null,
+    highlight: highlight ? cleanHex(highlight) : null,
     logo: images.logo === undefined ? saved.logo : images.logo,
     logoDark: images.logoDark === undefined ? saved.logoDark : images.logoDark,
     icon: images.icon === undefined ? saved.icon : images.icon,
   };
   if (!saved || !draft) return <p className="muted">Loading…</p>;
-  const changed = draft.name !== saved.name || draft.accent !== saved.accent || draft.tint !== saved.tint || Object.keys(images).length > 0;
+  const changed =
+    draft.name !== saved.name ||
+    draft.accent !== saved.accent ||
+    draft.tint !== saved.tint ||
+    (draft.sidebar ?? null) !== (saved.sidebar ?? null) ||
+    (draft.highlight ?? null) !== (saved.highlight ?? null) ||
+    Object.keys(images).length > 0;
 
   const pick = async (/** @type {Slot} */ slot, /** @type {File | undefined} */ file) => {
     if (!file) return;
@@ -123,7 +136,7 @@ export default function BrandingSettings({ orgName, endpoint = "/org/branding", 
           e.preventDefault();
           setSaving(true);
           try {
-            const body = { displayName: draft.name, accent: draft.accent, tint: draft.tint, ...images };
+            const body = { displayName: draft.name, accent: draft.accent, tint: draft.tint, sidebar: draft.sidebar ?? null, highlight: draft.highlight ?? null, ...images };
             const r = /** @type {{ branding: BrandingView }} */ (await api(endpoint, "PUT", body));
             load(r.branding);
             if (own) applyBranding(r.branding);
@@ -160,6 +173,32 @@ export default function BrandingSettings({ orgName, endpoint = "/org/branding", 
                 </button>
               )}
             </span>
+          </div>
+          <div className="field">
+            Sidebar colour (optional)
+            <span className="org-colour">
+              <input type="color" value={sidebar ?? "#18202b"} onChange={(e) => setSidebar(e.target.value)} aria-label="Sidebar colour" />
+              <code>{sidebar ?? "neutral graphite"}</code>
+              {sidebar && (
+                <button type="button" className="btn btn-ghost sm" onClick={() => setSidebar(null)}>
+                  Use the neutral sidebar
+                </button>
+              )}
+            </span>
+            <small className="muted">Darkened if needed, so its text stays readable.</small>
+          </div>
+          <div className="field">
+            Sidebar highlight (optional)
+            <span className="org-colour">
+              <input type="color" value={highlight ?? cleanAccent} onChange={(e) => setHighlight(e.target.value)} aria-label="Sidebar highlight" />
+              <code>{highlight ?? "the accent"}</code>
+              {highlight && (
+                <button type="button" className="btn btn-ghost sm" onClick={() => setHighlight(null)}>
+                  Use the accent
+                </button>
+              )}
+            </span>
+            <small className="muted">The active page's edge, glow and icons in the sidebar. Lightened if needed.</small>
           </div>
         </div>
 
@@ -271,7 +310,14 @@ function BrandPreview({ branding: b, theme }) {
   const dark = theme !== "light";
   const ink = b.shades[theme];
   const solid = solidShade(b.accent);
-  const vars = /** @type {import("react").CSSProperties} */ ({ "--bp-ink": ink, "--bp-dark-ink": b.shades.dark, "--bp-solid": solid, "--bp-tint": b.tint ?? ink });
+  const sb = sidebarTheme(b.sidebar, b.highlight, b.accent);
+  const vars = /** @type {import("react").CSSProperties} */ ({
+    "--bp-ink": ink,
+    "--bp-dark-ink": sb?.ink ?? b.shades.dark,
+    "--bp-solid": solid,
+    "--bp-tint": b.tint ?? ink,
+    ...(sb ? { "--bp-sb": `radial-gradient(170% 90% at 20% 0%, ${sb.top} 0%, ${sb.base} 45%, ${sb.end} 100%)` } : {}),
+  });
   return (
     <div className={`bp bp-${theme}`} style={vars}>
       <figure className="bp-state">

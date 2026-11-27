@@ -36,6 +36,8 @@ export const PLATFORM_ACCENT = "#3e5c76";
  * @property {string} accent         as the administrator chose it (#rrggbb)
  * @property {Record<Theme, string>} shades   the contrast-safe accent per theme
  * @property {string | null} tint    the sign-in background tint, if any
+ * @property {string | null} [sidebar]    its own sidebar colour, if any (else neutral graphite)
+ * @property {string | null} [highlight]  its sidebar's highlight (the active page), if any (else the accent)
  * @property {string | null} logo    the logo for light backgrounds (an address), if uploaded
  * @property {string | null} logoDark  the logo for dark backgrounds, if uploaded
  * @property {string | null} icon    the square icon, if uploaded
@@ -157,6 +159,55 @@ export function solidShade(accent) {
     if (contrast(c, ON_LIGHT) >= AA) return c;
   }
   return "#000000";
+}
+
+/** The neutral sidebar (graphite), and the light text drawn on any sidebar. */
+export const SIDEBAR_DEFAULT = "#18202b";
+export const SIDEBAR_TEXT = "#e6ebf1";
+
+/**
+ * Moves a colour's lightness (same hue) until `ok` holds: darker with step < 0, lighter with step > 0.
+ * @param {string} colour
+ * @param {number} step
+ * @param {(c: string) => boolean} ok
+ */
+function shadeUntil(colour, step, ok) {
+  if (ok(colour)) return colour;
+  const [h, s, l] = toHsl(colour);
+  for (let x = l + step; x >= 0 && x <= 1; x += step) {
+    const c = fromHsl(h, s, Math.min(1, Math.max(0, x)));
+    if (ok(c)) return c;
+  }
+  return step < 0 ? "#000000" : "#ffffff";
+}
+
+/** @param {string} a @param {string} b @param {number} t  0 = a, 1 = b */
+function mix(a, b, t) {
+  const [x, y] = [rgb(a), rgb(b)];
+  return `#${x.map((v, i) => hex2(v + (y[i] - v) * t)).join("")}`;
+}
+
+/**
+ * An organisation's own sidebar, when it sets one (a sidebar colour, a highlight, or both); null for the neutral
+ * graphite sidebar with the accent. Every colour is made safe:
+ *  - the sidebar is darkened until its light text reaches AA;
+ *  - the highlight (the active page's edge and glow) reaches 3:1 on it, and its ink (icons, small text) AA.
+ * @param {string | null | undefined} sidebar
+ * @param {string | null | undefined} highlight
+ * @param {string} accent  the fallback for the highlight
+ * @returns {{ top: string; base: string; end: string; hi: string; ink: string } | null}
+ */
+export function sidebarTheme(sidebar, highlight, accent) {
+  const sb = cleanHex(sidebar);
+  const hl = cleanHex(highlight);
+  if (!sb && !hl) return null;
+  const base = shadeUntil(sb ?? SIDEBAR_DEFAULT, -0.01, (c) => contrast(c, SIDEBAR_TEXT) >= AA);
+  const seed = hl ?? accentShades(accent).shades.dark;
+  const hi = shadeUntil(seed, 0.01, (c) => contrast(c, base) >= 3);
+  // The ink: a lighter tint of the highlight, as icons and small text on a dark sidebar read best.
+  const ink = mix(shadeUntil(seed, 0.01, (c) => contrast(c, base) >= AA), "#ffffff", 0.45);
+  // A soft light from the top-left, tinted by the highlight, fading to a deeper bottom.
+  return { top: mix(base, hi, 0.12), base, end: mix(base, "#000000", 0.2), hi, ink };
 }
 
 /**

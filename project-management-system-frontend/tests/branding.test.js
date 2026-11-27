@@ -1,6 +1,6 @@
 // Organisation branding: the contrast check, the safe shades and the monogram fallback (src/data/branding.js).
 import { describe, expect, it } from "vitest";
-import { AA, SURFACES, THEMES, accentShades, cleanHex, contrast, initials, monogramSvg, passes, safeShade, solidShade, textOn } from "../src/data/branding";
+import { AA, SIDEBAR_TEXT, SURFACES, THEMES, accentShades, cleanHex, contrast, initials, monogramSvg, passes, safeShade, sidebarTheme, solidShade, textOn } from "../src/data/branding";
 
 describe("contrast", () => {
   it("matches the WCAG reference values", () => {
@@ -84,5 +84,29 @@ describe("the monogram fallback", () => {
     expect(svg).not.toContain("<script>");
     expect(monogramSvg("Demo Co", "#ffd400")).toContain('fill="#0b0c22"');
     expect(monogramSvg("Demo Co", "javascript:alert(1)")).toMatch(/fill="#[0-9a-f]{6}"/);
+  });
+});
+
+describe("an organisation's own sidebar", () => {
+  it("is neutral unless a sidebar or highlight colour is set", () => {
+    expect(sidebarTheme(null, null, "#2c3280")).toBeNull();
+    expect(sidebarTheme("", undefined, "#2c3280")).toBeNull();
+  });
+  it("keeps Omnicontact's Penn blue and sky blue, both readable", () => {
+    const sb = /** @type {NonNullable<ReturnType<typeof sidebarTheme>>} */ (sidebarTheme("#011f5b", "#1ba9e1", "#2c3280"));
+    expect(sb.base).toBe("#011f5b");
+    expect(sb.hi).toBe("#1ba9e1");
+    expect(contrast(sb.base, SIDEBAR_TEXT)).toBeGreaterThanOrEqual(AA);
+    expect(contrast(sb.ink, sb.base)).toBeGreaterThanOrEqual(AA);
+  });
+  it("makes any choice safe: text on the sidebar at AA, the highlight 3:1 and its ink AA", () => {
+    for (const s of ["#ffffff", "#ffd400", "#a0c4ff", "#011f5b", "#000000", "#7a1f2b", "#2e7d32"]) {
+      for (const h of ["#000000", "#ffffff", "#1ba9e1", "#011f5b", "#ffd400", null]) {
+        const sb = /** @type {NonNullable<ReturnType<typeof sidebarTheme>>} */ (sidebarTheme(s, h, "#2c3280"));
+        expect(contrast(sb.base, SIDEBAR_TEXT), `${s} text`).toBeGreaterThanOrEqual(AA);
+        expect(contrast(sb.hi, sb.base), `${s}/${h} highlight`).toBeGreaterThanOrEqual(3);
+        expect(contrast(sb.ink, sb.base), `${s}/${h} ink`).toBeGreaterThanOrEqual(AA);
+      }
+    }
   });
 });

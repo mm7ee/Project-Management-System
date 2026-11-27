@@ -43,6 +43,8 @@ const SLOTS = {
  * @property {string | null} display_name
  * @property {string | null} accent
  * @property {string | null} signin_tint
+ * @property {string | null} sidebar
+ * @property {string | null} highlight
  * @property {boolean | number | null} has_logo
  * @property {boolean | number | null} has_logo_dark
  * @property {boolean | number | null} has_icon
@@ -50,7 +52,7 @@ const SLOTS = {
  * @property {string | null} updated_at
  */
 
-const SELECT = `SELECT o.id, o.name, o.code, b.display_name, b.accent, b.signin_tint, b.logo IS NOT NULL AS has_logo,
+const SELECT = `SELECT o.id, o.name, o.code, b.display_name, b.accent, b.signin_tint, b.sidebar, b.highlight, b.logo IS NOT NULL AS has_logo,
   b.logo_dark IS NOT NULL AS has_logo_dark, b.icon IS NOT NULL AS has_icon, b.version, b.updated_at
   FROM organizations o LEFT JOIN organization_branding b ON b.organization_id = o.id`;
 
@@ -69,6 +71,8 @@ export function brandingView(r) {
     accent,
     shades: accentShades(accent).shades,
     tint: cleanHex(r.signin_tint),
+    sidebar: cleanHex(r.sidebar),
+    highlight: cleanHex(r.highlight),
     logo: r.has_logo ? url("logo") : null,
     logoDark: r.has_logo_dark ? url("logo-dark") : null,
     icon: r.has_icon ? url("icon") : null,
@@ -251,6 +255,8 @@ export function cleanImage(slot, v) {
  * @property {unknown} [displayName]
  * @property {unknown} [accent]
  * @property {unknown} [tint]      null to remove
+ * @property {unknown} [sidebar]   its own sidebar colour, or null for the neutral one
+ * @property {unknown} [highlight] its sidebar's highlight, or null for the accent
  * @property {unknown} [logo]      a data: URL, or null to remove
  * @property {unknown} [logoDark]
  * @property {unknown} [icon]
@@ -269,7 +275,23 @@ export function cleanImage(slot, v) {
 export async function saveBranding(db, orgId, b, actorId) {
   const r = /** @type {BrandingRow | null} */ (await db.prepare(`${SELECT} WHERE o.id = ?`).bind(orgId).first());
   if (!r) throw new HttpError(404, "Not found");
-  const before = { displayName: r.display_name || r.name, accent: cleanHex(r.accent) ?? PLATFORM_ACCENT, tint: cleanHex(r.signin_tint) };
+  const before = {
+    displayName: r.display_name || r.name,
+    accent: cleanHex(r.accent) ?? PLATFORM_ACCENT,
+    tint: cleanHex(r.signin_tint),
+    sidebar: cleanHex(r.sidebar),
+    highlight: cleanHex(r.highlight),
+  };
+  /** An optional colour: unchanged, cleared (null or ""), or a colour. @param {unknown} v @param {string | null} was @param {string} label */
+  const optional = (v, was, label) => {
+    if (v === undefined) return was;
+    if (v === null || v === "") return null;
+    const c = cleanHex(v);
+    if (!c) throw new HttpError(400, `${label} is # and six hex digits`);
+    return c;
+  };
+  const sidebar = optional(b.sidebar, before.sidebar, "The sidebar colour");
+  const highlight = optional(b.highlight, before.highlight, "The highlight colour");
   const displayName = b.displayName === undefined ? before.displayName : String(b.displayName ?? "").replace(/\s+/g, " ").trim();
   if (!displayName || displayName.length > 80) throw new HttpError(400, "The display name is 1 to 80 characters");
   const accent = b.accent === undefined ? before.accent : cleanHex(b.accent);
@@ -292,7 +314,7 @@ export async function saveBranding(db, orgId, b, actorId) {
       [imageBefore[slot], imageAfter[slot]] = [had ? "set" : "none", had ? "replaced" : "added"];
     }
   }
-  const after = { displayName, accent, tint };
+  const after = { displayName, accent, tint, sidebar, highlight };
   const fields = changed(before, after);
   const diff = fields || Object.keys(imageAfter).length ? { before: { ...(fields?.before ?? {}), ...imageBefore }, after: { ...(fields?.after ?? {}), ...imageAfter } } : null;
   if (!diff) return { view: brandingView(r), diff: null };
@@ -300,15 +322,16 @@ export async function saveBranding(db, orgId, b, actorId) {
   const now = new Date().toISOString();
   await db
     .prepare(
-      `INSERT INTO organization_branding (organization_id, display_name, accent, signin_tint, logo, logo_dark, icon, version, updated_at, updated_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+      `INSERT INTO organization_branding (organization_id, display_name, accent, signin_tint, sidebar, highlight, logo, logo_dark, icon, version, updated_at, updated_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
        ON CONFLICT (organization_id) DO UPDATE SET display_name = excluded.display_name, accent = excluded.accent, signin_tint = excluded.signin_tint,
+         sidebar = excluded.sidebar, highlight = excluded.highlight,
          logo = CASE WHEN ? THEN excluded.logo ELSE organization_branding.logo END,
          logo_dark = CASE WHEN ? THEN excluded.logo_dark ELSE organization_branding.logo_dark END,
          icon = CASE WHEN ? THEN excluded.icon ELSE organization_branding.icon END,
          version = organization_branding.version + 1, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
     )
-    .bind(orgId, displayName, accent, tint, images.logo ?? null, images.logoDark ?? null, images.icon ?? null, now, actorId, set("logo"), set("logoDark"), set("icon"))
+    .bind(orgId, displayName, accent, tint, sidebar, highlight, images.logo ?? null, images.logoDark ?? null, images.icon ?? null, now, actorId, set("logo"), set("logoDark"), set("icon"))
     .run();
   const view = await brandingFor(db, orgId);
   return { view: /** @type {BrandingView} */ (view), diff };

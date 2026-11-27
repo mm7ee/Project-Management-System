@@ -1157,7 +1157,10 @@ The plan, and the 13 recommendations approved with "continue", are in `docs/admi
     small print.
   - **Status colours never change with the brand.** Success, warning, danger, info, the status pills and the chart
     palette are fixed. The accent sets three variables (`--accent-solid`, `--accent-light`, `--accent-dark`), which
-    the older names (`--navy`, `--cyan`…) follow. The sidebar stays neutral graphite in every organisation.
+    the older names (`--navy`, `--cyan`…) follow. The sidebar is neutral graphite unless the organisation sets its
+    own sidebar and highlight colours (added 2026-11-27, migration 0023; Omnicontact's are its Penn blue and sky
+    blue from before the rename). Those are made safe the same way: the sidebar darkened until its text reaches
+    AA, the highlight lightened to 3:1 and its ink to AA.
 - **Showing an organisation before sign-in** reverses the admin module's phase 1 decision ("the sign-in page stays
   plain"):
   - A public lookup by code (`GET /api/public/org/:code/branding`) tells a visitor whether a code exists. This was

@@ -56,6 +56,6 @@ describe("no organisation's branding in the product", () => {
   it("status colours are fixed: an organisation's branding sets only the accent variables", () => {
     const theme = readFileSync(join(FRONT, "src", "brandTheme.js"), "utf8");
     const set = [...theme.matchAll(/--([a-z-]+):/g)].map((m) => m[1]);
-    expect([...new Set(set)].sort()).toEqual(["accent-dark", "accent-light", "accent-solid", "org-tint"]);
+    expect([...new Set(set)].sort()).toEqual(["accent-dark", "accent-light", "accent-solid", "org-sb", "org-sb-end", "org-sb-hi", "org-sb-ink", "org-sb-top", "org-tint"]);
   });
 });

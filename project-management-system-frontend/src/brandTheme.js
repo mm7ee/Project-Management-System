@@ -6,7 +6,7 @@
 // white text, --accent-light and --accent-dark for text, links and focus on light and dark surfaces. All three
 // are worked out from its accent by src/data/branding.js and already pass WCAG AA. Status colours never change.
 import { BRAND, tabTitle } from "./data/brand";
-import { monogramSvg, platformIconSvg, solidShade, svgDataUrl } from "./data/branding";
+import { monogramSvg, platformIconSvg, sidebarTheme, solidShade, svgDataUrl } from "./data/branding";
 
 /** @typedef {import("./data/branding").BrandingView} BrandingView */
 
@@ -27,6 +27,7 @@ export function applyBranding(b) {
   if (!b) {
     style?.remove();
     delete root.dataset.org;
+    delete root.dataset.orgSidebar;
     setFavicon(svgDataUrl(platformIconSvg()));
     return;
   }
@@ -37,12 +38,17 @@ export function applyBranding(b) {
   }
   // The values come from cleaned hex colours (#rrggbb), so they are safe to write into a style sheet.
   const solid = solidShade(b.accent);
+  // Its own sidebar, if it set one: safe shades worked out from its colours.
+  const sb = sidebarTheme(b.sidebar, b.highlight, b.accent);
   style.textContent = [
     `:root { --accent-solid: ${solid}; --accent-light: ${b.shades.light}; --accent-dark: ${b.shades.dark}; }`,
     `:root[data-theme="futuristic"] { --accent-dark: ${b.shades.futuristic}; }`,
     b.tint ? `:root { --org-tint: ${b.tint}; }` : "",
+    sb ? `:root { --org-sb-top: ${sb.top}; --org-sb: ${sb.base}; --org-sb-end: ${sb.end}; --org-sb-hi: ${sb.hi}; --org-sb-ink: ${sb.ink}; }` : "",
   ].join("\n");
   root.dataset.org = b.code;
+  if (sb) root.dataset.orgSidebar = "1";
+  else delete root.dataset.orgSidebar;
   setFavicon(b.icon ?? svgDataUrl(monogramSvg(b.name, b.accent)));
 }
 
