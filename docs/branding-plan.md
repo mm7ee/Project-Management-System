@@ -35,7 +35,8 @@ Corrections to the brief:
    - Codes are never listed.
    - Unknown, suspended and archived codes all get the same 404 and the same message.
    - The reply carries only the name, the logo and icon addresses, the accent and the tint.
-   - Lookups are limited per address (30 a minute, then 429), through Cloudflare's rate-limit binding.
+   - Lookups are limited per address (30 a minute, then 429), through Cloudflare's rate-limit binding. (As built:
+     30 codes that lead nowhere in 10 minutes, counted in the database, because the binding wasn't strict enough live.)
    - A failed lookup costs the same time as a successful one.
    - DECISIONS.md records the change and why.
 2. **Choosing a workspace before sign-in:** the brief puts the workspace choice (Projects, HR…) on the sign-in

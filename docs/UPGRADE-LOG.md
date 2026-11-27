@@ -1155,8 +1155,9 @@ The product is now **Project Management System (PMS)**, and each organisation br
   every organisation's old logo and colour copied in; Omnicontact's two logos and indigo moved into its row. The
   public `omni-logo*.png` files, `src/brand.js` and `PulseMark` are deleted.
 - **Worker:** `src/branding.js`:
-  - `GET /api/public/org/:code/branding` and its images, rate-limited (30 a minute per address, the
-    `BRANDING_LIMIT` binding), one 404 for every organisation nobody may see
+  - `GET /api/public/org/:code/branding` and its images, limited per address (30 codes that lead nowhere
+    in 10 minutes, counted in the database; Cloudflare's `BRANDING_LIMIT` binding is a first line), one 404 for every
+    organisation nobody may see
   - `GET/PUT /api/org/branding` and `/api/platform/organizations/:id/branding`
   - images checked from their bytes (PNG, WebP or JPEG; never SVG), size and dimensions
   - branding in `/api/me/workspaces`, `/api/data`, `/api/showcase` and `/api/portal`

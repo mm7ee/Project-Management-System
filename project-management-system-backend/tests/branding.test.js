@@ -135,6 +135,26 @@ describe("branding per organisation", () => {
     }
   }, SLOW);
 
+  it("an address that keeps trying codes that lead nowhere is refused, without touching sign-in", async () => {
+    const ip = `203.0.113.${Math.floor(Math.random() * 200) + 20}`;
+    const from = (/** @type {string} */ path, /** @type {string} */ addr = ip) => api.call(path, { headers: { "cf-connecting-ip": addr } });
+    // A real code doesn't count.
+    for (let i = 0; i < 5; i++) expect((await from(`/api/public/org/${orgs.a.code}/branding`)).status).toBe(200);
+    for (let i = 0; i < 30; i++) expect((await from(`/api/public/org/guess-${tag}-${i}/branding`)).status).toBe(404);
+    // Then everything from that address is refused, real codes and images too, with nothing about any code.
+    const refused = await from(`/api/public/org/${orgs.a.code}/branding`);
+    expect(refused.status).toBe(429);
+    expect(JSON.stringify(refused.data)).not.toContain(orgs.a.name);
+    expect((await from(`/api/public/org/another-guess/logo`)).status).toBe(429);
+    // Another address is unaffected.
+    expect((await from(`/api/public/org/${orgs.a.code}/branding`, "198.51.100.7")).status).toBe(200);
+    // Signing in from the refused address still works: these misses never pause sign-in.
+    const r = await api.call("/api/login", { method: "POST", headers: { "cf-connecting-ip": ip }, body: { organization: orgs.a.code, username: id("val"), password: PASSWORD } });
+    expect(r.status, JSON.stringify(r.data)).toBe(200);
+    const [{ n }] = await db`SELECT count(*)::int AS n FROM login_failures WHERE ip = ${ip} AND reason = 'org_code' AND organization_id IS NULL`;
+    expect(n).toBe(30);
+  }, SLOW);
+
   it("reads the real type and size of an image from its bytes", () => {
     const bytes = (/** @type {string} */ u) => Uint8Array.from(Buffer.from(u.split(",")[1], "base64"));
     expect(sniffImage(bytes(png(480, 160)))).toEqual({ type: "image/png", w: 480, h: 160 });

@@ -20,6 +20,10 @@ const cleanCode = (v) => {
   return /^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/.test(code) ? code : "";
 };
 
+/** Codes that led nowhere, per address, before every lookup from it is refused (publicBrandingApi). */
+export const ORG_CODE_MISSES = 30;
+export const ORG_CODE_WINDOW_MS = 10 * 60_000;
+
 /** The template organisation is never shown to anyone. */
 const TEMPLATE_ORG = "pulse-template";
 
@@ -96,17 +100,42 @@ export async function publicBrandingApi(env, req, path) {
   const m = path.match(/^\/api\/public\/org\/([^/]{1,64})\/(branding|logo|logo-dark|icon)$/);
   if (!m) return null;
   if (req.method !== "GET") throw new HttpError(405, "Method not allowed");
-  // Per address, before anything is looked up: a burst of guesses gets 429 whatever the codes are.
-  if (env.BRANDING_LIMIT) {
-    const { success } = await env.BRANDING_LIMIT.limit({ key: req.headers.get("cf-connecting-ip") ?? "unknown" });
-    if (!success) return json({ error: "Too many requests. Wait a minute and try again." }, 429, { "retry-after": "60", "cache-control": "no-store" });
-  }
-  const code = cleanCode(decodeURIComponent(m[1]));
-  if (!code) return gone();
+  const tooMany = () => json({ error: "Too many requests. Wait a few minutes and try again." }, 429, { "retry-after": "600", "cache-control": "no-store" });
+  const ip = req.headers.get("cf-connecting-ip");
   const root = env.ROOT;
+  // Two limits per address, checked before anything is looked up, so a refusal says nothing about any code:
+  //  1. Cloudflare's rate-limit binding (30 a minute). It counts per Cloudflare location, so it is only a first,
+  //     cheap line.
+  //  2. The one that holds everywhere: codes that led nowhere, counted in the database (login_failures, reason
+  //     "org_code", with no organisation). After ORG_CODE_MISSES in ORG_CODE_WINDOW_MS from one address, every
+  //     lookup from it is refused until the window passes. Looking up a real code doesn't count: guessing is the
+  //     threat. Sign-in's own address limits leave these rows out, so mistyped codes never pause anyone's sign-in.
+  if (env.BRANDING_LIMIT) {
+    const { success } = await env.BRANDING_LIMIT.limit({ key: ip ?? "unknown" });
+    if (!success) return tooMany();
+  }
+  const now = Date.now();
+  if (ip) {
+    const misses = /** @type {{ n: number } | null} */ (await root.prepare("SELECT COUNT(*) AS n FROM login_failures WHERE ip = ? AND reason = 'org_code' AND at > ?").bind(ip, now - ORG_CODE_WINDOW_MS).first());
+    if (Number(misses?.n ?? 0) >= ORG_CODE_MISSES) return tooMany();
+  }
+  /** A code that led nowhere: recorded for the limit, and the same 404 as always. */
+  const miss = async (/** @type {string} */ tried) => {
+    if (ip) {
+      await root
+        .batch([
+          root.prepare("INSERT INTO login_failures (id, at, username, user_id, ip, reason) VALUES (?, ?, ?, NULL, ?, 'org_code')").bind(crypto.randomUUID().replace(/-/g, "").slice(0, 16), now, `orgcode:${tried.slice(0, 40)}`, ip),
+          root.prepare("DELETE FROM login_failures WHERE reason = 'org_code' AND at < ?").bind(now - 86_400_000),
+        ])
+        .catch((e) => console.error("Couldn't record an organisation code miss", e));
+    }
+    return gone();
+  };
+  const code = cleanCode(decodeURIComponent(m[1]));
+  if (!code) return miss(decodeURIComponent(m[1]).toLowerCase());
   if (m[2] === "branding") {
     const r = /** @type {BrandingRow | null} */ (await root.prepare(`${SELECT} WHERE o.code = ? AND o.status = 'active' AND o.id <> ?`).bind(code, TEMPLATE_ORG).first());
-    if (!r) return gone();
+    if (!r) return miss(code);
     return json(brandingView(r), 200, { "cache-control": "public, max-age=60" });
   }
   const slot = /** @type {Slot} */ (m[2] === "logo-dark" ? "logoDark" : m[2]);
@@ -117,7 +146,8 @@ export async function publicBrandingApi(env, req, path) {
       .first()
   );
   const parsed = r?.img ? parseDataUrl(r.img) : null;
-  if (!r || !parsed) return gone();
+  // (A real organisation's page never asks for an image it doesn't have, so this counts as a miss too.)
+  if (!r || !parsed) return miss(code);
   const current = new URL(req.url).searchParams.get("v") === String(r.version);
   return new Response(parsed.bytes, {
     headers: {

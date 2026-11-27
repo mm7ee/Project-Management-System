@@ -119,7 +119,7 @@ async function tooManyFailures(db, req, name) {
   const ip = req.headers.get("cf-connecting-ip");
   const [account, address] = await Promise.all([
     /** @type {Promise<{ n: number } | null>} */ (db.prepare("SELECT COUNT(*) AS n FROM login_failures WHERE username = ? AND at > ?").bind(`platform:${name}`, since).first()),
-    ip ? /** @type {Promise<{ n: number } | null>} */ (db.prepare("SELECT COUNT(*) AS n FROM login_failures WHERE ip = ? AND at > ?").bind(ip, since).first()) : Promise.resolve({ n: 0 }),
+    ip ? /** @type {Promise<{ n: number } | null>} */ (db.prepare("SELECT COUNT(*) AS n FROM login_failures WHERE ip = ? AND at > ? AND reason <> 'org_code'").bind(ip, since).first()) : Promise.resolve({ n: 0 }),
   ]);
   return Number(account?.n ?? 0) >= ACCOUNT_TRIES || Number(address?.n ?? 0) >= ADDRESS_TRIES;
 }

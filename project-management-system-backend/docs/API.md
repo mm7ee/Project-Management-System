@@ -444,8 +444,12 @@ A branding view, wherever it appears:
   current `?v=` it is cached for a year (`immutable`); a new upload changes `v`.
 - An unknown, suspended or archived organisation, a malformed code and a missing image all get the same `404`
   `{ "error": "Not found" }`, with `Cache-Control: no-store`.
-- **Rate-limited:** 30 lookups a minute per address (all of these routes together). Then `429` with
-  `Retry-After: 60`.
+- **Rate-limited per address:**
+  - After 30 lookups in 10 minutes that led nowhere (unknown codes, missing images), every lookup from that address
+    gets `429` with `Retry-After: 600` until the window passes. Looking up a real code doesn't count.
+  - Cloudflare's rate-limit binding (30 a minute) is a first line. It counts per Cloudflare location, so it isn't
+    relied on.
+  - These misses never count towards pausing sign-in.
 
 **Signed in:** `/api/me/workspaces` and `/api/data` (`tenant.organization.branding`) carry the organisation's view.
 So do the executive page (`/api/showcase`: `branding`) and the service desk portal (`/api/portal`: `branding`).

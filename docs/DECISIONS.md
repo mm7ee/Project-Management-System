@@ -1166,7 +1166,10 @@ The plan, and the 13 recommendations approved with "continue", are in `docs/admi
     - unknown, suspended, archived and template organisations get one identical 404 (and the sign-in page one
       message)
     - the reply carries only the name, accent, shades, tint and image addresses
-    - lookups are rate-limited to 30 a minute per address (the `BRANDING_LIMIT` binding)
+    - lookups are limited per address: 30 codes that lead nowhere in 10 minutes, then every lookup is refused
+      (counted in `login_failures` as `org_code`, kept out of sign-in's own address limits). Cloudflare's
+      rate-limit binding was the first plan, but live it counts per location and didn't refuse 160 quick
+      lookups, so it is only a first line.
   - Sign-in itself is unchanged: one generic message, the dummy-hash check, nothing about usernames.
 - **Workspaces are chosen after sign-in, never on the sign-in page:** listing an organisation's workspaces to anyone
   with its code would reveal more than its name, logo and colour.

@@ -340,7 +340,9 @@ async function recordFailure(db, req, f) {
 async function addressFailures(db, req, since) {
   const ip = req.headers.get("cf-connecting-ip");
   if (!ip) return 0;
-  return /** @type {{ n: number; }} */ (await /** @type {Promise<{ n: number; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT COUNT(*) AS n FROM login_failures WHERE ip = ? AND at > ?").bind(ip, since).first()))).n;
+  // Organisation codes that led nowhere (the sign-in page's branding lookup) have their own limit, and never
+  // count towards pausing sign-in (src/branding.js).
+  return /** @type {{ n: number; }} */ (await /** @type {Promise<{ n: number; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT COUNT(*) AS n FROM login_failures WHERE ip = ? AND at > ? AND reason <> 'org_code'").bind(ip, since).first()))).n;
 }
 const isLocked =
   /** @param {{ locked_until: number | null }} row
