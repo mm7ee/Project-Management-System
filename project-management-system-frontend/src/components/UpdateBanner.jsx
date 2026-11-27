@@ -1,3 +1,4 @@
+import { BRAND } from "../data/brand";
 import { useEffect, useState } from "react";
 import { RefreshCw } from "lucide-react";
 // Each deploy gives the app bundle a new hashed filename. An open tab keeps running the
@@ -43,7 +44,7 @@ export default function UpdateBanner() {
   if (!stale) return null;
   return (
     <div className="update-banner" role="status">
-      <span>Pulse has been updated.</span>
+      <span>{BRAND.shortName} has been updated.</span>
       <button onClick={() => window.location.reload()}>
         <RefreshCw size={15} /> Reload
       </button>

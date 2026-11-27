@@ -1,3 +1,4 @@
+import { BRAND } from "../data/brand";
 import { useCallback, useEffect, useState } from "react";
 import { Check, Copy, Eye, Link2, Plus } from "lucide-react";
 import { api } from "../data/api";
@@ -8,7 +9,7 @@ const KINDS = {
     endpoint: "/share-links",
     title: "View-only links",
     intro:
-      "Let managers or leadership browse this workspace without an account: the dashboard, projects, feature requests, Concept Notes, reports and Ask Pulse, read-only. Anyone with the link can see it until it expires, so share it only with the people it's for. Contact details are hidden and documents can't be downloaded.",
+      `Let managers or leadership browse this workspace without an account: the dashboard, projects, feature requests, Concept Notes, reports and ${BRAND.assistantName}, read-only. Anyone with the link can see it until it expires, so share it only with the people it's for. Contact details are hidden and documents can't be downloaded.`,
     days: [1, 7, 30, 90],
     first: 7,
   },
@@ -16,7 +17,7 @@ const KINDS = {
     endpoint: "/showcase-links",
     title: "Executive page links",
     intro:
-      "The executive page shows how Pulse works and this workspace's portfolio as live totals: no names of projects, people or blockers. Anyone with the link can open it until it expires.",
+      "The executive page shows how the system works and this workspace's portfolio as live totals: no names of projects, people or blockers. Anyone with the link can open it until it expires.",
     days: [7, 30, 90, 365],
     first: 30,
   },

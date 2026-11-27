@@ -1,3 +1,4 @@
+import { BRAND } from "./brand";
 // Browser side of passkeys and security keys (WebAuthn): turns the server's options into a
 // navigator.credentials call and the result into plain base64url strings for the API.
 const toB64url =
@@ -26,7 +27,7 @@ function explain(e) {
   const name = e instanceof DOMException ? e.name : "";
   if (name === "NotAllowedError" || name === "AbortError") return new Error("Cancelled, or the device didn't respond. Try again.");
   if (name === "InvalidStateError") return new Error("That passkey is already on your account.");
-  if (name === "SecurityError") return new Error("Passkeys only work on the Pulse website address.");
+  if (name === "SecurityError") return new Error("Passkeys only work on this site's own address.");
   return e instanceof Error ? e : new Error("The passkey didn't work");
 }
 /**
@@ -41,7 +42,7 @@ export async function createPasskey(o) {
       await navigator.credentials.create({
         publicKey: {
           challenge: fromB64url(o.challenge),
-          rp: { id: o.rpId, name: "Pulse" },
+          rp: { id: o.rpId, name: BRAND.productName },
           user: { id: new TextEncoder().encode(o.user.id), name: o.user.name, displayName: o.user.displayName },
           pubKeyCredParams: [
             { type: "public-key", alg: -7 },

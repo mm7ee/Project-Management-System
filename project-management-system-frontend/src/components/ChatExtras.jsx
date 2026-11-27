@@ -128,7 +128,7 @@ export function GifPicker({ onPick, onClose }) {
           <p>
             <b>GIF search isn't switched on yet.</b>
           </p>
-          <p>An administrator can turn it on by adding a GIPHY API key to Pulse. You can still attach your own GIF files with the paperclip.</p>
+          <p>An administrator can turn it on by adding a GIPHY API key to the server. You can still attach your own GIF files with the paperclip.</p>
         </div>
       ) : (
         <>
@@ -204,7 +204,7 @@ export function Sticker({ id, size = 112 }) {
 export function StickerPicker({ onPick, onClose }) {
   return (
     <Popover label="Stickers" onClose={onClose} className="chat-sticker-pop">
-      <p className="chat-pop-label">Pulse stickers</p>
+      <p className="chat-pop-label">Stickers</p>
       <div className="chat-sticker-grid">
         {STICKERS.map((s) => (
           <button key={s.id} type="button" onClick={() => onPick(s.id)} title={s.label} aria-label={`Send the "${s.label}" sticker`}>

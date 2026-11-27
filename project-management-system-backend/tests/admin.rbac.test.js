@@ -135,25 +135,22 @@ describe("administrator module, phase 1: roles, organisation and workspace admin
     expect((await as("pat", "/api/org/workspaces", { method: "POST", body: { name: "Copy", key: "COPY", cloneFrom: ws.MKT } })).status).toBe(404);
   }, SLOW);
 
-  it("the organisation profile: colour, time zone, working hours and a logo, recorded with before and after", async () => {
+  it("the organisation profile: time zone and working hours, recorded with before and after (the logo and colour are its branding now)", async () => {
     expect((await as("owen", "/api/org/profile", { method: "PUT", body: { timeZone: "Mars/Olympus" } })).status).toBe(400);
-    expect((await as("owen", "/api/org/profile", { method: "PUT", body: { logo: "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=" } })).status).toBe(400);
     expect((await as("owen", "/api/org/profile", { method: "PUT", body: { workStart: "17:00", workEnd: "08:00" } })).status).toBe(400);
-    const saved = await as("owen", "/api/org/profile", { method: "PUT", body: { colour: "#1F6FEB", timeZone: "Europe/London", workDays: [1, 2, 3, 4], workStart: "09:00", workEnd: "17:30", contactEmail: "ops@example.test", logo: PNG } });
+    const saved = await as("owen", "/api/org/profile", { method: "PUT", body: { timeZone: "Europe/London", workDays: [1, 2, 3, 4], workStart: "09:00", workEnd: "17:30", contactEmail: "ops@example.test", colour: "#1F6FEB", logo: PNG } });
     expect(saved.status, JSON.stringify(saved.data)).toBe(200);
-    expect(saved.data.profile).toMatchObject({ colour: "#1f6feb", timeZone: "Europe/London", workDays: [1, 2, 3, 4], workStart: "09:00", workEnd: "17:30" });
-    // Anyone signed in to the organisation sees the logo and colour (a Viewer too); nobody else does.
-    const tenant = await as("vic", "/api/me/workspaces");
-    expect(tenant.data.organization.colour).toBe("#1f6feb");
-    const logo = await api.call(tenant.data.organization.logo, { cookie: cookie.vic });
-    expect(logo.status).toBe(200);
-    expect((await api.call("/api/org/logo")).status).toBe(401);
-    expect((await as("pat", "/api/org/logo")).status).toBe(404);
+    expect(saved.data.profile).toMatchObject({ timeZone: "Europe/London", workDays: [1, 2, 3, 4], workStart: "09:00", workEnd: "17:30" });
+    // A logo or colour sent the old way is ignored: they are changed under Branding.
+    expect(saved.data.profile).not.toHaveProperty("logo");
+    expect((await as("vic", "/api/me/workspaces")).data.organization.branding.logo).toBeNull();
+    // The old private logo address is gone (an Organisation Administrator gets 404; anyone else is stopped sooner).
+    expect((await as("owen", "/api/org/logo")).status).toBe(404);
+    expect((await as("vic", "/api/org/logo")).status).not.toBe(200);
     const [entry] = await db`SELECT before, after, actor_id FROM audit_log WHERE organization_id = ${org} AND action = 'organization_profile_updated'`;
     expect(entry.actor_id).toBe(id("owen"));
-    expect(JSON.parse(entry.before)).toMatchObject({ timeZone: "Africa/Harare", workStart: "08:00", logo: "none" });
-    expect(JSON.parse(entry.after)).toMatchObject({ timeZone: "Europe/London", workStart: "09:00", logo: "replaced" });
-    expect(entry.after).not.toContain("base64");
+    expect(JSON.parse(entry.before)).toMatchObject({ timeZone: "Africa/Harare", workStart: "08:00" });
+    expect(JSON.parse(entry.after)).toMatchObject({ timeZone: "Europe/London", workStart: "09:00" });
   }, SLOW);
 
   it("invites someone by email: they choose a password with the link, then sign in", async () => {

@@ -68,7 +68,7 @@ function DigestReader({ digest, onFollow }) {
           </ul>
         </section>
       ))}
-      {digest.aiWritten && <p className="ask-note">The opening is AI-written and can be wrong. The lists come straight from Pulse's data.</p>}
+      {digest.aiWritten && <p className="ask-note">The opening is AI-written and can be wrong. The lists come straight from the live data.</p>}
     </div>
   );
 }

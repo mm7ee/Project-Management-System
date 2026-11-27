@@ -1,14 +1,15 @@
 /** @import { Role } from '../../project-management-system-frontend/src/data/roles' */
 /** @import { Blueprint } from '../../project-management-system-frontend/src/data/workspaceTemplates' */
 // Organisation administration, added by the administrator module (phase 1, migration 0017):
-//   - the organisation profile (logo, colour, time zone, working days and hours, contact email) and its logo
+//   - the organisation profile (time zone, working days and hours, contact email); its branding is worker/branding.js
 //   - inviting people by email, one at a time or from a CSV file
 //   - deactivating and reactivating accounts
 //   - copying a workspace's configuration into a new one
 //   - the administration audit log
 // The older routes (workspaces, people, memberships) are in worker/index.js. Everything here runs with the
 // organisation's handle (orgDb), which row-level security limits to this organisation; only the Organisation
-// Administrators reach it, except the logo (anyone signed in to the organisation) and a workspace's own audit log.
+// Administrators reach it, except a workspace's own audit log.
+import { BRAND } from "../../project-management-system-frontend/src/data/brand";
 import { auditEntry, adminAudit, changed } from "./audit";
 import { hashPassword, newToken, tokenHash } from "./auth";
 import { HttpError, body, json } from "./http";
@@ -17,10 +18,10 @@ import { ROLES, ROLE_LABEL } from "../../project-management-system-frontend/src/
 import { IMPORT_COLUMNS, MAX_IMPORT_ROWS, parseCsv } from "../../project-management-system-frontend/src/data/csv";
 import { WORKSPACE_ICONS } from "../../project-management-system-frontend/src/data/orgAdmin";
 import { applyBlueprint, exportBlueprint } from "./blueprints";
+import { orgBrandingApi } from "./branding";
 import { BUILT_IN_TEMPLATES } from "../../project-management-system-frontend/src/data/workspaceTemplates";
 
 export const INVITE_HOURS = 72;
-const LOGO_MAX_BYTES = 140_000; // as base64 in the data: URL, under the database's 200,000-character limit
 const AUDIT_PAGE = 100;
 
 /**
@@ -44,7 +45,6 @@ const AUDIT_PAGE = 100;
  */
 export async function orgAdminApi(c) {
   const { path, method } = c;
-  if (path === "/api/org/logo" && method === "GET") return logo(c);
   if (path === "/api/audit-log" && method === "GET") {
     if (!c.canAudit) throw new HttpError(403, "You don't have permission to do that");
     return auditList(c, c.scope.workspaceId);
@@ -52,6 +52,7 @@ export async function orgAdminApi(c) {
   if (!path.startsWith("/api/org/")) return null;
   const known =
     path === "/api/org/profile" ||
+    path === "/api/org/branding" ||
     path === "/api/org/invites" ||
     path === "/api/org/people/import" ||
     path === "/api/org/audit" ||
@@ -62,6 +63,7 @@ export async function orgAdminApi(c) {
   if (!c.orgAdmin) throw new HttpError(403, "Only your organisation's administrators can change this: it applies to every workspace", "org_admin_only");
   if (path === "/api/org/profile" && method === "GET") return json({ profile: await profile(c.odb, c.scope.orgId) });
   if (path === "/api/org/profile" && method === "PUT") return saveProfile(c);
+  if (path === "/api/org/branding") return orgBrandingApi(c);
   if (path === "/api/org/invites" && method === "POST") {
     const b = /** @type {Record<string, unknown>} */ (await body(c.req));
     const spaces = await workspaceIndex(c.odb);
@@ -93,19 +95,18 @@ export async function orgAdminApi(c) {
  */
 async function profile(odb, orgId) {
   const r = /** @type {Record<string, string | null> | null} */ (
-    await odb.prepare("SELECT name, code, colour, time_zone, work_days, work_start, work_end, contact_email, logo IS NOT NULL AS has_logo, updated_at FROM organizations WHERE id = ?").bind(orgId).first()
+    await odb.prepare("SELECT name, code, time_zone, work_days, work_start, work_end, contact_email, updated_at FROM organizations WHERE id = ?").bind(orgId).first()
   );
   if (!r) throw new HttpError(404, "Not found");
+  // The logo and colour are the organisation's branding now (worker/branding.js, /api/org/branding).
   return {
     name: r.name,
     code: r.code,
-    colour: r.colour,
     timeZone: r.time_zone,
     workDays: String(r.work_days).split(",").map(Number),
     workStart: r.work_start,
     workEnd: r.work_end,
     contactEmail: r.contact_email,
-    logo: r.has_logo ? `/api/org/logo?v=${encodeURIComponent(String(r.updated_at))}` : null,
   };
 }
 
@@ -120,7 +121,7 @@ export function cleanTimeZone(v) {
   try {
     new Intl.DateTimeFormat("en", { timeZone: tz });
   } catch {
-    throw new HttpError(400, `${tz} isn't a time zone Pulse knows`);
+    throw new HttpError(400, `${tz} isn't a time zone this system knows`);
   }
   return tz;
 }
@@ -129,8 +130,6 @@ export function cleanTimeZone(v) {
 async function saveProfile(c) {
   const b = /** @type {Record<string, unknown>} */ (await body(c.req));
   const before = await profile(c.odb, c.scope.orgId);
-  const colour = b.colour === null || b.colour === "" ? null : String(b.colour ?? before.colour ?? "").toLowerCase();
-  if (colour !== null && !/^#[0-9a-f]{6}$/.test(colour)) throw new HttpError(400, "A colour is # and six hex digits, such as #1f6feb");
   const timeZone = b.timeZone === undefined ? String(before.timeZone) : cleanTimeZone(b.timeZone);
   const days = b.workDays === undefined ? before.workDays : Array.isArray(b.workDays) ? [...new Set(b.workDays.map(Number))].sort() : [];
   if (!days.length || days.some((d) => !Number.isInteger(d) || d < 1 || d > 7)) throw new HttpError(400, "Choose at least one working day");
@@ -144,50 +143,19 @@ async function saveProfile(c) {
   if (workEnd <= workStart) throw new HttpError(400, "The working day must end after it starts");
   const contactEmail = b.contactEmail === undefined ? before.contactEmail : b.contactEmail === null || b.contactEmail === "" ? null : String(b.contactEmail).trim();
   if (contactEmail !== null && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contactEmail)) throw new HttpError(400, "That contact email doesn't look right");
-  // The logo: a PNG, JPEG or WebP data: URL (never SVG, which can carry script), or null to remove it.
-  /** @type {string | null | undefined} */ let logo;
-  if (b.logo === null) logo = null;
-  else if (b.logo !== undefined) {
-    logo = String(b.logo);
-    if (!/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(logo)) throw new HttpError(400, "The logo must be a PNG, JPEG or WebP image");
-    if (logo.length > LOGO_MAX_BYTES) throw new HttpError(400, "The logo must be under 100 KB");
-  }
   const now = new Date().toISOString();
-  const after = { colour, timeZone, workDays: days, workStart, workEnd, contactEmail };
-  const diff = changed(
-    { colour: before.colour, timeZone: before.timeZone, workDays: before.workDays, workStart: before.workStart, workEnd: before.workEnd, contactEmail: before.contactEmail },
-    after,
-  );
-  const logoChange = logo === undefined ? null : logo === null ? (before.logo ? "removed" : null) : "replaced";
-  if (!diff && !logoChange) return json({ profile: before });
+  const after = { timeZone, workDays: days, workStart, workEnd, contactEmail };
+  const diff = changed({ timeZone: before.timeZone, workDays: before.workDays, workStart: before.workStart, workEnd: before.workEnd, contactEmail: before.contactEmail }, after);
+  if (!diff) return json({ profile: before });
   await c.odb.batch([
     c.odb
-      .prepare(
-        `UPDATE organizations SET colour = ?, time_zone = ?, work_days = ?, work_start = ?, work_end = ?, contact_email = ?,
-         logo = CASE WHEN ? THEN ? ELSE logo END, updated_at = ? WHERE id = ?`,
-      )
-      .bind(colour, timeZone, days.join(","), workStart, workEnd, contactEmail, logo !== undefined, logo ?? null, now, c.scope.orgId),
-    auditEntry(c.odb, c.req, c.me, {
-      action: "organization_profile_updated",
-      type: "organization",
-      id: c.scope.orgId,
-      // The image itself isn't copied into the log; only that it changed.
-      before: { ...(diff?.before ?? {}), ...(logoChange ? { logo: before.logo ? "set" : "none" } : {}) },
-      after: { ...(diff?.after ?? {}), ...(logoChange ? { logo: logoChange } : {}) },
-    }),
+      .prepare("UPDATE organizations SET time_zone = ?, work_days = ?, work_start = ?, work_end = ?, contact_email = ?, updated_at = ? WHERE id = ?")
+      .bind(timeZone, days.join(","), workStart, workEnd, contactEmail, now, c.scope.orgId),
+    auditEntry(c.odb, c.req, c.me, { action: "organization_profile_updated", type: "organization", id: c.scope.orgId, before: diff.before, after: diff.after }),
   ]);
   return json({ profile: await profile(c.odb, c.scope.orgId) });
 }
 
-/** The organisation's logo, for anyone signed in to it. @param {OrgContext} c */
-async function logo(c) {
-  const r = /** @type {{ logo: string | null } | null} */ (await c.odb.prepare("SELECT logo FROM organizations WHERE id = ?").bind(c.scope.orgId).first());
-  const m = r?.logo?.match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/);
-  if (!m) throw new HttpError(404, "No logo");
-  const bytes = Uint8Array.from(atob(m[2]), (ch) => ch.charCodeAt(0));
-  // Private: only this organisation's people may see it. The address changes with each new logo (?v=).
-  return new Response(bytes, { headers: { "content-type": m[1], "cache-control": "private, max-age=604800", "x-content-type-options": "nosniff" } });
-}
 
 // ---------- inviting people ----------
 
@@ -314,9 +282,9 @@ async function invite(c, p) {
   const delivery = await readDelivery(odb);
   if (delivery.resendKey && delivery.from && env.MFA_KEY) {
     const mail = securityEmail(
-      `You're invited to ${org.name} on Pulse`,
+      `You're invited to ${org.name} on ${BRAND.shortName}`,
       [
-        `Hi ${p.name}, ${c.me.name} has invited you to ${org.name}'s Pulse.`,
+        `Hi ${p.name}, ${c.me.name} has invited you to ${org.name}'s ${BRAND.productName}.`,
         `Your username is ${p.username} and your organisation code is ${org.code}. Choose your password with the link below; it works once, within ${INVITE_HOURS} hours.`,
       ],
       { label: "Choose your password", url: link },

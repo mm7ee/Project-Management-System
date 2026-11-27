@@ -4,6 +4,7 @@
 // goes to /api/platform, so it can't reach the rest of the API. Signing in always needs an authenticator app
 // (set up at the first sign-in). Everything runs on the owner connection (env.ROOT): these tables are outside
 // every tenant, and pulse_app can't read them.
+import { brandingFor, saveBranding } from "./branding";
 import { hashPassword, newToken, newTotpSecret, openSecret, sealSecret, tempPassword, tokenHash, totpUri, verifyPassword, verifyTotp } from "./auth";
 import { HttpError, body, json } from "./http";
 import { passwordProblem } from "../../project-management-system-frontend/src/data/password";
@@ -38,7 +39,7 @@ export async function purgeDueOrganizations(root) {
     try {
       const rows = /** @type {{ n: number } | null} */ (await root.prepare("SELECT tenancy_purge_organization(?) AS n").bind(o.id).first());
       await root
-        .prepare("INSERT INTO platform_activity (at, admin_id, actor, action, target, detail, ip) VALUES (?, NULL, 'Pulse', 'organization_deleted', ?, ?, NULL)")
+        .prepare("INSERT INTO platform_activity (at, admin_id, actor, action, target, detail, ip) VALUES (?, NULL, 'System', 'organization_deleted', ?, ?, NULL)")
         .bind(new Date().toISOString(), o.id, JSON.stringify({ name: o.name, code: o.code, rows: Number(rows?.n ?? 0) }))
         .run();
       n += 1;
@@ -306,12 +307,19 @@ export async function platformApi(env, req, path) {
       201,
     );
   }
-  const orgMatch = path.match(/^\/api\/platform\/organizations\/([A-Za-z0-9_-]{1,64})(\/admins|\/deletion)?$/);
+  const orgMatch = path.match(/^\/api\/platform\/organizations\/([A-Za-z0-9_-]{1,64})(\/admins|\/deletion|\/branding)?$/);
   if (orgMatch) {
     const org = /** @type {{ id: string; name: string; code: string; status: string; delete_after: string | null } | null} */ (
       orgMatch[1] === TEMPLATE_ORG ? null : await db.prepare("SELECT id, name, code, status, delete_after FROM organizations WHERE id = ?").bind(orgMatch[1]).first()
     );
     if (!org) throw new HttpError(404, "Organisation not found");
+    // Its branding: the same rules as its own administrators' (worker/branding.js), written as the owner.
+    if (orgMatch[2] === "/branding" && method === "GET") return json({ branding: await brandingFor(db, org.id) });
+    if (orgMatch[2] === "/branding" && method === "PUT") {
+      const { view, diff } = await saveBranding(db, org.id, /** @type {import("./branding").BrandingInput} */ (await body(req)), me.id);
+      if (diff) await log(db, req, me, "organization_branding_updated", org.id, { name: org.name, code: org.code, ...diff });
+      return json({ branding: view });
+    }
     // Deleting, for good: only an archived organisation, confirmed by typing its code, and only DELETE_AFTER_DAYS
     // later (the hourly job does it; worker/index.js scheduled). Until then it can be called off, or reactivated.
     if (orgMatch[2] === "/deletion" && method === "POST") {

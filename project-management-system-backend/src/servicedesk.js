@@ -11,6 +11,7 @@
 // People raise requests on the portal: a link (like a view-only link: it expires and can be revoked),
 // or a page for signed-in staff. The portal shows people only their own requests and the public replies
 // on them; never internal items or notes. The team works the requests in queues.
+import { brandingFor } from "./branding";
 import { newToken, tokenHash } from "./auth";
 import { tenantEnv } from "./pg";
 import { HttpError, body, json } from "./http";
@@ -229,8 +230,9 @@ function customerEmail(title, greeting, text) {
   return {
     subject: title,
     html: `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14.5px;line-height:1.5;color:#1c2b45;background:#ffffff;padding:24px;border-radius:12px;max-width:600px">
-<p style="margin:0 0 14px;font-weight:800;font-size:13px;letter-spacing:.08em;color:#ed0000">OMNI CONTACT SERVICE DESK</p>
-<h2 style="margin:0 0 10px;font-size:19px;color:#101553">${esc(title)}</h2>
+<!--pms:header-->
+<p style="margin:0 0 6px;font-weight:700;font-size:12px;letter-spacing:.08em;color:#5b6776">SERVICE DESK</p>
+<h2 style="margin:0 0 10px;font-size:19px;color:#1f2933">${esc(title)}</h2>
 <p style="margin:0 0 12px">${esc(greeting)}</p>${paras}
 <p style="margin:18px 0 0;font-size:12px;color:#6b7a90">You can see your request and reply to it on the service desk portal link you used to raise it.</p>
 </div>`,
@@ -894,7 +896,8 @@ export async function portalApi(env, req, path, waitUntil) {
     const ready = !!(await configuredSystem(db));
     // Whose service desk it is, for the heading.
     const owner = /** @type {{ name: string } | null} */ (await db.prepare("SELECT name FROM organizations WHERE id = ?").bind(link.organization_id).first());
-    return json({ label: link.label, organization: owner?.name ?? "", expiresAt: link.expires_at, ready, types: ready ? await loadTypes(db, true) : [] });
+    // The portal is that organisation's: its branding, with "Powered by" in small print.
+    return json({ label: link.label, organization: owner?.name ?? "", branding: await brandingFor(db, link.organization_id), expiresAt: link.expires_at, ready, types: ready ? await loadTypes(db, true) : [] });
   }
   if (path === "/api/portal/requests" && method === "POST") {
     const b = await /** @type {Promise<RaiseBody>} */ (/** @type {unknown} */ (body(req)));

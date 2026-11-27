@@ -1,3 +1,4 @@
+import { BRAND } from "./brand";
 /** @import { User } from './roles' */
 export {}; // the type imports above belong to the file, not to the first declaration
 /**
@@ -6,7 +7,7 @@ export {}; // the type imports above belong to the file, not to the first declar
  * @returns {{ kind: ContactKind; label: string; href: string }[]}
  */
 export function contactLinks(p, about) {
-  const subject = `Pulse: ${about}`;
+  const subject = `${BRAND.shortName}: ${about}`;
   /** @type {{ kind: ContactKind; label: string; href: string }[]} */ const links = [];
   if (p.email) {
     links.push({ kind: "email", label: "Email", href: `mailto:${p.email}?subject=${encodeURIComponent(subject)}` });

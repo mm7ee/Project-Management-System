@@ -18,7 +18,7 @@ import { describe } from "./ActivityPage";
 import { workspaceKey } from "../data/tenant";
 const OVERVIEW = "overview";
 const PICK_KEY = "pulse:dashboard";
-const OVERVIEW_DESC = "Projects, delivery and team workload across Pulse, as of now.";
+const OVERVIEW_DESC = "Projects, delivery and team workload across this workspace, as of now.";
 // The categorical chart palette (styles.css --cat-*), in its fixed order. Status colours are kept for meaning.
 const CAT = ["var(--cat-1)", "var(--cat-2)", "var(--cat-3)", "var(--cat-4)", "var(--cat-5)", "var(--cat-6)", "var(--cat-7)", "var(--cat-8)"];
 const OTHER = "var(--cat-other)";
@@ -105,7 +105,7 @@ export default function CustomDashboards({ overview, users, systems, workspaces,
     }
     setEditing(d);
   };
-  const overviewHead = <DashHead title="Pulse overview" description={OVERVIEW_DESC} />;
+  const overviewHead = <DashHead title="Workspace overview" description={OVERVIEW_DESC} />;
   if (!enabled)
     return (
       <>
@@ -120,7 +120,7 @@ export default function CustomDashboards({ overview, users, systems, workspaces,
       <label>
         <span className="sr-only">Dashboard</span>
         <select value={showing ? showing.id : OVERVIEW} onChange={(e) => choose(e.target.value)} aria-label="Choose a dashboard">
-          <option value={OVERVIEW}>Pulse overview</option>
+          <option value={OVERVIEW}>Workspace overview</option>
           {list.map((d) => (
             <option key={d.id} value={d.id}>
               {d.name}
@@ -146,7 +146,7 @@ export default function CustomDashboards({ overview, users, systems, workspaces,
         (showing ? (
           <DashHead title={showing.name} description={`${showing.mine ? shareLabel(showing.shareScope, showing.shareValue) : `Shared by ${showing.ownerName}`} · each gadget shows only the work items you can see.`} actions={actions} />
         ) : (
-          <DashHead title="Pulse overview" description={OVERVIEW_DESC} actions={actions} />
+          <DashHead title="Workspace overview" description={OVERVIEW_DESC} actions={actions} />
         ))}
       {editing ? (
         <DashboardEditor

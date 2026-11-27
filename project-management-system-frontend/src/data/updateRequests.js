@@ -1,8 +1,9 @@
+import { BRAND } from "./brand";
 // "Request update": how the person asking wants the project team reached. Shared by the Worker and the UI.
 // Whatever is chosen, the team is also told under the bell, so the request is never lost.
 /** @type {RequestChannel[]} */ export const REQUEST_CHANNELS = ["chat", "email", "teams"];
 /** @type {Record<RequestChannel, string>} */ export const CHANNEL_LABEL = {
-  chat: "Pulse chat",
+  chat: `${BRAND.shortName} chat`,
   email: "Email",
   teams: "Teams",
 };

@@ -478,7 +478,7 @@ function SigninRulesEditor({ rules, onSave }) {
         {field("lockMinutes", "Minutes an account stays locked", "It unlocks itself after this. You can unlock it sooner in Users.")}
         {field("ipAttempts", "Failed sign-ins from one address before it's refused", `Counted over ${SIGNIN_WINDOW_MINUTES} minutes, across every account.`)}
       </div>
-      <p className="set-note">The built-in admin account can be locked too, but always unlocks itself within {ADMIN_MAX_LOCK_MINUTES} minutes, so Pulse can't be left without an administrator. Locks and unlocks are recorded in the activity log, and administrators are told under the bell.</p>
+      <p className="set-note">The built-in admin account can be locked too, but always unlocks itself within {ADMIN_MAX_LOCK_MINUTES} minutes, so the organisation can't be left without an administrator. Locks and unlocks are recorded in the activity log, and administrators are told under the bell.</p>
     </section>
   );
 }
@@ -722,7 +722,7 @@ function UserModal({ user, systems, limit, onSave, onClose }) {
         <div className="field-row">
           <label className="field">
             <span>Email</span>
-            <input type="email" value={f.email ?? ""} onChange={set("email")} placeholder="name.surname@omnicontact.biz" />
+            <input type="email" value={f.email ?? ""} onChange={set("email")} placeholder="name.surname@your-company.com" />
           </label>
           <label className="field">
             <span>Phone</span>

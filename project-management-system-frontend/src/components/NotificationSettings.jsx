@@ -1,5 +1,6 @@
 /** @import { DeliveryStatus } from '../data/notifications' */
 /** @import { Prefs } from '../data/roles' */
+import { BRAND } from "../data/brand";
 import { useEffect, useState } from "react";
 import qrcode from "qrcode-generator";
 import { Bell, Download, Send, Smartphone } from "lucide-react";
@@ -48,15 +49,15 @@ export function InstallSection() {
   qr.addData(address);
   qr.make();
   return (
-    <Section icon={<Smartphone size={18} />} title="Install Pulse" sub="Add Pulse to your home screen and it opens like an app, without the browser's bars.">
+    <Section icon={<Smartphone size={18} />} title={`Install ${BRAND.shortName}`} sub="Add it to your home screen and it opens like an app, without the browser's bars.">
       {isInstalled() ? (
-        <p className="set-note">You're using Pulse from your home screen.</p>
+        <p className="set-note">You're using {BRAND.shortName} from your home screen.</p>
       ) : (
         <div className="install">
           <div className="install-steps">
             {canPromptInstall() && (
               <button className="btn btn-navy" onClick={() => promptInstall()}>
-                <Download size={16} /> Install Pulse
+                <Download size={16} /> Install {BRAND.shortName}
               </button>
             )}
             {isIos() ? (
@@ -77,8 +78,8 @@ export function InstallSection() {
           </div>
           {!phone && (
             <figure className="install-qr">
-              <div role="img" aria-label="QR code that opens Pulse on your phone" dangerouslySetInnerHTML={{ __html: qr.createSvgTag({ cellSize: 3, margin: 2, scalable: true }) }} />
-              <figcaption>Scan with your phone to open Pulse there.</figcaption>
+              <div role="img" aria-label="QR code that opens this site on your phone" dangerouslySetInnerHTML={{ __html: qr.createSvgTag({ cellSize: 3, margin: 2, scalable: true }) }} />
+              <figcaption>Scan with your phone to open it there.</figcaption>
             </figure>
           )}
         </div>
@@ -132,7 +133,7 @@ export function DeliverySection() {
   };
   if (!status) return null;
   return (
-    <Section icon={<Send size={18} />} title="Email and Teams delivery" sub="Everything already appears under the bell. Connect these to send it beyond Pulse too. Keys are encrypted and can't be read back.">
+    <Section icon={<Send size={18} />} title="Email and Teams delivery" sub="Everything already appears under the bell. Connect these to send it further too. Keys are encrypted and can't be read back.">
       {status.demoProjects > 0 && <p className="form-error">{status.demoProjects} demo projects are still in the system. Run "npm run demo:remove" before connecting email, or staff will receive summaries about demo work.</p>}
       <form
         className="set-form"
@@ -148,7 +149,7 @@ export function DeliverySection() {
           </label>
           <label className="field">
             <span>Send from</span>
-            <input value={from} onChange={(e) => setFrom(e.target.value)} placeholder="Pulse <pulse@omnicontact.biz>" />
+            <input value={from} onChange={(e) => setFrom(e.target.value)} placeholder={`${BRAND.shortName} <pms@your-company.com>`} />
           </label>
         </div>
         <label className="field">
@@ -156,8 +157,8 @@ export function DeliverySection() {
           <input type="password" autoComplete="off" value={teamsWebhook} onChange={(e) => setTeamsWebhook(e.target.value)} placeholder={status.teams.configured ? "Saved. Paste a new address to replace it" : "https://..."} />
         </label>
         <label className="field">
-          <span>Also email the Monday Briefing to (people without a Pulse account)</span>
-          <input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="name.surname@omnicontact.biz, ..." />
+          <span>Also email the Monday Briefing to (people without an account)</span>
+          <input value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="name.surname@your-company.com, ..." />
         </label>
         <p className="set-note">Teams posts go to one channel for the whole team. Daily digests are personal, so they're never posted there.</p>
         {status.lastError && (

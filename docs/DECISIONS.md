@@ -1142,3 +1142,52 @@ The plan, and the 13 recommendations approved with "continue", are in `docs/admi
     PGlite).
   - **The live database** needs `--live`.
   - It runs through `vite-node`, because the Worker's imports leave off file extensions, as the bundler allows.
+
+## Project Management System (PMS), and branding per organisation (2026-11-27)
+
+- **The name lives in one place:** `src/data/brand.js` (`BRAND`). Renaming the product again is a change to that
+  file; `index.html` gets it at build time. "Ask Pulse" is **Ask AI**, a name that reads well under any
+  organisation's brand and survives another rename.
+- **The branding rules:**
+  - **The platform is neutral.** Before an organisation is chosen (the platform page, `/platform`, the loading
+    splash) nothing carries any organisation's name, logo or colour. The platform's own identity is the PMS
+    wordmark and its graphite and steel tokens; it never uses an image logo.
+  - **An organisation brands its own space, and only that:** its sign-in page, the app once signed in, its emails,
+    exports, view-only links, executive page and customer portal. "Powered by Project Management System" stays in
+    small print.
+  - **Status colours never change with the brand.** Success, warning, danger, info, the status pills and the chart
+    palette are fixed. The accent sets three variables (`--accent-solid`, `--accent-light`, `--accent-dark`), which
+    the older names (`--navy`, `--cyan`…) follow. The sidebar stays neutral graphite in every organisation.
+- **Showing an organisation before sign-in** reverses the admin module's phase 1 decision ("the sign-in page stays
+  plain"):
+  - A public lookup by code (`GET /api/public/org/:code/branding`) tells a visitor whether a code exists. This was
+    accepted for State B, with these limits:
+    - codes are never listed or searched
+    - unknown, suspended, archived and template organisations get one identical 404 (and the sign-in page one
+      message)
+    - the reply carries only the name, accent, shades, tint and image addresses
+    - lookups are rate-limited to 30 a minute per address (the `BRANDING_LIMIT` binding)
+  - Sign-in itself is unchanged: one generic message, the dummy-hash check, nothing about usernames.
+- **Workspaces are chosen after sign-in, never on the sign-in page:** listing an organisation's workspaces to anyone
+  with its code would reveal more than its name, logo and colour.
+- **Unsafe accents are adjusted, not refused:** for each theme, the colour itself if it reaches WCAG AA (4.5:1 as
+  text on that theme's surfaces, and with white or dark text on it), else the nearest shade of the same hue that
+  does. Buttons use a shade that always carries white text. The settings page shows the shades it will use. The
+  administrator's colour is kept as chosen; the shades are worked out when read.
+- **Logos:**
+  - PNG, WebP or JPEG only; **SVG is refused**, so no sanitiser to get wrong.
+  - The browser resizes and re-encodes each image (which also strips what's hidden in the file).
+  - The Worker checks the real type from the bytes, the size (≤ 200 KB) and the dimensions (a logo fits 480 × 160,
+    the icon 256 × 256).
+  - Stored in Postgres (`organization_branding`, one row per organisation, row-level security); no R2 is bound.
+  - Served publicly with the version in the address, cached for a year, `nosniff`.
+- **No logo, no problem:** a monogram of up to two initials in the accent stands in everywhere (sign-in page,
+  sidebar, favicon, emails), so no organisation looks broken.
+- **Omnicontact's logos are data now:** they moved from the app's public files into Omnicontact's branding row
+  (migration 0021). A test fails if anything else refers to them, or if the product names Omni Contact as itself.
+  Omnicontact's accent is its indigo `#2c3280`; its signature red isn't used, since red stays the danger colour.
+- **Internal names are kept for now** (`docs/rename-list.md` lists them, with the risk of renaming each):
+  - the `omni-tracker` Worker (its MFA_KEY can't move)
+  - the `pulse.` address
+  - the cookies, the `pulse_` token prefix and the `X-Pulse-Signature` header
+  - the database role and the browser storage keys

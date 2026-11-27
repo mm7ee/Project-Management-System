@@ -58,7 +58,8 @@ interface Env {
   D1?: D1Database; // the old D1 database: retired (Phase 1), still bound, never used
   DATABASE?: "postgres" | "d1"; // must be "postgres"; "d1" is refused since multi-tenancy
   ASSETS: Fetcher;
-  AI?: Ai; // Workers AI binding, for Ask Pulse
+  AI?: Ai; // Workers AI binding, for the assistant (Ask AI)
+  BRANDING_LIMIT?: { limit(o: { key: string }): Promise<{ success: boolean }> }; // per-address limit on the public branding lookup
   MFA_KEY?: string; // encrypts two-step verification secrets; a Worker secret (.dev.vars locally)
   PUBLIC_URL?: string; // Pulse's address, for links in emails and Teams posts
   GIPHY_API_KEY?: string; // turns on GIF search in chat; a Worker secret (wrangler secret put GIPHY_API_KEY)

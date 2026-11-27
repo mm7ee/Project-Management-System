@@ -134,7 +134,7 @@ export async function adminApi(c, path, method) {
             .all()
         )
       );
-      if (found.results.length !== people.length) throw new HttpError(400, "One of those people isn't in Pulse");
+      if (found.results.length !== people.length) throw new HttpError(400, "One of those people isn't in this organisation");
     }
     return {
       name,

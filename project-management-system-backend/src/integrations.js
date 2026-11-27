@@ -5,6 +5,7 @@
 // tokens (scoped, expiring, stored as a hash, rate-limited, with the owner's permissions), and outbound
 // webhooks for work item events (signed with HMAC, retried with backoff). Webhooks and GitHub need
 // "manage_integrations"; tokens need "use_api".
+import { BRAND } from "../../project-management-system-frontend/src/data/brand";
 import { newToken, openSecret, sealSecret, tokenHash } from "./auth";
 import { renderTemplate } from "../../project-management-system-frontend/src/data/automation";
 import { HttpError, body, json } from "./http";
@@ -131,7 +132,7 @@ export async function githubWebhook(env, req) {
   const db = env.ROOT.withScope({ orgId: owner.organization_id, workspaceId: owner.workspace_id });
   const event = req.headers.get("x-github-event") ?? "";
   const delivery = (req.headers.get("x-github-delivery") ?? "").slice(0, 80);
-  if (event === "ping") return json({ ok: true, message: "Pulse is listening" });
+  if (event === "ping") return json({ ok: true, message: `${BRAND.shortName} is listening` });
   if (delivery && (await db.prepare("SELECT 1 FROM github_deliveries WHERE delivery_id = ?").bind(delivery).first())) return json({ ok: true, duplicate: true });
   /** @type {Record<string, unknown>} */ let payload;
   try {
@@ -193,7 +194,7 @@ export async function tokenAuth(root, req, path) {
   const m = header.match(/^Bearer\s+(\S+)$/i);
   if (!m) return null;
   const token = m[1];
-  if (!token.startsWith(TOKEN_PREFIX)) throw new HttpError(401, "That isn't a Pulse API token");
+  if (!token.startsWith(TOKEN_PREFIX)) throw new HttpError(401, `That isn't a ${BRAND.shortName} API token`);
   const row = await /** @type {Promise<{ id: string; user_id: string; name: string; scope: TokenScope; expires_at: string; revoked_at: string | null; last_used_at: string | null; organization_id: string; workspace_id: string; } | null>} */ (
     /** @type {unknown} */ (
       root
@@ -641,7 +642,7 @@ export async function integrationsApi(c, env, path, method) {
       /** @type {unknown} */ (
         db
           .prepare("INSERT INTO webhook_deliveries (webhook_id, event, payload, status, next_attempt_at, created_at) VALUES (?, 'ping', ?, 'pending', ?, ?) RETURNING id")
-          .bind(hook.id, JSON.stringify({ event: "ping", sentAt: c.now, message: "A test from Pulse" }), c.now, c.now)
+          .bind(hook.id, JSON.stringify({ event: "ping", sentAt: c.now, message: `A test from ${BRAND.shortName}` }), c.now, c.now)
           .first()
       )
     );

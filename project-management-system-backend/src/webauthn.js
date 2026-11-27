@@ -84,7 +84,7 @@ function checkClient(clientDataB64, type, challenge, origin) {
 async function importKey(spki, alg) {
   if (alg === ES256) return crypto.subtle.importKey("spki", spki, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]);
   if (alg === RS256) return crypto.subtle.importKey("spki", spki, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
-  throw new Error("This passkey uses a type of key Pulse doesn't support");
+  throw new Error("This passkey uses a type of key this site doesn't support");
 }
 /**
  * WebAuthn ECDSA signatures are DER; Web Crypto wants the raw r‖s pair.

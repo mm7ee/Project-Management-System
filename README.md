@@ -1,8 +1,10 @@
-# Project Management System (Pulse)
+# Project Management System (PMS)
 
-Omni Contact's project management system, known in the app as **Pulse**. It follows every project from idea to live: progress, feature requests from
+A multi-tenant project management system, **PMS** for short. Each organisation signs in to its own branded space (its
+logo, name and colour); the platform itself stays neutral. The name lives in one place,
+`project-management-system-frontend/src/data/brand.js`. It follows every project from idea to live: progress, feature requests from
 clients, work items on boards and sprints, blockers, documents, Concept Notes and sign-offs, a service desk, and
-team chat. Managers get reports and insights on top of it all, and **Ask Pulse** answers questions about the live
+team chat. Managers get reports and insights on top of it all, and **Ask AI** answers questions about the live
 data in plain English.
 
 **Live:** https://pulse.utsa--wanza--ortfolio.workers.dev
@@ -33,7 +35,7 @@ data in plain English.
 Browser ──► "pulse" Worker (gateway) ──► "omni-tracker" Worker ──► Hyperdrive ──► Postgres on Neon (Singapore)
                                            │  serves the React app (static assets)
                                            │  and the JSON API under /api
-                                           └─► Workers AI (Ask Pulse) · Resend (email) · Teams webhook
+                                           └─► Workers AI (Ask AI) · Resend (email) · Teams webhook
 ```
 
 - **Front end:** React 18 and Vite, in JavaScript with JSDoc types that `npm run build` checks (`tsc --checkJs`), with hand-written SVG charts. Routing uses the URL hash.
@@ -87,7 +89,7 @@ You need Node 22 and access to the Neon project.
    git clone https://github.com/mm7ee/Project-Management-System.git "Project Management System"
    cd "Project Management System"
    npm run install:all      # npm install in both folders
-   npx wrangler@4 login     # once: Ask Pulse's Workers AI binding runs on Cloudflare even locally
+   npx wrangler@4 login     # once: Ask AI's Workers AI binding runs on Cloudflare even locally
    ```
 2. Create `project-management-system-backend/.dev.vars` with these values. Ask the project owner for them; never commit this file.
    ```
@@ -107,7 +109,7 @@ You need Node 22 and access to the Neon project.
    | **The built app, as deployed** | | `npm run dev:api` (backend) | http://127.0.0.1:8787 |
 
    - **Both:** one terminal, each line labelled `[frontend]` or `[backend]`. Ctrl+C stops both, and if one stops,
-     so does the other. In VS Code, **Terminal → Run Task → Pulse: frontend + backend** does the same in two
+     so does the other. In VS Code, **Terminal → Run Task → PMS: frontend + backend** does the same in two
      panels.
    - **Frontend only:** the screens with live reloading. Vite sends `/api` to http://127.0.0.1:8787. If the backend
      isn't running, API calls answer 503 with a message saying so. Set `PULSE_API` to point it elsewhere.
@@ -200,7 +202,7 @@ six people, work, SLAs, approvals and rules.
    - **who may:** a role, the assignee
    - **needs first:** a comment, a field, sub-tasks done, **approval** by a person, a role or N of M people
    - **then:** assign, set the resolution, clear a field, notify
-5. **Save draft**, then **Publish**. Pulse asks where items in removed statuses go, and keeps every version to
+5. **Save draft**, then **Publish**. PMS asks where items in removed statuses go, and keeps every version to
    restore.
 6. At the top, choose which workflow the workspace, a project or an item type uses. Item types are under
    **Item types**; SLAs under **SLAs**.
@@ -215,6 +217,6 @@ six people, work, SLAs, approvals and rules.
 
 ## API
 
-Other systems can use Pulse's API with a personal API token (Settings → Security & privacy → API tokens). See
+Other systems can use PMS's API with a personal API token (Settings → Security & privacy → API tokens). See
 [project-management-system-backend/docs/API.md](project-management-system-backend/docs/API.md) and the Postman
 collection in [project-management-system-backend/postman/](project-management-system-backend/postman/).

@@ -19,8 +19,11 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": ["/api/*"]
   },
-  // Workers AI, for Ask Pulse. Calls are billed to the account (a generous free daily allowance).
+  // Workers AI, for the assistant (Ask AI). Calls are billed to the account (a generous free daily allowance).
   "ai": { "binding": "AI" },
+  // The public branding lookup (GET /api/public/org/:code/…) before sign-in: 30 a minute per address, so codes
+  // can't be tried in bulk (src/branding.js). Counted per Cloudflare location, which is enough for this.
+  "ratelimits": [{ "name": "BRANDING_LIMIT", "namespace_id": "1021", "simple": { "limit": 30, "period": 60 } }],
   "vars": {
     // Pulse's address, for links in emails and Teams posts. Update it if the address ever changes.
     "PUBLIC_URL": "https://pulse.utsa--wanza--ortfolio.workers.dev",

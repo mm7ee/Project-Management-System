@@ -1,5 +1,6 @@
 /** @import { System } from '../data/systems' */
 /** @import { User } from '../data/roles' */
+import { BRAND } from "../data/brand";
 import { AlertOctagon, BellRing, ChevronRight, Clock, Mail, Wrench } from "lucide-react";
 import { SCHEDULE_META, STATUS_META, daysUntil, getSchedule, initials } from "../data/systems";
 import { formatShort, plural, timeAgo } from "../time";
@@ -166,7 +167,7 @@ export default function SystemCard({ system, now, lead, developers, requests, mi
         </span>
         <span className="foot-actions">
           {lead?.email && (
-            <a className="icon-link" href={`mailto:${lead.email}?subject=${encodeURIComponent(`Pulse: ${system.name}`)}`} title={`Email ${lead.name}`} aria-label={`Email ${lead.name}`}>
+            <a className="icon-link" href={`mailto:${lead.email}?subject=${encodeURIComponent(`${BRAND.shortName}: ${system.name}`)}`} title={`Email ${lead.name}`} aria-label={`Email ${lead.name}`}>
               <Mail size={16} />
             </a>
           )}

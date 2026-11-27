@@ -133,7 +133,7 @@ const projectLink =
    * @returns {string}
    */ (id) => `#/projects/${id}`;
 // ---------- the developer's daily digest ----------
-const DAILY_OPENING = `You write the opening of a developer's daily digest in Pulse, their organisation's project tracker.
+const DAILY_OPENING = `You write the opening of a developer's daily digest in their organisation's project management system.
 Using ONLY the FACTS, write 2 or 3 plain sentences to the developer as "you": what to start with today and why (follow the suggested working order), then anything else waiting on them.
 Write names exactly as given. Never count or total anything, and don't mention list positions. Dates and day counts may be quoted exactly as written. No greeting, headings, lists or markdown. Don't invent causes or advice.`;
 /**
@@ -226,7 +226,7 @@ export async function runDailyDigests(env, now = Date.now()) {
   return total;
 }
 // ---------- the Monday Briefing ----------
-const BRIEFING_OPENING = `You write the opening of the Monday Briefing for an organisation's managers, from Pulse, their project tracker.
+const BRIEFING_OPENING = `You write the opening of the Monday Briefing for an organisation's managers, from their project management system.
 Using ONLY the FACTS, write 3 or 4 plain sentences: one for each of What moved, What slipped and Needs a decision, each drawn only from its own list. A project is only said to have moved if it's listed under What moved; if that list says nothing moved, say so plainly. Don't reword a list's meaning: a project's percentage in What slipped is where it stands, not progress. Name the specific projects and people instead. Write names exactly as given. Never count or total anything: no "three projects" or "35 items". Dates, percentages and day counts may be quoted exactly as written. No greeting, headings, lists or markdown. Don't invent causes or advice.`;
 /**
  * @param {D1Database} db

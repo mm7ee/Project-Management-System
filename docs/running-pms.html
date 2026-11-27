@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Running Pulse</title>
-<!-- The source of "Pulse - Running the System.pdf". Print it with:
-     msedge --headless --no-pdf-header-footer --print-to-pdf="Pulse - Running the System.pdf" docs/running-pulse.html -->
+<title>Running PMS</title>
+<!-- The source of "PMS - Running the System.pdf". Print it with:
+     msedge --headless --no-pdf-header-footer --print-to-pdf="PMS - Running the System.pdf" docs/running-pms.html -->
 <style>
   @page {
     size: A4;
     margin: 18mm 16mm 20mm;
-    @bottom-left { content: "Pulse: running the system and viewing the backend"; font: 9pt "Segoe UI", Arial, sans-serif; color: #6b7a90; }
+    @bottom-left { content: "PMS: running the system and viewing the backend"; font: 9pt "Segoe UI", Arial, sans-serif; color: #6b7a90; }
     @bottom-right { content: "Page " counter(page); font: 9pt "Segoe UI", Arial, sans-serif; color: #6b7a90; }
   }
   body { font: 10.5pt/1.5 "Segoe UI", Arial, sans-serif; color: #1c2b45; margin: 0; }
@@ -36,11 +36,11 @@
 </head>
 <body>
 
-<h1>Running Pulse</h1>
-<p class="lead">How to run the system on your computer from VS Code, how to look at its backend, how changes reach the live site, and what each part of Pulse does. Pulse was previously called OmniTrack. This edition covers the move to Postgres and upgrade Phases 0 to 5 (November 2026).</p>
+<h1>Running PMS</h1>
+<p class="lead">How to run the system on your computer from VS Code, how to look at its backend, how changes reach the live site, and what each part of PMS does. PMS was previously called OmniTrack. This edition covers the move to Postgres and upgrade Phases 0 to 5 (November 2026).</p>
 
 <h2>1. How the system is put together</h2>
-<p>Pulse has three parts. The screens are in <code>project-management-system-frontend</code>; the API, database migrations and deployment are in <code>project-management-system-backend</code>.</p>
+<p>PMS has three parts. The screens are in <code>project-management-system-frontend</code>; the API, database migrations and deployment are in <code>project-management-system-backend</code>.</p>
 <table>
   <tr><th style="width:20%">Part</th><th>What it does</th><th style="width:33%">Where it is</th></tr>
   <tr><td>Screens (frontend)</td><td>What people see in the browser: dashboard, projects, work items, boards, backlog and timeline, search, the service desk, feature requests, Concept Notes, reports and settings. Built with React and TypeScript.</td><td><code>frontend/src/</code></td></tr>
@@ -49,7 +49,7 @@
 </table>
 <p><b>Live site:</b> https://pulse.utsa--wanza--ortfolio.workers.dev</p>
 <p>The old address (omni-tracker.utsa--wanza--ortfolio.workers.dev) redirects there, keeping view-only links and project pages.</p>
-<p>When you run the system on your computer, it uses the Neon <code>dev</code> branch, never the live database. Nothing you do locally changes the live site or its users. One exception: Ask Pulse always uses Cloudflare's live AI service, even locally, and that usage counts towards the account.</p>
+<p>When you run the system on your computer, it uses the Neon <code>dev</code> branch, never the live database. Nothing you do locally changes the live site or its users. One exception: Ask AI always uses Cloudflare's live AI service, even locally, and that usage counts towards the account.</p>
 
 <h3>The two Cloudflare Workers</h3>
 <table>
@@ -58,10 +58,10 @@
   <tr><td><code>omni-tracker</code></td><td>The app itself: screens, API, the database connection, AI, the hourly job and the <code>MFA_KEY</code> secret. It keeps its old name on purpose. Smart Placement runs it close to the database.</td><td>Automatically, on every push to the main branch, after the unit tests pass.</td></tr>
 </table>
 <div class="warn"><b>Do not rename, delete or replace the <code>omni-tracker</code> Worker, and do not change its <code>MFA_KEY</code> secret.</b> The key encrypts everyone's authenticator-app codes, and it also seals the email key, the Teams webhook, the GitHub secret and every outbound webhook's signing secret. None of these can be read back. If the key is lost, every authenticator-app user needs an administrator reset, and email, Teams, GitHub and webhooks must all be set up again.</div>
-<p class="small">The old Cloudflare D1 database is still attached to the Worker as <code>D1</code>, read-only, as history. Pulse stopped using it when it moved to Postgres.</p>
+<p class="small">The old Cloudflare D1 database is still attached to the Worker as <code>D1</code>, read-only, as history. PMS stopped using it when it moved to Postgres.</p>
 
 <h3>The hourly job</h3>
-<p>The Worker has one scheduled trigger, every hour on the hour (<code>0 * * * *</code>). The Cloudflare account is on Workers Free, which allows only five cron triggers across all its Workers, so Pulse uses one and works out what is due (<code>frontend/worker/schedule.ts</code>):</p>
+<p>The Worker has one scheduled trigger, every hour on the hour (<code>0 * * * *</code>). The Cloudflare account is on Workers Free, which allows only five cron triggers across all its Workers, so PMS uses one and works out what is due (<code>frontend/worker/schedule.ts</code>):</p>
 <table>
   <tr><th style="width:32%">When (Harare time)</th><th>What runs</th></tr>
   <tr><td>Every hour</td><td>Saved-filter email subscriptions, scheduled automation rules, service desk SLA warnings and breach alerts, and retries of failed outbound webhooks.</td></tr>
@@ -72,7 +72,7 @@
 <h2>2. Before you start (one time only)</h2>
 <ol>
   <li>Install Node.js (version 22 or newer) from nodejs.org. To check it worked, open a terminal and run:<pre>node -v</pre></li>
-  <li>Install VS Code and open the project folder (File &gt; Open Folder, then pick the Omni Tracker folder).</li>
+  <li>Install VS Code and open the project folder (File &gt; Open Folder, then pick the project folder).</li>
   <li>Open the terminal in VS Code: press Ctrl + ` (the backtick key, left of 1), or use Terminal &gt; New Terminal. Then install the packages:<pre>cd project-management-system-frontend
 npm install
 cd ../project-management-system-backend
@@ -116,8 +116,8 @@ npm run dev:api</pre></li>
 <p><b>Signing in locally:</b> the dev branch has its own accounts, including the test accounts <code>qa-admin</code>, <code>qa-dev</code> and <code>qa-viewer</code> (password in <code>QA_PASSWORD</code>). Their passwords may differ from the live site.</p>
 <p><b>Passkeys</b> belong to the web address they were added on. A passkey added on the live site doesn't work locally, and the other way round.</p>
 
-<h2>6. What Pulse does</h2>
-<p>Pulse began as a project tracker (projects, feature requests, Concept Notes, reports, digests and Ask Pulse). The upgrade added Jira's core work management in six phases. UPGRADE-LOG.md and DECISIONS.md at the top of the repository describe each phase in full.</p>
+<h2>6. What PMS does</h2>
+<p>PMS began as a project tracker (projects, feature requests, Concept Notes, reports, digests and Ask AI). The upgrade added Jira's core work management in six phases. UPGRADE-LOG.md and DECISIONS.md at the top of the repository describe each phase in full.</p>
 <table>
   <tr><th style="width:17%">Phase</th><th>What it added</th><th style="width:30%">Where to find it</th></tr>
   <tr><td>Postgres move</td><td>The database moved from Cloudflare D1 to Postgres on Neon, through Hyperdrive. Backups and migrations run from <code>scripts/db.mjs</code>.</td><td>Section 8 and 9 below</td></tr>
@@ -130,7 +130,7 @@ npm run dev:api</pre></li>
 </table>
 
 <h3>Who sees what</h3>
-<p>One rule decides who may see a work item, everywhere it appears: lists, item pages, boards, the timeline, reports, search, dashboards, subscriptions, digests, notifications, Ask Pulse, view-only links, the API, webhooks and automation (<code>frontend/worker/access.ts</code>).</p>
+<p>One rule decides who may see a work item, everywhere it appears: lists, item pages, boards, the timeline, reports, search, dashboards, subscriptions, digests, notifications, Ask AI, view-only links, the API, webhooks and automation (<code>frontend/worker/access.ts</code>).</p>
 <ul>
   <li><b>Developers</b> without "Log and assign feature requests" see only the items and feature requests assigned to them or that they reported, and only their own Concept Notes.</li>
   <li><b>Security levels:</b> an item with a level (such as "Confidential – Managers only" or "HR only") is seen only by administrators, its assignee and reporter, and the roles and people the level names.</li>
@@ -171,7 +171,7 @@ npm run dev:api</pre></li>
 <h3>Settings pages, at a glance</h3>
 <table>
   <tr><th style="width:34%">Page</th><th>What it's for</th></tr>
-  <tr><td>Profile, Appearance, Phone app</td><td>Your details, theme (Light or Dark), motion, density and start page; adding Pulse to a phone.</td></tr>
+  <tr><td>Profile, Appearance, Phone app</td><td>Your details, theme (Light or Dark), motion, density and start page; adding PMS to a phone.</td></tr>
   <tr><td>Notifications</td><td>Whether alerts and summaries are emailed to you, and which work item events you hear about.</td></tr>
   <tr><td>Security &amp; privacy</td><td>Password, two-step verification and passkeys, signed-in devices, API tokens with the API reference, and the data retention policy.</td></tr>
   <tr><td>Administration &gt; People, Roles &amp; permissions, Two-step rules, Sign-in security, Workload limits, View-only links, Email &amp; Teams</td><td>Accounts and access (administrators).</td></tr>
@@ -196,7 +196,7 @@ npm run dev:api</pre></li>
 <ul>
   <li><b>GitHub:</b> Settings &gt; Administration &gt; Integrations has the steps. Commits, branches and pull requests that mention a key appear in the item's Development panel.</li>
   <li><b>The API:</b> each person makes their own token in Settings &gt; Security &amp; privacy &gt; API tokens. A token acts as its owner. The full reference is <code>docs/API.md</code>.</li>
-  <li><b>Webhooks:</b> Pulse can post work item events to another system, signed with HMAC-SHA256. Set them up in Integrations.</li>
+  <li><b>Webhooks:</b> PMS can post work item events to another system, signed with HMAC-SHA256. Set them up in Integrations.</li>
 </ul>
 
 <h2>7. Testing</h2>
@@ -215,7 +215,7 @@ node scripts/db.mjs exec dev demo-data.sql</pre></td></tr>
 <h3>A. The code (in VS Code)</h3>
 <table>
   <tr><th style="width:38%">File</th><th>What is in it</th></tr>
-  <tr><td><code>src/index.ts</code></td><td>Sign-in, accounts, projects, feature requests, Concept Notes, settings, Ask Pulse's snapshot, the activity log, and the routing to everything below. Search for a path such as <code>/api/systems</code> to find the code behind it.</td></tr>
+  <tr><td><code>src/index.ts</code></td><td>Sign-in, accounts, projects, feature requests, Concept Notes, settings, Ask AI's snapshot, the activity log, and the routing to everything below. Search for a path such as <code>/api/systems</code> to find the code behind it.</td></tr>
   <tr><td><code>src/access.ts</code></td><td>The one visibility rule: own items for developers, and security levels.</td></tr>
   <tr><td><code>src/workitems.ts</code></td><td>Work items: create, edit, workflow moves, comments, links, attachments, time logs.</td></tr>
   <tr><td><code>src/workflows.ts</code>, <code>workflowData.ts</code>, <code>boards.ts</code></td><td>Statuses, workflows and boards.</td></tr>
@@ -225,7 +225,7 @@ node scripts/db.mjs exec dev demo-data.sql</pre></td></tr>
   <tr><td><code>src/integrations.ts</code></td><td>GitHub, API tokens (and their rate limit), outbound webhooks.</td></tr>
   <tr><td><code>src/schemes.ts</code>, <code>admin.ts</code>, <code>customfields.ts</code></td><td>Notification schemes, opt-outs, security levels and custom fields.</td></tr>
   <tr><td><code>src/servicedesk.ts</code></td><td>The service desk: queues, the portal, SLA clocks and alerts, reports.</td></tr>
-  <tr><td><code>src/notify.ts</code>, <code>digest.ts</code>, <code>ask.ts</code></td><td>The bell, email and Teams; the daily digests and Monday Briefing; Ask Pulse.</td></tr>
+  <tr><td><code>src/notify.ts</code>, <code>digest.ts</code>, <code>ask.ts</code></td><td>The bell, email and Teams; the daily digests and Monday Briefing; Ask AI.</td></tr>
   <tr><td><code>src/auth.ts</code>, <code>webauthn.ts</code></td><td>Password hashing, tokens, sealed secrets, authenticator codes; passkeys.</td></tr>
   <tr><td><code>src/retention.ts</code>, <code>schedule.ts</code>, <code>pg.ts</code></td><td>The retention clean-up; the hourly timetable; the Postgres adapter.</td></tr>
   <tr><td><code>database/migrations/*.sql</code></td><td>The tables and columns, in the order they were added (0001 to 0007).</td></tr>
@@ -294,7 +294,7 @@ git push</pre></li>
   <tr><td>Commits don't appear on a work item</td><td>Check Integrations &gt; GitHub &gt; Recent events: the secret must match GitHub's, and the key (INFRA-12) must be in the commit message, branch name or pull request title.</td></tr>
   <tr><td>A webhook isn't arriving</td><td>Open the webhook's Deliveries in Integrations: each shows the response or error, the next try, and a Retry button. Items with a security level are never sent.</td></tr>
   <tr><td>An API client gets 401, 403 or 429</td><td>401: the token expired or was revoked. 403: a read token tried to change something, or the path isn't open to tokens. 429: over 120 requests a minute; wait a minute.</td></tr>
-  <tr><td>Ask Pulse says it isn't switched on, or doesn't respond</td><td>Check the Workers AI line in <code>project-management-system-backend/wrangler.jsonc</code>, then the Logs for the omni-tracker Worker. Usage limits apply per person (or per view-only link).</td></tr>
+  <tr><td>Ask AI says it isn't switched on, or doesn't respond</td><td>Check the Workers AI line in <code>project-management-system-backend/wrangler.jsonc</code>, then the Logs for the omni-tracker Worker. Usage limits apply per person (or per view-only link).</td></tr>
 </table>
 
 </body>

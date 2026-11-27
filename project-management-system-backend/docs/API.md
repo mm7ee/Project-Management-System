@@ -1,12 +1,12 @@
-# Pulse API reference
+# Project Management System (PMS) API reference
 
-Pulse's API is the one its own pages use. Other systems reach it with a **personal API token**.
+PMS's API is the one its own pages use. Other systems reach it with a **personal API token**.
 
 ## Tokens
 
-- **Making one:** in Pulse, go to **Settings → Security & privacy → API tokens**. Name the token after what will
+- **Making one:** in PMS, go to **Settings → Security & privacy → API tokens**. Name the token after what will
   use it, choose **Read only** or **Read and write**, and choose when it expires (7 to 365 days).
-- **Copy it at once.** Pulse keeps only a hash, so the token is shown once.
+- **Copy it at once.** PMS keeps only a hash, so the token is shown once.
 - **Who may make them:** your role needs "Use personal API tokens". By default that's every role except Standard
   user.
 - **Revoking:** you can revoke your own tokens, and an administrator can see and revoke anyone's. A revoked or
@@ -25,7 +25,7 @@ Authorization: Bearer pulse_3f9c…
   the owner belongs to other workspaces too. It stops working if the owner leaves that workspace, or the workspace
   or organisation is archived or suspended. To work in two workspaces, make a token in each.
 - **Read tokens** may only `GET`.
-- **Rate limit:** up to **120 requests a minute** per token. Over that, Pulse answers `429` with
+- **Rate limit:** up to **120 requests a minute** per token. Over that, PMS answers `429` with
   `{"error": …, "code": "rate_limited", "retryAfter": <seconds>}`.
 - **Never with a token:** accounts and sign-in (`/api/me…`, `/api/logout…`, `/api/users…`), tokens
   (`/api/tokens…`), settings (`/api/settings/…`), view-only links, integrations and webhooks.
@@ -43,7 +43,7 @@ Errors come back as JSON, `{"error": "…"}`, with a 4xx status:
 
 ## Organisations and workspaces
 
-Pulse holds several organisations, each with its own workspaces (for example Projects, HR, Finance). Everything the
+PMS holds several organisations, each with its own workspaces (for example Projects, HR, Finance). Everything the
 API returns belongs to **one organisation and one workspace**: the one your session has open, or the one a token,
 view-only link or portal link was made in. Nothing from another workspace or organisation is ever returned, counted
 or changed, and asking for it by id or key gives `404`, the same as something that doesn't exist.
@@ -302,7 +302,7 @@ Values that make no sense are ignored. The screen keeps the same filters in its 
   `{ typeId, summary, description, priority, answers: { "<question id>": "…" } }`.
 - **`GET /api/service-desk/config`** returns the request types and their questions.
 
-## Webhooks Pulse sends
+## Webhooks PMS sends
 
 An administrator adds them in **Settings → Administration → Integrations**.
 
@@ -333,7 +333,7 @@ An administrator adds them in **Settings → Administration → Integrations**.
 
 ## GitHub
 
-GitHub calls `POST /api/integrations/github/webhook`, signed with the shared secret in `X-Hub-Signature-256`. Pulse
+GitHub calls `POST /api/integrations/github/webhook`, signed with the shared secret in `X-Hub-Signature-256`. PMS
 reads pushes, branch creation and pull requests, and links each one that mentions a key (INFRA-12) to that item.
 Each workspace connects GitHub with its own secret; a delivery belongs to the workspace whose secret signed it, and
 links only to that workspace's items.
@@ -374,7 +374,7 @@ Another organisation's workspace or person is `404`.
   `{ id, username, emailed, link? }`.
   - It makes the account and a one-time "choose your password" link, valid 72 hours. The link is emailed when email is
     set up; otherwise it is returned as `link`, shown once.
-  - `role` is a role key or the name Pulse shows ("Developer", "Viewer" …).
+  - `role` is a role key or the name PMS shows ("Developer", "Viewer" …).
   - `username` comes from the email address when not given.
 - `POST /api/org/people/import` `{ csv, check? }`: invitations from CSV.
   - Columns: `email, name, workspace, role`, and optionally `username, title, orgadmin`.
@@ -383,12 +383,17 @@ Another organisation's workspace or person is `404`.
   - Every row is checked first. Any problem → `400`, `code: "import_invalid"`, `problems: [{ line, problem }]`, and
     nobody is invited.
   - With `check: true` it only reports who would be invited. At most 200 people.
-- `GET /api/org/profile`, `PUT /api/org/profile` `{ colour?, timeZone?, workDays?, workStart?, workEnd?, contactEmail?, logo? }`:
-  - `logo` is a PNG, JPEG or WebP `data:` URL under 100 KB, or `null` to remove it.
+- `GET /api/org/profile`, `PUT /api/org/profile` `{ timeZone?, workDays?, workStart?, workEnd?, contactEmail? }`:
   - `workDays` are ISO weekdays (1 = Monday).
   - `timeZone` is an IANA name such as `Africa/Harare`.
-- `GET /api/org/logo`: the logo image, for anyone signed in to the organisation (`404` if there is none).
-  `/api/me/workspaces` gives its address and the colour once signed in.
+  - The logo and colour moved to the branding (below); the old `GET /api/org/logo` is gone.
+- `GET /api/org/branding` → `{ branding }`, `PUT /api/org/branding` `{ displayName?, accent?, tint?, logo?, logoDark?, icon? }`
+  → `{ branding }`: the organisation's branding (see [Branding](#branding)).
+  - `accent` and `tint` are `#rrggbb` (`#rgb` is accepted); `tint: null` uses the accent.
+  - `logo`, `logoDark` and `icon` are PNG, WebP or JPEG `data:` URLs, or `null` to remove one. **SVG is refused.** The
+    type is read from the bytes, not the label. At most 200 KB each; a logo fits in 480 × 160 pixels, the icon in
+    256 × 256 (the settings page resizes them before sending).
+  - Recorded in the audit log as `organization_branding_updated` (what changed; never the images).
 - `GET /api/org/audit?workspace=&action=&before=` → `{ entries: [{ id, at, actor, actorId, action, targetType, targetId, workspace, before, after, ip }], more }`:
   - the administration audit log, newest first, 100 at a time
   - `before` is the last `id` seen
@@ -404,12 +409,47 @@ request other than GET returns `403`, `code: "read_only"`, except:
 - their own account (`/api/me…`, sign-out)
 - notifications
 - chat
-- searching and Ask Pulse
+- searching and Ask AI
 
 Viewers can't be assigned work.
 
 **Organisation-wide workspaces.** `GET /api/me/workspaces` also lists workspaces open to the organisation that you
 aren't in, with `open: true`. `POST /api/me/workspace` to one makes you its Viewer.
+
+## Branding
+
+Each organisation has its own branding: a display name, an accent colour, an optional sign-in tint, a logo for light
+backgrounds, a logo for dark backgrounds and a square icon. The platform itself is neutral. Organisation
+Administrators change it with `/api/org/branding` (above), and Platform Administrators with
+`/api/platform/organizations/:id/branding` (below).
+
+A branding view, wherever it appears:
+
+```json
+{ "name": "Omnicontact", "code": "omnicontact", "accent": "#2c3280",
+  "shades": { "light": "#2c3280", "dark": "#757cd0", "futuristic": "#757cd0" }, "tint": null,
+  "logo": "/api/public/org/omnicontact/logo?v=2", "logoDark": "/api/public/org/omnicontact/logo-dark?v=2", "icon": null }
+```
+
+- `shades` is the accent made safe for each theme: the colour itself where it passes WCAG AA (4.5:1 as text on that
+  theme's surfaces, and with white or dark text on it), else the nearest shade of the same hue that does. Status
+  colours never change with the brand.
+- An image is `null` when there is none. The app then shows a monogram of the organisation's initials in its accent.
+
+**Before sign-in** (no session), only for an organisation whose code someone already has:
+
+- `GET /api/public/org/:code/branding` → the view above, nothing else (no workspaces, people or ids).
+  `Cache-Control: public, max-age=60`.
+- `GET /api/public/org/:code/logo`, `/logo-dark`, `/icon` → the image, with its real type and `nosniff`. With the
+  current `?v=` it is cached for a year (`immutable`); a new upload changes `v`.
+- An unknown, suspended or archived organisation, a malformed code and a missing image all get the same `404`
+  `{ "error": "Not found" }`, with `Cache-Control: no-store`.
+- **Rate-limited:** 30 lookups a minute per address (all of these routes together). Then `429` with
+  `Retry-After: 60`.
+
+**Signed in:** `/api/me/workspaces` and `/api/data` (`tenant.organization.branding`) carry the organisation's view.
+So do the executive page (`/api/showcase`: `branding`) and the service desk portal (`/api/portal`: `branding`).
+Emails carry the organisation's logo, name and accent, with "Powered by Project Management System" in small print.
 
 ## Platform administration
 
@@ -428,6 +468,8 @@ Platform Administrators only, at `/api/platform/…`, with their own session coo
 - `PATCH /api/platform/organizations/:id` `{ name?, status?: "active" | "suspended" | "archived" }`. Leaving active
   ends its sessions.
 - `POST /api/platform/organizations/:id/admins` `{ username, name, email? }`: another Organisation Administrator.
+- `GET /api/platform/organizations/:id/branding`, `PUT /api/platform/organizations/:id/branding` (the same body and
+  checks as `/api/org/branding`): an organisation's branding. Recorded in the platform activity log.
 - `POST /api/platform/organizations/:id/deletion` `{ code }`: deletes an **archived** organisation 30 days later.
   - `code` must be the organisation's code, typed to confirm.
   - Every row it holds is removed then, by the hourly job.

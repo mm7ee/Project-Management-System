@@ -10,7 +10,8 @@ import { SCHEDULE_META, getSchedule } from "../../data/systems";
 import { FEATURE_KINDS, KIND_META, PRIORITIES, PRIORITY_META, isOpen } from "../../data/features";
 import { EMPTY_FILTERS, NO_LEAD, activeCount, applyFilters, clientOf, countBy, kpis, lastMonths, squarify, stageOf, toggle, workspaceOf } from "../../data/bi";
 import { Legend, TipRows, TooltipLayer, useTip, useWidth } from "./chartKit";
-import PulseMark from "../PulseMark";
+import OrgMark from "../OrgMark";
+import { currentBranding } from "../../brandTheme";
 /** @type {{ key: Stage; label: string; color: string }[]} */ const STAGES = [
   { key: "NOT_STARTED", label: "Not started", color: "var(--st-not)" },
   { key: "WIP", label: "In progress", color: "var(--st-wip)" },
@@ -119,8 +120,9 @@ export default function BiDashboard({ systems, features, blockers, users, worksp
         {/* On paper only: the letterhead, and what the page was filtered to. */}
         <header className="bi-print-head print-only">
           <div className="bi-print-brand">
-            <img src="/omni-logo.png" alt="Omni Contact" />
-            <PulseMark tone="dark" />
+            {/* The organisation's letterhead: paper is a light surface. */}
+            {currentBranding() && <OrgMark branding={/** @type {import("../../data/branding").BrandingView} */ (currentBranding())} surface="light" size="md" />}
+            <span>{currentBranding()?.name ?? ""}</span>
           </div>
           <div className="bi-print-title">
             <h1>Portfolio overview</h1>

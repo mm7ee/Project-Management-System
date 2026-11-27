@@ -8,8 +8,9 @@
 /** @import { Feature } from './data/features' */
 /** @import { SignoffStatus } from './data/pcn' */
 /** @import { User } from './data/roles' */
+import { BRAND } from "./data/brand";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertOctagon, ArrowLeft, Building2, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, LockKeyhole, Menu, Zap, Plug, BellRing, Lock, ListPlus, Headset, Layers, LayoutTemplate, Plus, ScrollText, Shapes, Timer, Search, Send, ShieldCheck, Sparkles, Users, Workflow } from "lucide-react";
+import { AlertOctagon, Palette, ArrowLeft, Building2, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, LockKeyhole, Menu, Zap, Plug, BellRing, Lock, ListPlus, Headset, Layers, LayoutTemplate, Plus, ScrollText, Shapes, Timer, Search, Send, ShieldCheck, Sparkles, Users, Workflow } from "lucide-react";
 import { getSchedule } from "./data/systems";
 import { api, useAppData } from "./data/api";
 import { isAssigned } from "./data/roles";
@@ -61,7 +62,8 @@ import SlaSettings from "./components/SlaSettings";
 import { awaitingSignature } from "./data/pcn";
 import { mfaRequiredFor } from "./data/roles";
 import AskPanel from "./components/AskPanel";
-import PulseMark from "./components/PulseMark";
+import { applyBranding, setTitle } from "./brandTheme";
+import OrgMark, { pageSurface } from "./components/OrgMark";
 import VitalSign from "./components/VitalSign";
 import WorkspaceBar from "./components/WorkspaceBar";
 import NotificationBell from "./components/NotificationBell";
@@ -137,7 +139,7 @@ function Tracker() {
     <>
       {loading ? (
         <div className="splash" role="status" aria-label="Loading">
-          <PulseMark tone="dark" />
+          <span className="splash-pms">{BRAND.shortName}</span>
         </div>
       ) : shareToken && !data ? (
         // A view-only link never falls through to the sign-in screen.
@@ -165,6 +167,14 @@ function Tracker() {
 function Dashboard({ data, reload }) {
   // Before anything reads browser storage: what is remembered inside a workspace is kept per workspace.
   setOpenWorkspace(data.tenant?.workspace?.id ?? "", data.tenant?.organization?.name ?? "");
+  // State C: inside an organisation, its branding (accent tokens, favicon) and its name in the tab title.
+  const branding = data.tenant?.organization?.branding ?? null;
+  const brandingKey = JSON.stringify(branding);
+  useEffect(() => {
+    applyBranding(branding);
+    setTitle(branding?.name ?? data.tenant?.organization?.name ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [brandingKey]);
   const now = useNow();
   const { me, systems, users, requests, features, documents, blockers, limits } = data;
   const can = /** @param {Permission} p */ (p) => data.permissions.includes(p);
@@ -505,6 +515,7 @@ function Dashboard({ data, reload }) {
       <ParticleField key={prefs.motion + resolveTheme(prefs.theme)} className="app-web no-print" palette={resolveTheme(prefs.theme) === "futuristic" ? "appDark" : "appLight"} />
       <Sidebar
         org={data.tenant?.organization ?? null}
+        workspace={data.tenant?.workspace?.name ?? ""}
         me={me}
         view={selectedId ? "project" : view}
         counts={counts}
@@ -544,6 +555,12 @@ function Dashboard({ data, reload }) {
           <button className="menu-btn" onClick={() => setMenuOpen(true)} aria-label="Open menu">
             <Menu size={20} />
           </button>
+          {/* On narrow screens the sidebar is a drawer: the organisation's mark stays in view here. */}
+          {data.tenant?.organization?.branding && (
+            <span className="topbar-org" title={data.tenant.organization.branding.name}>
+              <OrgMark branding={data.tenant.organization.branding} surface={pageSurface()} size="sm" icon={!!data.tenant.organization.branding.icon} />
+            </span>
+          )}
           {canGoBack && (
             <button className="back-btn" onClick={() => window.history.back()} aria-label="Back to the previous page" title="Back">
               <ArrowLeft size={18} />
@@ -592,14 +609,14 @@ function Dashboard({ data, reload }) {
             }}
           />
           <button className="ask-btn" onClick={() => setAsking(true)} title="Ask a question about projects, people and deadlines">
-            <Sparkles size={17} /> <span>Ask Pulse</span>
+            <Sparkles size={17} /> <span>{BRAND.assistantName}</span>
           </button>
         </header>
         {data.viewOnly && (
           <div className="view-only-banner no-print" role="status">
             <Eye size={17} />
             <span>
-              <b>View only</b> · {data.viewOnly.label}. You're seeing Pulse live and can request updates on any project; nothing else can be changed. Link expires {new Date(data.viewOnly.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}.
+              <b>View only</b> · {data.viewOnly.label}. You're seeing this workspace live and can request updates on any project; nothing else can be changed. Link expires {new Date(data.viewOnly.expiresAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}.
             </span>
           </div>
         )}
@@ -730,6 +747,7 @@ function Dashboard({ data, reload }) {
                 ...(orgAdmin
                   ? [
                       { group: ORG, key: "org-profile", label: "Profile", icon: Building2, content: <OrgAdmin me={me} section="profile" /> },
+                      { group: ORG, key: "org-branding", label: "Branding", icon: Palette, content: <OrgAdmin me={me} section="branding" /> },
                       { group: ORG, key: "organisation", label: "Workspaces", icon: Layers, content: <OrgAdmin me={me} section="workspaces" /> },
                       { group: ORG, key: "org-people", label: "Members & roles", icon: Users, content: <OrgAdmin me={me} section="people" /> },
                       ...(can("manage_users") ? [{ group: ORG, key: "roles", label: "Roles & permissions", icon: ShieldCheck, content: <UsersPage section="roles" {...usersPageProps} /> }] : []),

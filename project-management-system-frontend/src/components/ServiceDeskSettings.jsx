@@ -186,7 +186,7 @@ export default function ServiceDeskSettings({ systems }) {
         </span>
       </Section>
 
-      <Section icon={<Link2 size={18} />} title="Portal links" sub="Send a link to people without a Pulse account (a client, a site) so they can raise requests and follow their own. Like a view-only link, it expires and can be turned off. Staff can also use Service desk → Raise a request.">
+      <Section icon={<Link2 size={18} />} title="Portal links" sub="Send a link to people without an account (a client, a site) so they can raise requests and follow their own. Like a view-only link, it expires and can be turned off. Staff can also use Service desk → Raise a request.">
         {freshUrl && (
           <div className="secret-once" role="status">
             <p>

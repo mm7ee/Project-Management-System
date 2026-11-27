@@ -1,78 +1,90 @@
 import { useEffect, useState } from "react";
 /** @import { Tenant } from '../data/api' */
-import { ArrowRight, BellRing, Building2, FileBarChart, Fingerprint, KeyRound, Layers, LifeBuoy, LockKeyhole, Radio, ShieldCheck, Sparkles, UserRound } from "lucide-react";
+/** @import { BrandingView } from '../data/branding' */
+import { ArrowRight, Building2, Fingerprint, KeyRound, Layers, LifeBuoy, LockKeyhole, ShieldCheck, UserRound } from "lucide-react";
 import { ApiError, api } from "../data/api";
 import { cleanCode, forgetOrg, initialOrgCode, lastWorkspace, rememberOrg, rememberWorkspace } from "../data/tenant";
 import { passkeysSupported, signWithPasskey } from "../data/passkeys";
-import { COMPANY_URL } from "../brand";
-import PulseMark from "./PulseMark";
+import { BRAND } from "../data/brand";
+import { applyBranding, setTitle } from "../brandTheme";
+import OrgMark, { pageSurface } from "./OrgMark";
 import { ForgotPassword, ResetPassword } from "./PasswordReset";
 import { resetTokenIn } from "../data/passwordReset";
 import "./landing.css";
-// The lifecycle as one heartbeat trace: each beat is stronger as a project comes to life.
-const STAGES = [
-  { label: "Idea", height: 10 },
-  { label: "Build", height: 16 },
-  { label: "Test", height: 22 },
-  { label: "Deploy", height: 28 },
-  { label: "Live", height: 36 },
-];
-const TRACE_W = 520;
-const TRACE_MID = 44;
-const SLOT = TRACE_W / STAGES.length;
-const TRACE =
-  STAGES.reduce((d, { height }, i) => {
-    const x = SLOT * i + SLOT / 2;
-    return `${d} H${x - 16} L${x - 8} ${TRACE_MID + height * 0.2} L${x} ${TRACE_MID - height} L${x + 8} ${TRACE_MID + height * 0.45} L${x + 16} ${TRACE_MID}`;
-  }, `M0 ${TRACE_MID}`) + ` H${TRACE_W}`;
-const TRACE_SECONDS = 5; // keep in step with lp-trace-run and lp-stage-lit in landing.css
-const TRACE_DASH = 0.16;
-/** How far through its loop the travelling signal reaches stage i (0–1). */
-const stagePhase =
-  /** @param {number} i
-   * @returns {number}
-   */ (i) => (((i + 0.5) / STAGES.length - TRACE_DASH) / (1 + TRACE_DASH) + 1) % 1;
-const FEATURES = [
-  { icon: Radio, label: "Live progress" },
-  { icon: ShieldCheck, label: "Role-based access" },
-  { icon: BellRing, label: "Update requests" },
-  { icon: FileBarChart, label: "Instant reports" },
-];
-// Real questions Ask Pulse answers from the live data.
-const AI_QUESTIONS = ["Which projects are blocked or stalled, and why?", "What's due in the next 30 days?", "Who has the most projects right now?"];
+
+/** One message for every code nobody may see: unknown, suspended, archived, mistyped. */
+const NOT_FOUND = "We couldn't find that organisation. Check the code with your administrator.";
+
 /**
- */
-function PulseAI() {
-  const [shown, setShown] = useState(0);
-  useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const timer = setInterval(() => setShown((i) => (i + 1) % AI_QUESTIONS.length), 4000);
-    return () => clearInterval(timer);
-  }, []);
-  return (
-    <div className="lp-ai lp-in" style={{ animationDelay: "0.55s" }}>
-      <span className="lp-ai-icon" aria-hidden="true">
-        <Sparkles size={18} />
-      </span>
-      <div>
-        <strong>Pulse AI</strong>
-        <p>Ask Pulse in plain English, answered from the live data.</p>
-        <q key={shown}>{AI_QUESTIONS[shown]}</q>
-      </div>
-    </div>
-  );
-}
-/**
+ * Signing in, in two states (docs/branding-plan.md):
+ *  - A, the platform page: no organisation chosen yet. Neutral: the PMS wordmark, one line of value and the
+ *    organisation code. It never lists or looks up organisations by anything but the code someone types.
+ *  - B, the organisation's page: its logo, name and accent (from the public branding lookup, which returns only
+ *    those), then the usual sign-in. A wrong, suspended or archived code goes back to A with one message.
+ * Workspaces are chosen after signing in, never before.
  * @param {{ onSignedIn: () => void }} arg1
  */
 export default function Login({ onSignedIn }) {
   // Which organisation: from a link (#/o/<code>), else the last one used on this device, else asked first.
-  // The code isn't checked on its own (that would let anyone test codes); it goes with the password, and a wrong
-  // code gets the same message as a wrong password.
   const [orgCode, setOrgCode] = useState(initialOrgCode);
   const [orgDraft, setOrgDraft] = useState("");
+  const [branding, setBranding] = useState(/** @type {BrandingView | null} */ (null));
+  const [findHelp, setFindHelp] = useState(false);
   // After signing in, someone in several workspaces chooses which to open.
   const [choices, setChoices] = useState(/** @type {Tenant | null} */ (null));
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  // Set once the password checked out for an account with two-step verification.
+  const [ticket, setTicket] = useState(/** @type {string | null | (() => string | null)} */ (null));
+  const [methods, setMethods] = useState(/** @type {Methods | (() => Methods)} */ ({ app: true, passkey: false }));
+  // Forgot password: the request form, or the screen an emailed link opens.
+  const [forgot, setForgot] = useState(false);
+  const [resetToken, setResetToken] = useState(() => resetTokenIn(window.location.hash));
+  const [notice, setNotice] = useState("");
+
+  // The organisation's branding, once there is a code. Until then, and if the code leads nowhere, the page is the
+  // neutral platform page.
+  useEffect(() => {
+    if (!orgCode) {
+      setBranding(null);
+      applyBranding(null);
+      setTitle(null);
+      return;
+    }
+    let live = true;
+    api(`/public/org/${encodeURIComponent(orgCode)}/branding`)
+      .then((b) => {
+        if (!live) return;
+        const view = /** @type {BrandingView} */ (b);
+        setBranding(view);
+        applyBranding(view);
+        setTitle(view.name);
+      })
+      .catch((err) => {
+        if (!live) return;
+        forgetOrg();
+        if (window.location.hash.startsWith("#/o/")) history.replaceState(null, "", window.location.pathname + window.location.search);
+        setOrgDraft(orgCode);
+        setOrgCode("");
+        setError(err instanceof ApiError && err.status === 429 ? err.message : err instanceof ApiError ? NOT_FOUND : "Couldn't reach the server. Check your connection and try again.");
+      });
+    return () => {
+      live = false;
+    };
+  }, [orgCode]);
+
+  useEffect(() => {
+    // A reset link opened in a tab that already shows the sign-in page.
+    const onHash = () => {
+      const t = resetTokenIn(window.location.hash);
+      if (t) setResetToken(t);
+    };
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
   const finish = async () => {
     rememberOrg(orgCode);
     try {
@@ -87,26 +99,6 @@ export default function Login({ onSignedIn }) {
     }
     onSignedIn();
   };
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  // Set once the password checked out for an account with two-step verification.
-  const [ticket, setTicket] = useState(/** @type {string | null | (() => string | null)} */ (null));
-  const [methods, setMethods] = useState(/** @type {Methods | (() => Methods)} */ ({ app: true, passkey: false }));
-  // Forgot password: the request form, or the screen an emailed link opens.
-  const [forgot, setForgot] = useState(false);
-  const [resetToken, setResetToken] = useState(() => resetTokenIn(window.location.hash));
-  const [notice, setNotice] = useState("");
-  useEffect(() => {
-    // A reset link opened in a tab that already shows the sign-in page.
-    const onHash = () => {
-      const t = resetTokenIn(window.location.hash);
-      if (t) setResetToken(t);
-    };
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
-  }, []);
   const leaveReset = (message = "", done = false) => {
     // The link's secret shouldn't linger in the address bar or history.
     history.replaceState(null, "", window.location.pathname + window.location.search);
@@ -121,76 +113,44 @@ export default function Login({ onSignedIn }) {
     setPassword("");
     setError(message);
   };
-  return (
-    <div className="landing">
-      <div className="lp-aurora" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </div>
-      <div className="lp-paper" aria-hidden="true" />
+  /** "Not your organisation?": back to the platform page, forgetting the code on this device. */
+  const notYours = () => {
+    forgetOrg();
+    if (window.location.hash.startsWith("#/o/")) history.replaceState(null, "", window.location.pathname + window.location.search);
+    setOrgDraft("");
+    setOrgCode("");
+    setTicket(null);
+    setForgot(false);
+    setPassword("");
+    setError("");
+    setNotice("");
+  };
 
-      <header className="lp-top">
-        <span className="lp-brand">
-          <a href={COMPANY_URL} target="_blank" rel="noopener noreferrer" className="logo-link" title="Omni Contact website">
-            <img src="/omni-logo-white.png" alt="Omni Contact" />
-          </a>
-          <PulseMark />
-        </span>
-        <span className="lp-status">
-          <i /> Systems team · Projects Tracker
-        </span>
-      </header>
+  const errorLine = error && (
+    <p className="lp-error" role="alert">
+      {error}
+    </p>
+  );
 
-      <main className="lp-main">
-        <section className="lp-hero">
-          <h1 className="lp-in" style={{ animationDelay: "0.1s" }}>
-            Every project
-            <br />
-            has a <span className="lp-beat">pulse.</span>
+  // State A: no organisation yet (or waiting for its branding).
+  if (!branding) {
+    return (
+      <div className="landing">
+        <main className="lp-center">
+          <h1 className="lp-wordmark" aria-label={BRAND.productName}>
+            <span className="lp-pms" aria-hidden="true">
+              {BRAND.shortName}
+            </span>
+            <span className="lp-full" aria-hidden="true">
+              {BRAND.productName}
+            </span>
           </h1>
-          <p className="lp-lede lp-in" style={{ animationDelay: "0.2s" }}>
-            The live heartbeat of Omni Contact's projects. Follow every build from idea to live, catch what's stalling before it flatlines, and report on all of it in one click.
-          </p>
-
-          <div className="lp-vitals lp-in" style={{ animationDelay: "0.3s" }} role="img" aria-label="Idea, build, test, deploy, live">
-            <svg viewBox={`0 0 ${TRACE_W} 62`} aria-hidden="true">
-              <path className="lp-trace-base" d={TRACE} pathLength={1} />
-              <path className="lp-trace-run" d={TRACE} pathLength={1} />
-            </svg>
-            <ol>
-              {STAGES.map((st, i) => (
-                <li key={st.label} style={{ animationDelay: `${(stagePhase(i) - 1) * TRACE_SECONDS}s` }}>
-                  {st.label}
-                </li>
-              ))}
-            </ol>
-          </div>
-
-          <ul className="lp-features lp-in" style={{ animationDelay: "0.45s" }}>
-            {FEATURES.map(({ icon: Icon, label }) => (
-              <li key={label}>
-                <Icon size={16} /> {label}
-              </li>
-            ))}
-          </ul>
-
-          <PulseAI />
-        </section>
-
-        <section className="lp-panel lp-in" style={{ animationDelay: "0.3s" }}>
-          {/* Rings ripple out from behind the card, like a heartbeat. */}
-          <div className="lp-ripples" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-          </div>
-
+          <p className="lp-value">{BRAND.tagline}</p>
           {resetToken ? (
             <ResetPassword token={resetToken} onDone={() => leaveReset("Your password has been changed and every device signed out. Sign in with your new password.", true)} onBack={(m) => leaveReset(m)} />
-          ) : choices ? (
-            <ChooseWorkspace tenant={choices} onChosen={onSignedIn} />
-          ) : !orgCode ? (
+          ) : orgCode ? (
+            <div className="lp-loading" role="status" aria-label="Finding your organisation" />
+          ) : (
             <form
               className="lp-card"
               onSubmit={(e) => {
@@ -204,137 +164,132 @@ export default function Login({ onSignedIn }) {
                 setOrgCode(code);
               }}
             >
-              <div className="lp-card-head">
-                <span className="lp-card-icon">
-                  <Building2 size={20} />
-                </span>
-                <div>
-                  <h2>Welcome</h2>
-                  <p>Which organisation are you signing in to?</p>
-                </div>
-              </div>
               <label className="lp-field">
                 <span>Organisation code</span>
                 <span className="lp-input">
-                  <Building2 size={17} />
-                  <input autoFocus autoComplete="organization" autoCapitalize="none" spellCheck={false} required value={orgDraft} onChange={(e) => setOrgDraft(e.target.value)} placeholder="e.g. omnicontact" aria-describedby="org-help" />
+                  <Building2 size={17} aria-hidden="true" />
+                  <input autoFocus autoComplete="organization" autoCapitalize="none" spellCheck={false} required value={orgDraft} onChange={(e) => setOrgDraft(e.target.value)} placeholder="e.g. your-company" aria-describedby="org-help" />
                 </span>
               </label>
               <p className="lp-help" id="org-help">
                 Your administrator gives you this code, or a sign-in link with it. This device remembers it.
               </p>
-              {error && (
-                <p className="lp-error" role="alert">
-                  {error}
-                </p>
-              )}
-              <button type="submit" className="lp-submit">
-                Continue <ArrowRight size={18} />
-              </button>
-            </form>
-          ) : forgot ? (
-            <ForgotPassword initial={username} organization={orgCode} onBack={() => leaveReset()} />
-          ) : ticket ? (
-            <SecondStep ticket={ticket} methods={methods} onSignedIn={finish} onBack={backToPassword} />
-          ) : (
-            <form
-              className="lp-card"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                setBusy(true);
-                setError("");
-                setNotice("");
-                try {
-                  const r = await /** @type {Promise<{ ok?: boolean; mfa?: boolean; ticket?: string; methods?: Methods; }>} */ (/** @type {unknown} */ (api("/login", "POST", { organization: orgCode, username, password })));
-                  if (r.mfa && r.ticket) {
-                    setMethods(r.methods ?? { app: true, passkey: false });
-                    setTicket(r.ticket);
-                    setBusy(false);
-                    return;
-                  }
-                  await finish();
-                } catch (err) {
-                  setError(err instanceof Error ? err.message : "Sign-in failed");
-                  setBusy(false);
-                }
-              }}
-            >
-              <div className="lp-card-head">
-                <span className="lp-card-icon">
-                  <LockKeyhole size={20} />
-                </span>
-                <div>
-                  <h2>Welcome back</h2>
-                  <p>Sign in to Pulse</p>
-                </div>
-              </div>
-              <p className="lp-org">
-                <Building2 size={15} aria-hidden="true" /> Organisation <b>{orgCode}</b>
-                <button
-                  type="button"
-                  className="lp-link"
-                  onClick={() => {
-                    forgetOrg();
-                    setOrgDraft(orgCode);
-                    setOrgCode("");
-                    setError("");
-                    setNotice("");
-                  }}
-                >
-                  Change
-                </button>
-              </p>
-
-              <label className="lp-field">
-                <span>Username</span>
-                <span className="lp-input">
-                  <UserRound size={17} />
-                  <input autoFocus autoComplete="username" required value={username} onChange={(e) => setUsername(e.target.value)} placeholder="e.g. mutsa" />
-                </span>
-              </label>
-              <label className="lp-field">
-                <span>Password</span>
-                <span className="lp-input">
-                  <LockKeyhole size={17} />
-                  <input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
-                </span>
-              </label>
               {notice && (
                 <p className="lp-ok" role="status">
                   {notice}
                 </p>
               )}
-              {error && (
-                <p className="lp-error" role="alert">
-                  {error}
+              {errorLine}
+              <button type="submit" className="lp-submit">
+                Continue <ArrowRight size={18} aria-hidden="true" />
+              </button>
+              <button type="button" className="lp-link" aria-expanded={findHelp} onClick={() => setFindHelp((v) => !v)}>
+                Find your organisation
+              </button>
+              {findHelp && (
+                <p className="lp-find">
+                  Use the sign-in link your administrator sent you: it opens your organisation's page directly. Without it, ask them for your organisation's code. For privacy, organisations aren't listed or searchable here.
                 </p>
               )}
-              <button type="submit" className="lp-submit" disabled={busy}>
-                {busy ? "Signing in…" : "Sign in"} {!busy && <ArrowRight size={18} />}
-              </button>
-              <button
-                type="button"
-                className="lp-link"
-                onClick={() => {
-                  setError("");
-                  setNotice("");
-                  setForgot(true);
-                }}
-              >
-                Forgot your password?
-              </button>
-              <p className="lp-help">Need an account? Ask your Pulse administrator. Never share your password, including with the IT helpdesk.</p>
             </form>
           )}
-        </section>
-      </main>
+        </main>
+        <footer className="lp-foot">
+          {BRAND.productName}
+          {BRAND.supportEmail && (
+            <>
+              {" · "}
+              <a href={`mailto:${BRAND.supportEmail}`}>Help</a>
+            </>
+          )}
+        </footer>
+      </div>
+    );
+  }
 
-      <footer className="lp-foot">
-        © {new Date().getFullYear()} Omni Contact ·{" "}
-        <a href={COMPANY_URL} target="_blank" rel="noopener noreferrer">
-          omnicontact.biz
-        </a>
-      </footer>
+  // State B: the organisation's own sign-in page.
+  return (
+    <div className="landing lp-branded">
+      <main className="lp-center">
+        <div className="lp-org-mark">
+          <OrgMark branding={branding} surface={pageSurface()} size="lg" />
+        </div>
+        <h1 className="lp-org-title">Sign in to {branding.name}</h1>
+        {resetToken ? (
+          <ResetPassword token={resetToken} onDone={() => leaveReset("Your password has been changed and every device signed out. Sign in with your new password.", true)} onBack={(m) => leaveReset(m)} />
+        ) : choices ? (
+          <ChooseWorkspace tenant={choices} onChosen={onSignedIn} />
+        ) : forgot ? (
+          <ForgotPassword initial={username} organization={orgCode} onBack={() => leaveReset()} />
+        ) : ticket ? (
+          <SecondStep ticket={ticket} methods={methods} onSignedIn={finish} onBack={backToPassword} />
+        ) : (
+          <form
+            className="lp-card"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setBusy(true);
+              setError("");
+              setNotice("");
+              try {
+                const r = await /** @type {Promise<{ ok?: boolean; mfa?: boolean; ticket?: string; methods?: Methods; }>} */ (/** @type {unknown} */ (api("/login", "POST", { organization: orgCode, username, password })));
+                if (r.mfa && r.ticket) {
+                  setMethods(r.methods ?? { app: true, passkey: false });
+                  setTicket(r.ticket);
+                  setBusy(false);
+                  return;
+                }
+                await finish();
+              } catch (err) {
+                setError(err instanceof Error ? err.message : "Sign-in failed");
+                setBusy(false);
+              }
+            }}
+          >
+            <label className="lp-field">
+              <span>Username</span>
+              <span className="lp-input">
+                <UserRound size={17} aria-hidden="true" />
+                <input autoFocus autoComplete="username" required value={username} onChange={(e) => setUsername(e.target.value)} />
+              </span>
+            </label>
+            <label className="lp-field">
+              <span>Password</span>
+              <span className="lp-input">
+                <LockKeyhole size={17} aria-hidden="true" />
+                <input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+              </span>
+            </label>
+            {notice && (
+              <p className="lp-ok" role="status">
+                {notice}
+              </p>
+            )}
+            {errorLine}
+            <button type="submit" className="lp-submit" disabled={busy}>
+              {busy ? "Signing in…" : "Sign in"} {!busy && <ArrowRight size={18} aria-hidden="true" />}
+            </button>
+            <button
+              type="button"
+              className="lp-link"
+              onClick={() => {
+                setError("");
+                setNotice("");
+                setForgot(true);
+              }}
+            >
+              Forgot your password?
+            </button>
+            <p className="lp-help">Need an account? Ask your administrator. Never share your password, including with the IT helpdesk.</p>
+          </form>
+        )}
+        {!choices && (
+          <button type="button" className="lp-link lp-switch" onClick={notYours}>
+            Not your organisation?
+          </button>
+        )}
+      </main>
+      <footer className="lp-foot">{BRAND.poweredBy}</footer>
     </div>
   );
 }
@@ -531,7 +486,7 @@ function SecondStep({ ticket, methods, onSignedIn, onBack }) {
               <textarea rows={3} maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. My phone was stolen and I can't find my recovery codes" />
             </span>
           </label>
-          <p className="lp-help">They'll confirm it's really you, for example by phone or in person, before resetting anything. Nobody from Pulse will ever ask for your password.</p>
+          <p className="lp-help">They'll confirm it's really you, for example by phone or in person, before resetting anything. Nobody will ever ask you for your password.</p>
         </>
       )}
 

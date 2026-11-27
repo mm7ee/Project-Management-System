@@ -1,6 +1,7 @@
 /** @import { Role, User } from '../data/roles' */
 /** @import { System } from '../data/systems' */
 /** @import { ApiToken, CustomField, CustomFieldKind, NotificationEvent, NotificationScheme, SecurityLevel, TokenScope, Webhook, WebhookDelivery, WebhookEvent } from '../data/admin' */
+import { BRAND } from "../data/brand";
 import { useCallback, useEffect, useState } from "react";
 import { BellRing, Check, Copy, GitBranch, KeyRound, ListPlus, Lock, Plug, Plus, RefreshCw, Send, Trash2, Webhook as WebhookIcon, X } from "lucide-react";
 import { api } from "../data/api";
@@ -193,7 +194,7 @@ export function SecurityLevelsSection({ users }) {
     <Section
       icon={<Lock size={18} />}
       title="Security levels"
-      sub="A work item with a level is seen only by administrators, its assignee and reporter, and the roles and people the level names: in lists, boards, reports, search, Ask Pulse, notifications, the API and webhooks. View-only links never see them."
+      sub={`A work item with a level is seen only by administrators, its assignee and reporter, and the roles and people the level names: in lists, boards, reports, search, ${BRAND.assistantName}, notifications, the API and webhooks. View-only links never see them.`}
     >
       {error && <p className="form-error">{error}</p>}
       {!levels ? (
@@ -527,7 +528,7 @@ export function ApiTokensSection({ canUse, isAdmin }) {
   const now = Date.now();
   const live = /** @param {ApiToken} t */ (t) => !t.revokedAt && Date.parse(t.expiresAt) > now;
   return (
-    <Section icon={<KeyRound size={18} />} title="API tokens" sub={`For other systems that use Pulse's API. A token acts as you, with your permissions, up to ${API_RATE_LIMIT} requests a minute. Read tokens can't change anything. Only a hash is kept, so a token is shown once.`}>
+    <Section icon={<KeyRound size={18} />} title="API tokens" sub={`For other systems that use the ${BRAND.shortName} API. A token acts as you, with your permissions, up to ${API_RATE_LIMIT} requests a minute. Read tokens can't change anything. Only a hash is kept, so a token is shown once.`}>
       {error && <p className="form-error">{error}</p>}
       {fresh && <CopyOnce label="Your new token." value={fresh} />}
       {canUse ? (
@@ -719,9 +720,9 @@ export function IntegrationsSection({ systems }) {
             <button type="button" className="btn btn-ghost sm" onClick={() => setSecret(randomSecret())}>
               Make one for me
             </button>{" "}
-            or type your own (20 characters or more). Use a different secret in each workspace: the secret tells Pulse which workspace a delivery is for.
+            or type your own (20 characters or more). Use a different secret in each workspace: the secret tells the system which workspace a delivery is for.
           </li>
-          <li>Save it here, below. Pulse seals it; it's never shown again.</li>
+          <li>Save it here, below. It's sealed and never shown again.</li>
           <li>
             In GitHub, open the repository (or the organisation) → <b>Settings</b> → <b>Webhooks</b> → <b>Add webhook</b>.
           </li>
@@ -791,7 +792,7 @@ export function IntegrationsSection({ systems }) {
       <Section
         icon={<WebhookIcon size={18} />}
         title="Outbound webhooks"
-        sub="Pulse posts work item events (created, updated, moved, commented) to other systems, signed with HMAC-SHA256 in X-Pulse-Signature. A failed delivery is retried after 15 seconds, then after 1, 2, 4 and 8 hours. Items with a security level are never sent."
+        sub={`${BRAND.shortName} posts work item events (created, updated, moved, commented) to other systems, signed with HMAC-SHA256 in X-Pulse-Signature. A failed delivery is retried after 15 seconds, then after 1, 2, 4 and 8 hours. Items with a security level are never sent.`}
       >
         {error && <p className="form-error">{error}</p>}
         {freshSecret && <CopyOnce label="The webhook's signing secret." value={freshSecret} />}
@@ -892,7 +893,7 @@ export function IntegrationsSection({ systems }) {
               </label>
             </fieldset>
             <label className="field">
-              <span>Payload (optional: leave empty for Pulse's standard JSON)</span>
+              <span>Payload (optional: leave empty for the standard JSON)</span>
               <textarea
                 rows={4}
                 className="mono"

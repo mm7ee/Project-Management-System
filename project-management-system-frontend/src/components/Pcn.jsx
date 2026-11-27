@@ -2,6 +2,9 @@
 /** @import { System } from '../data/systems' */
 /** @import { User } from '../data/roles' */
 /** @import { Pcn, Signatory, SignoffStatus } from '../data/pcn' */
+import OrgMark from "./OrgMark";
+import { currentBranding } from "../brandTheme";
+import { organisationName } from "../data/tenant";
 import { useState } from "react";
 import { ArrowLeft, Check, CheckCircle2, CircleSlash, FileText, Plus, Printer, Trash2, X } from "lucide-react";
 import { ROLE_LABEL } from "../data/roles";
@@ -388,7 +391,7 @@ export function PcnCard({ system, me, canRecord, canEdit, canMoveOn, compact = f
   );
 }
 /**
- * The PCN laid out like the OmniContact BPO document, for reading, printing and saving as PDF.
+ * The PCN laid out as a formal document, under the organisation's own header, for reading, printing and saving as PDF.
  * @param {{ system: System & { pcn: Pcn }; onBack: () => void }} arg3
  */
 export function PcnDocument({ system, onBack }) {
@@ -406,9 +409,10 @@ export function PcnDocument({ system, onBack }) {
       </div>
       <article className="pcn-doc">
         <header className="pcn-doc-banner">
-          <img src="/omni-logo-white.png" alt="Omni Contact" />
+          {/* The organisation's own header (the banner is dark). */}
+          {currentBranding() && <OrgMark branding={/** @type {import("../data/branding").BrandingView} */ (currentBranding())} surface="dark" size="md" />}
           <div>
-            <b>OmniContact BPO</b>
+            <b>{currentBranding()?.name ?? organisationName()}</b>
             <span>Project Concept Note</span>
           </div>
         </header>

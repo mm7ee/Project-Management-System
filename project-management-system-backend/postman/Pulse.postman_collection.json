@@ -1,6 +1,6 @@
 {
   "info": {
-    "name": "Pulse API",
+    "name": "Project Management System (PMS) API",
     "description": "\"Public\" is read-only and safe against the live site. \"Authenticated\" creates and deletes data and expects the local QA accounts (qa-admin, qa-viewer, qa-dev): run it against the local server only.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
@@ -469,6 +469,71 @@
                 "hooks",
                 "automation",
                 "0000000000000000000000000000000000000000000000000000000000000000"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Branding by organisation code: name, colours and images only",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"only the allowed fields\", () => pm.expect(Object.keys(pm.response.json()).sort()).to.eql([\"accent\", \"code\", \"icon\", \"logo\", \"logoDark\", \"name\", \"shades\", \"tint\"]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/public/org/omnicontact/branding",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "org",
+                "omnicontact",
+                "branding"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Branding of an unknown organisation: the same 404 as any other",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"generic body\", () => pm.expect(pm.response.json()).to.eql({ error: \"Not found\" }));",
+                  "pm.test(\"not cached\", () => pm.expect(pm.response.headers.get(\"Cache-Control\")).to.eql(\"no-store\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/public/org/no-such-organisation/branding",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "public",
+                "org",
+                "no-such-organisation",
+                "branding"
               ]
             }
           }
@@ -12132,6 +12197,113 @@
               "path": [
                 "api",
                 "logout"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Organisation branding (Organisation Administrators)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"has a branding view\", () => pm.expect(pm.response.json().branding.shades).to.have.keys(\"light\", \"dark\", \"futuristic\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/org/branding",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "org",
+                "branding"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Branding: an SVG logo is refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"says why\", () => pm.expect(pm.response.json().error).to.include(\"SVG\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"logo\":\"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz4=\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/org/branding",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "org",
+                "branding"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Branding: a colour that isn't a colour is refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"accent\":\"red\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/org/branding",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "org",
+                "branding"
               ]
             }
           }

@@ -95,7 +95,7 @@ export function workerClient(backend) {
     } catch {
       data = text;
     }
-    return { status: res.status, data, cookie: res.headers.get("set-cookie")?.split(";")[0] ?? null };
+    return { status: res.status, data, cookie: res.headers.get("set-cookie")?.split(";")[0] ?? null, headers: res.headers };
   }
   /** Signs in (password only: the QA accounts have no two-step) and returns the session cookie. */
   async function signIn(/** @type {string} */ username, /** @type {string} */ password) {
@@ -103,6 +103,7 @@ export function workerClient(backend) {
     if (r.status !== 200 || !r.cookie) throw new Error(`Sign-in as ${username} failed: ${r.status} ${JSON.stringify(r.data)}`);
     return r.cookie;
   }
-  return { call, signIn, root: shared, aiInputs };
+  // env: the Worker's environment, for a test to add a binding (such as a stand-in rate limiter).
+  return { call, signIn, root: shared, aiInputs, env };
 }
 

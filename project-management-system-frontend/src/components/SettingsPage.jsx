@@ -4,6 +4,7 @@
 /** @import { RegisterOptions } from '../data/passkeys' */
 /** @import { System } from '../data/systems' */
 /** @import { Permission, Prefs, User } from '../data/roles' */
+import { BRAND } from "../data/brand";
 import { useEffect, useRef, useState } from "react";
 import { Archive, Bell, Check, Eye, Fingerprint, KeyRound, LayoutDashboard, LifeBuoy, LogOut, MonitorSmartphone, Moon, Palette, Plus, RefreshCw, ShieldCheck, ShieldOff, Smartphone, Sparkles, Sun, UserRound } from "lucide-react";
 import { api } from "../data/api";
@@ -125,7 +126,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
       <header className="page-head">
         <div>
           <h2>Settings</h2>
-          <p>{viewOnly ? "Display settings for this view-only link, saved in this browser only." : adminPages.length ? "Your own preferences follow you to any device. Administration changes Pulse for everyone." : "Preferences are saved to your account, so they follow you to any device."}</p>
+          <p>{viewOnly ? "Display settings for this view-only link, saved in this browser only." : adminPages.length ? "Your own preferences follow you to any device. Administration changes it for everyone." : "Preferences are saved to your account, so they follow you to any device."}</p>
         </div>
         <span className={`saved-tick ${saved ? "show" : ""}`} aria-live="polite">
           {saved && (
@@ -195,7 +196,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
                   <div className="field-row">
                     <label className="field">
                       <span>Work email</span>
-                      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name.surname@omnicontact.biz" />
+                      <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name.surname@your-company.com" />
                     </label>
                     <label className="field">
                       <span>Phone (adds WhatsApp + Call)</span>
@@ -275,7 +276,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
                 <div className="set-row">
                   <div>
                     <b>Pop-up transparency</b>
-                    <span>How much of the page shows through windows that open: forms, the Ask Pulse panel, menus and tooltips.</span>
+                    <span>How much of the page shows through windows that open: forms, the {BRAND.assistantName} panel, menus and tooltips.</span>
                   </div>
                   <div className="glass-pick">
                     <input type="range" min={1} max={5} step={1} value={Number(prefs.glass)} onChange={(e) => setPref("glass", /** @type {Prefs["glass"]} */ (e.target.value))} aria-label="Pop-up transparency" aria-valuetext={GLASS_LABEL[prefs.glass]} />
@@ -291,7 +292,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
                 <div className="set-row">
                   <div>
                     <b>Start section</b>
-                    <span>{viewOnly ? "What Pulse opens on when you open this link." : "What the dashboard opens on after you sign in."}</span>
+                    <span>{viewOnly ? "What opens first when you open this link." : "What the dashboard opens on after you sign in."}</span>
                   </div>
                   <select className="set-select" value={prefs.start} onChange={(e) => setPref("start", e.target.value)} aria-label="Start section">
                     {startOptions.map((o) => (
@@ -314,7 +315,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
 
           {shown === "security" && (
             <>
-              <Section icon={<KeyRound size={18} />} title="Password" sub="Never share your password with anyone, including the IT helpdesk. Pulse staff will never ask for it.">
+              <Section icon={<KeyRound size={18} />} title="Password" sub="Never share your password with anyone, including the IT helpdesk. Administrators will never ask for it.">
                 <form
                   className="set-form"
                   onSubmit={async (e) => {
@@ -393,7 +394,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
 
               <ApiTokensSection canUse={permissions.includes("use_api")} isAdmin={permissions.includes("manage_users")} />
 
-              <Section icon={<Archive size={18} />} title="Data retention" sub="How long Pulse keeps each kind of record. Anything older is deleted automatically.">
+              <Section icon={<Archive size={18} />} title="Data retention" sub="How long each kind of record is kept. Anything older is deleted automatically.">
                 <dl className="retention-list">
                   {RETENTION.map((r) => (
                     <div key={r.what}>
@@ -409,19 +410,19 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
           {shown === "phone" && <InstallSection />}
 
           {shown === "link" && viewOnly && (
-            <Section icon={<Eye size={18} />} title="About this link" sub="You're browsing Pulse through a view-only link.">
+            <Section icon={<Eye size={18} />} title="About this link" sub="You're browsing this workspace through a view-only link.">
               <ul className="perm-list plain">
                 <li className="perm-item">
                   <Check size={14} /> See the dashboard, projects, feature requests, Concept Notes and reports, live
                 </li>
                 <li className="perm-item">
-                  <Check size={14} /> Ask Pulse questions about the work
+                  <Check size={14} /> Ask {BRAND.assistantName} questions about the work
                 </li>
                 <li className="perm-item">
                   <Check size={14} /> Request updates on projects (open a project, then Request update)
                 </li>
                 <li className="perm-item">
-                  <Check size={14} /> Change how Pulse looks here (saved in this browser only)
+                  <Check size={14} /> Change how it looks here (saved in this browser only)
                 </li>
               </ul>
               <p className="set-note">Apart from requesting updates, nothing can be changed through this link ({viewOnly.label}). To update projects, ask your administrator for an account.</p>

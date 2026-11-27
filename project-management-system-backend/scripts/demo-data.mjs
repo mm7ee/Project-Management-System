@@ -69,7 +69,7 @@ const slug = (s) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 
-const out = ["-- Pulse demo data. Remove with scripts/demo-data.mjs remove.", REMOVE];
+const out = ["-- PMS demo data. Remove with scripts/demo-data.mjs remove.", REMOVE];
 
 // ---------- people ----------
 const PEOPLE = [
@@ -239,7 +239,7 @@ PROJECTS.forEach(([name, status, description, leadKey, devKeys, startedDays, len
       date: dateAgo(x.pcn === "DRAFT" ? 5 : x.pcn === "PENDING" ? 9 : 35),
       type: x.pcn === "DRAFT" ? "Process improvement" : "New system",
       background: `${description} Today this is handled manually with spreadsheets and email, which is slow and hard to report on.`,
-      concept: `Build ${name} as an Pulse-managed system owned by the Systems Team, rolled out to one campaign first.`,
+      concept: `Build ${name} as a centrally managed system owned by the Systems Team, rolled out to one campaign first.`,
       mechanics: "Discovery workshops with operations, a two-week prototype, pilot on one campaign, then full rollout.",
       objectives: "Reduce manual effort by 40%, give managers live reporting, and improve client satisfaction scores.",
       mainPillar: x.pcn === "DRAFT" ? "Innovation" : "Customer",
@@ -400,7 +400,7 @@ const COMMENTS = [
   "Blocked until we get test data. @demo.tarisai please chase the client.",
   "Found the cause: the index on `customer_name` was missing. Fixed and re-tested.",
   "Moving this to next week: the pilot campaign starts on Monday.",
-  "Looks good. One small change: show the date as *dd Mmm yyyy* to match the rest of Pulse.",
+  "Looks good. One small change: show the date as *dd Mmm yyyy* to match the rest of the app.",
 ];
 const inFlight = systems.filter((s) => ["WIP", "TESTING", "TO_DEPLOY"].includes(s.status));
 let n = 0;

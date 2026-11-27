@@ -855,7 +855,7 @@ function RuleEditor({ draft, users, systems, statuses, orgAdmin, onCancel, onSav
             <label className="field">
               <span>To</span>
               <select value={c.to?.startsWith("phone:") ? "phone:" : (c.to ?? "assignee")} onChange={(e) => setCfg(i, { to: e.target.value })}>
-                <option value="assignee">The assignee (their phone in Pulse)</option>
+                <option value="assignee">The assignee (the phone in their profile)</option>
                 <option value="reporter">The reporter</option>
                 <option value="phone:">This number…</option>
               </select>
@@ -1052,7 +1052,7 @@ function RuleEditor({ draft, users, systems, statuses, orgAdmin, onCancel, onSav
             </label>
           )}
         </div>
-        {r.trigger === "webhook" && <p className="field-hint">When you save, Pulse gives the rule a secret address for another system to call. {r.hasWebhook && "It has one: tick below to make a new one (the old one stops working)."}</p>}
+        {r.trigger === "webhook" && <p className="field-hint">When you save, the rule gets a secret address for another system to call. {r.hasWebhook && "It has one: tick below to make a new one (the old one stops working)."}</p>}
         {r.trigger === "webhook" && r.id && r.hasWebhook && (
           <label className="wi-check">
             <input type="checkbox" checked={!!r.newWebhookAddress} onChange={(e) => set({ newWebhookAddress: e.target.checked })} /> Make a new address

@@ -18,7 +18,6 @@ import {
   LayoutTemplate,
   Mail,
   Megaphone,
-  Palette,
   Pencil,
   Plus,
   Trash2,
@@ -29,17 +28,18 @@ import {
 } from "lucide-react";
 import { ApiError, api } from "../data/api";
 import { ROLES, ROLE_LABEL } from "../data/roles";
-import { AUDIT_ACTIONS, LOGO_MAX_KB, WEEKDAYS, WORKSPACE_ICONS } from "../data/orgAdmin";
+import { AUDIT_ACTIONS, WEEKDAYS, WORKSPACE_ICONS } from "../data/orgAdmin";
 import { formatDate } from "../time";
 import Panel from "./Panel";
 import { Empty, Help, ToastProvider, useConfirm, useToast } from "./AdminKit";
+import BrandingSettings from "./BrandingSettings";
 
 /**
  * @typedef {{ id: string; name: string; key: string; status: "active" | "archived"; members: number; icon: WorkspaceIcon; colour?: string; description: string; visibility: "private" | "organization" }} Workspace
  * @typedef {{ workspaceId: string; role: Role }} Membership
  * @typedef {{ id: string; username: string; name: string; title: string; email?: string; orgAdmin: boolean; mustChangePassword?: boolean; locked?: boolean; deactivated?: boolean; invited?: "pending" | "expired"; workspaces: Membership[] }} Person
  * @typedef {{ organization: { id: string; name: string; code: string }; workspaces: Workspace[]; people: Person[] }} Org
- * @typedef {"profile" | "workspaces" | "people" | "audit" | "workspace-audit" | "templates"} OrgSection
+ * @typedef {"profile" | "branding" | "workspaces" | "people" | "audit" | "workspace-audit" | "templates"} OrgSection
  */
 
 /** @type {Record<WorkspaceIcon, LucideIcon>} */ export const WORKSPACE_ICON = {
@@ -108,6 +108,7 @@ function OrgPage({ me, section }) {
         {org.organization.name} · sign-in code <code>{org.organization.code}</code>. Changes here apply to the whole organisation.
       </p>
       {section === "profile" && <Profile />}
+      {section === "branding" && <BrandingSettings orgName={org.organization.name} />}
       {section === "workspaces" && <Workspaces org={org} act={act} />}
       {section === "people" && <People org={org} active={active} me={me} act={act} />}
       {section === "audit" && <AuditLog workspaces={org.workspaces} />}
@@ -118,12 +119,11 @@ function OrgPage({ me, section }) {
 
 // ---------- the organisation profile ----------
 
-/** @typedef {{ name: string; code: string; colour: string | null; timeZone: string; workDays: number[]; workStart: string; workEnd: string; contactEmail: string | null; logo: string | null }} Profile */
+/** @typedef {{ name: string; code: string; timeZone: string; workDays: number[]; workStart: string; workEnd: string; contactEmail: string | null }} Profile */
 
 function Profile() {
   const toast = useToast();
   const [p, setP] = useState(/** @type {Profile | null} */ (null));
-  const [logo, setLogo] = useState(/** @type {string | null | undefined} */ (undefined)); // undefined: unchanged
   const [saving, setSaving] = useState(false);
   const zones = useMemo(() => {
     try {
@@ -138,19 +138,9 @@ function Profile() {
       .catch((e) => toast(message(e, "Couldn't load the profile"), false));
   }, []);
   if (!p) return <p className="muted">Loading…</p>;
-  /** @param {File | undefined} file */
-  const pickLogo = (file) => {
-    if (!file) return;
-    if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) return toast("The logo must be a PNG, JPEG or WebP image", false);
-    if (file.size > LOGO_MAX_KB * 1024) return toast(`The logo must be under ${LOGO_MAX_KB} KB`, false);
-    const r = new FileReader();
-    r.onload = () => setLogo(String(r.result));
-    r.readAsDataURL(file);
-  };
-  const shownLogo = logo === undefined ? p.logo : logo;
   return (
-    <Panel title="Organisation profile" icon={Palette}>
-      <Help>The logo and colour appear inside Pulse once people have signed in. The sign-in page stays plain, so it never shows which organisations exist.</Help>
+    <Panel title="Organisation profile" icon={Building2}>
+      <Help>Working hours and the time zone drive schedules, digests and SLA clocks. The logo, colours and display name are under Branding.</Help>
       <form
         className="org-new"
         onSubmit={async (e) => {
@@ -158,10 +148,9 @@ function Profile() {
           setSaving(true);
           try {
             const r = /** @type {{ profile: Profile }} */ (
-              await api("/org/profile", "PUT", { colour: p.colour, timeZone: p.timeZone, workDays: p.workDays, workStart: p.workStart, workEnd: p.workEnd, contactEmail: p.contactEmail, ...(logo !== undefined ? { logo } : {}) })
+              await api("/org/profile", "PUT", { timeZone: p.timeZone, workDays: p.workDays, workStart: p.workStart, workEnd: p.workEnd, contactEmail: p.contactEmail })
             );
             setP(r.profile);
-            setLogo(undefined);
             toast("The profile is saved.");
           } catch (err) {
             toast(message(err, "Couldn't save"), false);
@@ -171,34 +160,6 @@ function Profile() {
         }}
       >
         <div className="org-grid">
-          <div className="field">
-            Logo
-            <div className="org-logo">
-              {shownLogo ? <img src={shownLogo} alt={`${p.name} logo`} /> : <span className="muted">No logo</span>}
-              <label className="btn btn-ghost sm">
-                <FileUp size={14} /> Choose…
-                <input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(e) => pickLogo(e.target.files?.[0])} />
-              </label>
-              {shownLogo && (
-                <button type="button" className="btn btn-ghost sm" onClick={() => setLogo(null)}>
-                  Remove
-                </button>
-              )}
-            </div>
-            <small className="muted">PNG, JPEG or WebP, up to {LOGO_MAX_KB} KB.</small>
-          </div>
-          <label className="field">
-            Brand colour
-            <span className="org-colour">
-              <input type="color" value={p.colour ?? "#1f6feb"} onChange={(e) => setP({ ...p, colour: e.target.value })} aria-label="Brand colour" />
-              <code>{p.colour ?? "none"}</code>
-              {p.colour && (
-                <button type="button" className="btn btn-ghost sm" onClick={() => setP({ ...p, colour: null })}>
-                  Clear
-                </button>
-              )}
-            </span>
-          </label>
           <label className="field">
             Time zone
             <input list="org-zones" value={p.timeZone} onChange={(e) => setP({ ...p, timeZone: e.target.value })} required />

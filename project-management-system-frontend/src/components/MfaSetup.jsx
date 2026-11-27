@@ -1,3 +1,4 @@
+import { BRAND } from "../data/brand";
 import { useState } from "react";
 import qrcode from "qrcode-generator";
 import { Check, Copy, Download, ShieldCheck, Smartphone } from "lucide-react";
@@ -40,7 +41,7 @@ function CopyButton({ text, label = "Copy" }) {
  * @param {{ codes: string[]; username: string }} props
  */
 export function RecoveryCodes({ codes, username }) {
-  const text = `Pulse recovery codes for ${username}\nEach code works once. Keep them somewhere safe.\n\n${codes.join("\n")}\n`;
+  const text = `${BRAND.shortName} recovery codes for ${username}\nEach code works once. Keep them somewhere safe.\n\n${codes.join("\n")}\n`;
   return (
     <div className="mfa-codes">
       <ol>

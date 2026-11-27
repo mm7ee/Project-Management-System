@@ -110,7 +110,7 @@ export default function AddSystemModal({ workspaces, initialWorkspace = "", user
           </button>
           <h2>Project Concept Note</h2>
           <p className="modal-note">
-            OmniContact BPO's PCN for proposing a new project. It's saved as an <b>Idea</b>; once every signatory approves through Econet, it moves on to planning.
+            Your organisation's Project Concept Note (PCN) for proposing a new project. It's saved as an <b>Idea</b>; once every signatory approves through Econet, it moves on to planning.
             {!proposeOnly && (
               <>
                 {" "}
@@ -153,7 +153,7 @@ export default function AddSystemModal({ workspaces, initialWorkspace = "", user
             </span>
             <span className="start-text">
               <b>Project Concept Note (PCN)</b>
-              <small>For a new idea that needs approval: fill in the OmniContact PCN and track sign-off from its signatories.</small>
+              <small>For a new idea that needs approval: fill in the Project Concept Note and track sign-off from its signatories.</small>
             </span>
           </button>
 

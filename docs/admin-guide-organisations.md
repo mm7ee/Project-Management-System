@@ -1,8 +1,8 @@
-# Running organisations and workspaces in Pulse
+# Running organisations and workspaces in PMS
 
-For Pulse's Platform Administrators and each organisation's administrators.
+For PMS's Platform Administrators and each organisation's administrators.
 
-Pulse holds several **organisations**. Each has its own **workspaces** (for example Projects, HR, Finance) and its
+PMS holds several **organisations**. Each has its own **workspaces** (for example Projects, HR, Finance) and its
 own people. Nobody ever sees anything of another organisation, and people see only the workspace they have open.
 
 | Who | Where | What they do |
@@ -36,7 +36,7 @@ The Platform Administrator then:
    type the code when they sign in, so keep it short. It can't be changed later.
 3. Give its first administrator's **username**, **full name** and, if you like, **email**.
 4. **Make the organisation.**
-   - Pulse copies its standard statuses, workflows, security levels, notification schemes, holidays and service
+   - PMS copies its standard statuses, workflows, security levels, notification schemes, holidays and service
      desk request types into it.
    - It gets one workspace, **Projects**.
    - Its first administrator is made an Organisation Administrator.
@@ -59,14 +59,14 @@ The administrator opens the link (or the main page, typing the code), signs in, 
 ## The organisation profile (Organisation Administrator)
 
 Settings → Organisation → **Profile**:
-- **Logo:** PNG, JPEG or WebP, up to 100 KB. It replaces the Pulse logo in the sidebar.
+- **Logo:** PNG, JPEG or WebP, up to 100 KB. It replaces the PMS logo in the sidebar.
 - **Brand colour:** a line under the logo.
 - **Time zone:** schedules, digests and SLA clocks use it.
 - **Working days and hours.**
 - **Contact email.**
 
 The logo and colour appear only after people sign in. The sign-in page stays plain, so it never shows which
-organisations use Pulse.
+organisations use PMS.
 
 ## Adding a workspace (Organisation Administrator)
 
@@ -106,14 +106,14 @@ Settings → **Organisation** → **Members & roles**. There are three ways to a
 4. **Send invitation.**
    - They get an email with their username, the organisation code and a link to choose their password. The link
      works once, within 72 hours.
-   - If email isn't set up (Settings → Email & Teams), Pulse shows the link once instead: send it to them through a
+   - If email isn't set up (Settings → Email & Teams), PMS shows the link once instead: send it to them through a
      safe channel.
 
 **Import CSV:** for many people at once.
 - **The columns:**
   - The first row names them: `email, name, workspace, role`, and optionally `username, title, orgadmin`.
   - **workspace** is the key or name. Put several separated by `;`, or one row per workspace for the same email.
-  - **role** is the name you see in Pulse, such as Developer or Viewer.
+  - **role** is the name you see in PMS, such as Developer or Viewer.
 - **Check the file** lists who would be invited. If any row has a problem, every problem is listed and nobody is
   invited.
 - **Invite** sends the invitations.
@@ -193,7 +193,7 @@ new workspace gets its own copy of everything, to change freely.
      - **Needs first:** a comment, an assignee, a field, all sub-tasks done
      - **Then:** assign, set the resolution, clear a field, notify
 4. **Save draft** as you go. Nothing changes for anyone until you **Publish** (with a note of what changed). If you took
-   out a status that has work items in it, Pulse asks where they go.
+   out a status that has work items in it, PMS asks where they go.
 5. **Versions** lists everything published. **Restore** publishes an old version again, so nothing is lost.
 
 **Who uses which workflow:** at the top of the page.
@@ -240,7 +240,7 @@ Settings → This workspace → **Automations**. A rule reads **When** … **If*
 - a weekly social media plan every Monday at 08:00
 - reminders before and after due dates
 
-A preset is added **switched off**. Pulse lists anything it couldn't match in your workspace (a status or field it
+A preset is added **switched off**. PMS lists anything it couldn't match in your workspace (a status or field it
 doesn't have). Fix those, then switch the rule on.
 
 **Make your own:** **New rule**, then:
@@ -264,7 +264,7 @@ doesn't have). Fix those, then switch the rule on.
      another system's webhook.
    - **Smart values** such as `{{item.key}}`, `{{item.title}}` and `{{item.assignee.name}}` fill in the details.
 4. **Owner:** they're told if the rule keeps failing.
-5. **Test:** pick a work item. Pulse shows which conditions hold and what each action would do, without changing
+5. **Test:** pick a work item. PMS shows which conditions hold and what each action would do, without changing
    anything.
 6. **Save**, then switch it on.
 
@@ -283,7 +283,7 @@ only Organisation Administrators change, and new workspaces get organisation-wid
   that workspace's totals only (no names of projects or people), until it expires or you turn it off. Each
   workspace makes its own.
 - **GitHub:** Settings → Integrations → GitHub connects this workspace's repositories, with a secret of its own.
-  Pulse refuses a secret another workspace already uses, because the secret tells Pulse which workspace a delivery
+  PMS refuses a secret another workspace already uses, because the secret tells PMS which workspace a delivery
   is for.
 - **Digests and the Monday Briefing** go out per workspace, to its members, titled with its name. Someone in two
   workspaces gets one of each.

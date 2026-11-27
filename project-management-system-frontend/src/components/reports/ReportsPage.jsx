@@ -16,6 +16,12 @@ import { LineChart } from "./AgileCharts";
 import Panel from "../Panel";
 import CountUp from "../CountUp";
 import { organisationName } from "../../data/tenant";
+import OrgMark from "../OrgMark";
+import { currentBranding } from "../../brandTheme";
+import { BRAND } from "../../data/brand";
+
+/** Text inside a CSS string ("…"): quotes, backslashes and line breaks escaped. */
+const cssString = (/** @type {string} */ t) => t.replace(/[\\"]/g, (c) => `\\${c}`).replace(/[\r\n]+/g, " ");
 const HASH = "#/reports/projects";
 /** @type {Record<Rag, LucideIcon>} */ const RAG_ICON = { RED: AlertOctagon, AMBER: AlertTriangle, GREEN: CheckCircle2, NONE: CircleDashed };
 /** @type {Record<Rag, string>} */ const RAG_COLOR = { RED: "var(--danger)", AMBER: "var(--warning)", GREEN: "var(--success)", NONE: "var(--st-not)" };
@@ -171,7 +177,7 @@ export default function ReportsPage({ me, users, workspaces, now }) {
   const printPdf = () => {
     // A4 landscape, page numbers in the footer; only for this print.
     const style = document.createElement("style");
-    style.textContent = `@page { size: A4 landscape; margin: 12mm 12mm 16mm; @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9pt Inter, sans-serif; color: #464b66; } @bottom-left { content: "Omni Contact · Pulse · Projects report"; font: 9pt Inter, sans-serif; color: #464b66; } }`;
+    style.textContent = `@page { size: A4 landscape; margin: 12mm 12mm 16mm; @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9pt Inter, sans-serif; color: #464b66; } @bottom-left { content: "${cssString([organisationName(), "Projects report", BRAND.poweredBy].filter(Boolean).join(" · "))}"; font: 9pt Inter, sans-serif; color: #464b66; } }`;
     document.head.appendChild(style);
     document.body.classList.add("printing-project-report");
     const done = () => {
@@ -201,8 +207,8 @@ export default function ReportsPage({ me, users, workspaces, now }) {
       <div className="page report d-style project-report">
         {/* Printed first: the cover. */}
         <section className="pr-cover" aria-hidden="true">
-          <img src="/omni-logo.png" alt="" className="pr-cover-logo" />
-          <p className="pr-cover-kicker">Pulse{organisationName() ? ` · ${organisationName()}` : ""}</p>
+          {currentBranding() && <OrgMark branding={/** @type {import("../../data/branding").BrandingView} */ (currentBranding())} surface="light" size="lg" className="pr-cover-logo" />}
+          <p className="pr-cover-kicker">{currentBranding()?.name ?? organisationName()}</p>
           <h1>Projects report</h1>
           <p className="pr-cover-period">
             {filters.from} to {filters.to}

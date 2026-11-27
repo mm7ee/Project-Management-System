@@ -166,7 +166,7 @@ function literal(v) {
 async function backup() {
   if (!file) fail("Give the file to write, e.g. database/backups/backup-before-phase-1.sql");
   const { writeFileSync } = await import("node:fs");
-  const out = [`-- Pulse backup of ${target} (${host}), ${new Date().toISOString()}.`, "-- Restore: migrate an empty database, then run this file (node scripts/db.mjs exec <db> <file>).", "BEGIN;"];
+  const out = [`-- PMS backup of ${target} (${host}), ${new Date().toISOString()}.`, "-- Restore: migrate an empty database, then run this file (node scripts/db.mjs exec <db> <file>).", "BEGIN;"];
   const counts = [];
   await sql.begin("ISOLATION LEVEL REPEATABLE READ READ ONLY", async (tx) => {
     // Every column, and which are serial, in one round trip (the database is far away).

@@ -708,7 +708,7 @@ function Subscriptions({ filter, onClose, onChanged }) {
           <X size={18} />
         </button>
         <h2>Email me "{filter.name}"</h2>
-        <p className="modal-note">Pulse sends the results under your bell, and by email once email is connected, at the time you choose (Harare time). You get only the items you can see.</p>
+        <p className="modal-note">The results arrive under your bell, and by email once email is connected, at the time you choose (Harare time). You get only the items you can see.</p>
         {filter.subscriptions.length > 0 && (
           <ul className="sub-list">
             {filter.subscriptions.map((s) => (

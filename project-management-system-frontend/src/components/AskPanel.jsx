@@ -2,6 +2,7 @@
 /** @import { System } from '../data/systems' */
 /** @import { Feature } from '../data/features' */
 /** @import { User } from '../data/roles' */
+import { BRAND } from "../data/brand";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, Check, Copy, RotateCcw, Sparkles, X } from "lucide-react";
 import { ApiError, shareToken } from "../data/api";
@@ -142,7 +143,7 @@ export default function AskPanel({ open, onClose, systems, users, features, me, 
       }
       show(answer.trim() || "Sorry, I couldn't put an answer together. Try asking another way.");
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : "Couldn't reach Pulse. Check your connection.";
+      const msg = e instanceof ApiError ? e.message : "Couldn't reach the server. Check your connection.";
       setTurns((t) => t.map((x, i) => (i === t.length - 1 ? { ...x, error: msg } : x)));
     } finally {
       setBusy(false);
@@ -238,13 +239,13 @@ export default function AskPanel({ open, onClose, systems, users, features, me, 
   if (!open) return null;
   return (
     <div className="backdrop drawer-backdrop ask-backdrop no-print" onClick={onClose}>
-      <aside className="drawer ask" role="dialog" aria-label="Ask Pulse" onClick={(e) => e.stopPropagation()}>
+      <aside className="drawer ask" role="dialog" aria-label={BRAND.assistantName} onClick={(e) => e.stopPropagation()}>
         <header className="ask-head">
           <span className="ask-badge">
             <Sparkles size={18} />
           </span>
           <div>
-            <h2>Ask Pulse</h2>
+            <h2>{BRAND.assistantName}</h2>
             <p>{developer ? "Your work assistant: priorities, drafts, task breakdowns and tech help." : "Plain-English answers from the live project data."}</p>
           </div>
           {turns.length > 0 && (

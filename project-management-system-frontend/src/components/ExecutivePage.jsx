@@ -1,7 +1,9 @@
 /** @import { ReactNode } from 'react' */
 /** @import { Showcase } from '../data/showcase' */
+import { BRAND } from "../data/brand";
 import { useEffect, useState } from "react";
-import PulseMark from "./PulseMark";
+import OrgMark, { pageSurface } from "./OrgMark";
+import { applyBranding, setTitle } from "../brandTheme";
 import { AlertOctagon, ArrowRight, BellRing, CheckCircle2, ClipboardList, FileText, History, ListChecks, LockKeyhole, LogIn, Printer, ShieldCheck, Users } from "lucide-react";
 import { SCHEDULE_META } from "../data/systems";
 import { PRIORITY_META, PRIORITIES } from "../data/features";
@@ -10,7 +12,6 @@ import { DEFAULT_PREFS } from "../data/roles";
 import CountUp from "./CountUp";
 import { TooltipLayer } from "./reports/chartKit";
 import { StageBar } from "./reports/Charts";
-import { COMPANY_URL } from "../brand";
 /**
  * The executive page at /executive/<link>: how Pulse works and how one workspace's portfolio is doing, for
  * leadership. No sign-in, so it shows totals only; no names of systems, people or blockers. Each link is a secret
@@ -20,12 +21,12 @@ const tokenInPath = () => window.location.pathname.match(/^\/executive\/([a-f0-9
 export default function ExecutivePage() {
   // Follows the visitor's device theme; there's no account to read a preference from.
   useApplyPrefs({ ...DEFAULT_PREFS, theme: "system" });
-  const [data, setData] = useState(/** @type {(Showcase & { organization?: string; workspace?: string }) | null} */ (null));
+  const [data, setData] = useState(/** @type {(Showcase & { organization?: string; workspace?: string; branding?: import("../data/branding").BrandingView | null }) | null} */ (null));
   const [error, setError] = useState("");
   useEffect(() => {
     const token = tokenInPath();
     if (!token) {
-      setError("This page opens from its link. Ask whoever runs Pulse in your organisation for one.");
+      setError("This page opens from its link. Ask whoever runs this system in your organisation for one.");
       return;
     }
     // The link stays in the address, so the page can be bookmarked and reloaded; the API gets it in a header.
@@ -34,6 +35,9 @@ export default function ExecutivePage() {
         const body = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(body.error ?? "The live figures couldn't be loaded. Please try again shortly.");
         setData(body);
+        // The organisation's page: its accent, favicon and name in the tab.
+        applyBranding(body.branding ?? null);
+        setTitle(body.branding?.name ?? body.organization ?? null, "Executive overview");
       })
       .catch((e) => setError(e instanceof Error ? e.message : "The live figures couldn't be loaded. Please try again shortly."));
   }, []);
@@ -42,12 +46,7 @@ export default function ExecutivePage() {
     <TooltipLayer>
       <div className="exec">
         <header className="exec-top no-print">
-          <a href={COMPANY_URL} target="_blank" rel="noopener noreferrer" className="exec-logo" title="Omni Contact website">
-            <img src="/omni-logo.png" alt="Omni Contact" />
-          </a>
-          <span className="exec-who">
-            <PulseMark tone="dark" />
-          </span>
+          <span className="exec-logo">{data?.branding ? <OrgMark branding={data.branding} surface={pageSurface()} size="md" /> : <span className="exec-who">{data?.organization ?? ""}</span>}</span>
           <div className="page-actions">
             <button className="btn btn-ghost sm" onClick={() => window.print()}>
               <Printer size={15} /> Print / PDF
@@ -59,10 +58,10 @@ export default function ExecutivePage() {
         </header>
 
         <section className="exec-hero">
-          <span className="exec-eyebrow">Pulse · Executive overview</span>
+          <span className="exec-eyebrow">Executive overview</span>
           <h1>{data?.workspace ? `${data.workspace}: how every build is tracked` : "How every build is tracked"}</h1>
           <p>
-            {data?.organization ? `Pulse is where ${data.organization} plans, builds and runs its projects.` : "Pulse is where projects are planned, built and run."} Below is how it works, and how the portfolio stands right now.
+            {data?.organization ? `This is where ${data.organization} plans, builds and runs its projects.` : "This is where projects are planned, built and run."} Below is how it works, and how the portfolio stands right now.
             {data && ` Live figures as of ${new Date(data.generatedAt).toLocaleString("en-GB", { dateStyle: "long", timeStyle: "short" })}.`}
           </p>
         </section>
@@ -71,7 +70,7 @@ export default function ExecutivePage() {
 
         <HowItWorks stallDays={data?.stallDays ?? 14} />
 
-        <footer className="exec-foot">© {year} {data?.organization ?? "Pulse"} · Pulse. Figures are live totals; individual systems and people are visible to staff only.</footer>
+        <footer className="exec-foot">© {year} {data?.organization ?? BRAND.productName} · {BRAND.poweredBy}. Figures are live totals; individual systems and people are visible to staff only.</footer>
       </div>
     </TooltipLayer>
   );
@@ -174,7 +173,7 @@ function HowItWorks({ stallDays }) {
   const stages = ["Idea", "Upcoming", "In progress", "Testing", "To deploy", "Live"];
   return (
     <section className="viz-card exec-how">
-      <h3>How Pulse works</h3>
+      <h3>How it works</h3>
       <p className="viz-sub">The systems team's single place to plan, build and run every internal system.</p>
 
       <div className="exec-flow" aria-label="Lifecycle of a system">

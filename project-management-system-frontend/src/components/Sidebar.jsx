@@ -3,8 +3,8 @@
 import { Columns3, MessagesSquare, Eye, Search, Headset, FileBarChart, FileText, FolderKanban, LayoutDashboard, ListChecks, Plus, Settings, X } from "lucide-react";
 import { initials } from "../data/systems";
 import { ROLE_LABEL } from "../data/roles";
-import { COMPANY_URL } from "../brand";
-import PulseMark from "./PulseMark";
+import { BRAND } from "../data/brand";
+import OrgMark from "./OrgMark";
 import ParticleField from "./ParticleField";
 /**
  * @param {Props} p
@@ -18,24 +18,20 @@ export default function Sidebar(p) {
     <>
       <div className={`sidebar-scrim ${p.open ? "show" : ""}`} onClick={p.onClose} />
       <aside className={`sidebar ${p.open ? "open" : ""}`}>
-        {/* The sign-in page's look: its navy, its ECG grid and its cyan and amber web. */}
+        {/* A faint web behind the menu: neutral, the same in every organisation. */}
         <ParticleField className="sidebar-web" palette="dark" />
         <button className="sidebar-close" onClick={p.onClose} aria-label="Close menu">
           <X size={18} />
         </button>
-        {/* The organisation's own logo and colour when it has set them (Settings → Organisation → Profile). */}
-        <div className={`brand ${p.org?.colour ? "org-tinted" : ""}`} style={p.org?.colour ? /** @type {import('react').CSSProperties} */ ({ "--org-accent": p.org.colour }) : undefined}>
-          {p.org?.logo ? (
-            <span className="logo-link org-logo-chip" title={p.org.name}>
-              <img src={p.org.logo} alt={p.org.name} />
+        {/* State C: the organisation's own logo (the variant for dark backgrounds: the sidebar is always dark), or its
+            monogram, and the open workspace. Inside an organisation the product's name appears only as "Powered by". */}
+        <div className="brand">
+          {p.org?.branding ? <OrgMark branding={p.org.branding} surface="dark" size="md" /> : <span className="brand-pms">{BRAND.shortName}</span>}
+          {p.workspace && (
+            <span className="ws-pill" title="The workspace you're in. Switch it from the top bar.">
+              {p.workspace}
             </span>
-          ) : (
-            <a href={COMPANY_URL} target="_blank" rel="noopener noreferrer" className="logo-link" title="Omni Contact website">
-              <img src="/omni-logo-white.png" alt="Omni Contact" />
-            </a>
           )}
-          {/* The system's name, beside the company logo. */}
-          <PulseMark />
         </div>
 
         <nav className="nav">
@@ -169,7 +165,8 @@ export default function Sidebar(p) {
 /**
  * @typedef {Object} Props
  * @property {User} me
- * @property {{ name: string; logo?: string; colour?: string } | null} [org]  the organisation's logo and colour, if set
+ * @property {{ name: string; branding?: import("../data/branding").BrandingView | null } | null} [org]  the organisation, with its branding
+ * @property {string} [workspace]  the open workspace's name
  * @property {View} view
  * @property {Record<Filter, number>} counts
  * @property {Object} features

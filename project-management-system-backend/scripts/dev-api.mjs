@@ -29,7 +29,7 @@ if (!existsSync(dist)) {
   mkdirSync(dist, { recursive: true });
   writeFileSync(
     new URL("index.html", dist),
-    "<!doctype html><meta charset=utf-8><title>Pulse API</title><p>This is the Pulse API on its own. Open the frontend at <a href=\"http://localhost:5173\">http://localhost:5173</a> (npm run dev in project-management-system-frontend), or run npm run dev:api here to serve a built copy of the pages.</p>",
+    "<!doctype html><meta charset=utf-8><title>PMS API</title><p>This is the PMS API on its own. Open the frontend at <a href=\"http://localhost:5173\">http://localhost:5173</a> (npm run dev in project-management-system-frontend), or run npm run dev:api here to serve a built copy of the pages.</p>",
   );
 }
 

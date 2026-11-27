@@ -5,14 +5,14 @@ import { reduceMotion } from "../prefs";
  * landing page). Draws one still frame when the visitor prefers reduced motion, and
  * pauses while the tab is hidden.
  */
-// Ink per backdrop: the sign-in page's glowing cyan, and for inside the app, Omni Contact's
-// indigo with a few red points, kept faint so the pages stay calm.
+// Ink per backdrop: neutral steel and grey on every surface, the same in every organisation (the platform stays
+// neutral; an organisation's accent shows in its controls, not in the backdrop). Kept faint so the pages stay calm.
 const PALETTES = {
-  dark: { link: "27, 169, 225", linkAlpha: 0.16, reach: "242, 169, 0", reachAlpha: 0.3, dot: "rgba(140, 214, 245, 0.75)", accent: "rgba(242, 169, 0, 0.9)" },
-  light: { link: "11, 111, 176", linkAlpha: 0.2, reach: "27, 169, 225", reachAlpha: 0.55, dot: "rgba(11, 111, 176, 0.5)", accent: "rgba(242, 169, 0, 0.85)" },
-  appLight: { link: "44, 50, 128", linkAlpha: 0.13, reach: "0, 57, 166", reachAlpha: 0.32, dot: "rgba(44, 50, 128, 0.32)", accent: "rgba(237, 0, 0, 0.6)" },
-  appDark: { link: "128, 149, 255", linkAlpha: 0.13, reach: "180, 190, 255", reachAlpha: 0.3, dot: "rgba(180, 190, 255, 0.45)", accent: "rgba(255, 59, 59, 0.8)" },
-  sidebar: { link: "150, 168, 255", linkAlpha: 0.26, reach: "180, 190, 255", reachAlpha: 0.4, dot: "rgba(190, 200, 255, 0.65)", accent: "rgba(255, 59, 59, 0.85)" },
+  dark: { link: "143, 179, 212", linkAlpha: 0.14, reach: "190, 205, 220", reachAlpha: 0.28, dot: "rgba(190, 205, 220, 0.6)", accent: "rgba(230, 235, 241, 0.75)" },
+  light: { link: "62, 92, 118", linkAlpha: 0.16, reach: "62, 92, 118", reachAlpha: 0.4, dot: "rgba(62, 92, 118, 0.42)", accent: "rgba(31, 41, 51, 0.6)" },
+  appLight: { link: "62, 92, 118", linkAlpha: 0.1, reach: "62, 92, 118", reachAlpha: 0.26, dot: "rgba(62, 92, 118, 0.28)", accent: "rgba(31, 41, 51, 0.45)" },
+  appDark: { link: "143, 179, 212", linkAlpha: 0.1, reach: "190, 205, 220", reachAlpha: 0.24, dot: "rgba(190, 205, 220, 0.4)", accent: "rgba(230, 235, 241, 0.6)" },
+  sidebar: { link: "190, 205, 220", linkAlpha: 0.18, reach: "190, 205, 220", reachAlpha: 0.3, dot: "rgba(210, 220, 230, 0.5)", accent: "rgba(230, 235, 241, 0.7)" },
 };
 /**
  * @param {{ className?: string; palette?: keyof typeof PALETTES }} props

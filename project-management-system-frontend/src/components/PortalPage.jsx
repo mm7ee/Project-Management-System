@@ -3,7 +3,9 @@ import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, Headset, Plus } from "lucide-react";
 import { formatDate } from "../time";
 import { RequestForm, RequestView } from "./ServiceDeskParts";
-import PulseMark from "./PulseMark";
+import OrgMark, { pageSurface } from "./OrgMark";
+import { BRAND } from "../data/brand";
+import { applyBranding, setTitle } from "../brandTheme";
 /** The secret of a service desk portal link, when the page was opened at /portal/<secret>. */
 /** @type {string | null} */ export const portalToken = typeof window !== "undefined" ? (window.location.pathname.match(/^\/portal\/([A-Za-z0-9_-]{20,})\/?$/)?.[1] ?? null) : null;
 /**
@@ -58,7 +60,7 @@ async function portal(path, method = "GET", data) {
  * The service desk portal: raise a request and follow your own. No account, no internal items.
  */
 export default function PortalPage() {
-  const [info, setInfo] = useState(/** @type {{ label: string; organization?: string; ready: boolean; types: RequestType[] } | null | (() => { label: string; organization?: string; ready: boolean; types: RequestType[] } | null)} */ (null));
+  const [info, setInfo] = useState(/** @type {{ label: string; organization?: string; branding?: import("../data/branding").BrandingView | null; ready: boolean; types: RequestType[] } | null | (() => { label: string; organization?: string; branding?: import("../data/branding").BrandingView | null; ready: boolean; types: RequestType[] } | null)} */ (null));
   const [error, setError] = useState("");
   const [view, setView] = useState(/** @type {"list" | "new" | PortalRequest | (() => "list" | "new" | PortalRequest)} */ ("list"));
   const [list, setList] = useState(/** @type {PortalRequest[] | (() => PortalRequest[])} */ ([]));
@@ -68,10 +70,13 @@ export default function PortalPage() {
     setList(await /** @type {Promise<Array<PortalRequest>>} */ (/** @type {unknown} */ (portal("/requests"))).catch(() => []));
   }, []);
   useEffect(() => {
-    document.title = "Service desk";
-    /** @type {Promise<{ label: string; organization?: string; ready: boolean; types: RequestType[]; }>} */ (/** @type {unknown} */ (portal("")))
+    setTitle(null, "Service desk");
+    /** @type {Promise<{ label: string; organization?: string; branding?: import("../data/branding").BrandingView | null; ready: boolean; types: RequestType[]; }>} */ (/** @type {unknown} */ (portal("")))
       .then((i) => {
         setInfo(i);
+        // The organisation's own portal: its branding, its name in the tab.
+        applyBranding(i.branding ?? null);
+        setTitle(i.branding?.name ?? i.organization ?? null, "Service desk");
         if (!requesterKey()) setView("new");
       })
       .catch((e) => setError(e instanceof Error ? e.message : "This link doesn't work"));
@@ -80,7 +85,7 @@ export default function PortalPage() {
   return (
     <div className="portal">
       <header className="portal-head">
-        <PulseMark tone="dark" />
+        {info?.branding && <OrgMark branding={info.branding} surface={pageSurface()} size="md" />}
         <div>
           <h1>
             <Headset size={20} aria-hidden="true" /> {info?.organization ? `${info.organization} service desk` : "Service desk"}
@@ -165,7 +170,10 @@ export default function PortalPage() {
           </>
         )}
       </main>
-      <footer className="portal-foot">Only you see your requests here. Please don't share this link outside your team.</footer>
+      <footer className="portal-foot">
+        Only you see your requests here. Please don't share this link outside your team.
+        <small className="powered-by">{BRAND.poweredBy}</small>
+      </footer>
     </div>
   );
 }

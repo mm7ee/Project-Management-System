@@ -6,6 +6,7 @@
 // Search (PQL), saved filters with favourites and email subscriptions, dashboards whose gadgets read
 // saved filters, and turning a plain-English question into PQL. Every query runs as the person
 // asking (or subscribed, or viewing the dashboard), under their visibility rules.
+import { BRAND } from "../../project-management-system-frontend/src/data/brand";
 import { newToken } from "./auth";
 import { HttpError, body, json } from "./http";
 import { compile, loadLookup } from "./pql";
@@ -668,14 +669,14 @@ export async function searchApi(c, env, path, method) {
   }
   // ----- a question in plain English, as PQL -----
   if (path === "/api/ask/pql" && method === "POST") {
-    if (!env.AI) throw new HttpError(503, "Ask Pulse isn't switched on for this server");
+    if (!env.AI) throw new HttpError(503, `${BRAND.assistantName} isn't switched on for this server`);
     const question = String((await /** @type {Promise<{ question?: unknown; }>} */ (/** @type {unknown} */ (body(req)))).question ?? "")
       .trim()
       .slice(0, 400);
     if (!question) throw new HttpError(400, "Type a question");
     const values = await fieldValues(c);
     const system = [
-      "You turn a question about work items into one Pulse Query Language (PQL) query. Reply with the query only, on one line: no explanation, no code fences.",
+      "You turn a question about work items into one Project Query Language (PQL) query. Reply with the query only, on one line: no explanation, no code fences.",
       "PQL is like Jira's JQL. Fields: " + FIELDS.map((f) => `${f.name} (${f.description})`).join("; ") + ".",
       "Operators: = != > < >= <= IN (a, b) NOT IN ~ (contains) IS EMPTY IS NOT EMPTY AND OR NOT, brackets, ORDER BY field ASC|DESC.",
       "Functions: currentUser() (the person asking, for 'my' or 'me'), openSprints(), closedSprints(), now(), startOfWeek(), endOfWeek(). Relative dates: -7d, -2w, 1m. Dates: 2026-11-01.",

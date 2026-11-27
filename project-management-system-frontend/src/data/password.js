@@ -1,4 +1,4 @@
-// The password policy (Omni Contact Security Essentials, ISO 27001 A.5.17), shared by the
+// The password policy (ISO 27001 A.5.17), shared by the
 // Worker (which enforces it) and the UI (which shows it while typing).
 export const PASSWORD_MIN = 12;
 /**

@@ -1122,3 +1122,75 @@ Migration 0020 is applied on the Neon dev branch; its reverse was run there, the
 5. `npm run db:status` again.
 6. Push.
 7. Check sign-in, Settings → Workflows, Automations and SLAs, and moving a work item.
+
+## Project Management System (PMS), and branding per organisation (2026-11-27)
+
+The product is now **Project Management System (PMS)**, and each organisation brands its own space. Plan:
+`docs/branding-plan.md` (approved); every renamed string: `docs/rename-list.md`; decisions: DECISIONS.md.
+
+**What was built**
+- **The name in one place:** `src/data/brand.js` (`BRAND`: product name, short name, tagline, support email,
+  assistant name, "Powered by"). Screens, the Worker (emails, digests, the Monday Briefing, notifications, Teams,
+  Ask AI's instructions, the manifest, passkeys, exports) and `index.html` (filled in at build time) read it.
+  "Ask Pulse" is **Ask AI**.
+- **State A, the platform page:** the PMS wordmark, one line of value, the organisation code and "Find your
+  organisation" (help only: nothing is listed or searched). Neutral platform tokens, a CSS gradient and dot grid, the
+  PMS favicon (an SVG of the letters) and PMS app icons (`scripts/make-icons.mjs`).
+- **State B, the organisation's sign-in page:** its logo or monogram, "Sign in to {name}", its accent on the button
+  and focus rings, its tint, "Not your organisation?", "Powered by Project Management System". The tab reads
+  "{name} · PMS" with its icon or monogram. Unknown, suspended and archived codes go back to State A with one
+  message. Workspaces are still chosen after sign-in.
+- **State C, signed in:** the organisation's logo (the dark variant; the sidebar is always dark) and the workspace
+  pill; on narrow screens its mark in the top bar. The accent sets three variables (`--accent-solid`,
+  `--accent-light`, `--accent-dark`); status colours and the chart palette never change. The palette that was
+  Omni Contact's (indigo, royal blue, red, sky cyan) is now neutral graphite and steel by default.
+- **Outside the app:** emails (alerts, digests, the Monday Briefing, invitations, password resets, service desk
+  replies) carry the organisation's logo, name and accent; Teams posts its name; the PDF cover, BI letterhead,
+  printed footer and Excel heading its name and logo; the executive page and the customer portal its branding.
+  "Powered by Project Management System" is in small print.
+- **Branding settings:** Settings → Organisation → **Branding**: display name, logo for light and for dark
+  backgrounds, square icon, accent, sign-in tint, the contrast check and a live preview of A, B and C in each theme.
+  The logo and colour left the Profile page.
+- **Migration `0021_branding.sql`** (reverse in `migrations/down/`): `organization_branding` under row-level security;
+  every organisation's old logo and colour copied in; Omnicontact's two logos and indigo moved into its row. The
+  public `omni-logo*.png` files, `src/brand.js` and `PulseMark` are deleted.
+- **Worker:** `src/branding.js`:
+  - `GET /api/public/org/:code/branding` and its images, rate-limited (30 a minute per address, the
+    `BRANDING_LIMIT` binding), one 404 for every organisation nobody may see
+  - `GET/PUT /api/org/branding` and `/api/platform/organizations/:id/branding`
+  - images checked from their bytes (PNG, WebP or JPEG; never SVG), size and dimensions
+  - branding in `/api/me/workspaces`, `/api/data`, `/api/showcase` and `/api/portal`
+
+**Tests**
+- Frontend:
+  - `tests/branding.test.js` (12): the contrast maths, safe shades on every theme's surfaces, button shades, the
+    monogram
+  - `tests/noOrgBranding.test.js` (4): nothing outside Omnicontact's row refers to its logo or website, the product
+    never names Omni Contact, State A carries no organisation, branding sets only the accent variables
+- Backend:
+  - `tests/branding.test.js` (7): the public lookup returns only the allowed fields; unknown, suspended, archived and
+    template organisations get the same 404; 429 after a burst; uploads (SVG, HTML renamed .png, wrong type,
+    oversize, wrong dimensions); who may change it; nothing crosses organisations (row-level security included); the
+    Platform Administrator route
+  - `tests/brandEmail.test.js` (4): the organisation's logo, monogram, name and accent in emails; neutral without
+    one; escaping
+- `npm test`: 263 passed in 28 files (86 frontend, 177 backend). `tsc` (app and Worker): 0 errors. `vite build`
+  passes.
+
+**Screenshots:** `docs/screenshots/branding/` (contact sheet `index.html`):
+- States A, B and C for Omnicontact and Demo Co (no logo)
+- light, dark and futuristic, at 1440, 1024, 768 and 390 px
+- very wide and very tall logos
+
+They were taken on the Neon dev branch, where 0021 is applied; its reverse was run there, then it was applied again.
+
+**Release:** apply 0021 before pushing (it adds the table the new code reads).
+1. `npm run db:status`
+2. `npm run db:backup -- database/backups/backup-before-branding.sql`
+3. Dry-run 0021 on a copy of production.
+4. `npm run db:migrate`
+5. `npm run db:status`
+6. Push. The `BRANDING_LIMIT` rate-limit binding deploys with the Worker.
+7. Check State A at `/`, State B at `/#/o/omnicontact`, signing in, and Settings → Organisation → Branding.
+
+A later release drops `organizations.logo` and `.colour` (0017), which nothing reads now.

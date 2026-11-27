@@ -1,4 +1,4 @@
-# Pulse: frontend
+# PMS: frontend
 
 The screens people use, in React 18 and Vite (JavaScript, with JSDoc types checked by `tsc --checkJs`).
 

@@ -105,7 +105,7 @@ export async function chatApi(c, path, method) {
           .all()
       )
     );
-    if (found.results.length !== wanted.length) throw new HttpError(400, "One of those people isn't in Pulse");
+    if (found.results.length !== wanted.length) throw new HttpError(400, "One of those people isn't in this organisation");
     return wanted;
   };
   const namesOf = /** @param {string[]} ids */ async (ids) => {

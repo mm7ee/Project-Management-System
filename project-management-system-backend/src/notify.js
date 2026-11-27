@@ -2,6 +2,9 @@
 // Notifications: every alert lands under the person's bell, then goes out by email (Resend) and to
 // a Teams channel when an administrator has connected them in Settings. Until then, nothing leaves
 // Pulse. The API key and webhook address are sealed with MFA_KEY and never sent back to the browser.
+import { brandingFor } from "./branding";
+import { initials, solidShade } from "../../project-management-system-frontend/src/data/branding";
+import { BRAND } from "../../project-management-system-frontend/src/data/brand";
 import { newToken, openSecret } from "./auth";
 import { START_KEYS, cleanPrefs } from "../../project-management-system-frontend/src/data/roles";
 import { settingRow, saveSetting } from "./settings";
@@ -52,14 +55,14 @@ const fullLink =
  * @returns {string}
  */
 function emailHtml(env, title, intro, digest, link) {
-  const sections = (digest?.sections ?? []).map((s) => `<h3 style="margin:22px 0 6px;font-size:15px;color:#2c3280">${esc(s.title)}</h3>` + `<ul style="margin:0;padding-left:20px">${s.items.map((i) => `<li style="margin:4px 0">${esc(i.text)}</li>`).join("")}</ul>`).join("");
+  const sections = (digest?.sections ?? []).map((s) => `<h3 style="margin:22px 0 6px;font-size:15px;color:#pmsink">${esc(s.title)}</h3>` + `<ul style="margin:0;padding-left:20px">${s.items.map((i) => `<li style="margin:4px 0">${esc(i.text)}</li>`).join("")}</ul>`).join("");
   return `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14.5px;line-height:1.5;color:#1c2b45;background:#ffffff;padding:24px;border-radius:12px;max-width:600px">
-<p style="margin:0 0 14px;font-weight:800;font-size:13px;letter-spacing:.08em;color:#ed0000">PULSE</p>
-<h2 style="margin:0 0 10px;font-size:20px;color:#101553">${esc(title)}</h2>
+<!--pms:header-->
+<h2 style="margin:0 0 10px;font-size:20px;color:#1f2933">${esc(title)}</h2>
 ${intro ? `<p style="margin:0">${esc(intro)}</p>` : ""}
 ${sections}
-<p style="margin:24px 0"><a href="${esc(fullLink(env, link))}" style="background:#2c3280;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">Open Pulse</a></p>
-<p style="margin:0;font-size:12px;color:#6b7a90">Sent by Pulse. You can turn these emails off in Settings.${digest?.aiWritten ? " The opening paragraph is AI-written; the lists come straight from Pulse's data." : ""}</p>
+<p style="margin:24px 0"><a href="${esc(fullLink(env, link))}" style="background:#pmsacc;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">Open ${esc(BRAND.shortName)}</a></p>
+<p style="margin:0;font-size:12px;color:#6b7a90">${esc(BRAND.poweredBy)}. You can turn these emails off in Settings.${digest?.aiWritten ? " The opening paragraph is AI-written; the lists come straight from the live data." : ""}</p>
 </div>`;
 }
 /**
@@ -72,7 +75,7 @@ ${sections}
  */
 function emailText(env, title, intro, digest, link) {
   const sections = (digest?.sections ?? []).map((s) => `${s.title}\n${s.items.map((i) => `- ${i.text}`).join("\n")}`);
-  return [title, intro, ...sections, `Open Pulse: ${fullLink(env, link)}`].filter(Boolean).join("\n\n");
+  return [title, intro, ...sections, `Open ${BRAND.shortName}: ${fullLink(env, link)}`].filter(Boolean).join("\n\n");
 }
 /**
  * @param {Env} env
@@ -81,10 +84,15 @@ function emailText(env, title, intro, digest, link) {
  * @param {string} subject
  * @param {string} html
  * @param {string} text
+ * @param {string | null} [forOrg]  the organisation, when env isn't scoped to it
  * @returns {Promise<void>}
  */
-export async function sendEmail(env, delivery, to, subject, html, text) {
+export async function sendEmail(env, delivery, to, subject, html, text, forOrg) {
   if (!delivery.resendKey || !delivery.from || !env.MFA_KEY) throw new Error("Email isn't connected yet");
+  // The organisation's branding: from the handle's scope, or given (password resets run as the owner).
+  const orgId = forOrg ?? /** @type {TenantDatabase | undefined} */ (env.DB)?.scope?.orgId ?? null;
+  const brand = orgId ? await brandingFor(env.ROOT, orgId).catch(() => null) : null;
+  ({ subject, html } = brandEmail(env, brand, subject, html));
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { authorization: `Bearer ${await openSecret(delivery.resendKey, env.MFA_KEY)}`, "content-type": "application/json" },
@@ -96,6 +104,29 @@ export async function sendEmail(env, delivery, to, subject, html, text) {
   }
 }
 /**
+ * Fills an email's branding markers: the organisation's logo (or monogram) and name in the header, its accent on
+ * the button and headings, and its name before the subject. Without an organisation, the neutral PMS header.
+ * @param {Env} env
+ * @param {import("../../project-management-system-frontend/src/data/branding").BrandingView | null} b
+ * @param {string} subject
+ * @param {string} html
+ * @returns {{ subject: string; html: string }}
+ */
+export function brandEmail(env, b, subject, html) {
+  const solid = b ? solidShade(b.accent) : "#2f4a60";
+  const ink = b ? b.shades.light : "#3e5c76";
+  const base = env.PUBLIC_URL ?? "";
+  const header = !b
+    ? `<p style="margin:0 0 14px;font-weight:900;font-size:15px;letter-spacing:-0.01em;color:#1f2933">${esc(BRAND.shortName)}</p>`
+    : b.logo
+      ? `<p style="margin:0 0 16px"><img src="${esc(base + b.logo)}" alt="${esc(b.name)}" height="36" style="height:36px;max-width:220px;width:auto;display:block;border:0"></p>`
+      : `<p style="margin:0 0 16px"><span style="display:inline-block;width:36px;height:36px;line-height:36px;border-radius:9px;background:${solid};color:#fff;font-weight:800;font-size:15px;text-align:center;vertical-align:middle">${esc(initials(b.name))}</span> <b style="vertical-align:middle;font-size:15px;color:#1f2933">${esc(b.name)}</b></p>`;
+  return {
+    subject: b && subject.startsWith(`${BRAND.shortName}: `) ? `${b.name}: ${subject.slice(BRAND.shortName.length + 2)}` : subject,
+    html: html.split("<!--pms:header-->").join(header).split("#pmsacc").join(solid).split("#pmsink").join(ink),
+  };
+}
+/**
  * An account-security email (password reset, password changed): always sent, whatever the
  * person's email settings, with an optional button. `url` is a full address.
  * @param {string} title
@@ -105,14 +136,14 @@ export async function sendEmail(env, delivery, to, subject, html, text) {
  */
 export function securityEmail(title, lines, button) {
   const html = `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14.5px;line-height:1.5;color:#1c2b45;background:#ffffff;padding:24px;border-radius:12px;max-width:600px">
-<p style="margin:0 0 14px;font-weight:800;font-size:13px;letter-spacing:.08em;color:#ed0000">PULSE</p>
-<h2 style="margin:0 0 10px;font-size:20px;color:#101553">${esc(title)}</h2>
+<!--pms:header-->
+<h2 style="margin:0 0 10px;font-size:20px;color:#1f2933">${esc(title)}</h2>
 ${lines.map((l) => `<p style="margin:0 0 10px">${esc(l)}</p>`).join("")}
-${button ? `<p style="margin:22px 0"><a href="${esc(button.url)}" style="background:#2c3280;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">${esc(button.label)}</a></p>` : ""}
-<p style="margin:0;font-size:12px;color:#6b7a90">Sent by Pulse about your account's security. Nobody from Pulse will ever ask for your password.</p>
+${button ? `<p style="margin:22px 0"><a href="${esc(button.url)}" style="background:#pmsacc;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600">${esc(button.label)}</a></p>` : ""}
+<p style="margin:0;font-size:12px;color:#6b7a90">Sent about your account's security. Nobody will ever ask you for your password. ${esc(BRAND.poweredBy)}.</p>
 </div>`;
   const text = [title, ...lines, ...(button ? [`${button.label}: ${button.url}`] : [])].join("\n\n");
-  return { subject: `Pulse: ${title}`, html, text };
+  return { subject: `${BRAND.shortName}: ${title}`, html, text };
 }
 /**
  * Posts an Adaptive Card to a Teams "Workflows" webhook. Square brackets are dropped so typed text can't become links.
@@ -123,6 +154,9 @@ ${button ? `<p style="margin:22px 0"><a href="${esc(button.url)}" style="backgro
  */
 export async function postToTeams(env, delivery, post) {
   if (!delivery.teams || !env.MFA_KEY) throw new Error("Teams isn't connected yet");
+  // Posted as the organisation: its name on the button.
+  const orgId = /** @type {TenantDatabase | undefined} */ (env.DB)?.scope?.orgId ?? null;
+  const brand = orgId ? await brandingFor(env.ROOT, orgId).catch(() => null) : null;
   const plain = /** @param {string} s */ (s) => s.replace(/[[\]]/g, "");
   const res = await fetch(await openSecret(delivery.teams, env.MFA_KEY), {
     method: "POST",
@@ -137,7 +171,7 @@ export async function postToTeams(env, delivery, post) {
             type: "AdaptiveCard",
             version: "1.4",
             body: [{ type: "TextBlock", text: plain(post.title), weight: "Bolder", wrap: true }, ...(post.body ? [{ type: "TextBlock", text: plain(post.body), wrap: true }] : [])],
-            actions: [{ type: "Action.OpenUrl", title: "Open Pulse", url: fullLink(env, post.link) }],
+            actions: [{ type: "Action.OpenUrl", title: `Open in ${brand?.name ?? BRAND.shortName}`, url: fullLink(env, post.link) }],
           },
         },
       ],
@@ -158,7 +192,7 @@ export const pause =
  * @returns {{ subject: string; html: string; text: string; }}
  */
 export function emailFor(env, title, intro, digest, link) {
-  return { subject: `Pulse: ${title}`, html: emailHtml(env, title, intro, digest, link), text: emailText(env, title, intro, digest, link) };
+  return { subject: `${BRAND.shortName}: ${title}`, html: emailHtml(env, title, intro, digest, link), text: emailText(env, title, intro, digest, link) };
 }
 /**
  * Records alerts and sends them on. A `dedupe` key that person already has is skipped, along with

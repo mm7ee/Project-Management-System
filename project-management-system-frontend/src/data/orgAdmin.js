@@ -18,6 +18,7 @@ export const WEEKDAYS = /** @type {const} */ ([
 /** How each audit log action reads. Anything not listed is shown as its code with underscores as spaces. */
 /** @type {Record<string, string>} */ export const AUDIT_ACTIONS = {
   organization_profile_updated: "Changed the organisation profile",
+  organization_branding_updated: "Changed the organisation's branding",
   workspace_created: "Made a workspace",
   workspace_updated: "Changed a workspace",
   person_created: "Added a person",
@@ -34,4 +35,4 @@ export const WEEKDAYS = /** @type {const} */ ([
   role_permissions_updated: "Changed role permissions",
 };
 
-export const LOGO_MAX_KB = 100;
+// Logo and icon limits are in src/data/branding.js (IMAGE_BOX, UPLOAD_MAX_BYTES, STORED_MAX_BYTES).

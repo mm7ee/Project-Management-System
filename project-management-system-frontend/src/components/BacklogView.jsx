@@ -405,7 +405,7 @@ function CompleteSprint({ sprint, future, onClose, onComplete }) {
         </button>
         <h2>Complete {sprint.name}</h2>
         <p>
-          {sprint.items.length - open.length} of {sprint.items.length} items are done ({sprint.donePoints} of {sprint.points} points). Pulse keeps a snapshot of the sprint for the velocity and sprint reports.
+          {sprint.items.length - open.length} of {sprint.items.length} items are done ({sprint.donePoints} of {sprint.points} points). A snapshot of the sprint is kept for the velocity and sprint reports.
         </p>
         {open.length > 0 && (
           <label className="field">

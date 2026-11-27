@@ -47,5 +47,5 @@ export function resetOutcome(o) {
 /**
  * What the person sees after asking, whatever happened.
  */
-export const RESET_REPLY = "If that matches an account, we've emailed a link to reset its password. It works for 30 minutes. No email from Pulse? Your administrator has been asked to help.";
+export const RESET_REPLY = "If that matches an account, we've emailed a link to reset its password. It works for 30 minutes. No email? Your administrator has been asked to help.";
 /** @typedef {"emailed" | "admins_told" | "limited" | "unknown"} ResetOutcome */

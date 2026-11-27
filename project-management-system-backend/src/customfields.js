@@ -161,7 +161,7 @@ async function rowsFor(c, f, raw) {
     }
     case "user": {
       const u = await /** @type {Promise<{ id: string; } | null>} */ (/** @type {unknown} */ (c.db.prepare("SELECT id FROM users WHERE id = ?").bind(String(raw)).first()));
-      if (!u) throw new HttpError(400, `${f.name}: choose someone in Pulse`);
+      if (!u) throw new HttpError(400, `${f.name}: choose someone in this workspace`);
       return [{ ...base, value_user: u.id }];
     }
     case "select":

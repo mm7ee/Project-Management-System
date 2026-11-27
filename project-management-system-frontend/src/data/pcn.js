@@ -1,4 +1,4 @@
-// The OmniContact BPO Project Concept Note (PCN): how a new project is proposed and approved.
+// The Project Concept Note (PCN): how a new project is proposed and approved.
 // Mirrors the PCN document's sections; stored on the project (System.pcn). Shared by the UI and
 // the Worker (which cleans and validates it).
 export const PCN_TYPES = /** @type {const} */ (["New system", "Enhancement to an existing system", "Process improvement", "Integration", "Other"]);

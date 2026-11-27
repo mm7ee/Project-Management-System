@@ -14,6 +14,7 @@
 /** @import { MfaPolicy, Permission, Role, RolePermissions, UpdateRequest, User } from '../../project-management-system-frontend/src/data/roles' */
 // Pulse Worker: serves the built app (ASSETS) and the JSON API under /api.
 // Every permission check happens here; the UI only hides what a user can't do.
+import { BRAND } from "../../project-management-system-frontend/src/data/brand";
 import { hashPassword, newRecoveryCodes, newToken, newTotpSecret, normalizeRecoveryCode, openSecret, sealSecret, tempPassword, tokenHash, totpUri, verifyPassword, verifyTotp } from "./auth";
 import { STATUS_META, initials } from "../../project-management-system-frontend/src/data/systems";
 import { FEATURE_KINDS, FEATURE_STATUSES, PRIORITIES } from "../../project-management-system-frontend/src/data/features";
@@ -33,6 +34,7 @@ import { runBriefing, runDailyDigests } from "./digest";
 import { toFeature } from "./rows";
 import { NO_TENANT, pgDatabase, tenantEnv } from "./pg";
 import { platformApi, purgeDueOrganizations } from "./platform";
+import { brandingFor, publicBrandingApi } from "./branding";
 import { HttpError, body, json } from "./http";
 import { adminAudit, auditEntry, changed } from "./audit";
 import { cleanWorkspaceStyle, cloneWorkspaceConfig, orgAdminApi, templateBlueprint } from "./orgadmin";
@@ -707,14 +709,14 @@ function manifest(start) {
   return new Response(
     JSON.stringify({
       id: view ?? "/",
-      name: "Pulse",
-      short_name: "Pulse",
-      description: "Pulse: the project tracker",
+      name: BRAND.productName,
+      short_name: BRAND.shortName,
+      description: BRAND.tagline,
       start_url: view ?? "/",
       scope: "/",
       display: "standalone",
-      background_color: "#101553",
-      theme_color: "#101553",
+      background_color: "#18202b",
+      theme_color: "#18202b",
       icons: [
         { src: "/icon-192.png", sizes: "192x192", type: "image/png" },
         { src: "/icon-512.png", sizes: "512x512", type: "image/png" },
@@ -762,6 +764,9 @@ async function api(req, env, path, ctx) {
   const method = req.method;
   if (path === "/api/manifest" && method === "GET") return manifest(new URL(req.url).searchParams.get("start"));
   // Platform Administrators: their own sign-in and session, outside every organisation (worker/platform.js).
+  // An organisation's branding, for its sign-in page: only for a code someone already has, and rate-limited.
+  const branded = await publicBrandingApi(env, req, path);
+  if (branded) return branded;
   const platform = await platformApi(env, req, path);
   if (platform) return platform;
   if (path === "/api/login" && method === "POST") {
@@ -1035,10 +1040,10 @@ async function api(req, env, path, ctx) {
       const url = `${env.PUBLIC_URL ?? new URL(req.url).origin}/#/reset-password/${token}`;
       const mail = securityEmail(
         "Reset your password",
-        [`Hi ${row.name}, someone (hopefully you) asked to reset the password for your Pulse account, ${row.username}.`, `The link below works once, for the next ${RESET_LINK_MINUTES} minutes. If you didn't ask for this, ignore this email: your password stays as it is.`],
+        [`Hi ${row.name}, someone (hopefully you) asked to reset the password for your account, ${row.username}.`, `The link below works once, for the next ${RESET_LINK_MINUTES} minutes. If you didn't ask for this, ignore this email: your password stays as it is.`],
         { label: "Choose a new password", url },
       );
-      ctx.waitUntil(sendEmail(env, delivery, /** @type {NonNullable<typeof row.email>} */ (row.email), mail.subject, mail.html, mail.text).catch((e) => noteFailure(/** @type {Env} */ (orgEnv).DB, "Email", e)));
+      ctx.waitUntil(sendEmail(env, delivery, /** @type {NonNullable<typeof row.email>} */ (row.email), mail.subject, mail.html, mail.text, row.organization_id).catch((e) => noteFailure(/** @type {Env} */ (orgEnv).DB, "Email", e)));
     } else if (row && orgEnv && outcome === "admins_told") {
       // The organisation's administrators confirm it's them and give a temporary password.
       const people = await /** @type {Promise<D1Result<{ id: string; }>>} */ (/** @type {unknown} */ (orgEnv.DB.prepare("SELECT id FROM users WHERE org_admin = 1").all()));
@@ -1048,7 +1053,7 @@ async function api(req, env, path, ctx) {
           userId: u.id,
           kind: /** @type {const} */ ("account_locked"),
           title: `${row.name} forgot their password`,
-          body: `They asked for a reset at sign-in, but ${row.email ? "email isn't connected yet" : "they have no email address in Pulse"}, so no link could be sent. Confirm it's really them, then give them a temporary password in Settings → Users.`,
+          body: `They asked for a reset at sign-in, but ${row.email ? "email isn't connected yet" : "they have no email address on their account"}, so no link could be sent. Confirm it's really them, then give them a temporary password in Settings → Users.`,
           link: "view:users",
           dedupe: `pwreset:${row.id}:${new Date(at).toISOString().slice(0, 10)}`,
         }));
@@ -1098,10 +1103,10 @@ async function api(req, env, path, ctx) {
     const delivery = await readDelivery(orgDbForMail);
     if (row.email && delivery.resendKey) {
       const mail = securityEmail("Your password was changed", [
-        `Hi ${row.name}, the password for your Pulse account, ${row.username}, was just changed using a reset link, and every device was signed out.`,
-        "If this was you, there's nothing more to do. If it wasn't, contact your Pulse administrator straight away.",
+        `Hi ${row.name}, the password for your account, ${row.username}, was just changed using a reset link, and every device was signed out.`,
+        "If this was you, there's nothing more to do. If it wasn't, contact your administrator straight away.",
       ]);
-      ctx.waitUntil(sendEmail(env, delivery, row.email, mail.subject, mail.html, mail.text).catch((e) => noteFailure(orgDbForMail, "Email", e)));
+      ctx.waitUntil(sendEmail(env, delivery, row.email, mail.subject, mail.html, mail.text, row.organization_id).catch((e) => noteFailure(orgDbForMail, "Email", e)));
     }
     return json({ ok: true });
   }
@@ -1143,7 +1148,8 @@ async function api(req, env, path, ctx) {
       limits,
       Date.now(),
     );
-    return json({ ...showcase, organization: link.org, workspace: link.ws }, 200, { "cache-control": "private, no-store" });
+    // The page carries the organisation's branding: it's that organisation's page, with "Powered by" in small print.
+    return json({ ...showcase, organization: link.org, workspace: link.ws, branding: await brandingFor(env.ROOT, link.organization_id) }, 200, { "cache-control": "private, no-store" });
   }
   // GitHub calls this, signed with the shared secret; the customer portal works by its link. No session.
   if (path === "/api/integrations/github/webhook" && method === "POST") return githubWebhook(env, req);
@@ -1388,8 +1394,8 @@ async function api(req, env, path, ctx) {
   /** Who and where: the organisation, the open workspace, and (for people signed in) the workspaces they belong to. */
   const tenantInfo = async () => {
     const [org, ws, mine] = await Promise.all([
-      /** @type {Promise<{ id: string; name: string; code: string; colour: string | null; has_logo: boolean; updated_at: string } | null>} */ (
-        /** @type {unknown} */ (db.prepare("SELECT id, name, code, colour, logo IS NOT NULL AS has_logo, updated_at FROM organizations WHERE id = ?").bind(scope.orgId).first())
+      /** @type {Promise<{ id: string; name: string; code: string } | null>} */ (
+        /** @type {unknown} */ (db.prepare("SELECT id, name, code FROM organizations WHERE id = ?").bind(scope.orgId).first())
       ),
       /** @type {Promise<{ id: string; name: string; key: string; icon: string; colour: string | null } | null>} */ (
         /** @type {unknown} */ (db.prepare("SELECT id, name, key, icon, colour FROM workspaces WHERE id = ?").bind(scope.workspaceId).first())
@@ -1411,7 +1417,7 @@ async function api(req, env, path, ctx) {
           ),
     ]);
     return {
-      organization: org && { id: org.id, name: org.name, code: org.code, ...(org.colour ? { colour: org.colour } : {}), ...(org.has_logo ? { logo: `/api/org/logo?v=${encodeURIComponent(org.updated_at)}` } : {}) },
+      organization: org && { id: org.id, name: org.name, code: org.code, branding: await brandingFor(db, org.id) },
       workspace: ws,
       workspaces: mine.results.map((w) => ({ id: w.id, name: w.name, key: w.key, icon: w.icon, ...(w.colour ? { colour: w.colour } : {}), role: w.role ?? "reader", ...(w.role ? {} : { open: true }) })),
       orgAdmin: !!me.org_admin,
@@ -1856,7 +1862,7 @@ async function api(req, env, path, ctx) {
     }
     if (b.from !== undefined && b.from.trim() !== (next.from ?? "")) {
       const from = b.from.trim();
-      if (from && !/^([^<>]{1,60}<)?[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+>?$/.test(from)) throw new HttpError(400, 'Send from: an address, or a name and address like "Pulse <pulse@omnicontact.biz>"');
+      if (from && !/^([^<>]{1,60}<)?[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+>?$/.test(from)) throw new HttpError(400, `Send from: an address, or a name and address like "${BRAND.shortName} <pms@your-company.com>"`);
       next.from = from;
       changed.push("send-from address");
     }
@@ -1899,9 +1905,9 @@ async function api(req, env, path, ctx) {
         return e instanceof Error ? `${e.message}.` : "failed.";
       }
     };
-    const mail = emailFor(env, "Test message", "Email from Pulse is working.");
+    const mail = emailFor(env, "Test message", `Email from ${BRAND.shortName} is working.`);
     const email = await outcome(!!(delivery.resendKey && delivery.from && me.email), () => sendEmail(env, delivery, /** @type {NonNullable<typeof me.email>} */ (me.email), mail.subject, mail.html, mail.text), `sent to ${me.email}.`);
-    const teams = await outcome(!!delivery.teams, () => postToTeams(env, delivery, { title: "Test message from Pulse", body: `Sent by ${me.name}.` }), "posted.");
+    const teams = await outcome(!!delivery.teams, () => postToTeams(env, delivery, { title: `Test message from ${BRAND.shortName}`, body: `Sent by ${me.name}.` }), "posted.");
     // A working connection clears the old failure notice.
     if (!/refused|fail/i.test(email + teams)) await removeSetting(db, "delivery_error").run();
     return json({ email, teams });
@@ -2222,7 +2228,7 @@ async function api(req, env, path, ctx) {
   }
   // Ask Pulse: a plain-English question answered from the data every signed-in user can see.
   if (path === "/api/ask" && method === "POST") {
-    if (!env.AI) throw new HttpError(503, "Ask Pulse isn't switched on for this server");
+    if (!env.AI) throw new HttpError(503, `${BRAND.assistantName} isn't switched on for this server`);
     const b = await /** @type {Promise<{ question?: string; history?: AskTurn[]; }>} */ (/** @type {unknown} */ (body(req)));
     const question = String(b.question ?? "").trim();
     if (!question) throw new HttpError(400, "Type a question");
@@ -2718,10 +2724,10 @@ async function api(req, env, path, ctx) {
     const delivery = await readDelivery(db);
     const available = requestChannels(delivery, !!guest);
     const via = b.via === undefined ? (available.teams ? /** @type {RequestChannel[]} */ (["teams"]) : []) : cleanChannels(b.via);
-    if (b.via !== undefined && !via.length) throw new HttpError(400, "Choose how to send it: Pulse chat, email or Teams");
+    if (b.via !== undefined && !via.length) throw new HttpError(400, `Choose how to send it: ${CHANNEL_LABEL.chat}, email or Teams`);
     const off = via.find((c) => !available[c]);
     if (off) {
-      throw new HttpError(400, off === "chat" ? "A view-only link can't post in Pulse chat. Choose email or Teams." : `${CHANNEL_LABEL[off]} isn't connected yet: an administrator can set it up in Settings → Notifications.`);
+      throw new HttpError(400, off === "chat" ? `A view-only link can't post in ${CHANNEL_LABEL.chat}. Choose email or Teams.` : `${CHANNEL_LABEL[off]} isn't connected yet: an administrator can set it up in Settings → Notifications.`);
     }
     const id = newToken().slice(0, 16);
     await db

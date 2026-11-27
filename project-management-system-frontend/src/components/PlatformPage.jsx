@@ -1,11 +1,11 @@
 // /platform: Pulse's Platform Administrators (multi-tenancy, phase (d)). They create, rename, suspend and archive
 // organisations and give each its first administrator. They see each organisation's name, code, status and how
 // many workspaces and people it has; never anything inside it. Signing in always needs an authenticator app.
+import { BRAND, tabTitle } from "../data/brand";
 import { useEffect, useState } from "react";
 import { Building2, KeyRound, LogOut, Plus, ShieldCheck } from "lucide-react";
 import { ApiError, api } from "../data/api";
 import { QrCode } from "./MfaSetup";
-import PulseMark from "./PulseMark";
 import { useConfirm } from "./AdminKit";
 
 /**
@@ -31,14 +31,15 @@ export default function PlatformPage() {
     }
   };
   useEffect(() => {
-    document.title = "Pulse · Platform";
+    document.title = tabTitle("Platform");
     load();
   }, []);
   return (
     <div className="platform">
       <header className="platform-top">
         <span className="platform-brand">
-          <PulseMark /> <span>Platform</span>
+          {/* The platform is neutral: the product's own wordmark, never an organisation's. */}
+          <b className="platform-pms">{BRAND.shortName}</b> <span>Platform</span>
         </span>
         {me && (
           <button
@@ -104,7 +105,7 @@ function SignIn({ onDone }) {
       </h1>
       {!ticket ? (
         <>
-          <p className="platform-muted">For Pulse's Platform Administrators. Organisations sign in at the main page.</p>
+          <p className="platform-muted">For the platform's administrators. Organisations sign in at the main page.</p>
           <label className="field">
             Username
             <input autoFocus autoComplete="username" required value={username} onChange={(e) => setUsername(e.target.value)} />
@@ -425,7 +426,7 @@ function NewOrganisation({ onCancel, onMade }) {
       }}
     >
       <h2>New organisation</h2>
-      <p className="platform-muted">It starts with one workspace, Projects, and Pulse's standard statuses, workflows and service desk set-up. Its administrator adds the rest.</p>
+      <p className="platform-muted">It starts with one workspace, Projects, and the standard statuses, workflows and service desk set-up. Its administrator adds the rest.</p>
       <div className="platform-grid">
         <label className="field">
           Name

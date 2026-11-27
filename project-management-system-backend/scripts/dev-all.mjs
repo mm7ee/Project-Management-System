@@ -62,4 +62,4 @@ for (const part of parts) {
 
 process.on("SIGINT", () => stopAll(0));
 process.on("SIGTERM", () => stopAll(0));
-console.log("Pulse: the backend on http://127.0.0.1:8787 and the frontend on http://localhost:5173. Open the frontend. Ctrl+C stops both.");
+console.log("PMS: the backend on http://127.0.0.1:8787 and the frontend on http://localhost:5173. Open the frontend. Ctrl+C stops both.");
