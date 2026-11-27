@@ -6,7 +6,8 @@ import { useEffect, useState } from "react";
 import { Building2, KeyRound, LogOut, Plus, ShieldCheck } from "lucide-react";
 import { ApiError, api } from "../data/api";
 import { QrCode } from "./MfaSetup";
-import { useConfirm } from "./AdminKit";
+import { ToastProvider, useConfirm } from "./AdminKit";
+import BrandingSettings from "./BrandingSettings";
 
 /**
  * @typedef {{ id: string; name: string; code: string; status: "active" | "suspended" | "archived"; createdAt: string; deleteAfter?: string; workspaces: number; people: number; admins: number }} Org
@@ -191,6 +192,8 @@ function Organisations() {
   const [orgs, setOrgs] = useState(/** @type {Org[] | null} */ (null));
   const [error, setError] = useState("");
   const [adding, setAdding] = useState(false);
+  // The organisation whose branding is open below the table (a Platform Administrator may change any).
+  const [branding, setBranding] = useState(/** @type {Org | null} */ (null));
   const [dialog, ask] = useConfirm();
   /** What a new organisation's (or a new) administrator needs: shown once. */
   const [handover, setHandover] = useState(/** @type {{ title: string; username: string; temporaryPassword: string; signInLink: string } | null} */ (null));
@@ -253,6 +256,19 @@ function Organisations() {
           </button>
         </section>
       )}
+      {branding && (
+        <section className="platform-card platform-branding" aria-label={`Branding of ${branding.name}`}>
+          <div className="platform-head">
+            <h2>Branding: {branding.name}</h2>
+            <button className="btn btn-ghost sm" onClick={() => setBranding(null)}>
+              Close
+            </button>
+          </div>
+          <ToastProvider>
+            <BrandingSettings key={branding.id} orgName={branding.name} endpoint={`/platform/organizations/${branding.id}/branding`} own={false} />
+          </ToastProvider>
+        </section>
+      )}
       {adding && (
         <NewOrganisation
           onCancel={() => setAdding(false)}
@@ -306,6 +322,9 @@ function Organisations() {
                   <td className="num">{o.admins}</td>
                   <td>{new Date(o.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</td>
                   <td className="platform-actions">
+                    <button className="btn btn-ghost sm" aria-pressed={branding?.id === o.id} onClick={() => setBranding(branding?.id === o.id ? null : o)}>
+                      Branding
+                    </button>
                     <button
                       className="btn btn-ghost sm"
                       onClick={() => {

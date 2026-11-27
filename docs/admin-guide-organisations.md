@@ -59,14 +59,37 @@ The administrator opens the link (or the main page, typing the code), signs in, 
 ## The organisation profile (Organisation Administrator)
 
 Settings → Organisation → **Profile**:
-- **Logo:** PNG, JPEG or WebP, up to 100 KB. It replaces the PMS logo in the sidebar.
-- **Brand colour:** a line under the logo.
 - **Time zone:** schedules, digests and SLA clocks use it.
 - **Working days and hours.**
 - **Contact email.**
 
-The logo and colour appear only after people sign in. The sign-in page stays plain, so it never shows which
-organisations use PMS.
+## Branding (Organisation Administrator, or a Platform Administrator)
+
+Settings → Organisation → **Branding** makes PMS look like your organisation's own system. A Platform Administrator
+can do the same from `/platform`: **Branding** on the organisation's row.
+
+**What you can set:**
+- **Display name:** "Sign in to {name}", tab titles, emails.
+- **Logo for light backgrounds**, and **logo for dark backgrounds** (usually a white version). The sidebar is always
+  dark, so it uses the dark one.
+- **Square icon:** the browser tab and small places.
+- **Accent colour:** main buttons, links, the active page, focus rings.
+- **Sign-in background tint** (optional).
+
+**How it behaves:**
+- **The contrast check:** if the accent is too light or too dark for a theme, a safe shade of it is used there. The
+  page shows which.
+- **Without a logo:** your initials in a rounded square of the accent stand in.
+- **Images:** PNG, WebP or JPEG up to 512 KB, resized for you. SVG isn't accepted.
+- **The live preview** shows the platform page, your sign-in page and the app, in each theme.
+
+**Where it shows:**
+- **Your sign-in page:** `…/#/o/{code}`, or after someone types your code.
+- **Inside the app:** the sidebar, the tab, buttons and links.
+- **Beyond it:** emails, Teams posts, PDF and Excel exports, the executive page and the service desk portal, each with
+  "Powered by Project Management System" in small print.
+- **Not on the platform's own page:** it stays neutral and never lists organisations.
+- **Never the status colours:** on track, at risk and overdue look the same in every organisation.
 
 ## Adding a workspace (Organisation Administrator)
 
@@ -145,14 +168,18 @@ under This workspace → Audit log.
 
 ## Signing in, for everyone
 
-1. The sign-in page asks for the **organisation code**, or takes it from a link like `…/#/o/acme`. This device
-   remembers it; **Change** sets another.
-2. Username and password, then the second step if they have two-step verification.
+1. The platform page asks for the **organisation code**, or a link like `…/#/o/acme` opens the organisation's own
+   sign-in page directly. This device remembers it; **Not your organisation?** goes back.
+2. The organisation's page (its logo and name): username and password, then the second step if they have two-step
+   verification.
 3. Someone in several workspaces chooses which to open. They can switch later from the top bar, without signing in
    again.
 
-A wrong code, an unknown username and a wrong password all get the same message. That's on purpose, so nobody can
-find out which organisations or accounts exist.
+**What a visitor can learn:**
+- **Unknown codes:** an unknown, suspended or archived code gets one message: "We couldn't find that organisation".
+- **Repeated guessing:** after 30 such codes in 10 minutes, that address is refused for a while.
+- **Sign-in:** an unknown username and a wrong password get the same message, so nobody can find out which accounts
+  exist.
 
 ## Templates for new workspaces (Organisation Administrator)
 

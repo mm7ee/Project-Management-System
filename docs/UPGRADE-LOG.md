@@ -1195,3 +1195,18 @@ They were taken on the Neon dev branch, where 0021 is applied; its reverse was r
 7. Check State A at `/`, State B at `/#/o/omnicontact`, signing in, and Settings → Organisation → Branding.
 
 A later release drops `organizations.logo` and `.colour` (0017), which nothing reads now.
+
+## Branding: the remaining pieces (2026-11-27)
+
+- **Platform Administrators** change an organisation's branding on `/platform`: **Branding** on its row opens the
+  same settings page (contrast check, uploads, preview), through `/api/platform/organizations/:id/branding`.
+- **About:** "Powered by Project Management System" (and the support address, once `BRAND.supportEmail` is set) at
+  the foot of Settings: the one place inside an organisation's space that names the product.
+- **Migration `0022_drop_profile_logo.sql`** (reverse in `migrations/down/`) drops `organizations.logo` and
+  `.colour` (0017), unused since 0021. The reverse puts them back filled from the branding, so 0021's and 0017's
+  reverses still run. Applied on the Neon dev branch; reversed there, then applied again.
+- `docs/admin-guide-organisations.md`: Branding, and the new sign-in steps.
+
+`npm test`: 264 passed. `tsc` (app and Worker): 0 errors.
+
+**Release:** `npm run db:status`, `db:backup`, `db:migrate` (0022), `db:status`, then push.

@@ -430,6 +430,16 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
           )}
         </div>
       </div>
+      {/* About: inside an organisation's space, the product is named only here, quietly. */}
+      <p className="powered-by settings-about">
+        {BRAND.poweredBy}
+        {BRAND.supportEmail && (
+          <>
+            {" · "}
+            <a href={`mailto:${BRAND.supportEmail}`}>Platform support</a>
+          </>
+        )}
+      </p>
     </div>
   );
 }

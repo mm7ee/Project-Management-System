@@ -3670,3 +3670,5 @@ th[aria-sort="ascending"] .pr-sort svg, th[aria-sort="descending"] .pr-sort svg 
   .topbar-org { display: inline-flex; align-items: center; }
   .topbar-org .org-logo.sm { width: 96px; height: 30px; }
 }
+.settings-about { margin: 28px 0 8px; text-align: center; }
+.platform-branding { margin-top: 16px; }

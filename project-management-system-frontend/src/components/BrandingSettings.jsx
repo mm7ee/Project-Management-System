@@ -55,8 +55,12 @@ async function prepareImage(file, box, square) {
   return best;
 }
 
-/** @param {{ orgName: string }} p */
-export default function BrandingSettings({ orgName }) {
+/**
+ * @param {{ orgName: string; endpoint?: string; own?: boolean }} p  endpoint: the organisation's own route, or a
+ *   Platform Administrator's (/platform/organizations/:id/branding); own: it's the organisation that's open here, so a
+ *   save shows at once.
+ */
+export default function BrandingSettings({ orgName, endpoint = "/org/branding", own = true }) {
   const toast = useToast();
   const [saved, setSaved] = useState(/** @type {BrandingView | null} */ (null));
   const [displayName, setDisplayName] = useState("");
@@ -75,10 +79,10 @@ export default function BrandingSettings({ orgName }) {
     setImages({});
   };
   useEffect(() => {
-    api("/org/branding")
+    api(endpoint)
       .then((r) => load(/** @type {{ branding: BrandingView }} */ (r).branding))
       .catch((e) => toast(e instanceof Error ? e.message : "Couldn't load the branding", false));
-  }, []);
+  }, [endpoint]);
 
   const cleanAccent = cleanHex(accent) ?? saved?.accent ?? "#3e5c76";
   const check = useMemo(() => accentShades(cleanAccent), [cleanAccent]);
@@ -120,9 +124,9 @@ export default function BrandingSettings({ orgName }) {
           setSaving(true);
           try {
             const body = { displayName: draft.name, accent: draft.accent, tint: draft.tint, ...images };
-            const r = /** @type {{ branding: BrandingView }} */ (await api("/org/branding", "PUT", body));
+            const r = /** @type {{ branding: BrandingView }} */ (await api(endpoint, "PUT", body));
             load(r.branding);
-            applyBranding(r.branding);
+            if (own) applyBranding(r.branding);
             toast("The branding is saved. Everyone sees it on their next page load.");
           } catch (err) {
             toast(err instanceof Error ? err.message : "Couldn't save", false);
