@@ -1,4 +1,4 @@
-// Data retention policy (ISO 27001 A.5.33, A.8.10): how long Pulse keeps each kind of record. The
+// Data retention policy (ISO 27001 A.5.33, A.8.10): how long PMS keeps each kind of record. The
 // Worker's weekday-morning clean-up (worker/retention.ts) enforces these numbers; Settings shows them to everyone.
 /**
  * The activity log: sign-ins, failed sign-ins and every change.

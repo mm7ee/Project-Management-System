@@ -10,7 +10,7 @@ import { newToken, openSecret, sealSecret, tokenHash } from "./auth";
 import { renderTemplate } from "../../project-management-system-frontend/src/data/automation";
 import { HttpError, body, json } from "./http";
 import { SELECT, keyOf } from "./workitems";
-import { API_RATE_LIMIT, MAX_TOKENS_PER_PERSON, TOKEN_DAYS, TOKEN_PREFIX, WEBHOOK_BACKOFF_MINUTES, WEBHOOK_EVENTS, WEBHOOK_MAX_ATTEMPTS } from "../../project-management-system-frontend/src/data/admin";
+import { API_RATE_LIMIT, MAX_TOKENS_PER_PERSON, OLD_TOKEN_PREFIX, TOKEN_DAYS, TOKEN_PREFIX, WEBHOOK_BACKOFF_MINUTES, WEBHOOK_EVENTS, WEBHOOK_MAX_ATTEMPTS } from "../../project-management-system-frontend/src/data/admin";
 const enc = new TextEncoder();
 const hex =
   /** @param {ArrayBuffer} buf
@@ -181,7 +181,23 @@ export async function devLinksFor(db, itemId) {
  */
 const TOKEN_BLOCKED = [/^\/api\/me(\/|$)/, /^\/api\/tokens/, /^\/api\/logout/, /^\/api\/users/, /^\/api\/settings\//, /^\/api\/share-links/, /^\/api\/showcase-links/, /^\/api\/org(\/|$)/, /^\/api\/integrations/, /^\/api\/webhooks/, /^\/api\/mfa/];
 /**
- * A request with "Authorization: Bearer pulse_…": the token's owner, or an error. Read tokens may only
+ * The headers a signed delivery carries: X-PMS-Event, X-PMS-Delivery, X-PMS-Signature and so on, and the same values
+ * under their names from before the rename (X-Pulse-…), so receiving systems set up then keep working.
+ * @param {Record<string, string>} values  event, delivery, signature, rule…
+ * @param {string} agent
+ * @returns {Record<string, string>}
+ */
+export function webhookHeaders(values, agent) {
+  /** @type {Record<string, string>} */ const h = { "user-agent": agent };
+  for (const [k, v] of Object.entries(values)) {
+    h[`x-pms-${k}`] = v;
+    h[`x-pulse-${k}`] = v;
+  }
+  return h;
+}
+
+/**
+ * A request with "Authorization: Bearer pms_…" (or, made before the rename, "pulse_…"): the token's owner, or an error. Read tokens may only
  * read. Each token may make API_RATE_LIMIT requests a minute.
  * The token belongs to one workspace (the one it was made in): the request is scoped to it.
  * @param {TenantDatabase} root the owner handle: a token is found by its hash before its tenant is known
@@ -194,7 +210,7 @@ export async function tokenAuth(root, req, path) {
   const m = header.match(/^Bearer\s+(\S+)$/i);
   if (!m) return null;
   const token = m[1];
-  if (!token.startsWith(TOKEN_PREFIX)) throw new HttpError(401, `That isn't a ${BRAND.shortName} API token`);
+  if (!token.startsWith(TOKEN_PREFIX) && !token.startsWith(OLD_TOKEN_PREFIX)) throw new HttpError(401, `That isn't a ${BRAND.shortName} API token`);
   const row = await /** @type {Promise<{ id: string; user_id: string; name: string; scope: TokenScope; expires_at: string; revoked_at: string | null; last_used_at: string | null; organization_id: string; workspace_id: string; } | null>} */ (
     /** @type {unknown} */ (
       root
@@ -335,10 +351,10 @@ async function attempt(env, id) {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "user-agent": "Pulse-Webhooks/1",
-        "x-pulse-event": d.event,
-        "x-pulse-delivery": String(d.id),
-        "x-pulse-signature": `sha256=${await hmacHex(secret, d.payload)}`,
+        ...webhookHeaders(
+          { event: d.event, delivery: String(d.id), signature: `sha256=${await hmacHex(secret, d.payload)}` },
+          "PMS-Webhooks/1",
+        ),
       },
       body: d.payload,
       signal: AbortSignal.timeout(10_000),
@@ -562,7 +578,7 @@ export async function integrationsApi(c, env, path, method) {
     if (!events.length) throw new HttpError(400, "Choose at least one event");
     const systemId = b.systemId ? String(b.systemId) : null;
     if (systemId && !(await db.prepare("SELECT 1 FROM systems WHERE id = ?").bind(systemId).first())) throw new HttpError(404, "System not found");
-    // Its own JSON, with smart values ({{item.key}} …), or Pulse's standard payload when empty.
+    // Its own JSON, with smart values ({{item.key}} …), or the system's standard payload when empty.
     const template = b.payloadTemplate ? String(b.payloadTemplate).slice(0, 8000) : null;
     if (template) {
       try {
@@ -671,7 +687,7 @@ export async function integrationsApi(c, env, path, method) {
   throw new HttpError(404, "Not found");
 }
 /**
- * Ask Pulse: the person's own API tokens, and (for integration managers) the webhooks and GitHub.
+ * Ask AI: the person's own API tokens, and (for integration managers) the webhooks and GitHub.
  * @param {ItemContext} c
  * @returns {Promise<string[]>}
  */

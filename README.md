@@ -7,7 +7,7 @@ clients, work items on boards and sprints, blockers, documents, Concept Notes an
 team chat. Managers get reports and insights on top of it all, and **Ask AI** answers questions about the live
 data in plain English.
 
-**Live:** https://pulse.utsa--wanza--ortfolio.workers.dev
+**Live:** https://pms.utsa--wanza--ortfolio.workers.dev (the old pulse.… and omni-tracker.… addresses redirect there)
 
 ## What's in it
 
@@ -32,7 +32,7 @@ data in plain English.
 ## How it's built
 
 ```
-Browser ──► "pulse" Worker (gateway) ──► "omni-tracker" Worker ──► Hyperdrive ──► Postgres on Neon (Singapore)
+Browser ──► "pms" Worker (gateway) ──► "omni-tracker" Worker ──► Hyperdrive ──► Postgres on Neon (Singapore)
                                            │  serves the React app (static assets)
                                            │  and the JSON API under /api
                                            └─► Workers AI (Ask AI) · Resend (email) · Teams webhook
@@ -69,7 +69,7 @@ project-management-system-backend/    the API, database and deployment
   scripts/demo-org.mjs   the demo organisation "Demo Co" (Development and Marketing workspaces)
   scripts/platform-admin.mjs  makes the first Platform Administrator
   tests/               Vitest tests that run the real Worker on PGlite
-  gateway/             the "pulse" Worker that fronts the app (deployed by hand)
+  gateway/             the "pms" Worker that fronts the app, and "pulse", the old address (redirects)
   postman/             Postman collection and environments for the API
   docs/API.md          the API reference
   wrangler.jsonc       the Worker: the API plus the front end's dist/ as its assets
@@ -112,7 +112,7 @@ You need Node 22 and access to the Neon project.
      so does the other. In VS Code, **Terminal → Run Task → PMS: frontend + backend** does the same in two
      panels.
    - **Frontend only:** the screens with live reloading. Vite sends `/api` to http://127.0.0.1:8787. If the backend
-     isn't running, API calls answer 503 with a message saying so. Set `PULSE_API` to point it elsewhere.
+     isn't running, API calls answer 503 with a message saying so. Set `PMS_API` to point it elsewhere.
    - **Backend only:** the API, without building the screens. Until the frontend is built, the page at
      http://127.0.0.1:8787 just points you to the frontend.
    - **The two can start and stop in any order.** Start the backend later and the frontend picks it up.
@@ -141,10 +141,13 @@ git push origin main                                 # then deploy the code that
 Pushing code before its migration is applied breaks the live site. Backups go in `database/backups/` and are
 ignored by git (`backup-*.sql`).
 
-The gateway Worker rarely changes. To deploy it by hand, from `project-management-system-backend/`:
+The gateway is deployed by the same workflow, after the app: as `pms` (the address people use) and as `pulse` (the
+old address, which redirects pages to `pms.…` and passes `/api/` calls on, so other systems still calling it keep
+working). By hand, from `project-management-system-backend/`:
 
 ```sh
-npx wrangler@4 deploy --config gateway/wrangler.jsonc
+npx wrangler@4 deploy --config gateway/wrangler.jsonc               # pms
+npx wrangler@4 deploy --config gateway/wrangler.jsonc --name pulse  # the old address
 ```
 
 ## Useful commands

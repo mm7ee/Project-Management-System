@@ -3,8 +3,8 @@
 // workspace per organisation is offered first when choosing. Things a page remembers inside a workspace (the last
 // dashboard or board) are kept per workspace, so one workspace's choices never appear in another.
 
-const ORG_KEY = "pulse:org";
-const LAST_WS_KEY = "pulse:last-workspace";
+const ORG_KEY = "pms:org";
+const LAST_WS_KEY = "pms:last-workspace";
 /** The open workspace's id and the organisation's name, set by the app once its data has loaded. */
 let openWorkspace = "";
 let openOrganisation = "";

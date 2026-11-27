@@ -8,7 +8,7 @@ database/
   migrations/        Postgres schema changes, applied in order, once each
   migrations-d1/     the old D1 database's history (read-only)
   backups/           backups of production (ignored by git)
-gateway/             the "pulse" Worker in front of the app (deployed by hand)
+gateway/             the "pms" Worker in front of the app, and "pulse" (the old address), deployed by CI
 scripts/             database tool, demo data, the demo organisation, the first Platform Administrator
 tests/               Vitest tests that run the real Worker on PGlite (an in-process Postgres)
 postman/             Postman collection and environments

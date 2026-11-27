@@ -20,6 +20,7 @@
 // levels deep; a rule runs at most MAX_PER_ITEM_HOUR times an hour on one item and max_per_minute times a minute;
 // an organisation's rules run at most ORG_RUNS_PER_MINUTE times a minute between them. Every run is logged in
 // automation_runs, with each condition's result and what each action did.
+import { webhookHeaders } from "./integrations";
 import { newToken, openSecret, sealSecret, tokenHash } from "./auth";
 import { HttpError, body, json } from "./http";
 import { postToTeams, raise, readDelivery, sendEmail } from "./notify";
@@ -512,7 +513,7 @@ async function act(c, a, row, x) {
       const text = tpl(String(cfg.body ?? ""));
       const link = row ? smartValues(x.env, x.info, row, x.names, x.by)["item.url"] : "";
       // Every value put into the email is escaped, so an item's title can't add markup or links.
-      const html = `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14.5px;line-height:1.5;color:#1c2b45">${tpl(String(cfg.body ?? ""), "html").replace(/\n/g, "<br>")}${row ? `<p><a href="${renderTemplate("{{u}}", { u: link }, "html")}">Open ${renderTemplate("{{k}}", { k: keyOf(row) }, "html")} in Pulse</a></p>` : ""}</div>`;
+      const html = `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14.5px;line-height:1.5;color:#1c2b45">${tpl(String(cfg.body ?? ""), "html").replace(/\n/g, "<br>")}${row ? `<p><a href="${renderTemplate("{{u}}", { u: link }, "html")}">Open ${renderTemplate("{{k}}", { k: keyOf(row) }, "html")} in PMS</a></p>` : ""}</div>`;
       for (const addr of to) await sendEmail(x.env, delivery, addr, subject, html, `${text}${link ? `\n\n${link}` : ""}`);
       return { changed: true, message: `Emailed ${to.length} ${to.length === 1 ? "person" : "people"}` };
     }
@@ -686,7 +687,7 @@ async function checkOwnerCanCreate(env, orgId, workspaceId, ownerId) {
 
 /**
  * Calls a webhook: the payload template with smart values (escaped for JSON), signed with the action's secret
- * (X-Pulse-Signature: sha256=<hex HMAC of the body>). A failure (no answer, or not 2xx) throws, so the job is tried
+ * (X-PMS-Signature, and X-Pulse-Signature for receivers set up before the rename: sha256=<hex HMAC of the body>). A failure (no answer, or not 2xx) throws, so the job is tried
  * again.
  * @param {ItemContext} c
  * @param {AutomationAction} a
@@ -711,7 +712,7 @@ async function callWebhook(c, a, x, tpl) {
   const sig = [...new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload)))].map((b) => b.toString(16).padStart(2, "0")).join("");
   const res = await fetch(url, {
     method: "POST",
-    headers: { "content-type": "application/json", "user-agent": "Pulse-Automation", "x-pulse-signature": `sha256=${sig}`, "x-pulse-rule": x.rule.id },
+    headers: { "content-type": "application/json", ...webhookHeaders({ signature: `sha256=${sig}`, rule: x.rule.id }, "PMS-Automation") },
     body: payload,
     signal: AbortSignal.timeout(10_000),
   });
@@ -1720,7 +1721,7 @@ export async function automationApi(c, env, path, method) {
   throw new HttpError(404, "Not found");
 }
 /**
- * Ask Pulse, for people who manage automation: each rule and how it last went.
+ * Ask AI, for people who manage automation: each rule and how it last went.
  * @param {D1Database} db
  * @returns {Promise<string[]>}
  */

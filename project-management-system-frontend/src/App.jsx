@@ -85,9 +85,9 @@ const greeting = () => {
 };
 /**
  * Where a view-only link keeps its display settings (this browser only).
- * @type {"omnitrack:view-prefs"}
+ * @type {"pms:view-prefs"}
  */
-const VIEW_PREFS = "omnitrack:view-prefs";
+const VIEW_PREFS = "pms:view-prefs";
 // #/projects/<id>/items is its Work items tab; #/projects/<id>/items/<KEY-n> one work item.
 const PROJECT_ROUTE = /^#\/projects\/([a-z0-9-]+)(?:\/(pcn|items|board|backlog|timeline)(?:\/([A-Z]{2,10}-\d{1,7}))?)?\/?$/;
 /**
@@ -219,7 +219,7 @@ function Dashboard({ data, reload }) {
   // Chat: the conversation a link asked for, and the unread count beside "Chat" in the sidebar.
   const [chatOpen, setChatOpen] = useState(/** @type {string | null | (() => string | null)} */ (chatInHash));
   const [chatUnread, setChatUnread] = useChatUnread(!data.viewOnly);
-  // A search opened from somewhere else (Ask Pulse): the query, and a counter so the same one reruns.
+  // A search opened from somewhere else (Ask AI): the query, and a counter so the same one reruns.
   const [searchFor, setSearchFor] = useState(/** @type {{ pql: string; n: number } | null | (() => { pql: string; n: number } | null)} */ (null));
   const [filter, setFilter] = useState(/** @type {Filter | (() => Filter)} */ (() => (prefs.start === "DASHBOARD" || (prefs.start === "MINE" && !myProjects.length) ? "ALL" : /** @type {Filter} */ (prefs.start))));
   const showTab = /** @param {Filter} f */ (f) => {
@@ -231,7 +231,7 @@ function Dashboard({ data, reload }) {
   // The workspace the Projects page shows, remembered on this device.
   const [workspace, setWorkspaceState] = useState(() => {
     try {
-      return localStorage.getItem("omnitrack:workspace") ?? "";
+      return localStorage.getItem("pms:workspace") ?? "";
     } catch {
       return "";
     }
@@ -239,7 +239,7 @@ function Dashboard({ data, reload }) {
   const setWorkspace = /** @param {string} v */ (v) => {
     setWorkspaceState(v);
     try {
-      localStorage.setItem("omnitrack:workspace", v);
+      localStorage.setItem("pms:workspace", v);
     } catch {
       // Only a convenience.
     }
@@ -275,9 +275,9 @@ function Dashboard({ data, reload }) {
   };
   // ---------- Back and forward ----------
   // Every screen is a browser history entry carrying { view, filter, depth }, so the browser's Back and
-  // Forward (and a phone's back gesture) move between Pulse's pages, and the ← in the top bar does the same.
+  // Forward (and a phone's back gesture) move between the system's pages, and the ← in the top bar does the same.
   // Projects keep their address (#/projects/…); the entry for one also remembers the page underneath.
-  // `depth` counts the steps since Pulse opened, so the ← only shows when there's somewhere to go back to.
+  // `depth` counts the steps since PMS opened, so the ← only shows when there's somewhere to go back to.
   const viewRef = useRef(view);
   const filterRef = useRef(filter);
   const depthRef = sharedDepth; // shared with tab switches inside pages (history.js)
@@ -289,16 +289,16 @@ function Dashboard({ data, reload }) {
   /** @param {number} depth @param {boolean} [keepTabs] keep the tabs this entry remembers (same screen, e.g. after a reload) */
   const stamp = (depth, keepTabs = false) => {
     const s = window.history.state ?? {};
-    return { ...s, pulse: { view: viewRef.current, filter: filterRef.current, depth, ...(keepTabs && s.pulse?.tabs ? { tabs: s.pulse.tabs } : {}) } };
+    return { ...s, pms: { view: viewRef.current, filter: filterRef.current, depth, ...(keepTabs && s.pms?.tabs ? { tabs: s.pms.tabs } : {}) } };
   };
   useEffect(() => {
-    // The first screen: whatever was there before Pulse (a link, a bookmark) stays out of reach of the ←.
-    depthRef.current = Number(window.history.state?.pulse?.depth ?? 0);
+    // The first screen: whatever was there before PMS (a link, a bookmark) stays out of reach of the ←.
+    depthRef.current = Number(window.history.state?.pms?.depth ?? 0);
     window.history.replaceState(stamp(depthRef.current, true), "");
     setCanGoBack(depthRef.current > 0);
     setDepthListener(setCanGoBack);
     const onPop = /** @param {PopStateEvent} e */ (e) => {
-      const s = e.state?.pulse;
+      const s = e.state?.pms;
       if (!s) return;
       depthRef.current = Number(s.depth ?? 0);
       setCanGoBack(depthRef.current > 0);
@@ -317,7 +317,7 @@ function Dashboard({ data, reload }) {
       fromHistory.current = false;
       return;
     }
-    const s = window.history.state?.pulse;
+    const s = window.history.state?.pms;
     if (s && s.view === view && s.filter === filter) return;
     // Leaving a project for another page: that page takes over the entry made for leaving it.
     if (Date.now() - leftProjectAt.current < 400) {
@@ -331,7 +331,7 @@ function Dashboard({ data, reload }) {
   // Opening a project (or moving within one) changes the address: give that entry a screen and a depth too.
   useEffect(() => {
     const onHash = () => {
-      if (window.history.state?.pulse) return; // an entry we already know (Back or Forward)
+      if (window.history.state?.pms) return; // an entry we already know (Back or Forward)
       depthRef.current += 1;
       window.history.replaceState(stamp(depthRef.current), "");
       setCanGoBack(true);
@@ -733,7 +733,7 @@ function Dashboard({ data, reload }) {
               // so it takes the place of the entry the view change would add.
               if (view === "settings") return;
               const s = window.history.state ?? {};
-              window.history.replaceState({ ...s, pulse: { ...s.pulse, view: "settings" } }, "");
+              window.history.replaceState({ ...s, pms: { ...s.pms, view: "settings" } }, "");
               setView("settings");
             }}
             adminPages={(() => {

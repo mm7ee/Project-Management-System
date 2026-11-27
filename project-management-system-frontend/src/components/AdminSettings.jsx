@@ -646,7 +646,7 @@ export function ApiReference() {
     <details className="api-ref">
       <summary>API reference</summary>
       <p>
-        Send the token in a header: <code>Authorization: Bearer pulse_…</code>. Every request runs as the token's owner, with the same permissions and visibility rules (including security levels). Responses are JSON. Errors come back as <code>{'{ "error": "…" }'}</code> with a 4xx status; 429 means
+        Send the token in a header: <code>Authorization: Bearer pms_…</code> (tokens made before the rename start with <code>pulse_</code> and still work). Every request runs as the token's owner, with the same permissions and visibility rules (including security levels). Responses are JSON. Errors come back as <code>{'{ "error": "…" }'}</code> with a 4xx status; 429 means
         slow down (up to {API_RATE_LIMIT} requests a minute).
       </p>
       <table className="table">
@@ -679,7 +679,7 @@ export function ApiReference() {
         </tbody>
       </table>
       <p className="set-note">
-        Tokens can't be used for accounts, sign-in, tokens, view-only links or integrations. Webhooks are signed: check <code>X-Pulse-Signature</code>, an HMAC-SHA256 of the body with the webhook's secret.
+        Tokens can't be used for accounts, sign-in, tokens, view-only links or integrations. Webhooks are signed: check <code>X-PMS-Signature</code> (also sent as <code>X-Pulse-Signature</code>), an HMAC-SHA256 of the body with the webhook's secret.
       </p>
     </details>
   );
@@ -792,7 +792,7 @@ export function IntegrationsSection({ systems }) {
       <Section
         icon={<WebhookIcon size={18} />}
         title="Outbound webhooks"
-        sub={`${BRAND.shortName} posts work item events (created, updated, moved, commented) to other systems, signed with HMAC-SHA256 in X-Pulse-Signature. A failed delivery is retried after 15 seconds, then after 1, 2, 4 and 8 hours. Items with a security level are never sent.`}
+        sub={`${BRAND.shortName} posts work item events (created, updated, moved, commented) to other systems, signed with HMAC-SHA256 in X-PMS-Signature (also sent as X-Pulse-Signature, for systems set up before the rename). A failed delivery is retried after 15 seconds, then after 1, 2, 4 and 8 hours. Items with a security level are never sent.`}
       >
         {error && <p className="form-error">{error}</p>}
         {freshSecret && <CopyOnce label="The webhook's signing secret." value={freshSecret} />}
@@ -867,7 +867,7 @@ export function IntegrationsSection({ systems }) {
               </label>
               <label className="field">
                 <span>Address (https://)</span>
-                <input type="url" value={editing.url ?? ""} onChange={(e) => setEditing({ ...editing, url: e.target.value })} placeholder="https://example.com/pulse-events" required />
+                <input type="url" value={editing.url ?? ""} onChange={(e) => setEditing({ ...editing, url: e.target.value })} placeholder="https://example.com/pms-events" required />
               </label>
             </div>
             <label className="field">

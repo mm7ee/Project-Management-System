@@ -17,7 +17,7 @@ import { TooltipLayer } from "./reports/chartKit";
 import { describe } from "./ActivityPage";
 import { workspaceKey } from "../data/tenant";
 const OVERVIEW = "overview";
-const PICK_KEY = "pulse:dashboard";
+const PICK_KEY = "pms:dashboard";
 const OVERVIEW_DESC = "Projects, delivery and team workload across this workspace, as of now.";
 // The categorical chart palette (styles.css --cat-*), in its fixed order. Status colours are kept for meaning.
 const CAT = ["var(--cat-1)", "var(--cat-2)", "var(--cat-3)", "var(--cat-4)", "var(--cat-5)", "var(--cat-6)", "var(--cat-7)", "var(--cat-8)"];
@@ -69,7 +69,7 @@ function remembered() {
   }
 }
 /**
- * The Dashboard view: "Pulse overview" (the built-in one) or a configurable dashboard of gadgets.
+ * The Dashboard view: "Workspace overview" (the built-in one) or a configurable dashboard of gadgets.
  * @param {Props} arg1
  */
 export default function CustomDashboards({ overview, users, systems, workspaces, now, canShare, enabled }) {

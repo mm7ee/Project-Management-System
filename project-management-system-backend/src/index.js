@@ -12,7 +12,7 @@
 /** @import { ItemContext } from './workitems' */
 /** @import { AppNotification, DeliveryStatus, Digest, NotificationKind } from '../../project-management-system-frontend/src/data/notifications' */
 /** @import { MfaPolicy, Permission, Role, RolePermissions, UpdateRequest, User } from '../../project-management-system-frontend/src/data/roles' */
-// Pulse Worker: serves the built app (ASSETS) and the JSON API under /api.
+// PMS Worker: serves the built app (ASSETS) and the JSON API under /api.
 // Every permission check happens here; the UI only hides what a user can't do.
 import { BRAND } from "../../project-management-system-frontend/src/data/brand";
 import { hashPassword, newRecoveryCodes, newToken, newTotpSecret, normalizeRecoveryCode, openSecret, sealSecret, tempPassword, tokenHash, totpUri, verifyPassword, verifyTotp } from "./auth";
@@ -65,9 +65,11 @@ const VIA_TOKEN = /** @type {WeakMap<Request, string>} */ (/** @type {unknown} *
 import { EFFECTIVE_WORKFLOW, loadWorkflow } from "./workflowData";
 import { DEFAULT_ROLE_PERMISSIONS, ROLES, ROLE_LABEL, START_KEYS, assignable, cleanPrefs, mfaRequiredFor, permissionsFor } from "../../project-management-system-frontend/src/data/roles";
 import { settingRow, saveSetting, removeSetting, workspacesRow } from "./settings";
-const COOKIE = "omni_session";
+// The session cookie. Its old name (omni_session) is still read, so nobody is signed out by the rename.
+const COOKIE = "pms_session";
+const OLD_COOKIE = "omni_session";
 /**
- * Ask Pulse: questions per person per window, kept per Worker instance (a guard, not a quota).
+ * Ask AI: questions per person per window, kept per Worker instance (a guard, not a quota).
  * @type {20}
  */
 const ASK_LIMIT = 20;
@@ -144,7 +146,8 @@ function slug(text) {
  * @returns {string | null}
  */
 function cookieToken(req) {
-  const m = (req.headers.get("cookie") ?? "").match(new RegExp(`(?:^|;\\s*)${COOKIE}=([a-f0-9]{64})`));
+  const all = req.headers.get("cookie") ?? "";
+  const m = all.match(new RegExp(`(?:^|;\\s*)${COOKIE}=([a-f0-9]{64})`)) ?? all.match(new RegExp(`(?:^|;\\s*)${OLD_COOKIE}=([a-f0-9]{64})`));
   return m ? m[1] : null;
 }
 /**
@@ -1172,7 +1175,7 @@ async function api(req, env, path, ctx) {
   }
   // Everything below needs a signed-in user.
   // A view-only share link stands in for a signed-in user: read-only, and only while the link
-  // is valid. It may load the data and project history, ask Ask Pulse, and request updates
+  // is valid. It may load the data and project history, ask Ask AI, and request updates
   // (or withdraw its own requests); nothing else.
   const shareToken = req.headers.get("x-share-token");
   const guest = shareToken
@@ -1257,7 +1260,7 @@ async function api(req, env, path, ctx) {
     throw new HttpError(403, `Hi ${me.name}, your organisation requires two-step verification. Set it up to continue.`, "mfa_setup_required");
   }
   // A Viewer (the read-only role) reads; the only changes they make are to their own account, their notifications
-  // and chat. Searching and asking Ask Pulse are reads sent as POST. Checked here, before any route, so a route that
+  // and chat. Searching and asking Ask AI are reads sent as POST. Checked here, before any route, so a route that
   // forgets a permission check still can't be used to change anything.
   if (!guest && me.role === "reader" && !["GET", "HEAD"].includes(method) && !readerMayWrite(path)) {
     throw new HttpError(403, "You have view-only access in this workspace", "read_only");
@@ -1268,7 +1271,7 @@ async function api(req, env, path, ctx) {
   const can = /** @param {Permission} p */ (p) => perms.includes(p);
   if (apiToken && !can("use_api")) throw new HttpError(403, "Your role can no longer use API tokens", "token_not_allowed");
   // Developers (without manage_features) see only the feature requests assigned to them or
-  // logged by them: everywhere, including Ask Pulse and project history.
+  // logged by them: everywhere, including Ask AI and project history.
   const ownFeaturesOnly = me.role === "developer" && !can("manage_features");
   const mineOnly = /** @param {FeatureRow[]} rows */ (rows) => (ownFeaturesOnly ? rows.filter((f) => f.assignee === me.id || f.created_by === me.id) : rows);
   // Feature requests are work items: those with a security level only for people at the level (worker/access.ts).
@@ -1280,7 +1283,7 @@ async function api(req, env, path, ctx) {
   };
   const seeFeature = /** @param {FeatureRow} f */ async (f) => (await visibleFeatures([f])).length === 1;
   // Developers (without manage_systems) see only the Concept Notes they wrote or are asked to sign:
-  // anyone else's is left off the project, everywhere it's sent, including Ask Pulse.
+  // anyone else's is left off the project, everywhere it's sent, including Ask AI.
   const ownPcnsOnly = me.role === "developer" && !can("manage_systems");
   const pcnFor = /** @param {System} s @returns {System} */ (s) => {
     if (!ownPcnsOnly || !s.pcn || s.pcnBy === me.id || s.pcn.signatories.some((g) => g.userId === me.id)) return s;
@@ -2228,7 +2231,7 @@ async function api(req, env, path, ctx) {
         : [],
     });
   }
-  // Ask Pulse: a plain-English question answered from the data every signed-in user can see.
+  // Ask AI: a plain-English question answered from the data every signed-in user can see.
   if (path === "/api/ask" && method === "POST") {
     if (!env.AI) throw new HttpError(503, `${BRAND.assistantName} isn't switched on for this server`);
     const b = await /** @type {Promise<{ question?: string; history?: AskTurn[]; }>} */ (/** @type {unknown} */ (body(req)));
@@ -2755,7 +2758,7 @@ async function api(req, env, path, ctx) {
       : [];
     const title = `${me.name} asked for an update on ${system.name}`;
     /** @type {RequestDelivery} */ const sent = {};
-    // Pulse chat: a message in the project's channel, @mentioning the team, from the person asking.
+    // PMS chat: a message in the project's channel, @mentioning the team, from the person asking.
     if (via.includes("chat")) {
       const conversationId = `p-${system.id}`;
       const mentions = people.map((p) => `@${p.username}`).join(" ");

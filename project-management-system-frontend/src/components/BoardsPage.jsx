@@ -19,7 +19,7 @@ import { workspaceKey } from "../data/tenant";
 export default function BoardsPage({ workspaces, systems, users, me, now, readOnly, canAssignOthers }) {
   const remembered = (() => {
     try {
-      return localStorage.getItem(workspaceKey("pulse:board")) ?? "";
+      return localStorage.getItem(workspaceKey("pms:board")) ?? "";
     } catch {
       return "";
     }
@@ -29,7 +29,7 @@ export default function BoardsPage({ workspaces, systems, users, me, now, readOn
   const setPick = /** @param {string} v */ (v) => {
     setPickState(v);
     try {
-      localStorage.setItem(workspaceKey("pulse:board"), v);
+      localStorage.setItem(workspaceKey("pms:board"), v);
     } catch {
       // Only a convenience.
     }

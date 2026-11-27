@@ -44,7 +44,7 @@ export const MAX_REACTIONS = 20;
  */
 export const QUICK_REACTIONS = ["👍", "❤️", "😂", "🎉", "😮", "🙏"];
 /**
- * Pulse's own sticker set (original artwork drawn in the UI, src/components/ChatExtras.tsx).
+ * the system's own sticker set (original artwork drawn in the UI, src/components/ChatExtras.tsx).
  * Only these ids are accepted.
  */
 /** @type {{ id: string; label: string }[]} */ export const STICKERS = [

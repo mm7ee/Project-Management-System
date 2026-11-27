@@ -1,7 +1,7 @@
 /** @import { Digest, NotificationKind } from '../../project-management-system-frontend/src/data/notifications' */
 // Notifications: every alert lands under the person's bell, then goes out by email (Resend) and to
 // a Teams channel when an administrator has connected them in Settings. Until then, nothing leaves
-// Pulse. The API key and webhook address are sealed with MFA_KEY and never sent back to the browser.
+// PMS. The API key and webhook address are sealed with MFA_KEY and never sent back to the browser.
 import { brandingFor } from "./branding";
 import { initials, solidShade } from "../../project-management-system-frontend/src/data/branding";
 import { BRAND } from "../../project-management-system-frontend/src/data/brand";
@@ -39,7 +39,7 @@ const esc =
   /** @param {string} s
    * @returns {string}
    */ (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-/** Links in a notification are addresses inside Pulse; view-page links just open Pulse. */
+/** Links in a notification are addresses inside PMS; view-page links just open PMS. */
 const fullLink =
   /** @param {Env} env
    * @param {string} [link]

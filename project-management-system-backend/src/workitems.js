@@ -9,7 +9,7 @@
 // the Epic → Story/Task/Bug → Sub-task hierarchy, statuses and their categories, and numbering.
 //
 // Visibility: developers without "manage_features" see only the items assigned to them or that
-// they reported, everywhere (lists, item pages, links, Ask Pulse, notifications), as with feature
+// they reported, everywhere (lists, item pages, links, Ask AI, notifications), as with feature
 // requests. A view-only link reads items and comments but never attachments, and changes nothing.
 import { newToken } from "./auth";
 import { HttpError, body, json } from "./http";
@@ -1579,9 +1579,9 @@ export async function addComment(c, r, text, extra = {}, opts = {}) {
   c.emit?.({ type: "comment_added", itemId: r.id });
   return id;
 }
-// ---------- Ask Pulse ----------
+// ---------- Ask AI ----------
 /**
- * Work items for Ask Pulse, within what the person may see: open items first by priority, then
+ * Work items for Ask AI, within what the person may see: open items first by priority, then
  * recently finished ones. Kept short so answers start quickly.
  * @param {ItemContext} c
  * @param {Map<string, string>} nameOf

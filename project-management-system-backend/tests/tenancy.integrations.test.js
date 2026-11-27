@@ -1,7 +1,7 @@
-// Multi-tenancy, phase (e): what reaches outside Pulse stays in one workspace. The executive page is a secret
-// link per workspace; GitHub deliveries belong to the workspace whose secret signed them; Ask Pulse and the Monday
+// Multi-tenancy, phase (e): what reaches outside PMS stays in one workspace. The executive page is a secret
+// link per workspace; GitHub deliveries belong to the workspace whose secret signed them; Ask AI and the Monday
 // Briefing name the right organisation and workspace.
-// Runs on PGlite by default (npm test), or the Neon dev branch with PULSE_DB=dev.
+// Runs on PGlite by default (npm test), or the Neon dev branch with PMS_DB=dev.
 import { createHmac } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import worker from "../src/index.js";
@@ -13,7 +13,7 @@ const tag = Date.now().toString(36);
 const SLOW = url === "pglite" ? 120_000 : 900_000;
 const PASS = "Integration-Check-Pass-5!";
 
-describe("multi-tenancy: links, GitHub, Ask Pulse and the briefing", () => {
+describe("multi-tenancy: links, GitHub, Ask AI and the briefing", () => {
   /** @type {Awaited<ReturnType<typeof testBackend>>} */ let backend;
   /** @type {any} */ let db;
   /** @type {ReturnType<typeof workerClient>} */ let api;
@@ -103,7 +103,7 @@ describe("multi-tenancy: links, GitHub, Ask Pulse and the briefing", () => {
     expect((await api.call(`/api/showcase-links/${other.data.id}`, { method: "DELETE", cookie: cookie.ann })).status).toBe(404);
   }, SLOW);
 
-  it("Ask Pulse is told the organisation and workspace, and never another organisation's name", async () => {
+  it("Ask AI is told the organisation and workspace, and never another organisation's name", async () => {
     api.aiInputs.length = 0;
     await api.call("/api/ask", { method: "POST", cookie: cookie.ann, body: { question: "What's going on?" } });
     const told = JSON.stringify(api.aiInputs);

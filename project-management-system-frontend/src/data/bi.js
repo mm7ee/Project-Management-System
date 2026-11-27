@@ -30,7 +30,7 @@ export const activeCount =
   /** @param {BiFilters} f
    * @returns {any}
    */ (f) => Object.values(f).reduce((n, v) => n + v.length, 0);
-/** A project's workspace; one that isn't on the list counts in the first, as everywhere else in Pulse. */
+/** A project's workspace; one that isn't on the list counts in the first, as everywhere else in PMS. */
 export const workspaceOf =
   /** @param {System} s
    * @param {string[]} workspaces

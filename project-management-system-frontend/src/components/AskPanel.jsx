@@ -39,7 +39,7 @@ const escapeRe =
    * @returns {string}
    */ (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 /**
- * Ask Pulse: plain-English questions answered by the server from the live data.
+ * Ask AI: plain-English questions answered by the server from the live data.
  * The conversation stays while the page is open; follow-ups carry the last two turns.
  * @param {Props} arg1
  */

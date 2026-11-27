@@ -1,6 +1,6 @@
 // Runs the real Worker (worker/index.js) in the test process against a real Postgres. By default that is PGlite,
 // in this process, with every migration applied (tests/helpers/pglite.js): npm test runs it, here and in CI. With
-// PULSE_DB=dev (or stage) it is the Neon "dev" branch (or a branch of production), never the live database.
+// PMS_DB=dev (or stage) it is the Neon "dev" branch (or a branch of production), never the live database.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import postgres from "postgres";
@@ -23,10 +23,10 @@ export function devVar(key) {
 }
 /** Which database the database tests use: "pglite" (the default), or a Neon address. Refuses the live database. */
 export function testDatabase() {
-  const which = process.env.PULSE_DB;
+  const which = process.env.PMS_DB ?? process.env.PULSE_DB;
   if (!which || which === "pglite") return "pglite";
   const key = { dev: "PG_DEV", stage: "PG_STAGE" }[which];
-  if (!key) throw new Error(`PULSE_DB must be dev or stage, not "${which}"`);
+  if (!key) throw new Error(`PMS_DB must be dev or stage, not "${which}"`);
   const url = devVar(key);
   if (!url) throw new Error(`${key} isn't set (in .dev.vars or the environment)`);
   const live = devVar("PG_MAIN");
@@ -60,7 +60,7 @@ export function workerClient(backend) {
   // handed to the Worker as PG_ROOT (withDatabase in worker/index.js). It is the same adapter code the Worker uses,
   // and it scopes each request the same way.
   const shared = backend.root;
-  /** Everything sent to the stand-in Workers AI (Ask Pulse), to check what a question could reveal. */
+  /** Everything sent to the stand-in Workers AI (Ask AI), to check what a question could reveal. */
   /** @type {unknown[]} */ const aiInputs = [];
   const env = /** @type {any} */ ({
     PG_ROOT: shared,

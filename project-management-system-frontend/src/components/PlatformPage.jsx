@@ -1,4 +1,4 @@
-// /platform: Pulse's Platform Administrators (multi-tenancy, phase (d)). They create, rename, suspend and archive
+// /platform: the system's Platform Administrators (multi-tenancy, phase (d)). They create, rename, suspend and archive
 // organisations and give each its first administrator. They see each organisation's name, code, status and how
 // many workspaces and people it has; never anything inside it. Signing in always needs an authenticator app.
 import { BRAND, tabTitle } from "../data/brand";

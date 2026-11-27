@@ -1,7 +1,7 @@
 // Administrator module, phase 3: the automation engine. Conditions, round-robin and least-loaded assignment, the
 // test run (which changes nothing), loop protection, retries with back-off, signed webhooks, time-based triggers
 // (due dates, schedules), the webhook and manual triggers, creating items in another workspace, organisation rules,
-// and presets. The real Worker on PGlite (npm test), or the Neon dev branch with PULSE_DB=dev.
+// and presets. The real Worker on PGlite (npm test), or the Neon dev branch with PMS_DB=dev.
 import { createHmac } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { hashPassword } from "../src/auth.js";

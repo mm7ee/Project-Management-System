@@ -9,7 +9,9 @@ import { hashPassword, newToken, newTotpSecret, openSecret, sealSecret, tempPass
 import { HttpError, body, json } from "./http";
 import { passwordProblem } from "../../project-management-system-frontend/src/data/password";
 
-const COOKIE = "pulse_platform";
+// The Platform Administrators' cookie. Its old name (pulse_platform) is still read.
+const COOKIE = "pms_platform";
+const OLD_COOKIE = "pulse_platform";
 const SESSION_HOURS = 8;
 const TICKET_MINUTES = 10;
 const MAX_CODE_TRIES = 5;
@@ -55,7 +57,8 @@ export async function purgeDueOrganizations(root) {
  * @returns {string | null}
  */
 function platformToken(req) {
-  const m = (req.headers.get("cookie") ?? "").match(new RegExp(`(?:^|;\\s*)${COOKIE}=([a-f0-9]{64})`));
+  const all = req.headers.get("cookie") ?? "";
+  const m = all.match(new RegExp(`(?:^|;\\s*)${COOKIE}=([a-f0-9]{64})`)) ?? all.match(new RegExp(`(?:^|;\\s*)${OLD_COOKIE}=([a-f0-9]{64})`));
   return m ? m[1] : null;
 }
 /**

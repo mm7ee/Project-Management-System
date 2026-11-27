@@ -59,7 +59,7 @@ export function RecoveryCodes({ codes, username }) {
           onClick={() => {
             const a = document.createElement("a");
             a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
-            a.download = `pulse-recovery-codes-${username}.txt`;
+            a.download = `pms-recovery-codes-${username}.txt`;
             a.click();
             URL.revokeObjectURL(a.href);
           }}

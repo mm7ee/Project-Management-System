@@ -21,7 +21,7 @@ import { Choice, Section } from "./SettingsParts";
 import { InstallSection, NotificationPrefs } from "./NotificationSettings";
 import { ApiTokensSection, NotificationOptOuts } from "./AdminSettings";
 import { RETENTION } from "../data/retention";
-const PAGE_STORE = "pulse.settingsPage"; // the page last opened, per browser
+const PAGE_STORE = "pms:settings-page"; // the page last opened, per browser
 /** @type {Record<Prefs["glass"], string>} */ const GLASS_LABEL = { 1: "See-through", 2: "Frosted", 3: "Heavy frost", 4: "Nearly solid", 5: "Solid" };
 /**
  * @param {Props} props
@@ -51,7 +51,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
           key: "security",
           label: "Security & privacy",
           icon: ShieldCheck,
-          // (When two-step is required but missing, Pulse shows its setup screen instead of Settings.)
+          // (When two-step is required but missing, PMS shows its setup screen instead of Settings.)
           alert: twoStep.app && recoveryCodesLeft < 3 ? "You're running low on recovery codes" : undefined,
         },
         { key: "phone", label: "Phone app", icon: Smartphone },
@@ -76,7 +76,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
       // Remembering the page is only a convenience.
     }
   };
-  // Another part of Pulse asked for a page (e.g. the dashboard's Rebalance banner opens Users).
+  // Another part of PMS asked for a page (e.g. the dashboard's Rebalance banner opens Users).
   useEffect(() => {
     if (openPage) setPage(openPage);
   }, [openPage]);

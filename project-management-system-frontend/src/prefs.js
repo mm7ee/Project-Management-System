@@ -2,7 +2,7 @@
 import { useEffect } from "react";
 // Preferences live on the account (so they follow the user between devices); the theme
 // is also cached locally so a reload paints in the right colours before sign-in data arrives.
-const THEME_CACHE = "omnitrack:theme";
+const THEME_CACHE = "pms:theme";
 /**
  * @returns {HTMLElement}
  */

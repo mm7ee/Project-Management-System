@@ -16,7 +16,7 @@ backend's tests check it from the server side.
 | Command | What it does |
 | --- | --- |
 | `npm install` | Install the packages (the backend needs them too: it builds this folder) |
-| `npm run dev` | Vite dev server at http://localhost:5173, on its own. `/api` goes to the backend on port 8787 (`npm run dev` there); while it's off, API calls answer 503 saying so. `PULSE_API=<url>` points it elsewhere |
+| `npm run dev` | Vite dev server at http://localhost:5173, on its own. `/api` goes to the backend on port 8787 (`npm run dev` there); while it's off, API calls answer 503 saying so. `PMS_API=<url>` points it elsewhere |
 | `npm run build` | Type-check and build to `dist/` (the Worker serves it) |
 | `npm test` | The tests |
 

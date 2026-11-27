@@ -1,5 +1,5 @@
 // Administrator module, phase 4: SLAs for work items, approvals on workflow moves, and webhook payload templates.
-// The real Worker on PGlite (npm test), or the Neon dev branch with PULSE_DB=dev.
+// The real Worker on PGlite (npm test), or the Neon dev branch with PMS_DB=dev.
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { hashPassword } from "../src/auth.js";
 import { runEvent } from "../src/automation.js";

@@ -115,7 +115,7 @@ export default function AgileReports({ systems, now, overview = false }) {
       .reverse();
     csv = () =>
       download(
-        `pulse-velocity-${stamp}.csv`,
+        `pms-velocity-${stamp}.csv`,
         ["Sprint", "Committed points", "Completed points", "Added points", "Removed points"],
         closed.map((s) => [
           s.name,
@@ -166,7 +166,7 @@ export default function AgileReports({ systems, now, overview = false }) {
           ];
     csv = () =>
       download(
-        `pulse-${report}-${stamp}.csv`,
+        `pms-${report}-${stamp}.csv`,
         ["Day", "Scope", "Completed", "Remaining", "Ideal remaining"],
         d.days.map((day, i) => [day, d.scope[i] ?? "", d.completed[i] ?? "", d.remaining[i] ?? "", d.ideal[i]]),
       );
@@ -192,7 +192,7 @@ export default function AgileReports({ systems, now, overview = false }) {
     ];
     csv = () =>
       download(
-        `pulse-sprint-report-${stamp}.csv`,
+        `pms-sprint-report-${stamp}.csv`,
         ["Group", "Key", "Summary", "Status", "Story points"],
         groups.flatMap(([g, list]) => list.map((i) => [g, i.key, i.summary, i.statusName, i.storyPoints ?? ""])),
       );
@@ -238,7 +238,7 @@ export default function AgileReports({ systems, now, overview = false }) {
     const series = ordered.map((s, i) => ({ key: s.id, label: s.name, color: COLORS[i % COLORS.length], values: d.counts[s.id] }));
     csv = () =>
       download(
-        `pulse-cumulative-flow-${stamp}.csv`,
+        `pms-cumulative-flow-${stamp}.csv`,
         ["Day", ...ordered.map((s) => s.name)],
         d.days.map((day, i) => [day, ...ordered.map((s) => d.counts[s.id][i])]),
       );
@@ -259,7 +259,7 @@ export default function AgileReports({ systems, now, overview = false }) {
     const net = weeks.reduce((n, w) => n + w.created - w.resolved, 0);
     csv = () =>
       download(
-        `pulse-created-vs-resolved-${stamp}.csv`,
+        `pms-created-vs-resolved-${stamp}.csv`,
         ["Week starting", "Created", "Resolved"],
         weeks.map((w) => [w.label, w.created, w.resolved]),
       );
@@ -287,7 +287,7 @@ export default function AgileReports({ systems, now, overview = false }) {
       const limit = outlierLimit(days);
       csv = () =>
         download(
-          `pulse-control-chart-${stamp}.csv`,
+          `pms-control-chart-${stamp}.csv`,
           ["Key", "Summary", "Started", "Finished", "Cycle time (days)", "Rolling average", "Outlier"],
           withCycle.map((i, k) => [i.key, i.summary, i.started?.slice(0, 10), i.resolved.slice(0, 10), i.cycleDays, avg[k], limit != null && /** @type {NonNullable<typeof i.cycleDays>} */ (i.cycleDays) > limit ? "Yes" : ""]),
         );
@@ -304,7 +304,7 @@ export default function AgileReports({ systems, now, overview = false }) {
       const cycle = percentiles(withCycle.map((i) => /** @type {NonNullable<typeof i.cycleDays>} */ (i.cycleDays)));
       csv = () =>
         download(
-          `pulse-lead-cycle-time-${stamp}.csv`,
+          `pms-lead-cycle-time-${stamp}.csv`,
           ["Key", "Summary", "Type", "Created", "Started", "Finished", "Lead time (days)", "Cycle time (days)"],
           d.items.map((i) => [i.key, i.summary, i.type, i.created.slice(0, 10), i.started?.slice(0, 10) ?? "", i.resolved.slice(0, 10), i.leadDays, i.cycleDays ?? ""]),
         );

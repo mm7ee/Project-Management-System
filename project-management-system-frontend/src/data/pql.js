@@ -1,4 +1,4 @@
-// Pulse Query Language (PQL): a safe, JQL-style filter for work items. This file turns text into a
+// PMS Query Language (PQL): a safe, JQL-style filter for work items. This file turns text into a
 // syntax tree (tokenizer → parser) and is shared by the Worker, which turns the tree into parameterised
 // SQL (worker/pql.ts), and the Search page, which uses the field list and the tokenizer to suggest what
 // comes next. Nothing here ever builds SQL from text.

@@ -61,7 +61,7 @@ interface Env {
   AI?: Ai; // Workers AI binding, for the assistant (Ask AI)
   BRANDING_LIMIT?: { limit(o: { key: string }): Promise<{ success: boolean }> }; // per-address limit on the public branding lookup
   MFA_KEY?: string; // encrypts two-step verification secrets; a Worker secret (.dev.vars locally)
-  PUBLIC_URL?: string; // Pulse's address, for links in emails and Teams posts
+  PUBLIC_URL?: string; // the system's address, for links in emails and Teams posts
   GIPHY_API_KEY?: string; // turns on GIF search in chat; a Worker secret (wrangler secret put GIPHY_API_KEY)
 }
 

@@ -1,7 +1,7 @@
 // Multi-tenancy, phase (d): Platform Administrators (outside every organisation: they make and close organisations,
 // can't open their data, and always sign in with an authenticator app) and Organisation Administrators (their own
 // organisation's workspaces, people and roles, and nothing of any other).
-// Runs on PGlite by default (npm test), or the Neon dev branch with PULSE_DB=dev.
+// Runs on PGlite by default (npm test), or the Neon dev branch with PMS_DB=dev.
 import { createHmac } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hashPassword } from "../src/auth.js";
@@ -62,7 +62,7 @@ describe("multi-tenancy: platform and organisation administration", () => {
     expect(bad.status).toBe(401);
     const ok = await api.call("/api/platform/login/code", { method: "POST", body: { ticket: first.data.ticket, code: totp(secret) } });
     expect(ok.status).toBe(200);
-    expect(ok.cookie).toMatch(/^pulse_platform=/);
+    expect(ok.cookie).toMatch(/^pms_platform=/);
     platform = /** @type {string} */ (ok.cookie);
   }, SLOW);
 

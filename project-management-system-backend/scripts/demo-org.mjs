@@ -45,7 +45,7 @@ export async function buildDemo(o) {
   const dev = `${orgId}-dev`;
   const password = `Demo-${newToken().slice(0, 6)}-${newToken().slice(0, 6)}!`;
   const hash = await hashPassword(password);
-  // The organisation (from Pulse's template organisation), its Development workspace and its people.
+  // The organisation (from the system's template organisation), its Development workspace and its people.
   await sql.begin(async (/** @type {any} */ tx) => {
     await tx`INSERT INTO organizations (id, name, code, status, contact_email, created_at, updated_at) VALUES (${orgId}, 'Demo Co', ${DEMO_CODE}, 'active', 'it@demo-co.example', ${now}, ${now})`;
     await tx`SELECT tenancy_seed_organization(${orgId}, 'pulse-template')`;

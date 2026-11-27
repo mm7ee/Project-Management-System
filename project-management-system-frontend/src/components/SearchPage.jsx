@@ -140,7 +140,7 @@ export default function SearchPage({ users, workspaces, now, canShare, initialPq
       const blob = new Blob([rows.map((r) => r.map(cell).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
-      a.download = `pulse-search-${new Date(now).toISOString().slice(0, 10)}.csv`;
+      a.download = `pms-search-${new Date(now).toISOString().slice(0, 10)}.csv`;
       a.click();
       URL.revokeObjectURL(a.href);
     } catch (e) {

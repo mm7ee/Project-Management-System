@@ -38,7 +38,7 @@ export {};
  * @property {number} unread
  */
 /**
- * Administrators: how alerts and digests leave Pulse. Secrets are never sent back, only whether they're set.
+ * Administrators: how alerts and digests leave PMS. Secrets are never sent back, only whether they're set.
  * @typedef {Object} DeliveryStatus
  * @property {Object} email
  * @property {boolean} email.configured

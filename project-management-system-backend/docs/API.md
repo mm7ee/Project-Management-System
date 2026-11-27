@@ -16,8 +16,10 @@ Send the token in the `Authorization` header:
 
 ```
 GET /api/items?system=<project id>&state=open
-Authorization: Bearer pulse_3f9c…
+Authorization: Bearer pms_3f9c…
 ```
+
+Tokens start with `pms_`. Tokens made before the rename start with `pulse_` and keep working until they expire.
 
 - **Who it acts as:** a token acts as its owner, with the owner's permissions and visibility rules. A developer's
   token sees only their own items, and no token sees an item at a security level its owner isn't in.
@@ -224,7 +226,8 @@ Needs `manage_automation`, except the item buttons and the webhook trigger.
     workspaces get organisation-wide rules.
   - **Secrets, shown once:**
     - A new webhook action's signing secret: `secrets: [{ action, secret }]`. Each call carries
-      `X-Pulse-Signature: sha256=<hex HMAC-SHA256 of the body>`.
+      `X-PMS-Signature: sha256=<hex HMAC-SHA256 of the body>` (also sent as `X-Pulse-Signature`, and the rule as
+      `X-PMS-Rule` and `X-Pulse-Rule`, for receivers set up before the rename).
     - A webhook trigger's address: `webhookUrl`. `newWebhookAddress: true` on PUT makes a new one.
 - `POST /api/automation/rules/:id/test` `{ itemKey? }`, or `POST /api/automation/test` `{ rule, itemKey? }` for a
   rule not saved yet → `{ wouldRun, checks: [{ label, result }], actions: ["Would …"] }`. Changes nothing.
@@ -309,9 +312,11 @@ An administrator adds them in **Settings → Administration → Integrations**.
 **The request**
 - Each event is a `POST` with a JSON body, sent to the webhook's https address.
 - **Headers:**
-  - `X-Pulse-Event`: `work_item.created`, `work_item.updated`, `work_item.transitioned` or `work_item.commented`
-  - `X-Pulse-Delivery`: the delivery's number
-  - `X-Pulse-Signature`: `sha256=` and the HMAC-SHA256 of the raw body, keyed with the webhook's secret
+  - `X-PMS-Event`: `work_item.created`, `work_item.updated`, `work_item.transitioned` or `work_item.commented`
+  - `X-PMS-Delivery`: the delivery's number
+  - `X-PMS-Signature`: `sha256=` and the HMAC-SHA256 of the raw body, keyed with the webhook's secret
+  - The same three are also sent as `X-Pulse-Event`, `X-Pulse-Delivery` and `X-Pulse-Signature`, their names before
+    the rename, so receivers set up then keep working. The user agent is `PMS-Webhooks/1`.
 - Check the signature before trusting a delivery. The secret starts `whsec_` and is shown once, when the webhook
   is made.
 
@@ -457,7 +462,7 @@ Emails carry the organisation's logo, name and accent, with "Powered by Project 
 
 ## Platform administration
 
-Platform Administrators only, at `/api/platform/…`, with their own session cookie (`pulse_platform`, sent only to
+Platform Administrators only, at `/api/platform/…`, with their own session cookie (`pms_platform`; the old `pulse_platform` is still read; sent only to
 `/api/platform`). The first one is made with `node scripts/platform-admin.mjs`.
 
 - `POST /api/platform/login` `{ username, password }` → `{ ticket, setup? }`. `setup` (`{ secret, uri }`) comes the

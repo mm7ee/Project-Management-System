@@ -1,7 +1,7 @@
 // Multi-tenancy: two organisations, each with two workspaces. Someone in one workspace must not be able to read,
 // search, count, export, ask about, be told about, or change anything in another, whether it is in another
 // organisation or another workspace of their own. Runs the real Worker against a real database: PGlite with every
-// migration applied (npm test, and CI), or the Neon dev branch with PULSE_DB=dev. It makes its own organisations
+// migration applied (npm test, and CI), or the Neon dev branch with PMS_DB=dev. It makes its own organisations
 // and removes them afterwards.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hashPassword } from "../src/auth.js";
@@ -217,7 +217,7 @@ describe("multi-tenancy: nothing crosses between organisations or workspaces", (
     expect(JSON.stringify(g.data)).toContain(made.A1.word);
   }, SLOW);
 
-  it("Ask Pulse is only told about the open workspace", async () => {
+  it("Ask AI is only told about the open workspace", async () => {
     api.aiInputs.length = 0;
     const r = await api.call("/api/ask", { method: "POST", cookie: cookie.alice, body: { question: "What is everyone working on?" } });
     expect(r.status).toBeLessThan(300);

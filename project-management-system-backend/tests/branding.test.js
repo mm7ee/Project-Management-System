@@ -1,7 +1,7 @@
 // Branding per organisation (migration 0021, src/branding.js): the public lookup before sign-in, the images, who
 // may change it, what an upload must be, and that no organisation's branding reaches another.
 // Organisation A (an administrator and a Viewer), organisation B (an administrator), a suspended organisation and
-// an archived one. Runs the real Worker on PGlite (npm test), or the Neon dev branch with PULSE_DB=dev.
+// an archived one. Runs the real Worker on PGlite (npm test), or the Neon dev branch with PMS_DB=dev.
 import { createHmac } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hashPassword } from "../src/auth.js";

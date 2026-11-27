@@ -26,9 +26,9 @@ function printLandscape() {
 }
 /**
  * This browser remembers the last tab, so Reports opens where you left it.
- * @type {"pulse:reports-tab"}
+ * @type {"pms:reports-tab"}
  */
-const SAVED = "pulse:reports-tab";
+const SAVED = "pms:reports-tab";
 /**
  * A link to #/reports/projects?… opens the Projects tab with its filters.
  * @returns {boolean}

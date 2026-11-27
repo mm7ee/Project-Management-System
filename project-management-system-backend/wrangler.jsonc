@@ -1,4 +1,4 @@
-// Pulse's app Worker, reached through the "pulse" Worker (gateway/). Keep this name: the MFA_KEY secret
+// the system's app Worker, reached through the "pulse" Worker (gateway/). Keep this name: the MFA_KEY secret
 // lives here and can't be read back to move it. One Worker serves the Vite build (assets) and the /api backend,
 // backed by Postgres on Neon through Cloudflare Hyperdrive. Deploy with `npm run deploy`; apply schema
 // changes with `npm run db:migrate` (live Postgres) before deploying code that depends on them.
@@ -21,14 +21,14 @@
   },
   // Workers AI, for the assistant (Ask AI). Calls are billed to the account (a generous free daily allowance).
   "ai": { "binding": "AI" },
-  // The public branding lookup (GET /api/public/org/:code/…) before sign-in: 30 a minute per address, so codes
-  // can't be tried in bulk (src/branding.js). Counted per Cloudflare location, which is enough for this.
+  // The public branding lookup (GET /api/public/org/:code/…) before sign-in: a first, cheap limit of 30 a minute per
+  // address. It counts per Cloudflare location, so the limit that holds is in the database (src/branding.js).
   "ratelimits": [{ "name": "BRANDING_LIMIT", "namespace_id": "1021", "simple": { "limit": 30, "period": 60 } }],
   "vars": {
-    // Pulse's address, for links in emails and Teams posts. Update it if the address ever changes.
-    "PUBLIC_URL": "https://pulse.utsa--wanza--ortfolio.workers.dev",
+    // The address people use (the "pms" gateway), for links in emails and Teams posts. Update it if it ever changes.
+    "PUBLIC_URL": "https://pms.utsa--wanza--ortfolio.workers.dev",
     // Which database to use: "postgres" (Neon, through HYPERDRIVE) or "d1" (the old D1 database, kept as a
-    // fallback; it stopped receiving changes when Pulse moved to Postgres on 2026-11-16).
+    // fallback; it stopped receiving changes when the system moved to Postgres on 2026-11-16).
     "DATABASE": "postgres"
   },
   // One trigger, every 5 minutes, to stay within the Workers Free limit of 5 cron triggers per account.

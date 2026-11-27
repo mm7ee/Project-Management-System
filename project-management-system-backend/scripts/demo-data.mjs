@@ -678,7 +678,7 @@ REQUESTS_SD.forEach(([typeId, type, summary, priority, status, daysAgo, customer
 // A portal link for the demo client (its secret is unknown, so it can't be used) and a revoked API token.
 out.push(
   `INSERT INTO portal_links (id, token_hash, label, created_by, created_at, expires_at, requests) VALUES ('demo-pl-1', ${q(`demo-${slug("unused portal secret")}`)}, 'Demo client operations (demo)', ${q(P.Tarisai)}, ${q(ago(10))}, ${q(new Date(NOW + 80 * DAY).toISOString())}, 5);`,
-  `INSERT INTO api_tokens (id, user_id, name, token_hash, prefix, scope, created_at, expires_at, revoked_at, revoked_by) VALUES ('demo-tok-1', ${q(P.Tarisai)}, 'Reporting script (demo)', ${q(`demo-${slug("unused token")}`)}, 'pulse_demo00', 'read', ${q(ago(20))}, ${q(new Date(NOW + 10 * DAY).toISOString())}, ${q(ago(2))}, ${q(P.Tarisai)});`,
+  `INSERT INTO api_tokens (id, user_id, name, token_hash, prefix, scope, created_at, expires_at, revoked_at, revoked_by) VALUES ('demo-tok-1', ${q(P.Tarisai)}, 'Reporting script (demo)', ${q(`demo-${slug("unused token")}`)}, 'pms_demo00', 'read', ${q(ago(20))}, ${q(new Date(NOW + 10 * DAY).toISOString())}, ${q(ago(2))}, ${q(P.Tarisai)});`,
   `INSERT INTO notification_optouts (user_id, event) VALUES (${q(P.Michael)}, 'item_updated') ON CONFLICT DO NOTHING;`,
 );
 
@@ -838,7 +838,7 @@ systems.forEach((s, i) => {
         q(s.id),
         q(`${DOCS[(i + k) % DOCS.length]} – ${s.name}`),
         "'link'",
-        q(`https://example.com/omnitrack-demo/${s.id}/${slug(DOCS[(i + k) % DOCS.length])}`),
+        q(`https://example.com/pms-demo/${s.id}/${slug(DOCS[(i + k) % DOCS.length])}`),
         q(s.lead),
         q(ago(between(5, 120), 11)),
       ].join(", ")});`,

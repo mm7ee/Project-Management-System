@@ -31,7 +31,7 @@ export function Popover({ label, onClose, children, className = "" }) {
   );
 }
 // ---------- emoji ----------
-const RECENT_KEY = "pulse:recent-emoji";
+const RECENT_KEY = "pms:recent-emoji";
 const recentEmoji = /** @returns {string[]} */ () => {
   try {
     return JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]").slice(0, 16);
@@ -164,7 +164,7 @@ export function GifView({ gif }) {
     </figure>
   );
 }
-// ---------- stickers: Pulse's own set ----------
+// ---------- stickers: the system's own set ----------
 /** @type {Record<string, { icon: LucideIcon; from: string; to: string }>} */ const STICKER_ART = {
   thanks: { icon: Heart, from: "#ff7aa8", to: "#d6336c" },
   "great-job": { icon: Star, from: "#ffd35c", to: "#eba300" },

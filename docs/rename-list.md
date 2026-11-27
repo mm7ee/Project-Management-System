@@ -149,18 +149,31 @@ lives in one place, `project-management-system-frontend/src/data/brand.js`. "Omn
 | backend scripts/db.mjs, demo-data.mjs, dev-all.mjs, dev-api.mjs | "Pulse backup", "Pulse demo data", "Pulse: the backend…", "Pulse API" | "PMS …" |
 | docs | README, admin guide, API reference, folder READMEs, running-pulse.html | Project Management System (PMS); running-pms.html. UPGRADE-LOG, DECISIONS and the plans keep their history. |
 
-## Kept: internal names, for you to decide
+## Internal names (renamed 2026-11-27)
 
-| Identifier | What it is | Risk if renamed |
+| Before | After | How the change is made safe |
 | --- | --- | --- |
-| `omni-tracker` | the app Worker (and the old D1 database) | MFA_KEY can't be moved |
-| `pulse` | the gateway Worker, so the address `pulse.utsa--wanza--ortfolio.workers.dev` | **seen by users**; a new address breaks passkeys, installed apps, old links and Postman |
-| `omni_session`, `pulse_platform` | sign-in cookies | everyone signed out once |
-| `pulse_` | API token prefix | existing tokens stop working |
-| `X-Pulse-Signature`, `Pulse-Webhooks/1`, `Pulse-Automation`, `x-pulse-rule` | webhook headers and user agents | breaks receiving systems |
-| `pulse_app` | database role for row-level security | migration work, no benefit |
-| `pulse-db` | Hyperdrive configuration | none seen |
-| `pulse-template`, `pulse-template-ws` | the template organisation's ids | none seen |
-| `pulse:org`, `pulse:last-workspace`, `pulse.*`, `omnitrack:*` (theme, motion, recovery sign-in) | browser storage keys | preferences reset per browser |
-| `pulse-frontend`, `pulse-backend`, `Pulse.postman_collection.json` | package and file names | none seen |
-| "Project Query Language (PQL)" | was "Pulse Query Language"; the acronym stays | none |
+| address `pulse.utsa--wanza--ortfolio.workers.dev` (the `pulse` gateway) | `pms.utsa--wanza--ortfolio.workers.dev` (a `pms` gateway); `PUBLIC_URL` | `pulse.…` redirects pages to `pms.…` and still passes `/api/` calls on. Passkeys are tied to the address: people add theirs again once. Browser storage and sign-in belong to the address: everyone signs in again once, and installed apps need reinstalling |
+| cookies `omni_session`, `pulse_platform` | `pms_session`, `pms_platform` | the old names are still read |
+| API token prefix `pulse_` | `pms_` | old tokens keep working |
+| headers `X-Pulse-Signature`, `X-Pulse-Event`, `X-Pulse-Delivery`, `X-Pulse-Rule` | `X-PMS-…` | both names are sent |
+| user agents `Pulse-Webhooks/1`, `Pulse-Automation` | `PMS-Webhooks/1`, `PMS-Automation` | |
+| authenticator app label "Pulse" | "PMS" | new set-ups only; existing entries keep working |
+| browser storage `pulse:*`, `pulse.settingsPage`, `omnitrack:*` | `pms:*` | the new address starts fresh anyway |
+| download names `pulse-….csv`, `pulse-projects-report-….xlsx` | `pms-…` | |
+| the offline cache `pulse-offline-3` | `pms-offline-1` | |
+| `PULSE_DB`, `PULSE_API` | `PMS_DB`, `PMS_API` | the old names are still read |
+| packages `pulse`, `pulse-frontend`, `pulse-backend`; `Pulse.postman_collection.json` | `pms`, `pms-frontend`, `pms-backend`; `PMS.postman_collection.json` | |
+| comments and test descriptions | PMS | |
+
+## Kept, and why
+
+| Identifier | What it is | Why it stays |
+| --- | --- | --- |
+| `omni-tracker` | the app Worker (and the old D1 database) | its MFA_KEY secret can't be read back or moved |
+| `pulse_app` | the database role that row-level security is written for | renaming it means a window where the live code and database disagree, for a name nobody sees |
+| `pulse-template`, `pulse-template-ws` | the template organisation's and workspace's ids | primary keys referenced across the schema; never shown |
+| `pulse-db` | the Hyperdrive configuration's name in Cloudflare | never shown; renamed only in the Cloudflare dashboard |
+| `X-Pulse-…` (alongside `X-PMS-…`) | the old webhook header names | sent as well, so existing receivers keep working |
+| migrations, UPGRADE-LOG, DECISIONS, the plans, the PDFs | history | they record what it was called then |
+| "Project Query Language (PQL)" | was "Pulse Query Language" | the acronym stays |

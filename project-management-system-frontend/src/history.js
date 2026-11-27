@@ -1,5 +1,5 @@
-// Pulse's place in the browser history, shared by App (pages) and the pages that have tabs.
-// Every entry carries { pulse: { view, filter, depth, tabs } }: `depth` counts the steps since Pulse
+// the system's place in the browser history, shared by App (pages) and the pages that have tabs.
+// Every entry carries { pms: { view, filter, depth, tabs } }: `depth` counts the steps since PMS
 // opened (so the ← only shows when there's somewhere to go back to) and `tabs` remembers which tab
 // each page was on, so Back returns to that tab instead of skipping past the page.
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -14,7 +14,7 @@ export const setDepthListener = /** @param {(canGoBack: boolean) => void} fn */ 
 };
 
 /** @returns {Record<string, string>} */
-const tabsNow = () => window.history.state?.pulse?.tabs ?? {};
+const tabsNow = () => window.history.state?.pms?.tabs ?? {};
 
 /**
  * A page's open tab, kept in the browser history: switching tabs is a step Back undoes.
@@ -36,10 +36,10 @@ export function useHistoryTab(key, initial) {
     // after this effect runs.
     const record = setTimeout(() => {
       const s = window.history.state;
-      if (s?.pulse && !s.pulse.tabs?.[key]) window.history.replaceState({ ...s, pulse: { ...s.pulse, tabs: { ...s.pulse.tabs, [key]: start } } }, "");
+      if (s?.pms && !s.pms.tabs?.[key]) window.history.replaceState({ ...s, pms: { ...s.pms, tabs: { ...s.pms.tabs, [key]: start } } }, "");
     }, 0);
     const onPop = /** @param {PopStateEvent} e */ (e) => {
-      const t = /** @type {T | undefined} */ (e.state?.pulse?.tabs?.[key]) ?? start;
+      const t = /** @type {T | undefined} */ (e.state?.pms?.tabs?.[key]) ?? start;
       current.current = t;
       setTab(t);
     };
@@ -55,7 +55,7 @@ export function useHistoryTab(key, initial) {
       current.current = next;
       const s = window.history.state ?? {};
       depth.current += 1;
-      window.history.pushState({ ...s, pulse: { ...s.pulse, depth: depth.current, tabs: { ...s.pulse?.tabs, [key]: next } } }, "", url);
+      window.history.pushState({ ...s, pms: { ...s.pms, depth: depth.current, tabs: { ...s.pms?.tabs, [key]: next } } }, "", url);
       onDepth(true);
       setTab(next);
     },

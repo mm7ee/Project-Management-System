@@ -14,7 +14,7 @@ export const cleanChannels =
    * @returns {RequestChannel[]}
    */ (v) => (Array.isArray(v) ? REQUEST_CHANNELS.filter((c) => v.includes(c)) : []);
 /**
- * "Pulse chat", "Pulse chat and email", "Pulse chat, email and Teams".
+ * "PMS chat", "PMS chat and email", "PMS chat, email and Teams".
  * @param {RequestChannel[]} cs
  * @returns {string}
  */

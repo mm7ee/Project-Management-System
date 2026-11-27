@@ -37,7 +37,7 @@ export function NotificationPrefs({ prefs, hasEmail, setPref }) {
   );
 }
 /**
- * Adding Pulse to a phone's home screen.
+ * Adding PMS to a phone's home screen.
  */
 export function InstallSection() {
   const [, redraw] = useState(0);

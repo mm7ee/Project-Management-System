@@ -19,7 +19,7 @@ import { toFeature } from "./rows";
 import { sprintHealth } from "./sprints";
 import { currentWorkspace, settingRow, saveSetting } from "./settings";
 const DAY = 86_400_000;
-/** Pulse's day runs on Harare time (UTC+2), whichever server wakes up. */
+/** the system's day runs on Harare time (UTC+2), whichever server wakes up. */
 const localDate =
   /** @param {number} now
    * @returns {string}

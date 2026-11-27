@@ -1,4 +1,4 @@
-// Adding Pulse to a phone's home screen. Android and desktop Chrome offer a prompt, which fires once
+// Adding PMS to a phone's home screen. Android and desktop Chrome offer a prompt, which fires once
 // early on, so it's caught here at start-up for the Settings page to use later. iPhones have no
 // prompt: people use Share, then Add to Home Screen.
 /** @type {InstallPromptEvent | null} */ let deferred = null;

@@ -1,4 +1,4 @@
-// Pulse has one cron trigger, every 5 minutes (wrangler.jsonc). One trigger keeps the account within the Workers
+// PMS has one cron trigger, every 5 minutes (wrangler.jsonc). One trigger keeps the account within the Workers
 // Free limit of 5 cron triggers. Each run works out which jobs are due: automation (schedules, due dates, retries)
 // every run; the hourly jobs in the first run of each hour; the daily and weekly ones at their hour.
 /**

@@ -1,6 +1,6 @@
 // Administrator module, phase 2: a workflow per workspace and per item type, drafts, versions and rollback,
 // workspace templates, item types, and the new custom field kinds. One organisation with Development (DEV) and
-// Marketing (MKT); the real Worker on PGlite (npm test) or the Neon dev branch with PULSE_DB=dev.
+// Marketing (MKT); the real Worker on PGlite (npm test) or the Neon dev branch with PMS_DB=dev.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hashPassword } from "../src/auth.js";
 import { purgeDueOrganizations } from "../src/platform.js";

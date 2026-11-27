@@ -2,7 +2,7 @@
 /** @import { Blocker, Limits } from '../../project-management-system-frontend/src/data/project' */
 /** @import { Feature } from '../../project-management-system-frontend/src/data/features' */
 /** @import { Role } from '../../project-management-system-frontend/src/data/roles' */
-// "Ask Pulse": answers plain-English questions from the live data. The Worker gathers a
+// "Ask AI": answers plain-English questions from the live data. The Worker gathers a
 // compact, text-only snapshot of what every signed-in user can already see (projects, people,
 // feature requests, blockers) and asks a Workers AI model to answer from that snapshot alone.
 import { BRAND } from "../../project-management-system-frontend/src/data/brand";

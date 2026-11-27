@@ -1,7 +1,9 @@
-// The "pulse" Worker: Pulse's web address, in front of the app Worker. It rarely changes, so GitHub
-// Actions doesn't deploy it. From project-management-system-backend/: npx wrangler@4 deploy --config gateway/wrangler.jsonc
+// The gateway: the system's web address, in front of the app Worker "omni-tracker" (gateway/index.js).
+// GitHub Actions deploys it twice after the app, from project-management-system-backend/:
+//   npx wrangler@4 deploy --config gateway/wrangler.jsonc               the "pms" Worker: pms.<account>.workers.dev
+//   npx wrangler@4 deploy --config gateway/wrangler.jsonc --name pulse  the old address, which redirects to pms
 {
-  "name": "pulse",
+  "name": "pms",
   "main": "index.js",
   "compatibility_date": "2026-10-06",
   "workers_dev": true,

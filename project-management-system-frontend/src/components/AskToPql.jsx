@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Bookmark, Search } from "lucide-react";
 import { api } from "../data/api";
 /**
- * Under an Ask Pulse answer: the question as a PQL search, to open in Search or save as a filter.
+ * Under an Ask AI answer: the question as a PQL search, to open in Search or save as a filter.
  * @param {{ question: string; onSearch: (pql: string) => void }} props
  */
 export default function AskToPql({ question, onSearch }) {

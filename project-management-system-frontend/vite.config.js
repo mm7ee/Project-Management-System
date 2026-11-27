@@ -18,8 +18,8 @@ const brandHtml = {
 
 // /api is served by the backend (the Worker). Run it alongside this dev server: `npm run dev` in
 // project-management-system-backend, or `npm run dev` at the repository root for both at once.
-// PULSE_API points the proxy elsewhere, e.g. another port.
-const API = process.env.PULSE_API ?? "http://127.0.0.1:8787";
+// PMS_API points the proxy elsewhere, e.g. another port (PULSE_API, its old name, still works).
+const API = process.env.PMS_API ?? process.env.PULSE_API ?? "http://127.0.0.1:8787";
 
 export default defineConfig({
   plugins: [react(), brandHtml],

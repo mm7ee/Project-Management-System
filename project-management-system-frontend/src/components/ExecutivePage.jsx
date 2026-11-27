@@ -13,7 +13,7 @@ import CountUp from "./CountUp";
 import { TooltipLayer } from "./reports/chartKit";
 import { StageBar } from "./reports/Charts";
 /**
- * The executive page at /executive/<link>: how Pulse works and how one workspace's portfolio is doing, for
+ * The executive page at /executive/<link>: how PMS works and how one workspace's portfolio is doing, for
  * leadership. No sign-in, so it shows totals only; no names of systems, people or blockers. Each link is a secret
  * made in Settings → View-only links, for one workspace, and expires.
  */

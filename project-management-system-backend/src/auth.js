@@ -1,3 +1,4 @@
+import { BRAND } from "../../project-management-system-frontend/src/data/brand";
 // Password hashing (PBKDF2-SHA256) and session tokens. Stored hashes look like
 // "pbkdf2$<iterations>$<salt hex>$<hash hex>"; seeds in migrations/ use the same format.
 const ITERATIONS = 100_000; // the Workers runtime caps PBKDF2 at 100k
@@ -158,7 +159,7 @@ export const totpUri =
   /** @param {string} secret
    * @param {string} account
    * @returns {string}
-   */ (secret, account) => `otpauth://totp/${encodeURIComponent(`Pulse:${account}`)}?secret=${secret}&issuer=Pulse&algorithm=SHA1&digits=6&period=${TOTP_STEP}`;
+   */ (secret, account) => `otpauth://totp/${encodeURIComponent(`${BRAND.shortName}:${account}`)}?secret=${secret}&issuer=${encodeURIComponent(BRAND.shortName)}&algorithm=SHA1&digits=6&period=${TOTP_STEP}`;
 /**
  * Ten single-use recovery codes like "k7mq-2xpd", for when the phone is lost.
  * @returns {string[]}

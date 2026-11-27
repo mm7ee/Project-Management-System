@@ -1,6 +1,6 @@
 /** @import { Role, RolePermissions } from '../../project-management-system-frontend/src/data/roles' */
 // Who may see a work item. One rule, used everywhere work items are read or sent: lists, item pages,
-// boards, the timeline, reports, PQL, dashboards, subscriptions, digests, notifications, Ask Pulse,
+// boards, the timeline, reports, PQL, dashboards, subscriptions, digests, notifications, Ask AI,
 // view-only links, the API, webhooks and automation.
 //
 // 1. Developers without "Log and assign feature requests" see only items assigned to them or that
@@ -9,7 +9,7 @@
 //    roles and people the level grants. A view-only link never sees items with a security level.
 import { DEFAULT_ROLE_PERMISSIONS, permissionsFor } from "../../project-management-system-frontend/src/data/roles";
 import { settingRow } from "./settings";
-/** Nobody in particular: what may go to people outside Pulse or to everyone (webhooks, the briefing). */
+/** Nobody in particular: what may go to people outside PMS or to everyone (webhooks, the briefing). */
 /** @type {Viewer} */ export const PUBLIC_VIEWER = { id: "", role: "viewer", ownOnly: false, guest: true };
 /**
  * The SQL condition (with its values) limiting work items, under `alias`, to what `v` may see.

@@ -47,14 +47,15 @@
   <tr><td>API (backend)</td><td>Handles every request under <code>/api</code>. All permission and visibility checks happen here. Runs as a Cloudflare Worker, with an hourly scheduled job.</td><td><code>frontend/worker/</code> (section 8 lists the files)</td></tr>
   <tr><td>Database</td><td>Postgres on Neon (project <code>wild-sunset-31993352</code>). The branch <code>production</code> is the live database; the branch <code>dev</code> is for testing on your computer. The Worker reaches it through Cloudflare Hyperdrive (config <code>pulse-db</code>).</td><td><code>project-management-system-backend/database/migrations/</code> (table structure, numbered in order)</td></tr>
 </table>
-<p><b>Live site:</b> https://pulse.utsa--wanza--ortfolio.workers.dev</p>
-<p>The old address (omni-tracker.utsa--wanza--ortfolio.workers.dev) redirects there, keeping view-only links and project pages.</p>
+<p><b>Live site:</b> https://pms.utsa--wanza--ortfolio.workers.dev</p>
+<p>The old addresses (pulse.… and omni-tracker.utsa--wanza--ortfolio.workers.dev) redirect there, keeping view-only links and project pages. On pulse.…, calls to <code>/api/</code> are still passed on, so other systems using the old address keep working.</p>
 <p>When you run the system on your computer, it uses the Neon <code>dev</code> branch, never the live database. Nothing you do locally changes the live site or its users. One exception: Ask AI always uses Cloudflare's live AI service, even locally, and that usage counts towards the account.</p>
 
-<h3>The two Cloudflare Workers</h3>
+<h3>The Cloudflare Workers</h3>
 <table>
   <tr><th style="width:18%">Worker</th><th>What it does</th><th style="width:33%">How it is deployed</th></tr>
-  <tr><td><code>pulse</code></td><td>Provides the web address and passes every request to the app Worker. It holds nothing else.</td><td>By hand, rarely:<br><code>npx wrangler@4 deploy --config gateway/wrangler.jsonc</code></td></tr>
+  <tr><td><code>pms</code></td><td>Provides the web address and passes every request to the app Worker. It holds nothing else.</td><td>Automatically, after the app, on every push to main (<code>gateway/wrangler.jsonc</code>).</td></tr>
+  <tr><td><code>pulse</code></td><td>The old address: the same code, which redirects pages to pms.… and passes <code>/api/</code> calls on.</td><td>Automatically, right after <code>pms</code> (<code>--name pulse</code>).</td></tr>
   <tr><td><code>omni-tracker</code></td><td>The app itself: screens, API, the database connection, AI, the hourly job and the <code>MFA_KEY</code> secret. It keeps its old name on purpose. Smart Placement runs it close to the database.</td><td>Automatically, on every push to the main branch, after the unit tests pass.</td></tr>
 </table>
 <div class="warn"><b>Do not rename, delete or replace the <code>omni-tracker</code> Worker, and do not change its <code>MFA_KEY</code> secret.</b> The key encrypts everyone's authenticator-app codes, and it also seals the email key, the Teams webhook, the GitHub secret and every outbound webhook's signing secret. None of these can be read back. If the key is lost, every authenticator-app user needs an administrator reset, and email, Teams, GitHub and webhooks must all be set up again.</div>

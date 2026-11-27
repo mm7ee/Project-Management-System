@@ -24,7 +24,7 @@ export function SlaBadge({ label, clock }) {
 }
 /** @type {WorkPriority[]} */ const URGENCY = ["HIGHEST", "HIGH", "MEDIUM", "LOW"];
 /**
- * The form people raise a request with, on the portal and in Pulse.
+ * The form people raise a request with, on the portal and in PMS.
  * @param {{ types: RequestType[]; askContact: boolean; onSubmit: (b: Record<string, unknown>) => Promise<void> }} props
  */
 export function RequestForm({ types, askContact, onSubmit }) {

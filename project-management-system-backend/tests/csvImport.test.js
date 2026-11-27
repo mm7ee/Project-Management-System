@@ -18,7 +18,7 @@ describe("CSV import", () => {
       ["x", "", ""],
     ]);
   });
-  it("names roles the way Pulse shows them: Viewer is read-only, Standard user is the old viewer", () => {
+  it("names roles the way PMS shows them: Viewer is read-only, Standard user is the old viewer", () => {
     expect(roleFrom("Viewer")).toBe("reader");
     expect(roleFrom("viewer (read-only)")).toBe("reader");
     expect(roleFrom("Standard user")).toBe("viewer");

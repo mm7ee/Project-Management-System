@@ -14,9 +14,9 @@ const ICON = { chat: MessagesSquare, email: Mail, teams: Users };
 };
 /**
  * This browser remembers the last choice, so it's one click next time.
- * @type {"pulse:request-via"}
+ * @type {"pms:request-via"}
  */
-const SAVED = "pulse:request-via";
+const SAVED = "pms:request-via";
 /**
  * @param {ChannelAvailability} [available]
  * @returns {RequestChannel[]}

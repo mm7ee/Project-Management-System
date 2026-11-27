@@ -175,7 +175,7 @@ async function takenUsernames(odb) {
 }
 
 /**
- * A role by its key or by the name Pulse shows. "Viewer" is the read-only role; "Standard user" is `viewer`.
+ * A role by its key or by the name PMS shows. "Viewer" is the read-only role; "Standard user" is `viewer`.
  * @param {unknown} v
  * @returns {Role | null}
  */

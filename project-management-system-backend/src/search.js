@@ -795,7 +795,7 @@ export async function runSubscriptions(env, now = Date.now()) {
   return sent;
 }
 /**
- * Ask Pulse: the saved filters and dashboards this person can use.
+ * Ask AI: the saved filters and dashboards this person can use.
  * @param {ItemContext} c
  * @returns {Promise<string[]>}
  */

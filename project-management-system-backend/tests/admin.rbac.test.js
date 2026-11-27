@@ -2,7 +2,7 @@
 // organisation profile, invitations and CSV import, deactivating, copying a workspace's configuration, workspaces
 // open to the whole organisation, the append-only audit log, and deleting an organisation.
 // One organisation with Marketing (MKT) and Development (DEV), and a second organisation to prove nothing crosses.
-// Runs the real Worker on PGlite (npm test), or the Neon dev branch with PULSE_DB=dev.
+// Runs the real Worker on PGlite (npm test), or the Neon dev branch with PMS_DB=dev.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hashPassword } from "../src/auth.js";
 import { purgeDueOrganizations } from "../src/platform.js";

@@ -350,9 +350,9 @@ function ChooseWorkspace({ tenant, onChosen }) {
 }
 /**
  * Set after signing in with a recovery code, so the app can suggest moving to a new phone.
- * @type {"omnitrack:recovery-signin"}
+ * @type {"pms:recovery-signin"}
  */
-export const RECOVERY_SIGNIN = "omnitrack:recovery-signin";
+export const RECOVERY_SIGNIN = "pms:recovery-signin";
 /**
  * The second sign-in step. Offers whichever methods the account has (authenticator app,
  * passkey or security key), recovery codes for a lost phone, and, when nothing is left, a

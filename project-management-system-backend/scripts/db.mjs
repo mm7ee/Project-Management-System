@@ -1,4 +1,4 @@
-// Pulse's database tool for Postgres (Neon). Reads the connection strings from .dev.vars (never committed):
+// the system's database tool for Postgres (Neon). Reads the connection strings from .dev.vars (never committed):
 //   PG_MAIN=postgresql://…   the live database (Neon branch "main")
 //   PG_DEV=postgresql://…    for local testing (Neon branch "dev")
 //

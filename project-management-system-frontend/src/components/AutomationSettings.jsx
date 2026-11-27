@@ -136,7 +136,7 @@ function Automation({ users, systems, now, orgAdmin = false }) {
             )}
             {handover.secrets?.map((s) => (
               <p key={s.action}>
-                Action {s.action}'s signing secret. Each call carries <code>X-Pulse-Signature: sha256=…</code>, the HMAC-SHA256 of the body with this secret. It's shown only now.
+                Action {s.action}'s signing secret. Each call carries <code>X-PMS-Signature: sha256=…</code> (and the same as <code>X-Pulse-Signature</code>), the HMAC-SHA256 of the body with this secret. It's shown only now.
                 <br />
                 <code>{s.secret}</code>
               </p>
@@ -878,13 +878,13 @@ function RuleEditor({ draft, users, systems, statuses, orgAdmin, onCancel, onSav
           <>
             <label className="field grow">
               <span>Address (https://)</span>
-              <input type="url" value={c.url ?? ""} onChange={(e) => setCfg(i, { url: e.target.value })} placeholder="https://example.com/hooks/pulse" />
+              <input type="url" value={c.url ?? ""} onChange={(e) => setCfg(i, { url: e.target.value })} placeholder="https://example.com/hooks/pms" />
             </label>
             <label className="field grow">
               <span>JSON to send</span>
               <textarea rows={3} className="mono" value={c.payload ?? '{"key": "{{item.key}}", "title": "{{item.title}}", "status": "{{item.status}}"}'} onChange={(e) => setCfg(i, { payload: e.target.value })} spellCheck={false} />
             </label>
-            <p className="field-hint">Each call is signed (X-Pulse-Signature). The signing secret is shown once, when you save.</p>
+            <p className="field-hint">Each call is signed (X-PMS-Signature, also sent as X-Pulse-Signature). The signing secret is shown once, when you save.</p>
           </>
         );
       case "escalate":

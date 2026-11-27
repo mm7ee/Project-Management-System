@@ -3,7 +3,7 @@
 // Workflows and boards, shared by the Worker (which enforces every rule) and the UI (which greys out
 // the moves a person can't make, with the reason).
 //
-// A workflow uses some of Pulse's statuses and says which moves (transitions) are allowed between
+// A workflow uses some of the system's statuses and says which moves (transitions) are allowed between
 // them. Each transition can have conditions (who may make it), validators (what must be true first)
 // and post-functions (what happens afterwards).
 import { ROLE_LABEL } from "./roles";
@@ -111,7 +111,7 @@ const filled =
    */ (v) => !(v === undefined || v === null || v === "" || (Array.isArray(v) && !v.length));
 /**
  * Checks one transition for one person and item. Admins pass role conditions, as they keep every
- * permission elsewhere in Pulse. Validators report what is still needed, given `input`.
+ * permission elsewhere in PMS. Validators report what is still needed, given `input`.
  * @param {Transition} t
  * @param {ItemForCheck} item
  * @param {{ id: string; role: Role }} me

@@ -1,7 +1,7 @@
 {
-  "name": "pulse",
+  "name": "pms",
   "private": true,
-  "description": "Shortcuts for running Pulse's two halves from the repository root. No packages of its own.",
+  "description": "Shortcuts for running the Project Management System's two halves from the repository root. No packages of its own.",
   "scripts": {
     "install:all": "npm --prefix project-management-system-frontend install && npm --prefix project-management-system-backend install",
     "dev": "node project-management-system-backend/scripts/dev-all.mjs",

@@ -30,7 +30,10 @@ export {}; // the type imports above belong to the file, not to the first declar
 export const CURRENCIES = ["USD", "ZWG", "ZAR", "EUR", "GBP", "BWP", "ZMW", "KES"];
 export const MAX_CUSTOM_FIELDS = 30;
 export const MAX_FIELD_OPTIONS = 50;
-export const TOKEN_PREFIX = "pulse_";
+/** New API tokens start with this. */
+export const TOKEN_PREFIX = "pms_";
+/** Tokens made before the rename start with this, and keep working until they expire or are revoked. */
+export const OLD_TOKEN_PREFIX = "pulse_";
 export const TOKEN_DAYS = [7, 30, 90, 180, 365];
 export const MAX_TOKENS_PER_PERSON = 10;
 /**

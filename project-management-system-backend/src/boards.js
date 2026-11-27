@@ -329,7 +329,7 @@ export async function boardsApi(c, path, method) {
   throw new HttpError(404, "Not found");
 }
 /**
- * Ask Pulse: boards with work-in-progress limits, and the columns over them. Not for people who see only their own items.
+ * Ask AI: boards with work-in-progress limits, and the columns over them. Not for people who see only their own items.
  * @param {ItemContext} c
  * @returns {Promise<string[]>}
  */

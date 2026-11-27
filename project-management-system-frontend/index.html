@@ -14,9 +14,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>%BRAND_NAME%</title>
     <script>
-      // The old web address moves people to the new one, keeping view-only links and project pages.
+      // The oldest web address (omni-tracker.…) moves people to the current one (pms.…), keeping view-only links and pages.
       if (location.hostname.indexOf("omni-tracker.") === 0) {
-        location.replace("https://pulse." + location.hostname.slice(13) + location.pathname + location.search + location.hash);
+        location.replace("https://pms." + location.hostname.slice(13) + location.pathname + location.search + location.hash);
       }
       // A view-only link added to a home screen should reopen that link, not the sign-in page.
       if (location.pathname.indexOf("/view/") === 0) {

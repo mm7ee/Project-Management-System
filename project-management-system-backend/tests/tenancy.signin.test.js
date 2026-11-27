@@ -1,6 +1,6 @@
 // Multi-tenancy, phase (c): signing in to an organisation. The organisation code decides whose account a username
 // is; nothing before a correct sign-in says whether an organisation, a username or a workspace exists.
-// Runs on PGlite by default (npm test), or the Neon dev branch with PULSE_DB=dev.
+// Runs on PGlite by default (npm test), or the Neon dev branch with PMS_DB=dev.
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hashPassword } from "../src/auth.js";
 import { testBackend, testDatabase, workerClient } from "./helpers/worker.js";

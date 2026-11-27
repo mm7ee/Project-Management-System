@@ -33,7 +33,7 @@ describe("GIFs come from GIPHY's media servers only", () => {
   });
 });
 describe("stickers", () => {
-  it("accepts only Pulse's own sticker ids", () => {
+  it("accepts only the system's own sticker ids", () => {
     expect(STICKERS.length).toBeGreaterThan(10);
     expect(new Set(STICKERS.map((s) => s.id)).size).toBe(STICKERS.length);
     expect(isSticker("thanks")).toBe(true);

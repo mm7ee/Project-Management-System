@@ -216,7 +216,7 @@ const esc =
    * @returns {string}
    */ (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 /**
- * Emails to customers: plain, with no link into Pulse (they can't sign in).
+ * Emails to customers: plain, with no link into PMS (they can't sign in).
  * @param {string} title
  * @param {string} greeting
  * @param {string} text
@@ -1017,7 +1017,7 @@ export async function runSlaChecks(env, now = Date.now()) {
   return alerts.length;
 }
 /**
- * Ask Pulse: open requests by queue, and the ones at risk or breached, within the person's visibility.
+ * Ask AI: open requests by queue, and the ones at risk or breached, within the person's visibility.
  * @param {ItemContext} c
  * @returns {Promise<string[]>}
  */

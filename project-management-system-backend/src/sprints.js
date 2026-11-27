@@ -771,7 +771,7 @@ export async function sprintsApi(c, path, method) {
   throw new HttpError(404, "Not found");
 }
 /**
- * Each running sprint's health, as this person may see it: for Ask Pulse and the Monday Briefing.
+ * Each running sprint's health, as this person may see it: for Ask AI and the Monday Briefing.
  * @param {D1Database} db
  * @param {number} now
  * @param {Viewer} [viewer=PUBLIC_VIEWER]

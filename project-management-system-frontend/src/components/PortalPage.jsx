@@ -10,9 +10,9 @@ import { applyBranding, setTitle } from "../brandTheme";
 /** @type {string | null} */ export const portalToken = typeof window !== "undefined" ? (window.location.pathname.match(/^\/portal\/([A-Za-z0-9_-]{20,})\/?$/)?.[1] ?? null) : null;
 /**
  * This browser's key for this link: how it finds the requests it raised. Kept in this browser only.
- * @type {"pulse:portal-requester"}
+ * @type {"pms:portal-requester"}
  */
-const KEY_STORE = "pulse:portal-requester";
+const KEY_STORE = "pms:portal-requester";
 /**
  * @returns {string | null}
  */

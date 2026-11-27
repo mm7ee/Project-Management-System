@@ -1,4 +1,4 @@
-// Pulse's database is Postgres (Neon), reached through Cloudflare Hyperdrive. The Worker was written
+// the system's database is Postgres (Neon), reached through Cloudflare Hyperdrive. The Worker was written
 // against D1's small API (prepare → bind → first/all/run, and batch), so this file gives Postgres that
 // same API: queries keep their `?` placeholders and their shape, and a batch runs as one transaction,
 // as it did on D1. The few SQL differences (case-insensitive matching, ignoring duplicates) are written
