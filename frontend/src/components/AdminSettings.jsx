@@ -849,7 +849,7 @@ export function IntegrationsSection({ systems }) {
               e.preventDefault();
               setError("");
               try {
-                const b = { name: editing.name, url: editing.url, systemId: editing.systemId ?? null, events: editing.events ?? [], enabled: editing.enabled !== false };
+                const b = { name: editing.name, url: editing.url, systemId: editing.systemId ?? null, events: editing.events ?? [], enabled: editing.enabled !== false, payloadTemplate: editing.payloadTemplate || null };
                 if (editing.id) await api(`/webhooks/${editing.id}`, "PUT", b);
                 else setFreshSecret((await /** @type {Promise<Webhook & { secret: string; }>} */ (/** @type {unknown} */ (api("/webhooks", "POST", b)))).secret);
                 setEditing(null);
@@ -891,6 +891,19 @@ export function IntegrationsSection({ systems }) {
                 <input type="checkbox" checked={editing.enabled !== false} onChange={(e) => setEditing({ ...editing, enabled: e.target.checked })} /> On
               </label>
             </fieldset>
+            <label className="field">
+              <span>Payload (optional: leave empty for Pulse's standard JSON)</span>
+              <textarea
+                rows={4}
+                className="mono"
+                spellCheck={false}
+                value={editing.payloadTemplate ?? ""}
+                onChange={(e) => setEditing({ ...editing, payloadTemplate: e.target.value })}
+                placeholder={'{"text": "{{item.key}} {{item.title}} is {{item.status}}"}'}
+                maxLength={8000}
+              />
+              <small className="field-hint">JSON with smart values: {"{{event}} {{item.key}} {{item.title}} {{item.status}} {{item.priority}} {{item.type}} {{item.url}} {{item.assignee.name}} {{item.reporter.name}} {{item.dueDate}} {{project.name}}"}. Values are escaped for JSON; the body is still signed.</small>
+            </label>
             <div className="modal-actions">
               <button type="button" className="btn btn-ghost" onClick={() => setEditing(null)}>
                 Cancel

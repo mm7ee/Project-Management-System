@@ -260,6 +260,8 @@ export function byWorkUrgency(a, b) {
  * @property {{ id: string; name: string }[]} securityLevels The levels you may give it (you belong to them), for the security level menu.
  * @property {CustomField[]} fieldDefs Its workspace's custom fields, and its values.
  * @property {CustomFieldValue[]} fieldValues
+ * @property {import("./workflows").ApprovalView} [approval]  a move waiting for approval
+ * @property {{ policy: { id: string; name: string }; response?: import("./workCalendar").SlaTarget; resolution?: import("./workCalendar").SlaTarget }} [sla]
  * @property {DevLink[]} devLinks Commits, branches and pull requests that mention its key.
  * @property {RequestInfo} [request] For a service desk request: who asked, what they said, and its SLA clock.
  */

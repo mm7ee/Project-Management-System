@@ -206,6 +206,29 @@ new workspace gets its own copy of everything, to change freely.
 - **Kinds:** text, long text, number, money (with a currency), date, single or multi select, person, checkbox and link.
 - A field can be just **for some item types**, and can have a **default value**, which fills in new items left empty.
 
+## SLAs and approvals (workspace administrators)
+
+**SLAs:** Settings → This workspace → **SLAs**.
+- Set how soon work items should get a first response and be resolved, in **working hours**: your organisation's
+  working days and hours, in its time zone, without public holidays.
+- An SLA can be for some item types and priorities only, for example "Urgent bugs: first response in 2 hours,
+  resolved in 2 days".
+- On a work item, its SLA shows how much time is used and when it's due.
+- When a target is at risk, its assignee is told; when it's breached, the assignee and the workspace's administrators
+  are. Automations can react too.
+
+**Approvals:** in Workflows, add the rule **Approval is needed** to a move. Choose who approves:
+- anyone with a role
+- a named person
+- a number of people from a list, for example two of three
+
+When someone makes that move:
+- the item waits instead, with **Waiting for approval** on its page
+- the approvers are told
+- each approver can **Approve**, or **Reject** with a reason (required)
+- once enough approve, the move is made; a rejection ends it, and the reason is added as a comment
+- whoever asked can cancel it
+
 ## Automations (workspace administrators)
 
 Settings → This workspace → **Automations**. A rule reads **When** … **If** … **Then** ….

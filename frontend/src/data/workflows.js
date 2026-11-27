@@ -23,7 +23,7 @@ import { ROLE_LABEL } from "./roles";
   DONE: { label: "Done", tone: "green" },
 };
 /** Every rule, by kind, as the editor offers it. `value` says what the rule needs. */
-/** @type {Record<RuleKind, { rule: string; label: string; value?: "role" | "user" | "field" | "resolution" | "notify" }[]>} */ export const RULES = {
+/** @type {Record<RuleKind, { rule: string; label: string; value?: "role" | "user" | "field" | "resolution" | "notify" | "approval" }[]>} */ export const RULES = {
   condition: [
     { rule: "role", label: "Only people with this role", value: "role" },
     { rule: "assignee_only", label: "Only the assignee" },
@@ -34,6 +34,7 @@ import { ROLE_LABEL } from "./roles";
     { rule: "assignee_set", label: "Someone must be assigned" },
     { rule: "field_filled", label: "A field must be filled", value: "field" },
     { rule: "subtasks_done", label: "All sub-tasks must be done" },
+    { rule: "approval", label: "Approval is needed", value: "approval" },
   ],
   post_function: [
     { rule: "assign_user", label: "Assign to a person", value: "user" },
@@ -80,6 +81,22 @@ export function describeRule(r, nameOf = (id) => id) {
       return "Clear the assignee";
     case "clear_field":
       return `Clear ${FIELD_RULE_LABEL[r.value ?? ""]?.toLowerCase() ?? "a field"}`;
+    case "approval": {
+      // { who: "user:<id>" | "role:<role>" | "users:<id,id>", needed }
+      let v = { who: "", needed: 1 };
+      try {
+        v = { ...v, ...JSON.parse(r.value ?? "{}") };
+      } catch {
+        /* shown as unknown below */
+      }
+      if (v.who.startsWith("role:")) return `Approval by ${v.needed > 1 ? `${v.needed} ` : "a "}${ROLE_LABEL[/** @type {Role} */ (v.who.slice(5))] ?? v.who.slice(5)}${v.needed > 1 ? "s" : ""}`;
+      if (v.who.startsWith("user:")) return `Approval by ${nameOf(v.who.slice(5))}`;
+      if (v.who.startsWith("users:")) {
+        const ids = v.who.slice(6).split(",");
+        return `Approval by ${v.needed} of ${ids.map(nameOf).join(", ")}`;
+      }
+      return "Approval is needed";
+    }
     case "set_resolution":
       return `Resolution: ${r.value === "WONT_DO" ? "Won't do" : "Done"}`;
     case "notify":
@@ -217,4 +234,21 @@ export const needsInput =
  * @property {boolean} needs.comment
  * @property {boolean} needs.assignee
  * @property {string[]} needs.fields
+ */
+/**
+ * A move waiting for (or decided by) approval (worker/approvals.js).
+ * @typedef {Object} ApprovalView
+ * @property {string} id
+ * @property {string} move
+ * @property {string} toStatus
+ * @property {"pending" | "approved" | "rejected" | "cancelled"} status
+ * @property {string} requestedBy
+ * @property {string} requestedById
+ * @property {string} requestedAt
+ * @property {{ id: string; name: string }[]} approvers
+ * @property {number} needed
+ * @property {number} approvals
+ * @property {{ userId: string; by: string; decision: "approve" | "reject"; comment: string; at: string }[]} votes
+ * @property {string} [decidedAt]
+ * @property {string} [reason]
  */

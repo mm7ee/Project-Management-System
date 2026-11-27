@@ -798,6 +798,7 @@ function RulesCell({ rules, users, userName, canEdit, onChange, label }) {
               ))}
             </select>
           )}
+          {def?.value === "approval" && <ApprovalValue users={users} onChange={setValue} />}
           {def?.value === "resolution" && (
             <select value={value} onChange={(e) => setValue(e.target.value)} aria-label="Resolution">
               <option value="">Resolution…</option>
@@ -826,6 +827,64 @@ function RulesCell({ rules, users, userName, canEdit, onChange, label }) {
         </span>
       )}
     </div>
+  );
+}
+/**
+ * Who approves a move: anyone with a role, a named person, or N of several people. Sets the rule's value (JSON).
+ * @param {{ users: User[]; onChange: (v: string) => void }} p
+ */
+function ApprovalValue({ users, onChange }) {
+  const [kind, setKind] = useState(/** @type {"role" | "user" | "users"} */ ("role"));
+  const [role, setRole] = useState("manager");
+  const [person, setPerson] = useState("");
+  const [people, setPeople] = useState(/** @type {string[]} */ ([]));
+  const [needed, setNeeded] = useState(1);
+  useEffect(() => {
+    const who = kind === "role" ? `role:${role}` : kind === "user" ? (person ? `user:${person}` : "") : people.length ? `users:${people.join(",")}` : "";
+    onChange(who ? JSON.stringify({ who, needed: kind === "user" ? 1 : Math.max(1, Math.min(needed, kind === "users" ? people.length || 1 : 20)) }) : "");
+  }, [kind, role, person, people, needed]);
+  return (
+    <span className="wf-approval">
+      <select value={kind} onChange={(e) => setKind(/** @type {"role" | "user" | "users"} */ (e.target.value))} aria-label="Who approves">
+        <option value="role">Anyone with a role</option>
+        <option value="user">A named person</option>
+        <option value="users">Some of these people</option>
+      </select>
+      {kind === "role" && (
+        <select value={role} onChange={(e) => setRole(e.target.value)} aria-label="Role">
+          {ROLES.map((r) => (
+            <option key={r} value={r}>
+              {ROLE_LABEL[r]}
+            </option>
+          ))}
+        </select>
+      )}
+      {kind === "user" && (
+        <select value={person} onChange={(e) => setPerson(e.target.value)} aria-label="Approver">
+          <option value="">Person…</option>
+          {users.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name}
+            </option>
+          ))}
+        </select>
+      )}
+      {kind === "users" && (
+        <select multiple value={people} onChange={(e) => setPeople([...e.target.selectedOptions].map((o) => o.value))} aria-label="Approvers (choose several)" size={4}>
+          {users.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.name}
+            </option>
+          ))}
+        </select>
+      )}
+      {kind !== "user" && (
+        <label className="wi-check">
+          Approvals needed
+          <input type="number" min={1} max={20} value={needed} onChange={(e) => setNeeded(Number(e.target.value) || 1)} style={{ width: 56 }} />
+        </label>
+      )}
+    </span>
   );
 }
 /**

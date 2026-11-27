@@ -6,6 +6,7 @@
 // webhooks for work item events (signed with HMAC, retried with backoff). Webhooks and GitHub need
 // "manage_integrations"; tokens need "use_api".
 import { newToken, openSecret, sealSecret, tokenHash } from "./auth";
+import { renderTemplate } from "../src/data/automation";
 import { HttpError, body, json } from "./http";
 import { SELECT, keyOf } from "./workitems";
 import { API_RATE_LIMIT, MAX_TOKENS_PER_PERSON, TOKEN_DAYS, TOKEN_PREFIX, WEBHOOK_BACKOFF_MINUTES, WEBHOOK_EVENTS, WEBHOOK_MAX_ATTEMPTS } from "../src/data/admin";
@@ -370,18 +371,44 @@ export async function dispatchWebhooks(env, e) {
   const kind = EVENT_OF[e.type];
   if (!kind || !("itemId" in e)) return;
   const db = env.DB;
-  const hooks = await /** @type {Promise<D1Result<{ id: string; system_id: string | null; }>>} */ (/** @type {unknown} */ (db.prepare(`SELECT id, system_id FROM webhooks WHERE enabled = 1 AND ${COLUMN[kind]} = 1`).all()));
+  const hooks = await /** @type {Promise<D1Result<{ id: string; system_id: string | null; payload_template: string | null; }>>} */ (/** @type {unknown} */ (db.prepare(`SELECT id, system_id, payload_template FROM webhooks WHERE enabled = 1 AND ${COLUMN[kind]} = 1`).all()));
   if (!hooks.results.length) return;
   const r = await /** @type {Promise<ItemRow | null>} */ (/** @type {unknown} */ (db.prepare(`${SELECT} WHERE w.id = ?`).bind(e.itemId).first()));
   if (!r || r.security_level) return;
   const wanted = hooks.results.filter((h) => !h.system_id || h.system_id === r.system_id);
   if (!wanted.length) return;
-  const payload = JSON.stringify(await payloadFor(db, env, e, r, kind));
+  const standard = await payloadFor(db, env, e, r, kind);
+  const payload = JSON.stringify(standard);
+  // A webhook with its own template gets its JSON, filled with smart values escaped for JSON.
+  const values = /** @type {Record<string, string>} */ ({
+    "event": standard.event,
+    "item.key": standard.item.key,
+    "item.title": standard.item.summary,
+    "item.summary": standard.item.summary,
+    "item.status": standard.item.status,
+    "item.priority": standard.item.priority,
+    "item.type": r.item_type_name ?? standard.item.type,
+    "item.url": standard.item.url,
+    "item.assignee.name": standard.item.assignee?.name ?? "nobody",
+    "item.reporter.name": standard.item.reporter?.name ?? "",
+    "item.dueDate": standard.item.dueDate ?? "",
+    "project.name": standard.item.project.name,
+  });
+  const bodyFor = /** @param {{ payload_template: string | null }} h */ (h) => {
+    if (!h.payload_template) return payload;
+    const out = renderTemplate(h.payload_template, values, "json");
+    try {
+      JSON.parse(out);
+      return out;
+    } catch {
+      return payload;
+    }
+  };
   const header = /** @type {{ key: WebhookEvent; label: string; header: string; }} */ (WEBHOOK_EVENTS.find((x) => x.key === kind)).header;
   /** @type {number[]} */ const ids = [];
   for (const h of wanted) {
     const row = await /** @type {Promise<{ id: number; } | null>} */ (
-      /** @type {unknown} */ (db.prepare("INSERT INTO webhook_deliveries (webhook_id, event, item_key, payload, status, next_attempt_at, created_at) VALUES (?, ?, ?, ?, 'pending', ?, ?) RETURNING id").bind(h.id, header, keyOf(r), payload, new Date().toISOString(), new Date().toISOString()).first())
+      /** @type {unknown} */ (db.prepare("INSERT INTO webhook_deliveries (webhook_id, event, item_key, payload, status, next_attempt_at, created_at) VALUES (?, ?, ?, ?, 'pending', ?, ?) RETURNING id").bind(h.id, header, keyOf(r), bodyFor(h), new Date().toISOString(), new Date().toISOString()).first())
     );
     if (row) ids.push(Number(row.id));
   }
@@ -413,6 +440,7 @@ const toHook =
     ...(h.system_id ? { systemId: h.system_id } : {}),
     events: WEBHOOK_EVENTS.map((e) => e.key).filter((k) => Number(h[/** @type {keyof HookRow} */ (COLUMN[k])])),
     enabled: !!h.enabled,
+    ...(h.payload_template ? { payloadTemplate: h.payload_template } : {}),
     createdAt: h.created_at,
     ...(h.last_status ? { lastDelivery: { status: /** @type {"pending" | "delivered" | "failed"} */ (h.last_status), at: /** @type {NonNullable<typeof h.last_at>} */ (h.last_at), ...(h.last_code ? { code: Number(h.last_code) } : {}), ...(h.last_error ? { error: h.last_error } : {}) } } : {}),
   });
@@ -523,7 +551,7 @@ export async function integrationsApi(c, env, path, method) {
   // ----- outbound webhooks -----
   if (path.startsWith("/api/webhooks")) needIntegrations();
   if (path === "/api/webhooks" && method === "GET") return json((await /** @type {Promise<D1Result<HookRow>>} */ (/** @type {unknown} */ (db.prepare(`${HOOKS_SQL} ORDER BY h.created_at`).all()))).results.map(toHook));
-  const readHook = /** @param {{ name?: unknown; url?: unknown; systemId?: unknown; events?: unknown; enabled?: unknown }} b */ async (b) => {
+  const readHook = /** @param {{ name?: unknown; url?: unknown; systemId?: unknown; events?: unknown; enabled?: unknown; payloadTemplate?: unknown }} b */ async (b) => {
     const name = String(b.name ?? "")
       .trim()
       .slice(0, 60);
@@ -533,7 +561,16 @@ export async function integrationsApi(c, env, path, method) {
     if (!events.length) throw new HttpError(400, "Choose at least one event");
     const systemId = b.systemId ? String(b.systemId) : null;
     if (systemId && !(await db.prepare("SELECT 1 FROM systems WHERE id = ?").bind(systemId).first())) throw new HttpError(404, "System not found");
-    return { name, url, events, systemId, enabled: b.enabled === false ? 0 : 1 };
+    // Its own JSON, with smart values ({{item.key}} …), or Pulse's standard payload when empty.
+    const template = b.payloadTemplate ? String(b.payloadTemplate).slice(0, 8000) : null;
+    if (template) {
+      try {
+        JSON.parse(renderTemplate(template, {}, "json").replace(/\{\{[^}]*\}\}/g, "x"));
+      } catch {
+        throw new HttpError(400, "The payload must be JSON (smart values go inside quotes)");
+      }
+    }
+    return { name, url, events, systemId, enabled: b.enabled === false ? 0 : 1, template };
   };
   const flags = /** @param {WebhookEvent[]} events */ (events) => WEBHOOK_EVENTS.map((e) => (events.includes(e.key) ? 1 : 0));
   if (path === "/api/webhooks" && method === "POST") {
@@ -544,10 +581,10 @@ export async function integrationsApi(c, env, path, method) {
     const secret = `whsec_${newToken()}`;
     await db
       .prepare(
-        `INSERT INTO webhooks (id, name, url, secret_sealed, system_id, on_created, on_updated, on_transitioned, on_commented, enabled, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO webhooks (id, name, url, secret_sealed, system_id, on_created, on_updated, on_transitioned, on_commented, enabled, payload_template, created_by, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(id, h.name, h.url, await sealSecret(secret, mfaKey(env)), h.systemId, ...flags(h.events), h.enabled, c.me.id, c.now, c.now)
+      .bind(id, h.name, h.url, await sealSecret(secret, mfaKey(env)), h.systemId, ...flags(h.events), h.enabled, h.template, c.me.id, c.now, c.now)
       .run();
     await c.audit("webhook_created", h.systemId, { webhook: h.name, url: new URL(h.url).origin, events: h.events });
     const row = await /** @type {Promise<HookRow | null>} */ (/** @type {unknown} */ (db.prepare(`${HOOKS_SQL} WHERE h.id = ?`).bind(id).first()));
@@ -565,8 +602,8 @@ export async function integrationsApi(c, env, path, method) {
     }
     const h = await readHook(await body(req));
     await db
-      .prepare("UPDATE webhooks SET name = ?, url = ?, system_id = ?, on_created = ?, on_updated = ?, on_transitioned = ?, on_commented = ?, enabled = ?, updated_at = ? WHERE id = ?")
-      .bind(h.name, h.url, h.systemId, ...flags(h.events), h.enabled, c.now, before.id)
+      .prepare("UPDATE webhooks SET name = ?, url = ?, system_id = ?, on_created = ?, on_updated = ?, on_transitioned = ?, on_commented = ?, enabled = ?, payload_template = ?, updated_at = ? WHERE id = ?")
+      .bind(h.name, h.url, h.systemId, ...flags(h.events), h.enabled, h.template, c.now, before.id)
       .run();
     const prev = toHook(before);
     await c.audit("webhook_updated", h.systemId, {
@@ -695,6 +732,7 @@ export async function askIntegrationLines(c) {
  * @property {string} id
  * @property {string} name
  * @property {string} url
+ * @property {string | null} [payload_template]
  * @property {string | null} system_id
  * @property {number} on_created
  * @property {number} on_updated

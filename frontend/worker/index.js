@@ -39,7 +39,9 @@ import { cleanWorkspaceStyle, cloneWorkspaceConfig, orgAdminApi, templateBluepri
 import { applyBlueprint } from "./blueprints";
 import { KEY_PATTERN, mentionsIn, suggestKey } from "../src/data/workitems";
 import { notifyItem } from "./schemes";
-import { applyChange, askItemLines, createItem, deleteItem, featureToItem, afterChange, moveFeatureTo, itemById, itemsApi, recomputeProgress } from "./workitems";
+import { applyChange, askItemLines, createItem, deleteItem, featureToItem, afterChange, moveFeatureTo, itemById, itemsApi, recomputeProgress, transitionItem } from "./workitems";
+import { approvalsApi } from "./approvals";
+import { runWorkItemSla, slaApi } from "./sla";
 import { workflowsApi } from "./workflows";
 import { askBoardLines, boardsApi } from "./boards";
 import { sprintHealth, sprintsApi } from "./sprints";
@@ -1311,6 +1313,9 @@ async function api(req, env, path, ctx) {
     emit: guest ? undefined : (e) => ctx.waitUntil(runEvent(env, { ...e, by: me.id }).catch((err) => console.error("automation failed", err))),
   };
   const itemsResponse =
+    // Approvals first: /api/items/:key/approvals is theirs.
+    (await approvalsApi(itemCtx, path, method, transitionItem)) ??
+    (await slaApi(itemCtx, path, method)) ??
     (await itemsApi(itemCtx, path, method)) ??
     (await workflowsApi(itemCtx, path, method)) ??
     (await boardsApi(itemCtx, path, method)) ??
@@ -3538,6 +3543,8 @@ export default {
       // Every run (every 5 minutes): automation's schedules and due dates, and its jobs waiting to be tried again.
       await runTimeTriggers(tenv).catch((e) => console.error("Time-based automation failed", w.id, e));
       await retryAutomationJobs(tenv).catch((e) => console.error("Automation retries failed", w.id, e));
+      // Work item SLAs: warnings and breaches, each told once (worker/sla.js).
+      await runWorkItemSla(tenv, (e) => runEvent(tenv, e)).catch((e) => noteFailure(tenv.DB, "Work item SLAs", e));
       await retryWebhooks(tenv).catch((e) => console.error("Webhook retries failed", w.id, e));
       if (!due.hourly) continue;
       await runSubscriptions(tenv).catch((e) => noteFailure(tenv.DB, "Filter subscriptions", e));

@@ -158,6 +158,36 @@ one of the organisation's templates (`workspaceId: null`, `template: true`).
   - `DELETE /api/org/templates/:id`.
   - `POST /api/org/workspaces` takes `template: "builtin:marketing"` or `"org:<id>"`.
 
+## SLAs and approvals
+
+- **SLAs for work items:**
+  - `GET /api/sla-policies` → `{ policies, calendar }`.
+  - `POST /api/sla-policies` `{ name, firstResponseMinutes?, resolutionMinutes?, warnPercent?, itemTypes?, priorities? }`.
+  - `PATCH` and `DELETE /api/sla-policies/:id`. Changes need `manage_workflows`.
+  - Minutes are working minutes (the organisation's time zone, working days and hours, and holidays).
+  - The first matching active policy applies. A work item's detail has
+    `sla: { policy, response?, resolution? }`, each `{ state: running | warning | breached | met | missed, elapsedMinutes, targetMinutes, dueAt? }`.
+  - The first response is the first comment or status change by someone other than the reporter.
+  - Warnings and breaches are told once (the assignee; for breaches, the workspace's administrators too) and set
+    off the automation triggers `sla_warning` and `sla_breached`. `triggerValue` (`response` or `resolution`) narrows
+    them.
+- **Approvals:**
+  - **The rule:** a move whose rules include `{ kind: "validator", rule: "approval", value: "{\"who\": \"role:manager\" | \"user:<id>\" | \"users:<id,id>\", \"needed\": N}" }`
+    isn't made at once.
+  - **Asking:** `POST /api/items/:key/transitions` returns the item, unmoved, with
+    `approval: { id, move, toStatus, status: "pending", approvers, needed, approvals, votes }`. While it's pending,
+    other moves are refused (`409`, `code: "approval_pending"`). The person asking is never an approver.
+  - **Deciding:**
+    - `POST /api/approvals/:id/approve` `{ comment? }`. Enough approvals make the move, with what was sent with it.
+    - `POST /api/approvals/:id/reject` `{ reason }`. A reason is required (`code: "reason_required"`).
+    - `POST /api/approvals/:id/cancel`, by whoever asked or someone who may edit any work item.
+    - To anyone who isn't an approver, an approval is `404`. Decisions can't be changed.
+  - `GET /api/approvals` lists those waiting for you; `GET /api/items/:key/approvals` gives an item's history.
+  - Automation triggers: `approval_granted`, `approval_rejected`.
+- **Outgoing webhooks** (`/api/webhooks`) can have `payloadTemplate`: JSON with smart values (`{{event}}`,
+  `{{item.key}}`, `{{item.title}}`, `{{item.status}}`, `{{item.url}}` …), escaped for JSON, sent instead of the
+  standard payload and still signed.
+
 ## Automation
 
 Needs `manage_automation`, except the item buttons and the webhook trigger.

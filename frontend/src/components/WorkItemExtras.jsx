@@ -2,8 +2,9 @@
 /** @import { WorkItem } from '../data/workitems' */
 /** @import { CustomField, CustomFieldValue, CustomValue } from '../data/admin' */
 import { useEffect, useState } from "react";
-import { GitBranch, GitCommitHorizontal, GitPullRequest, Headset, ListPlus, Lock, Zap } from "lucide-react";
+import { GitBranch, GitCommitHorizontal, GitPullRequest, Headset, ListPlus, Lock, Stamp, Timer, Zap } from "lucide-react";
 import { api } from "../data/api";
+import { SLA_TARGET_LABEL, formatWorking } from "../data/workCalendar";
 import { REQUEST_KINDS } from "../data/servicedesk";
 import { formatDate, timeAgo } from "../time";
 import { SlaBadge } from "./ServiceDeskParts";
@@ -339,6 +340,120 @@ export function AutomationButtons({ itemKey, onRan }) {
           {note}
         </p>
       )}
+    </Panel>
+  );
+}
+/**
+ * A move waiting for approval: who asked, who may approve and who has, and (for an approver who hasn't decided yet)
+ * Approve and Reject; a rejection needs a reason. Whoever asked can cancel it.
+ * @param {{ item: WorkItem; meId: string; onDone: () => void }} props
+ */
+export function ApprovalPanel({ item, meId, onDone }) {
+  const a = item.approval;
+  const [reason, setReason] = useState("");
+  const [rejecting, setRejecting] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  if (!a) return null;
+  const decided = a.votes.some((v) => v.userId === meId);
+  const mayDecide = a.approvers.some((p) => p.id === meId) && !decided;
+  /** @param {"approve" | "reject" | "cancel"} what @param {Record<string, unknown>} [b] */
+  const act = async (what, b = {}) => {
+    setBusy(true);
+    setError("");
+    try {
+      await api(`/approvals/${a.id}/${what}`, "POST", b);
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "That didn't work");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Panel title="Waiting for approval" icon={<Stamp size={16} />}>
+      <p>
+        <b>{a.requestedBy}</b> asked to <b>{a.move}</b> (to {a.toStatus}) {timeAgo(a.requestedAt, Date.now())}. It needs {a.needed === 1 ? "one approval" : `${a.needed} approvals`} from {a.approvers.map((p) => p.name).join(", ")}; {a.approvals} so far.
+      </p>
+      {a.votes.length > 0 && (
+        <ul className="approval-votes">
+          {a.votes.map((v, i) => (
+            <li key={i}>
+              {v.decision === "approve" ? "✓" : "✗"} {v.by}
+              {v.comment ? `: ${v.comment}` : ""}
+            </li>
+          ))}
+        </ul>
+      )}
+      {mayDecide &&
+        (rejecting ? (
+          <form
+            className="approval-reject"
+            onSubmit={(e) => {
+              e.preventDefault();
+              act("reject", { reason });
+            }}
+          >
+            <label className="field">
+              <span>Why it's rejected (required)</span>
+              <textarea rows={2} value={reason} onChange={(e) => setReason(e.target.value)} required maxLength={1000} autoFocus />
+            </label>
+            <div className="org-row">
+              <button className="btn btn-danger sm" disabled={busy || !reason.trim()}>
+                Reject
+              </button>
+              <button type="button" className="btn btn-ghost sm" onClick={() => setRejecting(false)}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="org-row">
+            <button className="btn btn-navy sm" disabled={busy} onClick={() => act("approve")}>
+              Approve
+            </button>
+            <button className="btn btn-ghost sm" disabled={busy} onClick={() => setRejecting(true)}>
+              Reject…
+            </button>
+          </div>
+        ))}
+      {a.requestedById === meId && (
+        <button className="btn btn-ghost sm" disabled={busy} onClick={() => window.confirm("Cancel this approval request? The item stays where it is.") && act("cancel")}>
+          Cancel the request
+        </button>
+      )}
+      {error && (
+        <p className="form-error" role="alert">
+          {error}
+        </p>
+      )}
+    </Panel>
+  );
+}
+/**
+ * The item's SLA targets: time left, or met, missed or breached, in working time.
+ * @param {{ item: WorkItem }} props
+ */
+export function SlaPanel({ item }) {
+  if (!item.sla) return null;
+  const rows = [item.sla.response, item.sla.resolution].filter(/** @returns {t is import("../data/workCalendar").SlaTarget} */ (t) => !!t);
+  return (
+    <Panel title={`SLA: ${item.sla.policy.name}`} icon={<Timer size={16} />}>
+      <dl className="facts">
+        {rows.map((t) => (
+          <div key={t.target} className="fact-row">
+            <dt>{t.target === "response" ? "First response" : "Resolution"}</dt>
+            <dd>
+              <span className={`sla-pill ${t.state}`}>{SLA_TARGET_LABEL[t.state]}</span>{" "}
+              <span className="muted">
+                {formatWorking(t.elapsedMinutes)} of {formatWorking(t.targetMinutes)}
+                {t.dueAt ? ` · due ${new Date(t.dueAt).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}
+              </span>
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <p className="field-hint">Counted in working hours.</p>
     </Panel>
   );
 }

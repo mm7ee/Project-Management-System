@@ -23,6 +23,8 @@ import { ITEM_KEY_PATTERN, KIND_LABELS, LINK_META, LINK_TYPES, MAX_COMMENT, MAX_
 import { checkTransition, needsInput, transitionsFrom } from "../src/data/workflows";
 import { initialStatus, loadWorkflow, workflowIdFor } from "./workflowData";
 import { assignable } from "../src/data/roles";
+import { pendingApproval, requestApproval, viewOf as approvalView } from "./approvals";
+import { slaFor } from "./sla";
 /**
  * Everything a list or page needs about an item, in one query. Cancelled ("won't do") children don't count.
  */
@@ -368,6 +370,12 @@ async function detail(c, r) {
     fieldDefs: fieldDefs.filter((f) => !f.itemTypes || f.itemTypes.includes(r.item_type)),
     fieldValues: (await customValuesFor(c.db, [r.id])).get(r.id) ?? [],
     devLinks: c.guest ? [] : await devLinksFor(c.db, r.id),
+    // A move waiting for approval, and the item's SLA (worker/approvals.js, worker/sla.js).
+    ...(await (async () => {
+      const p = await pendingApproval(c.db, r.id);
+      return p ? { approval: await approvalView(c.db, p) } : {};
+    })()),
+    ...(await slaFor(c.db, r).then((sla) => (sla ? { sla } : {}), () => ({}))),
     ...(r.source === "service_desk" ? { request: await requestDetail(c, r) } : {}),
   };
 }
@@ -459,7 +467,7 @@ export async function personWithRole(c, role, systemId) {
  * @param {ItemContext} c
  * @param {ItemRow} r
  * @param {MoveRequest} m
- * @param {{ log?: boolean; quiet?: boolean }} [opts={}]
+ * @param {{ log?: boolean; quiet?: boolean; approved?: boolean }} [opts={}]  approved: an approval was granted for this move (worker/approvals.js), so it's made as asked
  * @returns {Promise<ChangeResult>}
  */
 export async function transitionItem(c, r, m, opts = {}) {
@@ -467,7 +475,10 @@ export async function transitionItem(c, r, m, opts = {}) {
   // people and updates the project's progress; every step still records its history.
   const log = opts.log ?? true;
   const may = rights(c, r);
-  if (!may.edit) throw new HttpError(403, "Only the assignee, the reporter or someone who can edit any work item can move this");
+  // An approved move was checked when it was asked for; the approver needn't be someone who could make it.
+  if (!opts.approved && !may.edit) throw new HttpError(403, "Only the assignee, the reporter or someone who can edit any work item can move this");
+  // While an approval is pending, the item waits.
+  if (!opts.approved && (await pendingApproval(c.db, r.id))) throw new HttpError(409, "This item is waiting for an approval. Cancel it to move it another way.", "approval_pending");
   const wf = await loadWorkflow(c.db, await workflowIdFor(c.db, r.system_id, r.item_type));
   const options = transitionsFrom(wf, r.status);
   /** @type {Transition | undefined} */ const t = m.transitionId ? options.find((x) => x.id === m.transitionId) : options.find((x) => x.to === m.to);
@@ -479,14 +490,19 @@ export async function transitionItem(c, r, m, opts = {}) {
   const comment = typeof m.comment === "string" ? m.comment.trim().slice(0, MAX_COMMENT) : "";
   const fields = m.fields && typeof m.fields === "object" ? m.fields : {};
   const check = checkTransition(t, await forCheck(c, r), c.me, { comment, fields });
-  if (!check.allowed) throw new HttpError(403, check.reason ?? "You can't make that move", "transition_condition");
+  if (!check.allowed && !opts.approved) throw new HttpError(403, check.reason ?? "You can't make that move", "transition_condition");
   if (needsInput(check)) {
     const wants = [...(check.needs.comment ? ["a comment"] : []), ...(check.needs.assignee ? ["an assignee"] : []), ...check.needs.fields.map((f) => f)];
     throw new HttpError(400, `"${t.name}" needs ${wants.join(", ")} first`, "transition_needs", { needs: check.needs, transition: t.id });
   }
-  if (fields.assignee !== undefined && !may.assignOthers) {
+  if (fields.assignee !== undefined && !may.assignOthers && !opts.approved) {
     const to = /** @type {string | null} */ (fields.assignee || null);
     if (to && to !== c.me.id) throw new HttpError(403, "You can assign a work item to yourself only");
+  }
+  // A move that needs approval waits for it instead (worker/approvals.js).
+  if (!opts.approved && t.rules.some((x) => x.kind === "validator" && x.rule === "approval")) {
+    const approval = await requestApproval(c, r, t, { comment, fields: /** @type {Record<string, unknown>} */ (fields) });
+    return { before: r, after: r, changed: [], diff: {}, pendingApproval: approval };
   }
   /** @type {ItemPatch} */ const patch = { ...fields, status: t.to };
   for (const rule of t.rules.filter((x) => x.kind === "post_function")) {
@@ -1643,7 +1659,9 @@ export async function askItemLines(c, nameOf, limit = 120) {
  * @typedef {| { type: "item_created" | "comment_added" | "subtasks_done"; itemId: string; by?: string }
  *   | { type: "item_transitioned"; itemId: string; from: string; to: string; by?: string }
  *   | { type: "field_changed"; itemId: string; fields: string[]; by?: string }
- *   | { type: "sprint_started" | "sprint_completed"; sprintId: string; systemId: string; by?: string }} ItemEvent  by: who set it off (a user id, or "automation")
+ *   | { type: "sprint_started" | "sprint_completed"; sprintId: string; systemId: string; by?: string }
+ *   | { type: "sla_warning" | "sla_breached"; itemId: string; target: "response" | "resolution"; by?: string }
+ *   | { type: "approval_granted" | "approval_rejected"; itemId: string; by?: string }} ItemEvent  by: who set it off (a user id, or "automation")
  */
 /**
  * @typedef {Object} ItemContext
@@ -1748,6 +1766,7 @@ export async function askItemLines(c, nameOf, limit = 120) {
  * @property {ItemRow} after
  * @property {string[]} changed
  * @property {Record<string, { from: unknown; to: unknown }>} diff Before and after values of each changed field, for the activity log.
+ * @property {import('../src/data/workflows').ApprovalView} [pendingApproval] the move waits for this approval instead
  */
 /**
  * @typedef {Object} NewItem

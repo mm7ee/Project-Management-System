@@ -5,7 +5,7 @@
 /** @import { LinkType, WorkComment, WorkItem, WorkItemPage as ItemPage, WorkItemSummary, WorkItemType } from '../data/workitems' */
 /** @import { PendingMove } from './MoveDialog' */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AutomationButtons, CustomFieldsPanel, DevelopmentPanel, RequestPanel, SecurityLevelField } from "./WorkItemExtras";
+import { ApprovalPanel, AutomationButtons, CustomFieldsPanel, SlaPanel, DevelopmentPanel, RequestPanel, SecurityLevelField } from "./WorkItemExtras";
 import { ArrowLeft, Copy, Download, Eye, EyeOff, Link2, MessageSquare, Paperclip, Pencil, Plus, Timer, Trash2, Upload, X } from "lucide-react";
 import { api, ApiError } from "../data/api";
 import { formatBytes, MAX_DOCUMENT_BYTES } from "../data/project";
@@ -177,6 +177,10 @@ export default function WorkItemPage({ system, itemKey, users, me, now, readOnly
           <RequestPanel item={item} />
 
           <CustomFieldsPanel item={item} users={users} canEdit={can.edit} onSave={(customFields) => save({ customFields })} />
+
+          <ApprovalPanel item={item} meId={me.id} onDone={load} />
+
+          <SlaPanel item={item} />
 
           {!readOnly && <AutomationButtons itemKey={item.key} onRan={load} />}
 

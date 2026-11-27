@@ -2,11 +2,11 @@
 
 For: the Pulse owner, before building.
 
-Status (2026-11-26):
+Status (2026-11-27):
 - The recommendations were approved.
-- **Phases 1, 2 and 3 are built:** committed locally and on the dev branch. Before they're pushed, migrations 0017,
-  0018 and 0019 must be applied to live (0018 after a dry run on a production copy); see UPGRADE-LOG.
-- Phase 4 is next.
+- **All four phases are built:** committed locally and on the dev branch, with the demo organisation and the README.
+  Before they're pushed, migrations 0017 to 0020 must be applied to live (0018 after a dry run on a production
+  copy); see UPGRADE-LOG.
 - Two deviations from section 3, phase 2, recorded in DECISIONS:
   - item types build on the five built-in kinds rather than replacing them
   - work items don't carry a workflow version (status moves are settled at publish)

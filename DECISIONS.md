@@ -1102,3 +1102,43 @@ The plan, and the 13 recommendations approved with "continue", are in `docs/admi
   with a list of what didn't match.
   - The Marketing "Approved → Scheduled" preset needs a status called Approved, which the Marketing template doesn't
     have (its approval step is "Client/Manager Approval"). It says so when added.
+
+## Administrator module, phase 4: SLAs, approvals, webhook payloads and the demo organisation (2026-11-27)
+
+- **Work item SLAs:**
+  - **Their own calendar** (`src/data/workCalendar.js`): the organisation's time zone, working days and hours (phase
+    1's profile) and its public holidays, daylight saving included. The service desk keeps its own Harare 08:00–17:00
+    clock; changing it was out of scope and would move its existing targets.
+  - **Policies** are per workspace, for some item types and priorities or all. The first matching active one
+    applies.
+  - **First response** is the first comment or status change by someone other than the reporter. **Resolution** is
+    reaching a Done status. Being on hold doesn't pause the clock (the service desk's "waiting for customer" pause
+    is a request feature).
+  - **States are worked out when asked**, not stored: running, at risk (past the warning share), breached, met,
+    missed.
+  - **The cron** looks at up to 500 open items per workspace every 5 minutes and records each warning and breach
+    once (`item_sla_events`), so people are told once.
+- **Approvals:**
+  - **A rule** ("Approval is needed", a validator) on a move. Its value is JSON: a person, a role, or N of a list.
+  - **A move with it doesn't happen.** It becomes a pending approval stored with what the person sent (comment,
+    fields), and the item waits: other moves are refused until it's decided or cancelled. This is the brief's
+    "Pending approval state", without adding a status to every workflow.
+  - **The person asking never approves their own move.** Approvers are resolved when asked (active members of the
+    workspace).
+  - **Deciding:** a rejection needs a reason, ends it, and is added as a comment. Enough approvals make the move
+    through the normal move code, skipping only the checks that were done when it was asked. If the move is no
+    longer possible (the workflow changed), the approval is cancelled and says why.
+  - **Who sees it:** to anyone but its approvers, an approval is a 404, like everything else that isn't theirs.
+  - **Votes can't be changed:** the app's role can't update or delete them.
+  - Approval and SLA events are automation triggers.
+- **Outgoing webhooks** can carry their own JSON with smart values, escaped for JSON and still signed. Incoming
+  webhooks and webhook actions were phase 3.
+- **The demo organisation** (`scripts/demo-org.mjs`, `npm run demo:org -- dev`):
+  - **Demo Co:** Development from the Software template and Marketing from the Marketing template, six people
+    (including a read-only Viewer), projects and work.
+  - **Rules:** the preset rules (switched on where they matched), an SLA for urgent bugs, and an approval step out of
+    Client/Manager Approval.
+  - **It's built through the real Worker,** so it is also an end-to-end check (`tests/demoOrg.test.js` runs it on
+    PGlite).
+  - **The live database** needs `--live`.
+  - It runs through `vite-node`, because the Worker's imports leave off file extensions, as the bundler allows.

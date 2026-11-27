@@ -1,6 +1,6 @@
 /** @import { AppNotification, Digest, NotificationKind } from '../data/notifications' */
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, AtSign, Bell, CheckCheck, Eye, Timer, FileSignature, Lock, Mail, MessageSquare, Headset, AlarmClock, Newspaper, Sparkles, Sunrise, UserPlus, X, Zap, MessagesSquare } from "lucide-react";
+import { ArrowLeft, AtSign, Bell, CheckCheck, Eye, Timer, FileSignature, Lock, Mail, MessageSquare, Headset, AlarmClock, Newspaper, Sparkles, Sunrise, UserPlus, X, Zap, MessagesSquare, Stamp } from "lucide-react";
 import { api } from "../data/api";
 const POLL_MS = 60000;
 /** @type {Record<NotificationKind, typeof Bell>} */ const ICON = {
@@ -18,6 +18,7 @@ const POLL_MS = 60000;
   service_desk: Headset,
   sla: AlarmClock,
   chat: MessagesSquare,
+  approval: Stamp,
 };
 /**
  * @param {string} iso

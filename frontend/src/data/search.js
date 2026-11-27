@@ -37,7 +37,7 @@ export const GADGET_KINDS = /** @type {GadgetKind[]} */ (Object.keys(GADGETS));
   resolution: "Resolution",
   sprint: "Sprint",
 };
-/** @type {Record<Trigger, { label: string; value?: "status" | "field" }>} */ export const TRIGGERS = {
+/** @type {Record<Trigger, { label: string; value?: "status" | "field" | "sla" }>} */ export const TRIGGERS = {
   item_created: { label: "A work item is created" },
   item_transitioned: { label: "A work item moves status", value: "status" },
   field_changed: { label: "A field changes", value: "field" },
@@ -51,6 +51,10 @@ export const GADGET_KINDS = /** @type {GadgetKind[]} */ (Object.keys(GADGETS));
   due_passed: { label: "Its due date has passed" },
   webhook: { label: "Another system calls its webhook" },
   manual: { label: "Someone presses its button on a work item" },
+  sla_warning: { label: "An SLA is about to be breached", value: "sla" },
+  sla_breached: { label: "An SLA was breached", value: "sla" },
+  approval_granted: { label: "An approval is granted" },
+  approval_rejected: { label: "An approval is rejected" },
 };
 /** Triggers that act on many items at once (everything the rule's conditions pick), not one item. */
 export const BULK_TRIGGERS = /** @type {Trigger[]} */ (["schedule", "sprint_started", "sprint_completed"]);
@@ -93,7 +97,7 @@ export const PLACEHOLDERS = ["{{item.key}}", "{{item.title}}", "{{item.status}}"
 export const MAX_AUTOMATION_DEPTH = 5;
 /** @typedef {"private" | "role" | "workspace" | "everyone"} ShareScope */
 /** @typedef {"filter_results" | "pie" | "created_resolved" | "sprint_health" | "workload" | "overdue" | "two_d" | "activity"} GadgetKind */
-/** @typedef {"item_created" | "item_transitioned" | "field_changed" | "comment_added" | "subtasks_done" | "sprint_started" | "sprint_completed" | "schedule" | "item_assigned" | "due_soon" | "due_passed" | "webhook" | "manual"} Trigger */
+/** @typedef {"item_created" | "item_transitioned" | "field_changed" | "comment_added" | "subtasks_done" | "sprint_started" | "sprint_completed" | "schedule" | "item_assigned" | "due_soon" | "due_passed" | "webhook" | "manual" | "sla_warning" | "sla_breached" | "approval_granted" | "approval_rejected"} Trigger */
 /** @typedef {"transition" | "assign" | "set_field" | "comment" | "notify" | "create_subtask" | "link" | "add_label" | "clear_field" | "create_item" | "email" | "message" | "webhook" | "escalate"} ActionKind */
 /**
  * @typedef {Object} SavedFilter

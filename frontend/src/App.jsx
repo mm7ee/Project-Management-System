@@ -9,7 +9,7 @@
 /** @import { SignoffStatus } from './data/pcn' */
 /** @import { User } from './data/roles' */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertOctagon, ArrowLeft, Building2, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, LockKeyhole, Menu, Zap, Plug, BellRing, Lock, ListPlus, Headset, Layers, LayoutTemplate, Plus, ScrollText, Shapes, Search, Send, ShieldCheck, Sparkles, Users, Workflow } from "lucide-react";
+import { AlertOctagon, ArrowLeft, Building2, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, LockKeyhole, Menu, Zap, Plug, BellRing, Lock, ListPlus, Headset, Layers, LayoutTemplate, Plus, ScrollText, Shapes, Timer, Search, Send, ShieldCheck, Sparkles, Users, Workflow } from "lucide-react";
 import { getSchedule } from "./data/systems";
 import { api, useAppData } from "./data/api";
 import { isAssigned } from "./data/roles";
@@ -57,6 +57,7 @@ import ServiceDeskSettings from "./components/ServiceDeskSettings";
 import { CustomFieldsSection, IntegrationsSection, NotificationSchemesSection, SecurityLevelsSection } from "./components/AdminSettings";
 import WorkflowsSettings from "./components/WorkflowsSettings";
 import ItemTypesSettings from "./components/ItemTypesSettings";
+import SlaSettings from "./components/SlaSettings";
 import { awaitingSignature } from "./data/pcn";
 import { mfaRequiredFor } from "./data/roles";
 import AskPanel from "./components/AskPanel";
@@ -740,6 +741,7 @@ function Dashboard({ data, reload }) {
                   ? [
                       { group: WS, key: "workflows", label: "Workflows", icon: Workflow, content: <WorkflowsSettings users={users} workspaces={data.workspaces} canEdit={can("manage_workflows")} /> },
                       { group: WS, key: "item-types", label: "Item types", icon: Shapes, content: <ItemTypesSettings canEdit={can("manage_workflows")} /> },
+                      { group: WS, key: "slas", label: "SLAs", icon: Timer, content: <SlaSettings canEdit={can("manage_workflows")} /> },
                     ]
                   : []),
                 ...(can("manage_schemes") ? [{ group: WS, key: "fields", label: "Fields", icon: ListPlus, content: <CustomFieldsSection workspaces={data.workspaces} /> }] : []),

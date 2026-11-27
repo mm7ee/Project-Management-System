@@ -141,6 +141,7 @@ export const WEBHOOK_MAX_ATTEMPTS = 6;
  * @property {string} id
  * @property {string} name
  * @property {string} url
+ * @property {string} [payloadTemplate]  its own JSON, with smart values
  * @property {string} [systemId]
  * @property {WebhookEvent[]} events
  * @property {boolean} enabled

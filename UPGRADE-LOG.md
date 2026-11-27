@@ -1065,3 +1065,60 @@ tests call).
 **Release:** 0017, 0018 and 0019 go together, before pushing (see phase 2 for the dry run).
 - After the push, the cron runs every 5 minutes.
 - Existing scheduled rules keep their hour, now in the organisation's time zone (Harare unless changed).
+
+## Administrator module, phase 4: SLAs, approvals, webhook payloads and the demo organisation (2026-11-27)
+
+**What was built** (decisions: DECISIONS.md)
+- **Migration `migrations/0020_sla_approvals_webhooks.sql`** (reverse in `migrations/down/`):
+  - `sla_policies`, `item_sla_events`
+  - `approvals`, `approval_votes` (votes can't be changed)
+  - SLA and approval automation triggers
+  - `webhooks.payload_template`
+- **Worker:**
+  - `worker/sla.js`: policies API, each item's SLA, the 5-minute check with notifications and automation events
+  - `worker/approvals.js`: asking, approving N of M, rejecting with a reason, cancelling, history, "waiting for me"
+  - `worker/workitems.js`: moves with an approval rule wait; items carry `approval` and `sla`
+  - `worker/workflows.js`: the approval rule checked on save
+  - `worker/integrations.js`: webhook payload templates
+  - `src/data/workCalendar.js`: working time in the organisation's time zone
+- **Screens:**
+  - on the work item: **Waiting for approval** (approve, reject with reason, cancel) and the **SLA**
+  - Settings → This workspace → **SLAs**
+  - the workflow rule "Approval is needed" (a role, a person, or N of several)
+  - the webhook form's payload field
+- **The demo organisation:** `scripts/demo-org.mjs` with `scripts/demo-org-cli.mjs` (`npm run demo:org -- dev`).
+  Demo Co is made on the Neon dev branch.
+- **Docs:**
+  - `README.md`: what's in it, scheduling, and Administration (setting up, creating a workflow, creating an
+    automation)
+  - `docs/API.md`: SLAs and approvals
+  - `docs/admin-guide-organisations.md`: SLAs and approvals
+
+**Tests:**
+- `tests/sla.approvals.test.js`, 6 checks:
+  - an SLA's first response by someone else
+  - a breach told once to the right people, setting off automation
+  - an approval waits, is hidden from the wrong people and needs a reason to reject
+  - two of three approvals make the move, and automation hears of it
+  - approval rules checked on save
+  - webhook payload templates escaped for JSON
+- `tests/workCalendar.test.js`, 5 unit checks: working hours, weekends, holidays, time zones and daylight saving,
+  adding working time, SLA states.
+- `tests/demoOrg.test.js`, 5 checks: Demo Co built through the Worker, the critical-bug rule assigning, isolation and
+  the Viewer, the approval step, `--reset`.
+- Letting anyone approve makes the suite fail.
+
+`npm test`: 236 passed in 24 files. `tsc` (app and Worker): 0 errors. `vite build` passes.
+
+Migration 0020 is applied on the Neon dev branch; its reverse was run there, then it was applied again.
+
+**Not yet checked:** the screens in a browser.
+
+**Release:** 0017, 0018, 0019 and 0020 go together, before pushing.
+1. Dry-run 0018 on a branch of production (phase 2).
+2. `npm run db:status`
+3. `npm run db:backup -- ../backup-before-admin-module.sql`
+4. `npm run db:migrate`
+5. `npm run db:status` again.
+6. Push.
+7. Check sign-in, Settings → Workflows, Automations and SLAs, and moving a work item.

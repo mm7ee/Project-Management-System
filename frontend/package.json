@@ -15,6 +15,7 @@
     "db:migrate:dev": "node scripts/db.mjs migrate dev",
     "db:status": "node scripts/db.mjs status main",
     "db:backup": "node scripts/db.mjs backup main",
+    "demo:org": "vite-node scripts/demo-org-cli.mjs --",
     "test": "vitest run"
   },
   "dependencies": {

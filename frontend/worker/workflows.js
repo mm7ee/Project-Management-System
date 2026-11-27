@@ -17,6 +17,7 @@ import { recomputeProgress } from "./workitems";
 import { EFFECTIVE_WORKFLOW, loadWorkflows, statusCatalogue } from "./workflowData";
 import { ROLES } from "../src/data/roles";
 import { FIELD_RULE_LABEL, RULES } from "../src/data/workflows";
+import { cleanApprovalValue } from "./approvals";
 /** @type {StatusCategory[]} */ const CATEGORIES = ["TODO", "IN_PROGRESS", "DONE"];
 const BASES = /** @type {WorkItemType[]} */ (["EPIC", "STORY", "TASK", "BUG", "SUBTASK"]);
 /** The workflow an item follows: its type's, else its project's, its workspace's or the default. `w`, `s`, `it`. */
@@ -92,7 +93,9 @@ function cleanRules(raw) {
     const kind = /** @type {RuleKind} */ (r.kind);
     const def = RULES[kind]?.find((d) => d.rule === r.rule);
     if (!def) throw new HttpError(400, `Unknown rule "${String(r.rule)}"`);
-    const value = r.value === undefined || r.value === null || r.value === "" ? null : String(r.value).slice(0, 64);
+    // An approval rule's value is JSON (worker/approvals.js); others are a short word.
+    const raw = r.value === undefined || r.value === null || r.value === "" ? null : String(r.value);
+    const value = raw && def.value === "approval" ? cleanApprovalValue(raw.slice(0, 2000)) : raw ? raw.slice(0, 64) : null;
     if (def.value && !value) throw new HttpError(400, `"${def.label}" needs a value`);
     if (def.value === "role" && !ROLES.includes(/** @type {never} */ (value))) throw new HttpError(400, "Unknown role");
     if (def.value === "field" && !(/** @type {NonNullable<typeof value>} */ (value) in FIELD_RULE_LABEL)) throw new HttpError(400, "Unknown field");

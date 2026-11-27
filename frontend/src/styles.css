@@ -3618,3 +3618,13 @@ th[aria-sort="ascending"] .pr-sort svg, th[aria-sort="descending"] .pr-sort svg 
 .smart-value { display: inline-flex; align-items: center; gap: 3px; margin: 2px; padding: 1px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--heading); font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer; }
 .smart-value:focus-visible { outline: none; box-shadow: var(--ring); }
 .auto-buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+
+/* ---------- Administrator module, phase 4: approvals and SLAs ---------- */
+.approval-votes { list-style: none; margin: 6px 0; padding: 0; font-size: 13px; display: flex; flex-direction: column; gap: 2px; }
+.approval-reject { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.approval-reject textarea { padding: 8px 10px; border: 1px solid var(--input-line, var(--border)); border-radius: var(--r-sm, 6px); background: var(--input-bg, var(--card)); color: var(--text); font: inherit; }
+.sla-pill { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 700; background: var(--track); color: var(--heading); }
+.sla-pill.running, .sla-pill.met { background: var(--tint-green); color: var(--green-ink); }
+.sla-pill.warning { background: var(--tint-amber, #fff4dd); color: var(--amber-ink, #8a5a00); }
+.sla-pill.breached, .sla-pill.missed { background: var(--tint-red); color: var(--red-ink); }
+.wf-approval { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }

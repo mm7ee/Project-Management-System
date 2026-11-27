@@ -891,6 +891,8 @@ async function runRules(env, e, depth) {
         if (rule.trigger_value.toUpperCase() !== e.to && rule.trigger_value.toLowerCase() !== (to?.name ?? "").toLowerCase()) continue;
       }
       if (e.type === "field_changed" && rule.trigger === "field_changed" && rule.trigger_value && !e.fields.includes(rule.trigger_value)) continue;
+      // An SLA rule can be for the first response or the resolution only.
+      if ((e.type === "sla_warning" || e.type === "sla_breached") && rule.trigger_value && rule.trigger_value !== e.target) continue;
       await consider(env, l, row, { trigger: rule.trigger === "item_assigned" ? "item_assigned" : e.type, depth, bulk: false, by: e.by }, `${rule.trigger}:${row.id}:${nonce}`);
     } catch (err) {
       await logRun(db, rule, { trigger: e.type, status: "error", message: err instanceof Error ? err.message : "Something went wrong", touched: [], depth }).catch(() => undefined);

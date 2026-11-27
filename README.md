@@ -14,9 +14,12 @@ data in plain English.
 | Dashboard and Projects | Every project's stage, progress, schedule and health, with blockers and update requests |
 | Concept Notes | Propose a project, collect the sign-offs, and turn an approved note into a project |
 | Feature requests | What clients ask for, with priority, delivery date and developer, plus an Insights view |
-| Work items, boards, sprints | Jira-style issues, Kanban and Scrum boards, backlog, timeline and workflows |
+| Organisations and workspaces | Several organisations, each with its own workspaces (Development, Marketing, HR …), isolated by the database; a Platform console and an admin console |
+| Work items, boards, sprints | Jira-style issues with each workspace's own item types, Kanban and Scrum boards, backlog, timeline |
+| Workflows | A workflow per workspace and per item type, edited on a diagram as a draft, published as versions, with approvals; built-in workspace templates |
+| SLAs | First-response and resolution targets for work items in the organisation's working hours, with warnings and breaches |
 | Search | PQL queries, saved filters, email subscriptions and custom dashboards |
-| Automation | Rules that run on events or a schedule |
+| Automation | When / If / Then rules: events, due dates, schedules, webhooks and buttons; conditions; actions that move, assign, email, message, call webhooks or create work in another workspace; tested before use, retried and logged |
 | Service desk | A customer portal, queues, and response and resolution targets in business hours |
 | Chat | Direct messages, group chats and a channel for each project |
 | Reports | Projects, feature requests, delivery (agile charts) and service desk, in one place |
@@ -40,8 +43,12 @@ Browser ──► "pulse" Worker (gateway) ──► "omni-tracker" Worker ─�
   D1-shaped API (`prepare` → `bind` → `first`/`all`/`run`, and `batch` as one transaction).
 - **Placement:** the Worker is pinned to `aws:ap-southeast-1`, next to the database, so each page's queries are
   short hops.
-- **Scheduled jobs:** one hourly cron trigger. `worker/schedule.js` decides what's due: daily digests, the Monday
-  briefing, filter subscriptions, automation rules and the retention clean-up.
+- **Tenancy:** every query runs in its organisation and workspace, enforced by Postgres row-level security
+  (`worker/pg.js`, migrations 0013–0014). See `docs/multi-tenancy-plan.md` and `DECISIONS.md`.
+- **Scheduled jobs:** one cron trigger, every 5 minutes. `worker/schedule.js` decides what's due:
+  - **Every run:** automation (schedules, due dates, retries) and work item SLAs.
+  - **Hourly:** filter subscriptions.
+  - **At their time:** daily digests, the Monday briefing and the retention clean-up.
 
 ## Repository layout
 
@@ -52,6 +59,8 @@ frontend/              the app: everything is built and deployed from here
   migrations/          Postgres schema changes, applied in order
   scripts/db.mjs       migrate, status, backup and run SQL against a database
   scripts/demo-data.mjs  demo records for presentations (every id starts "demo-")
+  scripts/demo-org.mjs   the demo organisation "Demo Co" (Development and Marketing workspaces)
+  scripts/platform-admin.mjs  makes the first Platform Administrator
   tests/               Vitest unit tests
   gateway/             the "pulse" Worker that fronts the app (deployed by hand)
 docs/                  API reference and guides
@@ -129,6 +138,8 @@ All of these run from `frontend/`.
 | `npm run db:migrate:dev` | Apply new migrations to the dev branch |
 | `npm run db:backup -- <file>` | Back up production to a SQL file |
 | `npm run demo:seed` / `demo:remove` | Add or remove demo data on production |
+| `npm run demo:org -- dev [--reset]` | The demo organisation Demo Co on the dev branch (`main` needs `--live`) |
+| `node scripts/platform-admin.mjs create main <username> "<Name>"` | The first Platform Administrator |
 
 ## Conventions
 
@@ -138,6 +149,45 @@ All of these run from `frontend/`.
   the UI, so the server enforces exactly what the screen shows.
 - **Decisions** worth remembering go in `DECISIONS.md`, with the date.
 - **Secrets** stay out of the repository: `.dev.vars`, `.env*` and backups are ignored by git.
+
+## Administration
+
+The full guide is [docs/admin-guide-organisations.md](docs/admin-guide-organisations.md). In short:
+
+**Setting up**
+1. **The first Platform Administrator:** `node scripts/platform-admin.mjs create main <username> "<Full name>"`
+   prints a temporary password. They sign in at `/platform` and set up an authenticator app.
+2. **An organisation:** on `/platform`, **New organisation**, with a name, a code (people type it at sign-in) and its
+   first administrator.
+3. **That administrator,** under Settings → **Organisation**:
+   - fills in the **Profile** (logo, colour, time zone, working days and hours)
+   - adds **Workspaces** (blank, from a template, or a copy of another)
+   - invites **Members** by email or CSV, with a role in each workspace (Viewer is read-only)
+4. **Every change** to the organisation, workspaces, people and roles is in the **Audit log**.
+
+To try it all, `npm run demo:org -- dev` makes Demo Co on the dev branch: Development and Marketing workspaces,
+six people, work, SLAs, approvals and rules.
+
+**Creating a workflow:** Settings → This workspace → **Workflows**.
+1. **New workflow** (a copy of this workspace's or a template), or pick one.
+2. Add its statuses and choose where items start.
+3. On the **Diagram**, drag from one status to another to add a move.
+4. In the table, give each move rules:
+   - **who may:** a role, the assignee
+   - **needs first:** a comment, a field, sub-tasks done, **approval** by a person, a role or N of M people
+   - **then:** assign, set the resolution, clear a field, notify
+5. **Save draft**, then **Publish**. Pulse asks where items in removed statuses go, and keeps every version to
+   restore.
+6. At the top, choose which workflow the workspace, a project or an item type uses. Item types are under
+   **Item types**; SLAs under **SLAs**.
+
+**Creating an automation:** Settings → This workspace → **Automations**.
+1. **New rule**, or **From a preset**.
+2. **When:** an item is created, moved, assigned or changed; a due date is near or passed; a schedule; a webhook; a
+   button.
+3. **If:** conditions in AND/OR groups (or PQL).
+4. **Then:** up to 10 actions, with smart values such as `{{item.key}}`.
+5. **Test** it on an item (nothing changes), save, switch it on, and watch its **Run log**.
 
 ## API
 
