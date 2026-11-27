@@ -467,7 +467,7 @@ export default function Dashboard({ data, reload }) {
       <ParticleField key={prefs.motion + resolveTheme(prefs.theme)} className="app-web no-print" palette={resolveTheme(prefs.theme) === "futuristic" ? "appDark" : "appLight"} />
       <Sidebar
         org={data.tenant?.organization ?? null}
-        workspace={data.tenant?.workspace?.name ?? ""}
+        tenant={data.tenant}
         me={me}
         view={selectedId ? "project" : view}
         counts={counts}

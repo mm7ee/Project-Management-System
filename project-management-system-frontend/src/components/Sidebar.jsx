@@ -5,6 +5,7 @@ import { initials } from "../data/systems";
 import { ROLE_LABEL } from "../data/roles";
 import { BRAND } from "../data/brand";
 import OrgMark from "./OrgMark";
+import WorkspaceCard from "./WorkspaceCard";
 import ParticleField from "./ParticleField";
 /**
  * @param {Props} p
@@ -27,11 +28,7 @@ export default function Sidebar(p) {
             monogram, and the open workspace. Inside an organisation the product's name appears only as "Powered by". */}
         <div className="brand">
           {p.org?.branding ? <OrgMark branding={p.org.branding} surface="dark" size="md" /> : <span className="brand-pms">{BRAND.shortName}</span>}
-          {p.workspace && (
-            <span className="ws-pill" title="The workspace you're in. Switch it from the top bar.">
-              {p.workspace}
-            </span>
-          )}
+          <WorkspaceCard tenant={p.tenant} viewOnly={!!p.viewOnly} />
         </div>
 
         <nav className="nav">
@@ -166,7 +163,7 @@ export default function Sidebar(p) {
  * @typedef {Object} Props
  * @property {User} me
  * @property {{ name: string; branding?: import("../data/branding").BrandingView | null } | null} [org]  the organisation, with its branding
- * @property {string} [workspace]  the open workspace's name
+ * @property {import("../data/api").Tenant} [tenant]  the open workspace (and the ones to switch to), for the card at the top
  * @property {View} view
  * @property {Record<Filter, number>} counts
  * @property {Object} features

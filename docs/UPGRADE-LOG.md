@@ -1323,3 +1323,14 @@ Plan and the algorithm (approved): `docs/adaptive-theming-plan.md`. Sample galle
   app.
 - **Not done:** density per organisation (it stays a personal setting); per-workspace hue shifts and an evening
   palette (deferred, as agreed in the plan); visual snapshot tests and a GIF (the Chrome screenshots in `docs/screenshots/theme/` stand in for now).
+
+## The workspace card at the top of the sidebar (2026-11-27)
+
+- **What's new:** under the organisation's logo, a card says which workspace you're in: "You're in", the name in
+  large type, its icon on a tile of its colour with a slow "you are here" ring, a bar in its colour down the left edge,
+  your role there, its key (only when it adds something), and a dot per workspace ("1 of 2"). It replaces the small
+  workspace pill.
+- **Switching:** with more than one workspace, the card opens a list (icon, name, your role; organisation-wide ones
+  marked view only) and switches straight away, like the top bar's switcher (`switchWorkspace`, shared).
+- Reduced motion stops the ring and the list's animation; forced colours get system colours. No migration.
+- Screenshots: `docs/screenshots/workspace-card/`. `npm test` (frontend): 112 passed.

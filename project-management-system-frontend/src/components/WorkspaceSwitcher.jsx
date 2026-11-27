@@ -17,6 +17,19 @@ function WorkspaceIconOf({ icon, colour }) {
 }
 
 /**
+ * Switches to another workspace: the server checks membership, then the page reloads so nothing from the last
+ * workspace stays on screen.
+ * @param {Tenant} tenant
+ * @param {string} id
+ */
+export async function switchWorkspace(tenant, id) {
+  await api("/me/workspace", "POST", { workspaceId: id });
+  if (tenant.organization) rememberWorkspace(tenant.organization.id, id);
+  window.location.hash = "";
+  window.location.reload();
+}
+
+/**
  * The open workspace, in the top bar. With more than one, choosing another switches to it without signing in
  * again: the server checks membership, then the page reloads so nothing from the last workspace stays on screen.
  * Organisation-wide workspaces you aren't in are listed too, marked "view only": opening one makes you its Viewer.
@@ -49,10 +62,7 @@ export default function WorkspaceSwitcher({ tenant }) {
           setBusy(true);
           setError("");
           try {
-            await api("/me/workspace", "POST", { workspaceId: e.target.value });
-            if (tenant.organization) rememberWorkspace(tenant.organization.id, e.target.value);
-            window.location.hash = "";
-            window.location.reload();
+            await switchWorkspace(tenant, e.target.value);
           } catch (err) {
             setError(err instanceof Error ? err.message : "Couldn't switch workspace");
             setBusy(false);
