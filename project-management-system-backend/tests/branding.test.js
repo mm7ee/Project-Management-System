@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hashPassword } from "../src/auth.js";
 import { purgeDueOrganizations } from "../src/platform.js";
 import { sniffImage } from "../src/branding.js";
+import { specFromColour } from "../../project-management-system-frontend/src/data/logoTheme.js";
 import { testBackend, testDatabase, workerClient } from "./helpers/worker.js";
 
 const url = testDatabase();
@@ -102,8 +103,8 @@ describe("branding per organisation", () => {
   it("before sign-in, an organisation's code gives its name, colours and image addresses, and nothing else", async () => {
     const r = await pub(orgs.a.code);
     expect(r.status).toBe(200);
-    expect(Object.keys(r.data).sort()).toEqual(["accent", "code", "highlight", "icon", "logo", "logoDark", "name", "shades", "sidebar", "tint"]);
-    expect(r.data).toMatchObject({ name: orgs.a.name, code: orgs.a.code, logo: null, logoDark: null, icon: null, tint: null });
+    expect(Object.keys(r.data).sort()).toEqual(["accent", "code", "highlight", "icon", "logo", "logoDark", "name", "shades", "sidebar", "theme", "tint"]);
+    expect(r.data).toMatchObject({ name: orgs.a.name, code: orgs.a.code, logo: null, logoDark: null, icon: null, tint: null, theme: null });
     expect(r.data.accent).toMatch(/^#[0-9a-f]{6}$/);
     expect(Object.keys(r.data.shades).sort()).toEqual(["dark", "futuristic", "light"]);
     expect(r.headers.get("cache-control")).toContain("public");
@@ -253,6 +254,58 @@ describe("branding per organisation", () => {
     expect(rows.map((/** @type {any} */ r) => r.organization_id)).toEqual([orgs.b.id]);
   }, SLOW);
 
+  it("themes: the first one from a logo is published at once, later ones wait as drafts; publish, roll back, turn off", async () => {
+    const orange = specFromColour("#f26b1d");
+    const teal = specFromColour("#0f8b8d", "immersive");
+    // Only the organisation's administrators.
+    expect((await as("val", "/api/org/theme")).status).toBe(403);
+    expect((await as("val", "/api/org/theme/publish", { method: "POST", body: { spec: orange } })).status).toBe(403);
+    const empty = await as("ada", "/api/org/theme");
+    expect(empty.status).toBe(200);
+    expect(empty.data).toMatchObject({ published: null, draft: null, history: [] });
+    // Never anything but a valid spec.
+    for (const bad of [{ spec: "body{display:none}" }, { spec: { ...orange, variation: "loud" } }, { spec: { ...orange, primary: ["red", 0, 0] } }, {}]) {
+      expect((await as("ada", "/api/org/theme/draft", { method: "PUT", body: bad })).status).toBe(400);
+    }
+    // A new organisation's first theme from its logo is applied straight away; unknown keys never reach storage.
+    const first = await as("ada", "/api/org/theme/draft", { method: "PUT", body: { spec: { ...orange, css: "x{}" }, fromLogo: true } });
+    expect(first.status, JSON.stringify(first.data)).toBe(200);
+    expect(first.data.autoPublished).toBe(true);
+    expect(first.data.published).toMatchObject({ version: 1, spec: orange });
+    const [stored] = await db`SELECT spec FROM organization_themes WHERE organization_id = ${orgs.a.id} AND version = 1`;
+    expect(stored.spec).not.toContain("css");
+    expect((await pub(orgs.a.code)).data.theme).toEqual(orange);
+    // A later logo change makes a draft; nothing changes until someone publishes it.
+    const draft = await as("ada", "/api/org/theme/draft", { method: "PUT", body: { spec: teal, fromLogo: true } });
+    expect(draft.data).toMatchObject({ published: { version: 1 }, draft: { version: 2, spec: teal } });
+    expect((await pub(orgs.a.code)).data.theme).toEqual(orange);
+    const published = await as("ada", "/api/org/theme/publish", { method: "POST", body: {} });
+    expect(published.data).toMatchObject({ published: { version: 2, spec: teal }, draft: null });
+    expect((await pub(orgs.a.code)).data.theme).toEqual(teal);
+    expect((await as("ada", "/api/org/theme/publish", { method: "POST", body: {} })).status).toBe(409);
+    // Rolling back publishes a copy of the old version; history is kept.
+    const back = await as("ada", "/api/org/theme/rollback", { method: "POST", body: { version: 1 } });
+    expect(back.data.published).toMatchObject({ version: 3, spec: orange, note: "Back to version 1" });
+    expect(back.data.history.map((/** @type {any} */ v) => [v.version, v.status])).toEqual([[3, "published"], [2, "archived"], [1, "archived"]]);
+    expect((await as("ada", "/api/org/theme/rollback", { method: "POST", body: { version: 99 } })).status).toBe(404);
+    const actions = (await db`SELECT action FROM audit_log WHERE organization_id = ${orgs.a.id} AND action LIKE 'organization_theme_%' ORDER BY id`).map((/** @type {any} */ r) => r.action);
+    expect(actions).toEqual(["organization_theme_published", "organization_theme_draft_saved", "organization_theme_published", "organization_theme_rolled_back"]);
+    // Another organisation sees none of it: its own (empty) list, and A's versions look like versions that don't exist.
+    expect((await as("bob", "/api/org/theme")).data).toMatchObject({ published: null, history: [] });
+    expect((await as("bob", "/api/org/theme/rollback", { method: "POST", body: { version: 1 } })).status).toBe(404);
+    expect((await pub(orgs.b.code)).data.theme).toBeNull();
+    const rows = await db.begin(async (/** @type {any} */ tx) => {
+      await tx`SET LOCAL ROLE pulse_app`;
+      await tx`SELECT set_config('app.org_id', ${orgs.b.id}, true)`;
+      return tx`SELECT organization_id FROM organization_themes`;
+    });
+    expect(rows).toEqual([]);
+    // Turning it off: back to the accent alone.
+    const off = await as("ada", "/api/org/theme/off", { method: "POST", body: {} });
+    expect(off.data.published).toBeNull();
+    expect((await pub(orgs.a.code)).data.theme).toBeNull();
+  }, SLOW);
+
   it("a Platform Administrator may change any organisation's branding, with the same checks", async () => {
     const first = await api.call("/api/platform/login", { method: "POST", body: { username: `pa-${tag}`, password: PLATFORM_TEMP } });
     expect(first.status).toBe(200);
@@ -268,5 +321,15 @@ describe("branding per organisation", () => {
     expect(log).toBeTruthy();
     // An organisation's own administrator can't use the platform route.
     expect((await as("bob", `/api/platform/organizations/${orgs.b.id}/branding`, { method: "PUT", body: { accent: "#000000" } })).status).toBe(401);
+    // And its theme, with the same rules.
+    const spec = specFromColour("#7a3cff");
+    expect((await pcall(`/api/platform/organizations/${orgs.b.id}/theme/publish`, { method: "POST", body: { spec: "nope" } })).status).toBe(400);
+    const t = await pcall(`/api/platform/organizations/${orgs.b.id}/theme/publish`, { method: "POST", body: { spec } });
+    expect(t.status, JSON.stringify(t.data)).toBe(200);
+    expect(t.data.published).toMatchObject({ version: 1, spec, createdBy: "Platform Administrator" });
+    expect((await pub(orgs.b.code)).data.theme).toEqual(spec);
+    expect((await pub(orgs.a.code)).data.theme).toBeNull();
+    const [tlog] = await db`SELECT action FROM platform_activity WHERE action = 'organization_theme_published' AND target = ${orgs.b.id}`;
+    expect(tlog).toBeTruthy();
   }, SLOW);
 });

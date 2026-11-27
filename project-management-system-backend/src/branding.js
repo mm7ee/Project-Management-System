@@ -9,6 +9,7 @@
 //   - A Platform Administrator changes it through saveBranding (worker/platform.js).
 import { HttpError, body, json } from "./http";
 import { auditEntry, changed } from "./audit";
+import { cleanThemeSpec } from "../../project-management-system-frontend/src/data/logoTheme";
 import { IMAGE_BOX, IMAGE_TYPES, PLATFORM_ACCENT, STORED_MAX_BYTES, accentShades, cleanHex } from "../../project-management-system-frontend/src/data/branding";
 
 /**
@@ -50,10 +51,12 @@ const SLOTS = {
  * @property {boolean | number | null} has_icon
  * @property {number | null} version
  * @property {string | null} updated_at
+ * @property {string | null} [theme_spec]  its published theme (migration 0024)
  */
 
 const SELECT = `SELECT o.id, o.name, o.code, b.display_name, b.accent, b.signin_tint, b.sidebar, b.highlight, b.logo IS NOT NULL AS has_logo,
-  b.logo_dark IS NOT NULL AS has_logo_dark, b.icon IS NOT NULL AS has_icon, b.version, b.updated_at
+  b.logo_dark IS NOT NULL AS has_logo_dark, b.icon IS NOT NULL AS has_icon, b.version, b.updated_at,
+  (SELECT t.spec FROM organization_themes t WHERE t.organization_id = o.id AND t.status = 'published') AS theme_spec
   FROM organizations o LEFT JOIN organization_branding b ON b.organization_id = o.id`;
 
 /**
@@ -76,6 +79,8 @@ export function brandingView(r) {
     logo: r.has_logo ? url("logo") : null,
     logoDark: r.has_logo_dark ? url("logo-dark") : null,
     icon: r.has_icon ? url("icon") : null,
+    // Its published theme, checked again on the way out (src/data/logoTheme.js), or null for the accent alone.
+    theme: cleanThemeSpec(r.theme_spec ?? null),
   };
 }
 

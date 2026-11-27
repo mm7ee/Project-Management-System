@@ -1222,3 +1222,22 @@ The plan, and the 13 recommendations approved with "continue", are in `docs/admi
   - **The landing page's own budget:** about 25 KB gzipped of script and styles; it is 5.3 KB.
 - **The theme toggle** follows the device until someone chooses, and the choice is remembered on that device only.
   Signing in applies the account's own theme.
+
+## Themes from the logo (2026-11-27)
+
+- **Only a ThemeSpec is ever stored or sent** (`src/data/logoTheme.js` `cleanThemeSpec`): `v`, `primary` and
+  `secondary` as OKLCH numbers, `variation`, `vibrancy`, `radius`, `font` (from a fixed list of system stacks: no
+  downloads), `source` and `askAdmin`. The Worker cleans it before storing and again whenever it is read. The CSS is
+  built in the browser by `themeCss`, which writes only the variables in `THEME_VARIABLES` with values it made itself.
+  Never store CSS, never accept colours as strings into the style sheet.
+- **Status colours are never generated** (success, warning, danger, info, the status pills).
+- **Buttons always carry white text** (the app's rule), in light and dark: the button fill is darkened until white
+  passes, never given dark text.
+- **A published theme replaces the accent and sidebar colours**; without one the organisation keeps them. Turning a
+  theme off archives it; nothing is deleted (the app's role has no DELETE on `organization_themes`).
+- **Versions are never rewritten:** publishing the draft keeps its number; rolling back publishes a copy of the old
+  version as a new one.
+- **A new logo never silently changes a live theme:** it publishes only for an organisation that has never had one;
+  otherwise it is a draft and the administrators are told.
+- **The logo is read in the administrator's browser** (only the organisation's own uploaded logo). The server never
+  decodes images.

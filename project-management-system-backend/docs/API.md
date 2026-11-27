@@ -463,6 +463,37 @@ A branding view, wherever it appears:
 So do the executive page (`/api/showcase`: `branding`) and the service desk portal (`/api/portal`: `branding`).
 Emails carry the organisation's logo, name and accent, with "Powered by Project Management System" in small print.
 
+### Themes (generated from the logo)
+
+The branding view also carries `theme`: the organisation's published **ThemeSpec**, or `null` (the accent alone).
+It is never CSS; the app builds the style sheet from it (`src/data/logoTheme.js`).
+
+```json
+{ "v": 1, "primary": [0.27, 0.12, 255.1], "secondary": [0.62, 0.12, 290.1], "variation": "balanced",
+  "vibrancy": 1, "radius": "default", "font": "inter",
+  "source": { "kind": "single-colour", "tone": "dark-on-transparent", "shape": "wide wordmark" }, "askAdmin": false }
+```
+
+- `primary`, `secondary`: OKLCH (L 0–1, C 0–0.37, h 0–360). `variation`: `subtle | balanced | immersive`.
+  `vibrancy`: 0.5–1.5. `radius`: `sharp | default | round`. `font`: `inter | system | serif | rounded`.
+- Anything else is refused with `400` `{ "error": "That theme isn't valid" }`; unknown keys are dropped.
+
+Organisation Administrators (others get `403`); Platform Administrators use the same routes under
+`/api/platform/organizations/:id/theme`. Each reply is `{ published, draft, history }`, where each version is
+`{ version, status, spec, note, createdAt, createdBy, publishedAt }` and `history` is the last 30, newest first.
+
+- `GET /api/org/theme`
+- `PUT /api/org/theme/draft` `{ spec, note?, fromLogo? }`: saves the draft. With `fromLogo: true` and no theme ever
+  published, it is published at once (the reply adds `autoPublished: true`); otherwise it stays a draft and the other
+  administrators get a `theme` notification.
+- `DELETE /api/org/theme/draft`: discards the draft (kept in history as archived).
+- `POST /api/org/theme/publish` `{}` publishes the draft (keeping its version number; `409` if there is none), or
+  `{ spec, note? }` publishes that spec as a new version.
+- `POST /api/org/theme/rollback` `{ version }`: publishes a copy of that version. Another organisation's version, or
+  one that doesn't exist, is `404`.
+- `POST /api/org/theme/off`: no theme; the accent is used again.
+- Audit actions: `organization_theme_published`, `_draft_saved`, `_draft_discarded`, `_rolled_back`, `_turned_off`.
+
 ## Platform administration
 
 Platform Administrators only, at `/api/platform/…`, with their own session cookie (`pms_platform`; the old `pulse_platform` is still read; sent only to

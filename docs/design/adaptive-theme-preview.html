@@ -1,0 +1,391 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Adaptive themes from logos</title>
+<style>
+:root { --bg: #eef1f5; --panel: #fff; --ink: #1f2933; --dim: #5b6776; --line: #d9dfe7; font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--ink); }
+body { margin: 0; background: var(--bg); }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 24px 16px 60px; display: grid; gap: 28px; }
+h1 { margin: 0; font-size: 22px; } h2 { margin: 0; font-size: 18px; } h3 { margin: 0; font-size: 13px; color: var(--dim); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+p { margin: 0; line-height: 1.5; color: var(--dim); max-width: 90ch; }
+.logo { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; display: grid; gap: 16px; }
+.head { display: grid; grid-template-columns: 220px 1fr; gap: 18px; align-items: start; }
+.mark { height: 110px; border-radius: 10px; display: grid; place-items: center; background: repeating-conic-gradient(#e9edf2 0 25%, #fff 0 50%) 0 0/16px 16px; border: 1px solid var(--line); }
+.mark img { max-width: 90%; max-height: 90%; object-fit: contain; }
+.facts { display: grid; gap: 8px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 12px; padding: 3px 9px; border-radius: 99px; background: #eef1f5; border: 1px solid var(--line); }
+.sw { display: flex; flex-wrap: wrap; gap: 10px; }
+.s { display: grid; gap: 4px; font-size: 11.5px; color: var(--dim); }
+.s i { width: 64px; height: 36px; border-radius: 8px; border: 1px solid rgba(0,0,0,.08); }
+.s b { color: var(--ink); font-size: 12px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
+.app { border-radius: 12px; overflow: hidden; border: 1px solid var(--line); display: grid; grid-template-columns: 112px 1fr; min-height: 250px; font-size: 12px; }
+.side { padding: 10px 8px; display: grid; align-content: start; gap: 5px; }
+.side .lg { height: 26px; display: grid; place-items: start; margin-bottom: 6px; }
+.side .lg img { max-height: 26px; max-width: 96px; object-fit: contain; }
+.side .lg .plate { background: #fff; border-radius: 6px; padding: 2px 5px; }
+.nav { padding: 5px 7px; border-radius: 6px; opacity: .85; }
+.nav.on { opacity: 1; font-weight: 700; }
+.main { display: grid; grid-template-rows: auto 1fr; }
+.top { padding: 8px 12px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
+.body { padding: 10px 12px; display: grid; gap: 8px; align-content: start; }
+.card { border-radius: 8px; padding: 9px; display: grid; gap: 6px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.btn { padding: 5px 10px; border-radius: 6px; font-weight: 700; }
+.ring { width: 54px; height: 22px; border-radius: 6px; }
+.bars { display: flex; gap: 3px; align-items: flex-end; height: 34px; }
+.bars i { flex: 1; border-radius: 3px 3px 0 0; }
+.pill { font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 99px; }
+.label { font-size: 11px; color: var(--dim); display: flex; justify-content: space-between; gap: 8px; padding: 6px 2px 0; }
+.label b { color: var(--ink); }
+details { font-size: 12px; color: var(--dim); } summary { cursor: pointer; }
+table { border-collapse: collapse; font-size: 12px; } td, th { padding: 4px 10px 4px 0; text-align: left; } th { color: var(--dim); font-weight: 600; }
+.ok { color: #0b6e55; font-weight: 700; } .bad { color: #b00d27; font-weight: 700; }
+@media (max-width: 700px) { .head { grid-template-columns: 1fr; } .grid { grid-template-columns: 1fr; } }
+</style></head><body><div class="wrap">
+<h1>Themes generated from logos: prototype results</h1>
+<p>Every colour below is computed in this page from the logos' pixels by the proposed engine (docs/adaptive-theming-plan.md): analysis in OKLab, roles, OKLCH scales, three variations in light and dark, the contrast fixer and the colour-vision check on charts. Status colours (on track, at risk, overdue) are the fixed ones and never generated. The two sample logos are invented.</p>
+<div id="out"></div>
+</div>
+<script>
+// Logo-driven theme engine (prototype for approval; becomes src/data/logoTheme.js). Pure functions, no DOM:
+// analyseLogo(pixels) → roles; generateTheme(roles, variation, mode) → tokens + what the fixer changed;
+// chartPalette(roles, mode) → 8 colours checked under simulated colour-vision deficiencies.
+
+// ---------- colour spaces: sRGB ↔ linear ↔ OKLab ↔ OKLCH ----------
+const toLin = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const toGam = (c) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
+function linToLab([r, g, b]) {
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
+}
+function labToLin([L, a, b]) {
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  return [4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s, -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s];
+}
+const labToLch = ([L, a, b]) => [L, Math.hypot(a, b), ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360];
+const lchToLab = ([L, C, h]) => [L, C * Math.cos((h * Math.PI) / 180), C * Math.sin((h * Math.PI) / 180)];
+const inGamut = (lin) => lin.every((v) => v >= -1e-4 && v <= 1 + 1e-4);
+/** OKLCH → #rrggbb, reducing chroma (never lightness or hue) until it fits sRGB. */
+function lchHex([L, C, h]) {
+  L = Math.min(1, Math.max(0, L));
+  let lo = 0, hi = C, lin = labToLin(lchToLab([L, C, h]));
+  if (!inGamut(lin)) {
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      if (inGamut(labToLin(lchToLab([L, mid, h])))) lo = mid; else hi = mid;
+    }
+    lin = labToLin(lchToLab([L, lo, h]));
+  }
+  return "#" + lin.map((v) => Math.round(Math.min(1, Math.max(0, toGam(Math.min(1, Math.max(0, v))))) * 255).toString(16).padStart(2, "0")).join("");
+}
+const hexLin = (hex) => [1, 3, 5].map((i) => toLin(parseInt(hex.slice(i, i + 2), 16) / 255));
+const hexLch = (hex) => labToLch(linToLab(hexLin(hex)));
+const lum = (hex) => { const [r, g, b] = hexLin(hex); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+/** WCAG contrast ratio. */
+const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+const hueDiff = (a, b) => { const d = Math.abs(a - b) % 360; return d > 180 ? 360 - d : d; };
+
+// ---------- 1. logo analysis ----------
+/**
+ * pixels: RGBA bytes of the logo drawn (contain) into a small canvas (64–96 px).
+ * Ignores transparent and anti-aliased edge pixels, a solid background (sampled at the corners), and near-white and
+ * near-black; clusters the rest with k-means in OKLab, each pixel weighted by area × (1 + saturation).
+ */
+function analyseLogo(data, width, height) {
+  const at = (x, y) => (y * width + x) * 4;
+  const corners = [at(0, 0), at(width - 1, 0), at(0, height - 1), at(width - 1, height - 1)];
+  const solidBg = corners.every((i) => data[i + 3] > 240) ? linToLab([0, 1, 2].map((k) => toLin(data[corners[0] + k] / 255))) : null;
+  const pts = [];
+  let opaque = 0, inkL = 0, inkW = 0, minX = width, maxX = 0, minY = height, maxY = 0;
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const i = at(x, y);
+    if (data[i + 3] < 128) continue;
+    const lab = linToLab([0, 1, 2].map((k) => toLin(data[i + k] / 255)));
+    if (solidBg && Math.hypot(lab[0] - solidBg[0], lab[1] - solidBg[1], lab[2] - solidBg[2]) < 0.06) continue;
+    opaque++;
+    minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+    inkL += lab[0]; inkW++;
+    if (data[i + 3] < 230) continue; // anti-aliased edge
+    const [L, C] = labToLch(lab);
+    if ((L > 0.95 || L < 0.12) && C < 0.03) continue; // near-white / near-black: structure, not brand colour
+    pts.push({ lab, w: 1 + 4 * Math.min(1, C / 0.15) });
+  }
+  const ink = inkW ? inkL / inkW : 0.5;
+  const bw = maxX - minX + 1, bh = maxY - minY + 1;
+  const shape = bw / bh > 2.2 ? "wide wordmark" : bw / bh < 1.4 ? "square mark" : "lockup";
+  const tone = ink > 0.75 ? "light-on-transparent" : ink < 0.45 ? "dark-on-transparent" : "mid-tone";
+  // k-means (k ≤ 5), deterministic seeding: the heaviest point, then the farthest weighted point each time.
+  const k = Math.min(5, pts.length);
+  const cent = [];
+  if (k) cent.push(pts.reduce((a, b) => (b.w > a.w ? b : a)).lab.slice());
+  while (cent.length < k) {
+    let best = null, bestD = -1;
+    for (const p of pts) { const d = Math.min(...cent.map((c) => (p.lab[0] - c[0]) ** 2 + (p.lab[1] - c[1]) ** 2 + (p.lab[2] - c[2]) ** 2)) * p.w; if (d > bestD) { bestD = d; best = p; } }
+    if (bestD < 1e-6) break;
+    cent.push(best.lab.slice());
+  }
+  let groups = [];
+  for (let it = 0; it < 12; it++) {
+    groups = cent.map(() => ({ sum: [0, 0, 0], w: 0, n: 0 }));
+    for (const p of pts) {
+      let j = 0, dj = Infinity;
+      cent.forEach((c, ci) => { const d = (p.lab[0] - c[0]) ** 2 + (p.lab[1] - c[1]) ** 2 + (p.lab[2] - c[2]) ** 2; if (d < dj) { dj = d; j = ci; } });
+      const g = groups[j]; g.w += p.w; g.n++; for (let q = 0; q < 3; q++) g.sum[q] += p.lab[q] * p.w;
+    }
+    groups.forEach((g, gi) => { if (g.w) cent[gi] = g.sum.map((v) => v / g.w); });
+  }
+  let clusters = cent.map((c, i) => ({ lab: c, w: groups[i]?.w ?? 0, share: (groups[i]?.n ?? 0) / Math.max(1, pts.length) })).filter((c) => c.share > 0.02);
+  // Merge near-identical clusters (ΔE_OK < 0.06).
+  clusters.sort((a, b) => b.w - a.w);
+  const merged = [];
+  for (const c of clusters) {
+    const m = merged.find((x) => Math.hypot(x.lab[0] - c.lab[0], x.lab[1] - c.lab[1], x.lab[2] - c.lab[2]) < 0.06);
+    if (m) { m.share += c.share; m.w += c.w; } else merged.push({ ...c });
+  }
+  clusters = merged.map((c) => ({ ...c, lch: labToLch(c.lab), hex: lchHex(labToLch(c.lab)) }));
+  const chromatic = clusters.filter((c) => c.lch[1] >= 0.035);
+  // Distinct hues among the chromatic ones (30° apart) decide the kind.
+  const hues = [];
+  for (const c of chromatic.sort((a, b) => b.w - a.w)) if (hues.every((h) => hueDiff(h, c.lch[2]) >= 30)) hues.push(c.lch[2]);
+  const kind = !chromatic.length ? "monochrome" : hues.length === 1 ? (clusters.length > chromatic.length ? "single-colour" : "single-colour") : hues.length === 2 ? "duotone" : "multicolour";
+  return { clusters, chromatic, kind, tone, shape, ink, coverage: opaque / (width * height) };
+}
+
+// ---------- 2. colour roles ----------
+/** Picks primary, secondary and neutral tint from the analysis; derives what the logo doesn't have. */
+function chooseRoles(a) {
+  const score = (c) => c.w * c.lch[1] ** 0.6 * (1 - 0.8 * Math.abs(c.lch[0] - 0.6));
+  const ranked = [...a.chromatic].sort((x, y) => score(y) - score(x));
+  const notes = [];
+  let primary, secondary, askAdmin = false;
+  if (ranked.length) {
+    primary = ranked[0].lch.slice();
+    // A muted brand colour (a dark, greyish navy, say) has too little chroma to carry buttons and links: its hue is
+    // kept and its chroma raised for the theme. The logo itself is never recoloured.
+    if (primary[1] < 0.1) {
+      notes.push(`Muted brand colour (chroma ${primary[1].toFixed(3)}): raised to 0.12 for accents, same hue.`);
+      primary[1] = 0.12;
+    }
+    const second = ranked.find((c) => hueDiff(c.lch[2], primary[2]) >= 30);
+    if (second) secondary = second.lch.slice();
+    else {
+      // Neighbouring (analogous) rather than opposite: it stays recognisably the same brand.
+      secondary = [0.62, Math.min(primary[1], 0.14), (primary[2] + 35) % 360];
+      notes.push("Secondary derived: analogous (+35°) from the primary, as the logo has one hue.");
+    }
+  } else {
+    // Monochrome: a refined neutral, with one accent taken from the logo's own tone (or steel blue for pure grey).
+    const tinted = a.clusters.find((c) => c.lch[1] >= 0.01);
+    const h = tinted ? tinted.lch[2] : 250;
+    primary = [Math.min(0.55, Math.max(0.3, a.ink)), 0.03, h];
+    secondary = [0.6, 0.12, h];
+    askAdmin = true;
+    notes.push(`Monochrome logo: neutral theme with one accent from the logo's tone (hue ${Math.round(h)}°); the admin may pick a brand colour instead.`);
+  }
+  return { primary, secondary, neutral: [0.5, 0.012, primary[2]], askAdmin, notes };
+}
+
+// ---------- 3. generation ----------
+const STEPS = { 50: 0.975, 100: 0.945, 200: 0.885, 300: 0.8, 400: 0.71, 500: 0.62, 600: 0.54, 700: 0.46, 800: 0.38, 900: 0.3, 950: 0.22 };
+/** A 50–950 scale in OKLCH: fixed lightness steps, chroma following the seed and easing off at the ends. */
+function scale([, C, h]) {
+  const out = {};
+  for (const [k, L] of Object.entries(STEPS)) out[k] = lchHex([L, C * Math.max(0.25, 1 - ((L - 0.58) / 0.48) ** 2), h]);
+  return out;
+}
+/**
+ * The accessibility fixer: moves a colour's OKLCH lightness (hue and chroma kept) away from its background until the
+ * pair reaches `min`, and records the change.
+ */
+function ensure(log, name, fgHex, bg, min) {
+  if ([].concat(bg).every((b) => contrast(fgHex, b) >= min)) return fgHex;
+  const [L, C, h] = hexLch(fgHex);
+  const darker = lum([].concat(bg)[0]) > 0.18;
+  for (let x = L, i = 0; i < 100; i++) {
+    x += darker ? -0.01 : 0.01;
+    const c = lchHex([x, C, h]);
+    if ([].concat(bg).every((b) => contrast(c, b) >= min)) { log.push(`${name}: ${fgHex} → ${c} (${min}:1)`); return c; }
+  }
+  return darker ? "#000000" : "#ffffff";
+}
+/** White or ink text on a fill, whichever passes (fixing the fill if neither does). */
+function onFill(log, name, fill, ink) {
+  if (contrast("#ffffff", fill) >= 4.5) return { fill, text: "#ffffff" };
+  if (contrast(ink, fill) >= 4.5) return { fill, text: ink };
+  return { fill: ensure(log, name, fill, "#ffffff", 4.5), text: "#ffffff" };
+}
+/**
+ * Tokens for one variation and mode. variation: "subtle" | "balanced" | "immersive"; mode: "light" | "dark".
+ * Status colours are not generated: they stay locked.
+ */
+function generateTheme(roles, variation, mode, { highContrast = false } = {}) {
+  const log = [];
+  const [Lp, Cp, hp] = roles.primary;
+  const [, Cs, hs] = roles.secondary;
+  const dark = mode === "dark";
+  const n = (L, C = dark ? 0.014 : 0.01) => lchHex([L, C, hp]); // brand-tinted neutral
+  const page = dark ? n(0.17) : n(0.975, 0.006);
+  const card = dark ? n(0.21) : "#ffffff";
+  const textMin = highContrast ? 7 : 7; // AAA for body text where achievable
+  const text = ensure(log, "text", dark ? n(0.95, 0.006) : n(0.21, 0.02), [page, card], textMin);
+  const muted = ensure(log, "muted text", dark ? n(0.76) : n(0.47), [page, card], highContrast ? 7 : 4.5);
+  const border = dark ? n(highContrast ? 0.55 : 0.31) : n(highContrast ? 0.45 : 0.89);
+  // Brand re-tuned per mode: on dark surfaces lighter and a little less chroma, so it glows rather than vibrates.
+  const brand = dark ? [Math.min(0.8, Math.max(0.7, Lp + 0.2)), Cp * 0.85, hp] : [Math.min(0.56, Lp), Cp, hp];
+  const accent2 = dark ? [0.74, Cs * 0.85, hs] : [0.55, Cs, hs];
+  const inkOn = dark ? n(0.16) : n(0.18);
+  const button = onFill(log, "primary button", lchHex(dark ? [brand[0] - 0.04, brand[1], hp] : brand), inkOn);
+  const link = ensure(log, "link", lchHex(dark ? brand : [Math.min(0.5, Lp), Cp, hp]), [page, card], highContrast ? 7 : 4.5);
+  const focus = ensure(log, "focus ring", lchHex(dark ? brand : [0.55, Cp, hp]), [page, card], 3);
+  const secondary = ensure(log, "secondary accent", lchHex(accent2), [page, card], 3);
+  // Sidebar and top bar by variation.
+  const sbC = variation === "subtle" ? (dark ? 0.012 : 0.015) : variation === "balanced" ? Math.min(Cp * 0.55, 0.085) : Math.min(Cp, 0.13);
+  const sbL = dark ? (variation === "immersive" ? 0.26 : 0.2) : variation === "immersive" ? 0.32 : 0.25;
+  // The sidebar carries light text: darken it (same hue and chroma) until that text reaches AA.
+  let sidebar = lchHex([sbL, sbC, hp]);
+  for (let x = sbL; contrast(sidebar, "#eef2f6") < 4.5 && x > 0.05; x -= 0.01) sidebar = lchHex([x, sbC, hp]);
+  const sidebarEnd = variation === "immersive" ? lchHex([sbL - 0.04, Math.min(Cs, 0.12), hs]) : lchHex([sbL - 0.05, sbC, hp]);
+  const sidebarText = "#eef2f6";
+  const navActive = ensure(log, "active page (sidebar)", lchHex([0.8, Math.min(variation === "subtle" ? Cp : Cs, 0.14), variation === "subtle" ? hp : hs]), [sidebar, sidebarEnd], 4.5);
+  const header = variation === "subtle" ? card : variation === "balanced" ? (dark ? n(0.23, Math.min(Cp * 0.3, 0.03)) : lchHex([0.965, Math.min(Cp * 0.25, 0.025), hp])) : null;
+  const headerGradient = variation === "immersive" ? [lchHex(dark ? [0.42, Cp, hp] : [0.5, Cp, hp]), lchHex(dark ? [0.42, Cs, hs] : [0.5, Cs, hs])] : null;
+  const glow = variation === "immersive" && !highContrast ? lchHex([dark ? 0.7 : 0.6, Cp, hp]) : null;
+  return {
+    variation, mode, log,
+    scales: { primary: scale(roles.primary), secondary: scale(roles.secondary), neutral: scale(roles.neutral) },
+    tokens: { page, card, text, muted, border, button: button.fill, onButton: button.text, link, focus, secondary, sidebar, sidebarEnd, sidebarText, navActive, header, headerGradient, glow },
+  };
+}
+
+// ---------- charts, checked under colour-vision deficiencies ----------
+const CVD = {
+  protanopia: [[0.152286, 1.052583, -0.204868], [0.114503, 0.786281, 0.099216], [-0.003882, -0.048116, 1.051998]],
+  deuteranopia: [[0.367322, 0.860646, -0.227968], [0.280085, 0.672501, 0.047413], [-0.01182, 0.04294, 0.968881]],
+  tritanopia: [[1.255528, -0.076749, -0.178779], [-0.078411, 0.930809, 0.147602], [0.004733, 0.691367, 0.3039]],
+};
+const simulate = (hex, M) => { const l = hexLin(hex); return linToLab(M.map((row) => Math.min(1, Math.max(0, row[0] * l[0] + row[1] * l[1] + row[2] * l[2])))); };
+const dE = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+/** Worst pairwise distance (OKLab) of a palette as seen with normal vision and under each simulation. */
+function cvdReport(pal) {
+  const out = {};
+  for (const [name, M] of [["normal", null], ...Object.entries(CVD)]) {
+    const labs = pal.map((h) => (M ? simulate(h, M) : linToLab(hexLin(h))));
+    let min = Infinity, pair = null;
+    for (let i = 0; i < labs.length; i++) for (let j = i + 1; j < labs.length; j++) { const d = dE(labs[i], labs[j]); if (d < min) { min = d; pair = [i, j]; } }
+    out[name] = { min, pair };
+  }
+  return out;
+}
+/**
+ * 8 series colours: the primary and secondary hues first, then golden-angle hues around them, alternating lightness;
+ * then the fixer separates any pair closer than 0.06 (OKLab) under a simulated deficiency by stepping lightness, and
+ * marks series that still clash for a pattern.
+ */
+function chartPalette(roles, mode) {
+  const dark = mode === "dark";
+  const [, , hp] = roles.primary;
+  const [, , hs] = roles.secondary;
+  const Ls = dark ? [0.7, 0.82, 0.62, 0.76, 0.88, 0.66, 0.8, 0.58] : [0.52, 0.7, 0.6, 0.44, 0.78, 0.56, 0.66, 0.4];
+  const hues = [hp, hs];
+  for (let k = 1; hues.length < 8; k++) { const h = (hp + k * 137.508) % 360; if (hues.every((x) => hueDiff(x, h) >= 22)) hues.push(h); if (k > 40) hues.push(h); }
+  let pal = hues.slice(0, 8).map((h, i) => lchHex([Ls[i], 0.14, h]));
+  const fixes = [];
+  const patterns = new Set();
+  // The weakest distance under any vision (normal or simulated).
+  const worstOf = (p) => Math.min(...Object.values(cvdReport(p)).map((v) => v.min));
+  // Greedy: for the closest pair, try each colour of it at other lightness steps (hue and chroma kept) and keep the
+  // one change that best raises the weakest distance; stop when nothing helps or the target is met.
+  for (let pass = 0; pass < 10; pass++) {
+    const rep = cvdReport(pal);
+    const worst = Object.entries(rep).sort((a, b) => a[1].min - b[1].min)[0];
+    if (worst[1].min >= 0.06) break;
+    let best = null;
+    for (const j of worst[1].pair) {
+      const [, C, h] = hexLch(pal[j]);
+      for (let L = 0.34; L <= 0.9; L += 0.04) {
+        const cand = pal.slice();
+        cand[j] = lchHex([L, C, h]);
+        const score = worstOf(cand);
+        if (!best || score > best.score) best = { j, hex: cand[j], score };
+      }
+    }
+    if (!best || best.score <= worstOf(pal) + 1e-4) break;
+    fixes.push(`series ${best.j + 1}: ${pal[best.j]} → ${best.hex} (${worst[0]})`);
+    pal[best.j] = best.hex;
+  }
+  const rep = cvdReport(pal);
+  for (const [k, v] of Object.entries(rep)) if (k !== "normal" && v.min < 0.06) { patterns.add(v.pair[0]); patterns.add(v.pair[1]); }
+  return { palette: pal, report: rep, fixes, patterns: [...patterns] };
+}
+
+const LOGOS = [
+  { name: "Omnicontact", src: "data:image/png;base64,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" },
+  { name: "Kestrel & Fern (invented, multicolour square mark)", src: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNDAiIGhlaWdodD0iMjQwIiB2aWV3Qm94PSIwIDAgMjQwIDI0MCI+CjxjaXJjbGUgY3g9Ijk2IiBjeT0iOTYiIHI9IjYyIiBmaWxsPSIjZjI2YjFkIi8+PHBhdGggZD0iTTExOCAxNTBjMTAtNTggNTItOTIgMTAwLTk2LTQgNTItNDAgOTItMTAwIDk2eiIgZmlsbD0iIzJlOWU1YiIvPgo8cGF0aCBkPSJNMTE4IDE1MGMyMi0yOCA0Ni01MCA3OC03MCIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjUiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8dGV4dCB4PSIxMjAiIHk9IjIxOCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXdlaWdodD0iNzAwIiBmb250LXNpemU9IjMwIiBmaWxsPSIjM2EzZjQ1Ij5LZXN0cmVsICZhbXA7IEZlcm48L3RleHQ+PC9zdmc+" },
+  { name: "Monolith Partners (invented, black-only wordmark)", src: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0ODAiIGhlaWdodD0iMTIwIiB2aWV3Qm94PSIwIDAgNDgwIDEyMCI+CjxyZWN0IHg9IjYiIHk9IjI0IiB3aWR0aD0iNzIiIGhlaWdodD0iNzIiIGZpbGw9IiMxMTExMTEiLz48cmVjdCB4PSIyNCIgeT0iNDIiIHdpZHRoPSIzNiIgaGVpZ2h0PSIzNiIgZmlsbD0iI2ZmZmZmZiIvPgo8dGV4dCB4PSI5OCIgeT0iNzgiIGZvbnQtZmFtaWx5PSJHZW9yZ2lhLCBzZXJpZiIgZm9udC1zaXplPSI0NiIgbGV0dGVyLXNwYWNpbmc9IjIiIGZpbGw9IiMxMTExMTEiPk1PTk9MSVRIPC90ZXh0Pgo8dGV4dCB4PSIxMDAiIHk9IjEwNCIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE1IiBsZXR0ZXItc3BhY2luZz0iNyIgZmlsbD0iIzExMTExMSI+UEFSVE5FUlM8L3RleHQ+PC9zdmc+" },
+];
+const STATUS = { ok: ["#e7f5f0", "#0b6e55"], warn: ["#fdf3d8", "#7a5600"], bad: ["#fdf0f1", "#b00d27"] };
+const STATUS_DARK = { ok: ["rgba(20,163,127,.18)", "#6fdcb4"], warn: ["rgba(224,154,0,.16)", "#ffd27a"], bad: ["rgba(229,72,77,.16)", "#ff9ea1"] };
+const load = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const sw = (hex, label, sub) => '<div class="s"><i style="background:' + hex + '"></i><b>' + esc(label) + '</b>' + esc(sub || hex) + '</div>';
+const lchTxt = (l) => "L " + l[0].toFixed(2) + " C " + l[1].toFixed(3) + " h " + Math.round(l[2]) + "°";
+
+async function run() {
+  const out = document.getElementById("out");
+  for (const logo of LOGOS) {
+    const img = await load(logo.src);
+    const S = 96, cv = document.createElement("canvas"); cv.width = S; cv.height = S;
+    const ctx = cv.getContext("2d");
+    const k = Math.min(S / img.width, S / img.height), w = img.width * k, h = img.height * k;
+    ctx.drawImage(img, (S - w) / 2, (S - h) / 2, w, h);
+    const a = analyseLogo(ctx.getImageData(0, 0, S, S).data, S, S);
+    // The shape is the logo's own, not the square canvas's.
+    a.shape = img.width / img.height > 2.2 ? "wide wordmark" : img.width / img.height < 1.4 ? "square mark" : "lockup";
+    const roles = chooseRoles(a);
+    const sec = document.createElement("section"); sec.className = "logo";
+    let h2 = '<div class="head"><div class="mark"><img alt="" src="' + logo.src + '"></div><div class="facts"><h2>' + esc(logo.name) + '</h2>';
+    h2 += '<div class="chips"><span class="chip">' + a.kind + '</span><span class="chip">' + a.tone + '</span><span class="chip">' + a.shape + '</span><span class="chip">' + a.clusters.length + ' colour clusters</span></div>';
+    h2 += '<h3>Extracted (weighted by area × saturation)</h3><div class="sw">' + (a.clusters.length ? a.clusters.map((c) => sw(c.hex, Math.round(c.share * 100) + "% of ink", lchTxt(c.lch))).join("") : '<p>No colour: only black, white and grey.</p>') + '</div>';
+    h2 += '<h3>Roles</h3><div class="sw">' + sw(lchHex(roles.primary), "Primary", lchTxt(roles.primary)) + sw(lchHex(roles.secondary), "Secondary", lchTxt(roles.secondary)) + sw(lchHex([0.9, roles.neutral[1], roles.neutral[2]]), "Neutral tint", "C " + roles.neutral[1]) + '</div>';
+    if (roles.notes.length) h2 += '<p>' + roles.notes.map(esc).join(" ") + '</p>';
+    h2 += '</div></div>';
+    let grid = '<div class="grid">';
+    for (const variation of ["subtle", "balanced", "immersive"]) for (const mode of ["light", "dark"]) {
+      const t = generateTheme(roles, variation, mode);
+      const T = t.tokens;
+      const chart = chartPalette(roles, mode);
+      const st = mode === "dark" ? STATUS_DARK : STATUS;
+      const sideBg = variation === "immersive" ? "linear-gradient(170deg," + T.sidebar + "," + T.sidebarEnd + ")" : "linear-gradient(170deg," + T.sidebar + "," + T.sidebarEnd + ")";
+      const topBg = T.headerGradient ? "linear-gradient(90deg," + T.headerGradient[0] + "," + T.headerGradient[1] + ")" : T.header;
+      const topInk = T.headerGradient ? "#ffffff" : T.text;
+      // The logo on the sidebar (always dark): a light-on-dark logo as is, a dark one on a light plate.
+      const plate = a.tone !== "light-on-transparent";
+      const checks = [["text", T.text, T.card, 7], ["muted", T.muted, T.card, 4.5], ["link", T.link, T.card, 4.5], ["button", T.onButton, T.button, 4.5], ["focus", T.focus, T.page, 3], ["sidebar text", T.sidebarText, T.sidebar, 4.5], ["active page", T.navActive, T.sidebar, 4.5]];
+      const allOk = checks.every(([, f, b, m]) => contrast(f, b) >= m);
+      grid += '<div><div class="app" style="background:' + T.page + ';color:' + T.text + '">';
+      grid += '<div class="side" style="background:' + sideBg + ';color:' + T.sidebarText + '"><div class="lg">' + (plate ? '<span class="plate">' : '<span>') + '<img alt="" src="' + logo.src + '"></span></div>';
+      grid += '<div class="nav on" style="color:' + T.navActive + ';box-shadow:inset 3px 0 0 ' + T.navActive + (T.glow ? ',0 0 14px ' + T.glow + '55' : '') + '">Dashboard</div><div class="nav">Projects</div><div class="nav">Boards</div><div class="nav">Reports</div></div>';
+      grid += '<div class="main"><div class="top" style="background:' + topBg + ';color:' + topInk + ';border-bottom:1px solid ' + T.border + '"><span>Projects</span><span style="font-weight:500;opacity:.8">' + variation + ' · ' + mode + '</span></div>';
+      grid += '<div class="body"><div class="card" style="background:' + T.card + ';border:1px solid ' + T.border + '"><b>Website relaunch</b><span style="color:' + T.muted + '">Due 12 Dec · 64% done</span>';
+      grid += '<div class="row"><span class="btn" style="background:' + T.button + ';color:' + T.onButton + (T.glow ? ';box-shadow:0 4px 14px ' + T.glow + '66' : '') + '">New item</span><span style="color:' + T.link + ';text-decoration:underline">View board</span><span class="ring" style="outline:2px solid ' + T.focus + ';outline-offset:2px;background:' + T.card + ';border:1px solid ' + T.border + '"></span></div>';
+      grid += '<div class="row"><span class="pill" style="background:' + st.ok[0] + ';color:' + st.ok[1] + '">On track</span><span class="pill" style="background:' + st.warn[0] + ';color:' + st.warn[1] + '">At risk</span><span class="pill" style="background:' + st.bad[0] + ';color:' + st.bad[1] + '">Overdue</span></div>';
+      grid += '<div class="bars">' + chart.palette.map((c, i) => '<i style="background:' + c + ';height:' + (30 + ((i * 37) % 70)) + '%"></i>').join("") + '</div></div></div></div></div>';
+      grid += '<div class="label"><span><b>' + variation + (variation === "balanced" ? " (default)" : "") + ' · ' + mode + '</b></span><span class="' + (allOk ? "ok" : "bad") + '">' + (allOk ? "all pairs pass AA (text AAA)" : "a pair fails") + '</span></div>';
+      grid += '<details><summary>Contrast and fixes (' + t.log.length + ')</summary><table><tr><th>Pair</th><th>Ratio</th><th>Needs</th></tr>' + checks.map(([n, f, b, m]) => '<tr><td>' + n + '</td><td>' + contrast(f, b).toFixed(2) + ':1</td><td>' + m + ':1</td></tr>').join("") + '</table>' + (t.log.length ? '<p>Adjusted: ' + t.log.map(esc).join("; ") + '</p>' : "<p>Nothing needed adjusting.</p>") + '</details></div>';
+    }
+    grid += '</div>';
+    const ch = chartPalette(roles, "light");
+    let cvd = '<h3>Chart colours under colour-vision simulation (light)</h3><div class="sw">' + ch.palette.map((c, i) => sw(c, "Series " + (i + 1), c)).join("") + '</div><table><tr><th>Vision</th><th>Closest pair (OKLab ΔE)</th><th>Target ≥ 0.06</th></tr>';
+    for (const [k2, v] of Object.entries(ch.report)) cvd += '<tr><td>' + k2 + '</td><td>' + v.min.toFixed(3) + ' (series ' + (v.pair[0] + 1) + ' & ' + (v.pair[1] + 1) + ')</td><td class="' + (v.min >= 0.06 ? "ok" : "bad") + '">' + (v.min >= 0.06 ? "distinct" : "pattern added") + '</td></tr>';
+    cvd += '</table>' + (ch.fixes.length ? '<p>Adjusted: ' + ch.fixes.map(esc).join("; ") + '</p>' : "") + (ch.patterns.length ? '<p>Series ' + ch.patterns.map((p) => p + 1).join(", ") + ' also get a pattern.</p>' : "");
+    sec.innerHTML = h2 + grid + cvd;
+    out.appendChild(sec);
+  }
+  document.body.dataset.done = "1";
+}
+run();
+</script></body></html>

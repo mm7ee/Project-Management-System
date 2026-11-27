@@ -19,6 +19,7 @@ import { IMPORT_COLUMNS, MAX_IMPORT_ROWS, parseCsv } from "../../project-managem
 import { WORKSPACE_ICONS } from "../../project-management-system-frontend/src/data/orgAdmin";
 import { applyBlueprint, exportBlueprint } from "./blueprints";
 import { orgBrandingApi } from "./branding";
+import { themeApi } from "./theme";
 import { BUILT_IN_TEMPLATES } from "../../project-management-system-frontend/src/data/workspaceTemplates";
 
 export const INVITE_HOURS = 72;
@@ -53,6 +54,7 @@ export async function orgAdminApi(c) {
   const known =
     path === "/api/org/profile" ||
     path === "/api/org/branding" ||
+    /^\/api\/org\/theme(\/draft|\/publish|\/rollback|\/off)?$/.test(path) ||
     path === "/api/org/invites" ||
     path === "/api/org/people/import" ||
     path === "/api/org/audit" ||
@@ -64,6 +66,12 @@ export async function orgAdminApi(c) {
   if (path === "/api/org/profile" && method === "GET") return json({ profile: await profile(c.odb, c.scope.orgId) });
   if (path === "/api/org/profile" && method === "PUT") return saveProfile(c);
   if (path === "/api/org/branding") return orgBrandingApi(c);
+  if (path.startsWith("/api/org/theme")) {
+    return themeApi({
+      env: c.env, req: c.req, method, sub: path.slice("/api/org/theme".length), db: c.odb, orgId: c.scope.orgId, me: c.me,
+      audit: (action, detail) => auditEntry(c.odb, c.req, c.me, { action, type: "organization", id: c.scope.orgId, before: null, after: detail }).run(),
+    });
+  }
   if (path === "/api/org/invites" && method === "POST") {
     const b = /** @type {Record<string, unknown>} */ (await body(c.req));
     const spaces = await workspaceIndex(c.odb);

@@ -41,6 +41,7 @@ export const PLATFORM_ACCENT = "#3e5c76";
  * @property {string | null} logo    the logo for light backgrounds (an address), if uploaded
  * @property {string | null} logoDark  the logo for dark backgrounds, if uploaded
  * @property {string | null} icon    the square icon, if uploaded
+ * @property {import("./logoTheme").ThemeSpec | null} [theme]  its published theme (src/data/logoTheme.js), if any
  */
 
 /**

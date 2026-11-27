@@ -19,6 +19,11 @@ export const WEEKDAYS = /** @type {const} */ ([
 /** @type {Record<string, string>} */ export const AUDIT_ACTIONS = {
   organization_profile_updated: "Changed the organisation profile",
   organization_branding_updated: "Changed the organisation's branding",
+  organization_theme_published: "Published a theme",
+  organization_theme_draft_saved: "Saved a theme draft",
+  organization_theme_draft_discarded: "Discarded a theme draft",
+  organization_theme_rolled_back: "Went back to an earlier theme",
+  organization_theme_turned_off: "Turned the theme off",
   workspace_created: "Made a workspace",
   workspace_updated: "Changed a workspace",
   person_created: "Added a person",

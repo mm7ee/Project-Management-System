@@ -5,6 +5,7 @@
 // (set up at the first sign-in). Everything runs on the owner connection (env.ROOT): these tables are outside
 // every tenant, and pulse_app can't read them.
 import { brandingFor, saveBranding } from "./branding";
+import { themeApi } from "./theme";
 import { hashPassword, newToken, newTotpSecret, openSecret, sealSecret, tempPassword, tokenHash, totpUri, verifyPassword, verifyTotp } from "./auth";
 import { HttpError, body, json } from "./http";
 import { passwordProblem } from "../../project-management-system-frontend/src/data/password";
@@ -310,7 +311,7 @@ export async function platformApi(env, req, path) {
       201,
     );
   }
-  const orgMatch = path.match(/^\/api\/platform\/organizations\/([A-Za-z0-9_-]{1,64})(\/admins|\/deletion|\/branding)?$/);
+  const orgMatch = path.match(/^\/api\/platform\/organizations\/([A-Za-z0-9_-]{1,64})(\/admins|\/deletion|\/branding|\/theme(?:\/draft|\/publish|\/rollback|\/off)?)?$/);
   if (orgMatch) {
     const org = /** @type {{ id: string; name: string; code: string; status: string; delete_after: string | null } | null} */ (
       orgMatch[1] === TEMPLATE_ORG ? null : await db.prepare("SELECT id, name, code, status, delete_after FROM organizations WHERE id = ?").bind(orgMatch[1]).first()
@@ -322,6 +323,20 @@ export async function platformApi(env, req, path) {
       const { view, diff } = await saveBranding(db, org.id, /** @type {import("./branding").BrandingInput} */ (await body(req)), me.id);
       if (diff) await log(db, req, me, "organization_branding_updated", org.id, { name: org.name, code: org.code, ...diff });
       return json({ branding: view });
+    }
+    // Its theme: the same routes as its own administrators' (worker/theme.js), written as the owner.
+    if (orgMatch[2]?.startsWith("/theme")) {
+      return themeApi({
+        env,
+        req,
+        method,
+        sub: orgMatch[2].slice("/theme".length),
+        db,
+        orgId: org.id,
+        me,
+        platform: true,
+        audit: (action, detail) => log(db, req, me, action, org.id, { name: org.name, code: org.code, ...detail }),
+      });
     }
     // Deleting, for good: only an archived organisation, confirmed by typing its code, and only DELETE_AFTER_DAYS
     // later (the hourly job does it; worker/index.js scheduled). Until then it can be called off, or reactivated.

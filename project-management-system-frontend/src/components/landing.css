@@ -182,6 +182,9 @@
 .org-monogram.sm { font-size: 12px; }
 .org-mark.on-light-plate { padding: 4px 8px; border-radius: 8px; background: #fff; box-sizing: content-box; }
 .org-mark.on-dark-plate { padding: 4px 8px; border-radius: 8px; background: #18202b; box-sizing: content-box; }
+/* A dark one-colour logo on a dark surface, with no dark version uploaded: shown in white (src/data/logoTheme.js). */
+.org-mark.recoloured img { filter: brightness(0) invert(1); }
+@media (forced-colors: active) { .org-mark.recoloured img { filter: none; } .org-mark.recoloured { background: #fff; padding: 4px 8px; border-radius: 8px; } }
 
 @media (prefers-reduced-motion: no-preference) {
   .lp-center > * { animation: lp-rise 0.35s var(--ease, ease) both; }

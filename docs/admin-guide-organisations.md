@@ -94,6 +94,27 @@ can do the same from `/platform`: **Branding** on the organisation's row.
 - **Not on the platform's own page:** it stays neutral and never lists organisations.
 - **Never the status colours:** on track, at risk and overdue look the same in every organisation.
 
+### The theme, generated from your logo
+
+Below Branding, **Theme** turns your logo into a complete colour theme: sidebar, header, buttons, links and chart
+colours, in light and dark.
+
+- **Generate from the logo:** shows the colours it found and the roles it chose. If your logo is one muted colour,
+  the theme uses a stronger version of the same hue; if it has no colour at all, the theme is neutral and you pick a
+  brand colour (click the primary swatch).
+- **Choose a variation:** Subtle (brand on buttons and links, a neutral sidebar), **Balanced** (recommended: a branded
+  sidebar and header band) or Immersive (gradients and a soft glow).
+- **Fine-tune:** swap primary and secondary, vibrancy, corners, font (fonts already on everyone's devices).
+- **Check it:** the panel confirms every colour pair is readable, and that chart colours stay distinct for
+  colour-blind people. The preview shows the dashboard, a board, a report, the sign-in page, an email and a PDF, in
+  light and dark, on desktop and mobile.
+- **Save draft, Preview as me, Publish.** Nobody else sees anything until you publish. Everyone sees it on their next
+  page load.
+- **History:** every version is kept; **Restore** publishes an old one again. **Turn the theme off** goes back to the
+  accent colour.
+- **When the logo changes,** a new theme is generated. If you've never published one, it's applied straight away;
+  otherwise it waits as a draft and the other administrators are notified.
+
 ## Adding a workspace (Organisation Administrator)
 
 1. Settings → **Organisation** → **Workspaces** → **Add workspace**.

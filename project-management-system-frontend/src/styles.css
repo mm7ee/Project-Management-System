@@ -85,7 +85,8 @@
   --dur: 180ms; --ease: cubic-bezier(.2, .8, .2, 1);
   --card-accent: none; /* the dark theme's hairline glow */
 
-  font-family: "Inter", "Inter Fallback", system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* An organisation's theme may choose another font stack (src/data/logoTheme.js FONTS: no downloads). */
+  font-family: var(--org-font, "Inter", "Inter Fallback", system-ui, -apple-system, "Segoe UI", sans-serif);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
 }
@@ -3697,3 +3698,115 @@ th[aria-sort="ascending"] .pr-sort svg, th[aria-sort="descending"] .pr-sort svg 
 /* Loading that takes too long, or fails: a way out (src/loadable.jsx). */
 .splash { align-content: center; gap: 14px; text-align: center; padding: 16px; }
 .splash-slow, .load-failed p { margin: 0; color: var(--muted); font-size: 14px; max-width: 40ch; }
+
+/* ---------- An organisation's theme (generated from its logo: src/data/logoTheme.js, set by src/brandTheme.js) ----------
+   Balanced and Immersive give the page header a band in the brand's tint (Immersive a gradient and a soft glow);
+   Subtle leaves it plain. Colours come only from the --org-* variables the theme sets, already checked for contrast. */
+:root:is([data-org-theme="balanced"], [data-org-theme="immersive"]) .topbar {
+  padding: 10px 14px; border-radius: var(--r-lg);
+  background: linear-gradient(100deg, var(--org-header), var(--org-header-end));
+}
+:root[data-org-theme="immersive"] .topbar { box-shadow: 0 10px 30px -18px var(--org-glow); }
+/* Swapping one theme for another: a 200 ms crossfade (a view transition). */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 200ms; }
+@media (prefers-reduced-motion: reduce) { ::view-transition-old(root), ::view-transition-new(root) { animation: none; } }
+/* Forced colours (Windows contrast themes): system colours everywhere, no brand gradients or glows. */
+@media (forced-colors: active) {
+  .sidebar { background: Canvas; color: CanvasText; border-right: 1px solid CanvasText; }
+  .sidebar::before { display: none; }
+  .sidebar .nav-item.active { border-color: Highlight; box-shadow: none; }
+  :root[data-org-theme] .topbar { background: Canvas; box-shadow: none; border: 1px solid CanvasText; }
+}
+/* Print: plain, ink-saving, whatever the theme. */
+@media print {
+  :root[data-org-theme] .topbar { background: none; box-shadow: none; padding: 0; }
+}
+
+/* ---------- Settings → Branding → Theme (src/components/ThemeStudio.jsx) ---------- */
+.ts-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 4px 0 14px; font-size: 14px; }
+.ts-status > span { display: inline-flex; align-items: center; gap: 6px; }
+.ts-status .btn { margin-left: auto; }
+.ts-draft-tag, .ts-tag { padding: 2px 9px; border-radius: 99px; background: var(--warning-tint); color: var(--warning-ink); font-size: 12px; font-weight: 650; }
+.ts-tag.published { background: var(--success-tint); color: var(--success-ink); }
+.ts-tag.archived { background: var(--track); color: var(--muted); }
+.ts-found { display: grid; gap: 4px; padding: 12px 14px; margin-bottom: 14px; border-radius: var(--r-md); background: var(--tint-cyan); }
+.ts-found b { display: inline-flex; align-items: center; gap: 6px; }
+.ts-found p { margin: 0; font-size: 13.5px; }
+.ts-found .brand-swatch { margin: 0 2px; vertical-align: -3px; }
+.ts-roles { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; margin-bottom: 16px; }
+.ts-role { display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 10px; align-items: center; font-size: 13px; }
+.ts-role .ts-chip { grid-row: span 2; }
+.ts-chip { position: relative; width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--border); overflow: hidden; }
+label.ts-chip { cursor: pointer; }
+.ts-chip input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.ts-variations { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.ts-variation { display: grid; gap: 6px; padding: 10px; text-align: left; border: 2px solid var(--border); border-radius: var(--r-lg); background: var(--card); color: var(--text); cursor: pointer; }
+.ts-variation.on { border-color: var(--accent-light); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-light) 18%, transparent); }
+:root[data-theme="dark"] .ts-variation.on, :root[data-theme="futuristic"] .ts-variation.on { border-color: var(--accent-dark); }
+.ts-variation small { font-size: 12.5px; line-height: 1.35; }
+.ts-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ts-rec { margin-left: 8px; padding: 1px 7px; border-radius: 99px; background: var(--track); color: var(--muted); font-size: 11px; font-weight: 650; }
+.ts-tune { margin-bottom: 14px; }
+.ts-tune input[type="range"] { width: 100%; }
+.brand-preview-head .seg + .seg { margin-left: 8px; }
+.brand-preview-head { flex-wrap: wrap; gap: 8px; }
+.ts-stage { margin: 10px 0 14px; }
+.ts-stage.mobile { max-width: 340px; margin-inline: auto; }
+.ts-actions { flex-wrap: wrap; }
+.ts-previewing { margin-top: 8px; padding: 8px 12px; border-radius: var(--r-md); background: var(--warning-tint); color: var(--warning-ink); font-size: 13.5px; }
+.ts-history { margin-top: 18px; }
+.ts-history summary { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 650; }
+.ts-history ul { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.ts-history li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r-md); font-size: 13.5px; }
+.ts-history li .btn { margin-left: auto; }
+.ts-dots { display: inline-flex; }
+.ts-dots span { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--card); }
+.ts-dots span + span { margin-left: -5px; }
+@media (max-width: 760px) { .ts-variations { grid-template-columns: minmax(0, 1fr); } }
+
+/* The drawings: every colour comes from --t-* (the theme's own tokens, set inline). */
+.ts-mock { --t-r: 8px; overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: var(--t-page); color: var(--t-text); font-size: 12px; min-height: 220px; display: grid; }
+.ts-mock.tiny { min-height: 0; height: 112px; font-size: 8px; border-radius: 8px; pointer-events: none; }
+.ts-app { display: grid; grid-template-columns: 26% 1fr; min-height: 100%; }
+.ts-stage.mobile .ts-app { grid-template-columns: 1fr; }
+.ts-side { display: grid; align-content: start; gap: 6px; padding: 10px 8px; background: var(--t-sb); color: #eef2f6; }
+.ts-mock.tiny .ts-side { padding: 6px 4px; gap: 3px; }
+.ts-side .org-mark { max-width: 100%; }
+.ts-mock.tiny .ts-side .org-mark img { max-height: 14px; }
+.ts-nav { padding: 4px 6px; border-radius: 6px; border-left: 2px solid transparent; color: #d4dbe4; }
+.ts-nav.on { border-left-color: var(--t-hi); color: var(--t-hi); font-weight: 700; background: color-mix(in srgb, var(--t-hi) 14%, transparent); }
+.ts-main { display: grid; align-content: start; gap: 8px; padding: 10px; }
+.ts-mock.tiny .ts-main { padding: 6px; gap: 4px; }
+.ts-head { font-weight: 750; padding: 5px 8px; border-radius: var(--t-r); }
+.ts-head.balanced, .ts-head.immersive { background: var(--t-header); }
+.ts-head.immersive { box-shadow: 0 6px 18px -10px var(--t-glow); }
+.ts-card { display: grid; gap: 6px; padding: 10px; border: 1px solid var(--t-border); border-radius: var(--t-r); background: var(--t-card); }
+.ts-mock.tiny .ts-card { padding: 5px; gap: 3px; }
+.ts-btn { justify-self: start; padding: 4px 10px; border-radius: var(--t-r); background: var(--t-button); color: #fff; font-weight: 650; }
+.ts-link { color: var(--t-link); text-decoration: underline; }
+.ts-act { display: flex; align-items: center; gap: 10px; }
+.ts-status-row { display: flex; gap: 5px; }
+.ts-status-row i { font-style: normal; padding: 1px 7px; border-radius: 99px; font-weight: 650; }
+.ts-status-row .ok { background: var(--success-tint); color: var(--success-ink); }
+.ts-status-row .warn { background: var(--warning-tint); color: var(--warning-ink); }
+.ts-status-row .bad { background: var(--danger-tint); color: var(--danger-ink); }
+.ts-mock.tiny :is(.ts-act, .ts-status-row, small) { display: none; }
+.ts-bars { display: flex; align-items: flex-end; gap: 4px; height: 48px; }
+.ts-mock.tiny .ts-bars { height: 26px; gap: 2px; }
+.ts-bars i { flex: 1; border-radius: 3px 3px 0 0; }
+.ts-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(80px, 1fr)); gap: 8px; }
+.ts-col { display: grid; gap: 6px; align-content: start; padding: 6px; border-radius: var(--t-r); background: color-mix(in srgb, var(--t-border) 45%, transparent); }
+.ts-item { min-height: 30px; border-left: 3px solid var(--t-sec); }
+.ts-row, .ts-line { height: 8px; border-radius: 4px; background: var(--t-border); }
+.ts-line.short { width: 60%; }
+.ts-signin { display: grid; place-items: center; padding: 18px; }
+.ts-signin .ts-card { width: min(260px, 100%); justify-items: start; }
+.ts-input { width: 100%; padding: 5px 8px; border: 1px solid var(--t-border); border-radius: var(--t-r); color: var(--t-muted); }
+.ts-focus { outline: 2px solid var(--t-focus); outline-offset: 1px; }
+.ts-paper { display: grid; align-content: start; gap: 8px; margin: 14px; padding: 14px; border-radius: 6px; background: var(--t-card); color: var(--t-text); border: 1px solid var(--t-border); }
+.ts-paper.email { background: var(--t-card); }
+.ts-letterhead { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 3px solid; color: var(--t-muted); }
+.ts-found .brand-swatch { display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--border); }
+.ts-mock.tiny .ts-side .org-mark { display: none; }
+.ts-mock.tiny .ts-nav { overflow: hidden; white-space: nowrap; text-overflow: clip; padding: 2px 3px; }
+.ts-mock.tiny .ts-app { grid-template-columns: 30% 1fr; }

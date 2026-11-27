@@ -1284,3 +1284,42 @@ claims.
 - **Tests:** any sidebar and highlight is readable, and Omnicontact's come through; saving, clearing and refusing
   them; the public lookup carries them. `npm test`: 271 passed.
 - **Where it was tried:** applied on the Neon dev branch, reversed there, then applied again.
+
+## Themes generated from an organisation's logo (2026-11-27)
+
+Plan and the algorithm (approved): `docs/adaptive-theming-plan.md`. Sample gallery from the approval step:
+`docs/design/adaptive-theme-preview.html` (Omnicontact and two invented logos, every variation, light and dark).
+
+- **What's new:** Settings → Organisation → Branding → **Theme**. "We generated a theme from your logo": the colours
+  found, the roles (primary, secondary, neutral tint; swap them, or pick the primary by hand), the three variations
+  (Subtle, **Balanced** by default, Immersive) drawn in light and dark, fine-tuning (vibrancy, corners, font), a live
+  preview (dashboard, board, report, sign-in, email, PDF; light and dark; desktop and mobile), then **Save draft →
+  Preview as me → Publish**, with a history where any version can be restored, and a way to turn the theme off.
+  Platform Administrators have the same on an organisation's Branding page in `/platform`.
+- **The engine** (`src/data/logoTheme.js`, shared by the app and the Worker): logo analysis in OKLab (k-means,
+  weighted by area and saturation, ignoring transparency, soft edges, white/grey backgrounds and near-white/black),
+  roles, OKLCH generation with the contrast fixer (body text 7:1, other text 4.5:1, focus and accents 3:1; with
+  `prefers-contrast: more` every text pair 7:1), and chart colours kept apart under protanopia, deuteranopia and
+  tritanopia (patterns for any pair that still clashes).
+- **Applied** by `src/brandTheme.js` from the published ThemeSpec: light, dark (re-tuned, not inverted), the futuristic
+  theme's link colour, and the high-contrast version. Swapping themes crossfades (200 ms view transition) unless
+  reduced motion is on. `forced-colors` gets system colours; print drops the header band. A dark one-colour logo with
+  no dark version is shown in white on dark surfaces; others keep the light plate.
+- **A new logo** generates a theme: an organisation that has never published one gets it published at once
+  (Balanced); otherwise it is saved as a draft and the other administrators get a notification. Nothing reaches
+  anyone until it is published.
+- **Without a published theme nothing changes:** the accent (and Omnicontact's sidebar colours from 0023) as before.
+- **Migration `0024_organization_themes.sql`** (reverse in `migrations/down/`): versions per organisation (at most one
+  draft and one published), row-level security, no DELETE for the app's role.
+- **API:** `GET /api/org/theme`, `PUT|DELETE /api/org/theme/draft`, `POST /api/org/theme/publish | rollback | off`,
+  and the same under `/api/platform/organizations/:id/theme`. The branding view gains `theme`.
+- **Tests:** `tests/logoTheme.test.js` (12 fixture logos × 3 variations × 3 vibrancies × light/dark × normal/high
+  contrast; colour-vision distinctness; spec validation; the style sheet holds only known variables with hex, px or
+  listed font values; dark-logo handling) and the theme part of `tests/branding.test.js` (only administrators,
+  auto-publish, drafts, publish, rollback, off, audit, tenant isolation including row-level security, Platform
+  Administrator). `npm test`: 295 passed (112 frontend, 183 backend). `tsc`: 0 errors.
+- **Tried in Chrome** against the Neon dev branch (migration applied there): Omnicontact's logo → one muted navy,
+  strengthened to the same hue, a neighbouring violet second colour; all 30 pairs pass; Preview as me re-themes the
+  app.
+- **Not done:** density per organisation (it stays a personal setting); per-workspace hue shifts and an evening
+  palette (deferred, as agreed in the plan); visual snapshot tests and a GIF (the Chrome screenshots in `docs/screenshots/theme/` stand in for now).

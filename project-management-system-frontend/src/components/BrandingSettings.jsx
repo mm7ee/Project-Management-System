@@ -12,6 +12,7 @@ import { IMAGE_BOX, IMAGE_TYPES, STORED_MAX_BYTES, THEMES, UPLOAD_MAX_BYTES, acc
 import { applyBranding } from "../brandTheme";
 import OrgMark from "./OrgMark";
 import Panel from "./Panel";
+import ThemeStudio, { themeFromNewLogo } from "./ThemeStudio";
 import { Help, useToast } from "./AdminKit";
 
 /** @typedef {"logo" | "logoDark" | "icon"} Slot */
@@ -73,6 +74,9 @@ export default function BrandingSettings({ orgName, endpoint = "/org/branding", 
   const [images, setImages] = useState(/** @type {Partial<Record<Slot, string | null>>} */ ({}));
   const [saving, setSaving] = useState(false);
   const [previewTheme, setPreviewTheme] = useState(/** @type {Theme} */ ("light"));
+  // Bumped when the logo's new theme is saved, so the Theme panel below reloads.
+  const [themeKey, setThemeKey] = useState(0);
+  const themeBase = endpoint.replace(/\/branding$/, "/theme");
 
   const load = (/** @type {BrandingView} */ b) => {
     setSaved(b);
@@ -124,6 +128,7 @@ export default function BrandingSettings({ orgName, endpoint = "/org/branding", 
   };
 
   return (
+    <>
     <Panel title="Branding" icon={Palette}>
       <Help>
         How {orgName} looks to its own people: on its sign-in page ({`/#/o/${saved.code}`}), inside the app, in emails, exports, view-only links and the
@@ -140,7 +145,19 @@ export default function BrandingSettings({ orgName, endpoint = "/org/branding", 
             const r = /** @type {{ branding: BrandingView }} */ (await api(endpoint, "PUT", body));
             load(r.branding);
             if (own) applyBranding(r.branding);
-            toast("The branding is saved. Everyone sees it on their next page load.");
+            // A new logo: a theme is generated from it (published at once for an organisation that has never had
+            // one; otherwise a draft, and the other administrators are told).
+            const newLogo = typeof images.logo === "string" ? images.logo : null;
+            const made = newLogo ? await themeFromNewLogo(themeBase, newLogo).catch(() => null) : null;
+            if (made?.autoPublished && own) applyBranding({ ...r.branding, theme: made.published?.spec ?? null });
+            if (made) setThemeKey((k) => k + 1);
+            toast(
+              made?.autoPublished
+                ? "The branding is saved, and a theme generated from your logo is now in use. Fine-tune it under Theme below."
+                : made
+                  ? "The branding is saved. A theme was generated from the new logo: review it under Theme below, then publish it."
+                  : "The branding is saved. Everyone sees it on their next page load.",
+            );
           } catch (err) {
             toast(err instanceof Error ? err.message : "Couldn't save", false);
           } finally {
@@ -266,6 +283,8 @@ export default function BrandingSettings({ orgName, endpoint = "/org/branding", 
         </div>
       </form>
     </Panel>
+    <ThemeStudio base={themeBase} branding={saved} own={own} reloadKey={themeKey} />
+    </>
   );
 }
 

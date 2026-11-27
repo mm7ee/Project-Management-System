@@ -5,8 +5,13 @@
 // An organisation sets only three CSS variables (styles.css explains them): --accent-solid for backgrounds with
 // white text, --accent-light and --accent-dark for text, links and focus on light and dark surfaces. All three
 // are worked out from its accent by src/data/branding.js and already pass WCAG AA. Status colours never change.
+//
+// An organisation with a published theme (generated from its logo, src/data/logoTheme.js) gets that instead: the
+// style sheet themeCss builds from its validated ThemeSpec, light and dark, with a high-contrast version. Swapping
+// one theme for another crossfades (a view transition, 200 ms) unless reduced motion is asked for.
 import { BRAND, tabTitle } from "./data/brand";
 import { monogramSvg, platformIconSvg, sidebarTheme, solidShade, svgDataUrl } from "./data/branding";
+import { themeCss } from "./data/logoTheme";
 
 /** @typedef {import("./data/branding").BrandingView} BrandingView */
 
@@ -28,6 +33,7 @@ export function applyBranding(b) {
     style?.remove();
     delete root.dataset.org;
     delete root.dataset.orgSidebar;
+    delete root.dataset.orgTheme;
     setFavicon(svgDataUrl(platformIconSvg()));
     return;
   }
@@ -36,6 +42,21 @@ export function applyBranding(b) {
     style.id = STYLE_ID;
     document.head.appendChild(style);
   }
+  if (b.theme) {
+    const css = themeCss(b.theme);
+    const sheet = /** @type {HTMLStyleElement} */ (style);
+    const swap = () => {
+      sheet.textContent = css;
+      root.dataset.orgTheme = /** @type {import("./data/logoTheme").ThemeSpec} */ (b.theme).variation;
+      if (b.theme?.variation === "subtle") delete root.dataset.orgSidebar;
+      else root.dataset.orgSidebar = "1";
+    };
+    crossfade(sheet.textContent ?? "", css, swap);
+    root.dataset.org = b.code;
+    setFavicon(b.icon ?? svgDataUrl(monogramSvg(b.name, b.accent)));
+    return;
+  }
+  delete root.dataset.orgTheme;
   // The values come from cleaned hex colours (#rrggbb), so they are safe to write into a style sheet.
   const solid = solidShade(b.accent);
   // Its own sidebar, if it set one: safe shades worked out from its colours.
@@ -50,6 +71,20 @@ export function applyBranding(b) {
   if (sb) root.dataset.orgSidebar = "1";
   else delete root.dataset.orgSidebar;
   setFavicon(b.icon ?? svgDataUrl(monogramSvg(b.name, b.accent)));
+}
+
+/**
+ * Applies a new style sheet; when one theme replaces another on screen, through a short crossfade (200 ms, styles.css
+ * ::view-transition), unless reduced motion is asked for or the browser can't.
+ * @param {string} before
+ * @param {string} after
+ * @param {() => void} swap
+ */
+function crossfade(before, after, swap) {
+  const doc = /** @type {Document & { startViewTransition?: (cb: () => void) => unknown }} */ (document);
+  const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.motion === "reduced";
+  if (before && before !== after && doc.startViewTransition && !still && document.visibilityState === "visible") doc.startViewTransition(swap);
+  else swap();
 }
 
 /**
