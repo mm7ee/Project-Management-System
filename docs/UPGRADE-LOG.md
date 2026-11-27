@@ -1210,3 +1210,64 @@ A later release drops `organizations.logo` and `.colour` (0017), which nothing r
 `npm test`: 264 passed. `tsc` (app and Worker): 0 errors.
 
 **Release:** `npm run db:status`, `db:backup`, `db:migrate` (0022), `db:status`, then push.
+
+## The platform landing page (State A), redesigned: "Clean timeline" (2026-11-27)
+
+Three directions were mocked up; "Clean timeline" was chosen.
+
+**What was built**
+- **`src/components/LandingPage.jsx`**, with its own section in `components/landing.css` (`.lp-a-*`):
+  - **Hero:** the PMS wordmark (still), "Plan. Track. Deliver." with the last word turning over (Deliver, Ship,
+    Report, Succeed; the static line is what screen readers get), the tagline, and six feature chips (Boards,
+    Sprints, Timeline, Reports, Service desk, Ask AI) that lift and glow on hover.
+  - **Behind the page:** a wide project timeline whose bars fill in, with a "Today" line, over the dot grid. A soft
+    ring of light grows from behind the code card now and then.
+  - **Under the card:** a small board where one card travels To do → In progress → Done and is ticked.
+  - **Futuristic:** neon edges and faint scan lines.
+- **The same behaviour:** the code field (now lower-cased as it's typed), Continue (Enter submits), "Find your
+  organisation" (an inline panel), the remembered-device note, and one message for every code that leads nowhere.
+- **Micro-interactions:**
+  - **Focus:** a glow in the platform accent, and the field's icon turns.
+  - **Continue:** the arrow slides on hover. While checking, it shows a spinner and a shimmer.
+  - **A refusal:** the card shakes once, and the message is announced.
+  - **Moving to State B:** the organisation's accent floods out from Continue, and the card morphs into its sign-in
+    page (View Transitions; a crossfade where the browser has none).
+- **Theme:** a toggle in the top-right corner (light → dark → futuristic), following the device until someone picks.
+  It is remembered on the device; signing in applies the account's own choice.
+- **Motion:** only transform and opacity animate. With reduced motion (the system setting or the account's), a
+  still composition: bars full, the card in Done and ticked. Animations pause while the tab is hidden, and the art
+  pauses off screen.
+- **Speed:**
+  - **Code on demand:** the signed-in app now loads only once someone is in (`src/SignedInApp.jsx`, split out of
+    `App.jsx`), and so do the platform, executive and portal pages. The sign-in page's script fell from 290 KB to
+    73 KB gzipped.
+  - **Fonts:** loaded without holding up the first paint, with an early connection to the font server and a
+    fallback sized to Inter's measurements, so the swap doesn't move the page.
+  - **The landing page's own size:** 5.3 KB gzipped (2.2 KB script, 3.1 KB styles).
+
+**Lighthouse** (the production build, served locally):
+
+| | Performance | Accessibility | Best Practices | LCP | CLS |
+| --- | --- | --- | --- | --- | --- |
+| Phone (simulated) | 92 | 100 | 96 | 1.8 s | 0.001 |
+| Desktop | 100 | 100 | 96 | 0.5 s | 0 |
+
+- **Before:** phone Performance was 79 and LCP 4.2 s.
+- **Best Practices:** loses points only for the 401 the browser logs while the app checks whether anyone is signed
+  in.
+- **Phone LCP misses the 1.5 s target:** what remains is the whole app stylesheet (45 KB gzipped) and the sign-in
+  check. Splitting the stylesheet is the next step.
+
+**Screenshots:** `docs/screenshots/landing/` (contact sheet `index.html`, and `landing-a-to-b.gif`):
+- every theme at 1440, 1024, 768 and 390 px
+- reduced motion
+- an unknown code
+- State B after the transition, for Omnicontact and Demo Co
+
+`npm test`: 267 passed (86 frontend, 181 backend). `tsc` (app and Worker): 0 errors. `vite build` passes.
+`tests/noOrgBranding.test.js` also checks the landing page: no image, no organisation, no data and no customer
+claims.
+
+**Not done:**
+- No Privacy link: there is no privacy page yet.
+- The footer's Help link appears once `BRAND.supportEmail` is set.

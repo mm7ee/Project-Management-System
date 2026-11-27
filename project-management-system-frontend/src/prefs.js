@@ -24,13 +24,38 @@ export function resolveTheme(theme) {
  * @returns {void}
  */
 export function applyCachedTheme() {
+  root().dataset.theme = landingTheme();
+}
+
+/**
+ * The theme before sign-in: the one last used on this device, else the device's own light or dark setting.
+ * @returns {"light" | "dark" | "futuristic"}
+ */
+export function landingTheme() {
   try {
     const t = localStorage.getItem(THEME_CACHE);
-    if (t === "light" || t === "futuristic") root().dataset.theme = t;
-    else if (t === "dark") root().dataset.theme = "futuristic"; // cached from the retired dark theme
+    if (t === "light" || t === "dark" || t === "futuristic") return t;
   } catch {
-    // Storage unavailable: start in light.
+    // Storage unavailable: follow the device.
   }
+  return darkQuery().matches ? "dark" : "light";
+}
+
+/**
+ * The platform page's theme toggle: light → dark → futuristic, remembered on this device. Signing in applies the
+ * account's own choice over it.
+ * @param {"light" | "dark" | "futuristic"} current
+ * @returns {"light" | "dark" | "futuristic"}
+ */
+export function cycleTheme(current) {
+  const next = current === "light" ? "dark" : current === "dark" ? "futuristic" : "light";
+  root().dataset.theme = next;
+  try {
+    localStorage.setItem(THEME_CACHE, next);
+  } catch {
+    // A nicety only.
+  }
+  return next;
 }
 /**
  * Keeps <html> data attributes in step with the user's preferences.

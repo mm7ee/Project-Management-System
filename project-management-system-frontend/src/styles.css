@@ -1,3 +1,13 @@
+/* Until Inter arrives (it loads without holding up the first paint), a local font sized to Inter's measurements,
+   so the swap doesn't move the page (no layout shift). */
+@font-face {
+  font-family: "Inter Fallback";
+  src: local("Arial"), local("Helvetica"), local("Liberation Sans");
+  size-adjust: 107.1%;
+  ascent-override: 90.4%;
+  descent-override: 22.5%;
+  line-gap-override: 0%;
+}
 /* Visual spec: the PMS "Projects Department Tracker" mock-up.
    Navy sidebar, pale blue-grey canvas, white cards, cyan/green/amber/red accents. */
 :root {
@@ -75,7 +85,7 @@
   --dur: 180ms; --ease: cubic-bezier(.2, .8, .2, 1);
   --card-accent: none; /* the dark theme's hairline glow */
 
-  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: "Inter", "Inter Fallback", system-ui, -apple-system, "Segoe UI", sans-serif;
   color: var(--text);
   -webkit-font-smoothing: antialiased;
 }

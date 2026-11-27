@@ -45,9 +45,12 @@ describe("no organisation's branding in the product", () => {
     expect(html).not.toMatch(/Omni|omnicontact|\bPulse\b/);
     const login = readFileSync(join(FRONT, "src", "components", "Login.jsx"), "utf8");
     // The only organisation it ever shows is the one the public branding lookup returned for a typed code.
-    // (Its "omnitrack:" session key is an internal name, kept for now.)
     expect(login).not.toMatch(/Omni|omnicontact|<img/);
     expect(login).toContain("/public/org/");
+    // The platform page itself: no image, no organisation, no data of any kind, no claims about customers.
+    const landing = readFileSync(join(FRONT, "src", "components", "LandingPage.jsx"), "utf8");
+    expect(landing).not.toMatch(/Omni|omnicontact|<img|api\(|fetch\(|trusted by|customers/i);
+    expect(landing).toContain("BRAND.productName");
   });
 
   it("status colours are fixed: an organisation's branding sets only the accent variables", () => {

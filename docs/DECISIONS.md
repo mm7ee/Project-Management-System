@@ -1194,3 +1194,28 @@ The plan, and the 13 recommendations approved with "continue", are in `docs/admi
   - the `pulse.` address
   - the cookies, the `pulse_` token prefix and the `X-Pulse-Signature` header
   - the database role and the browser storage keys
+
+## The platform landing page (2026-11-27)
+
+- **Neutral:** no logo (the PMS wordmark is type), no organisation's name, logo or colour, and nothing that lists
+  or searches organisations. A test checks this (`tests/noOrgBranding.test.js`).
+- **No claims:** no user counts, testimonials, "trusted by" strips or customer data. The illustrations are
+  placeholders: grey bars, a board, a timeline.
+- **The name comes from `src/data/brand.js`,** like everywhere else.
+- **Motion respects reduced motion:**
+  - **What may move:** only transform and opacity animate.
+  - **With reduced motion** (the system setting or the account's): a still composition, the turning word stopped
+    and nothing looping.
+  - **Pausing:** animations pause while the tab is hidden, and the art pauses off screen.
+- **Calm over spectacle:** of three directions ("Glass and Kanban", "Command centre", "Clean timeline"), the calm one
+  was chosen. There is one wide timeline behind the page and one small loop (the board); there is no parallax,
+  cursor spotlight or colour mesh.
+- **The behaviour is the sign-in page's,** unchanged. Choosing an organisation is the one designed moment: its colour
+  floods in and the card becomes its sign-in page.
+- **Fast first paint:**
+  - **Only what the page needs loads first:** the signed-in app, the platform, executive and portal pages load on
+    demand.
+  - **Fonts don't block,** and a metric-matched fallback keeps the layout still.
+  - **The landing page's own budget:** about 25 KB gzipped of script and styles; it is 5.3 KB.
+- **The theme toggle** follows the device until someone chooses, and the choice is remembered on that device only.
+  Signing in applies the account's own theme.

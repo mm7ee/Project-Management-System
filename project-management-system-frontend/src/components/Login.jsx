@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 /** @import { Tenant } from '../data/api' */
 /** @import { BrandingView } from '../data/branding' */
-import { ArrowRight, Building2, Fingerprint, KeyRound, Layers, LifeBuoy, LockKeyhole, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowRight, Fingerprint, KeyRound, Layers, LifeBuoy, LockKeyhole, ShieldCheck, UserRound } from "lucide-react";
 import { ApiError, api } from "../data/api";
 import { cleanCode, forgetOrg, initialOrgCode, lastWorkspace, rememberOrg, rememberWorkspace } from "../data/tenant";
 import { passkeysSupported, signWithPasskey } from "../data/passkeys";
@@ -10,7 +11,11 @@ import { applyBranding, setTitle } from "../brandTheme";
 import OrgMark, { pageSurface } from "./OrgMark";
 import { ForgotPassword, ResetPassword } from "./PasswordReset";
 import { resetTokenIn } from "../data/passwordReset";
+import LandingPage from "./LandingPage";
 import "./landing.css";
+
+/** Whether to animate: not when the person asked for less motion. */
+const motionOk = () => !window.matchMedia("(prefers-reduced-motion: reduce)").matches && document.documentElement.dataset.motion !== "reduced";
 
 /** One message for every code nobody may see: unknown, suspended, archived, mistyped. */
 const NOT_FOUND = "We couldn't find that organisation. Check the code with your administrator.";
@@ -27,9 +32,13 @@ const NOT_FOUND = "We couldn't find that organisation. Check the code with your 
 export default function Login({ onSignedIn }) {
   // Which organisation: from a link (#/o/<code>), else the last one used on this device, else asked first.
   const [orgCode, setOrgCode] = useState(initialOrgCode);
-  const [orgDraft, setOrgDraft] = useState("");
+  // The field shows the code being checked, a remembered one included.
+  const [orgDraft, setOrgDraft] = useState(orgCode);
   const [branding, setBranding] = useState(/** @type {BrandingView | null} */ (null));
-  const [findHelp, setFindHelp] = useState(false);
+  // Each refusal on the platform page counts up, so its card shakes again.
+  const [errorKey, setErrorKey] = useState(0);
+  // Where Continue was, so the organisation's colour can flood out from it as its page opens.
+  const [floodFrom, setFloodFrom] = useState(/** @type {{ x: number; y: number } | null} */ (null));
   // After signing in, someone in several workspaces chooses which to open.
   const [choices, setChoices] = useState(/** @type {Tenant | null} */ (null));
   const [username, setUsername] = useState("");
@@ -58,9 +67,16 @@ export default function Login({ onSignedIn }) {
       .then((b) => {
         if (!live) return;
         const view = /** @type {BrandingView} */ (b);
-        setBranding(view);
-        applyBranding(view);
-        setTitle(view.name);
+        // The moment the neutral platform becomes the organisation's system: the card morphs into its sign-in
+        // page (View Transitions where the browser has them, else a crossfade), and its colour floods in.
+        const become = () => {
+          setBranding(view);
+          applyBranding(view);
+          setTitle(view.name);
+        };
+        const doc = /** @type {Document & { startViewTransition?: (cb: () => void) => unknown }} */ (document);
+        if (motionOk() && typeof doc.startViewTransition === "function") doc.startViewTransition(() => flushSync(become));
+        else become();
       })
       .catch((err) => {
         if (!live) return;
@@ -68,7 +84,9 @@ export default function Login({ onSignedIn }) {
         if (window.location.hash.startsWith("#/o/")) history.replaceState(null, "", window.location.pathname + window.location.search);
         setOrgDraft(orgCode);
         setOrgCode("");
+        setFloodFrom(null);
         setError(err instanceof ApiError && err.status === 429 ? err.message : err instanceof ApiError ? NOT_FOUND : "Couldn't reach the server. Check your connection and try again.");
+        setErrorKey((k) => k + 1);
       });
     return () => {
       live = false;
@@ -132,84 +150,40 @@ export default function Login({ onSignedIn }) {
     </p>
   );
 
-  // State A: no organisation yet (or waiting for its branding).
+  // State A: no organisation yet, or checking the code (LandingPage.jsx).
   if (!branding) {
     return (
-      <div className="landing">
-        <main className="lp-center">
-          <h1 className="lp-wordmark" aria-label={BRAND.productName}>
-            <span className="lp-pms" aria-hidden="true">
-              {BRAND.shortName}
-            </span>
-            <span className="lp-full" aria-hidden="true">
-              {BRAND.productName}
-            </span>
-          </h1>
-          <p className="lp-value">{BRAND.tagline}</p>
-          {resetToken ? (
-            <ResetPassword token={resetToken} onDone={() => leaveReset("Your password has been changed and every device signed out. Sign in with your new password.", true)} onBack={(m) => leaveReset(m)} />
-          ) : orgCode ? (
-            <div className="lp-loading" role="status" aria-label="Finding your organisation" />
-          ) : (
-            <form
-              className="lp-card"
-              onSubmit={(e) => {
-                e.preventDefault();
-                const code = cleanCode(orgDraft);
-                if (!code) {
-                  setError("Enter your organisation's code: letters, numbers and dashes, as your administrator gave it to you.");
-                  return;
-                }
-                setError("");
-                setOrgCode(code);
-              }}
-            >
-              <label className="lp-field">
-                <span>Organisation code</span>
-                <span className="lp-input">
-                  <Building2 size={17} aria-hidden="true" />
-                  <input autoFocus autoComplete="organization" autoCapitalize="none" spellCheck={false} required value={orgDraft} onChange={(e) => setOrgDraft(e.target.value)} placeholder="e.g. your-company" aria-describedby="org-help" />
-                </span>
-              </label>
-              <p className="lp-help" id="org-help">
-                Your administrator gives you this code, or a sign-in link with it. This device remembers it.
-              </p>
-              {notice && (
-                <p className="lp-ok" role="status">
-                  {notice}
-                </p>
-              )}
-              {errorLine}
-              <button type="submit" className="lp-submit">
-                Continue <ArrowRight size={18} aria-hidden="true" />
-              </button>
-              <button type="button" className="lp-link" aria-expanded={findHelp} onClick={() => setFindHelp((v) => !v)}>
-                Find your organisation
-              </button>
-              {findHelp && (
-                <p className="lp-find">
-                  Use the sign-in link your administrator sent you: it opens your organisation's page directly. Without it, ask them for your organisation's code. For privacy, organisations aren't listed or searchable here.
-                </p>
-              )}
-            </form>
-          )}
-        </main>
-        <footer className="lp-foot">
-          {BRAND.productName}
-          {BRAND.supportEmail && (
-            <>
-              {" · "}
-              <a href={`mailto:${BRAND.supportEmail}`}>Help</a>
-            </>
-          )}
-        </footer>
-      </div>
+      <LandingPage
+        draft={orgDraft}
+        onDraft={setOrgDraft}
+        checking={!!orgCode}
+        error={error}
+        errorKey={errorKey}
+        notice={notice}
+        onSubmit={(from) => {
+          const code = cleanCode(orgDraft);
+          if (!code) {
+            setError("Enter your organisation's code: letters, numbers and dashes, as your administrator gave it to you.");
+            setErrorKey((k) => k + 1);
+            return;
+          }
+          setError("");
+          setNotice("");
+          setFloodFrom(from ? { x: from.left + from.width / 2, y: from.top + from.height / 2 } : null);
+          setOrgCode(code);
+        }}
+      >
+        {resetToken ? <ResetPassword token={resetToken} onDone={() => leaveReset("Your password has been changed and every device signed out. Sign in with your new password.", true)} onBack={(m) => leaveReset(m)} /> : null}
+      </LandingPage>
     );
   }
 
   // State B: the organisation's own sign-in page.
   return (
     <div className="landing lp-branded">
+      {floodFrom && motionOk() && (
+        <span className="lp-flood" aria-hidden="true" style={/** @type {any} */ ({ "--fx": `${floodFrom.x}px`, "--fy": `${floodFrom.y}px` })} onAnimationEnd={() => setFloodFrom(null)} />
+      )}
       <main className="lp-center">
         <div className="lp-org-mark">
           <OrgMark branding={branding} surface={pageSurface()} size="lg" />
@@ -225,7 +199,7 @@ export default function Login({ onSignedIn }) {
           <SecondStep ticket={ticket} methods={methods} onSignedIn={finish} onBack={backToPassword} />
         ) : (
           <form
-            className="lp-card"
+            className="lp-card lp-morph"
             onSubmit={async (e) => {
               e.preventDefault();
               setBusy(true);

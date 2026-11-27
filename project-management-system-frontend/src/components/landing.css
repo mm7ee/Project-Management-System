@@ -90,12 +90,6 @@
 .lp-foot { padding: 18px 16px 22px; text-align: center; font-size: 12px; color: var(--lp-dim); }
 .lp-foot a { color: inherit; }
 
-/* ---------- State A: the wordmark ---------- */
-.lp-wordmark { margin: 0; display: flex; flex-direction: column; align-items: center; line-height: 1; color: var(--lp-ink); }
-.lp-wordmark .lp-pms { font-size: clamp(48px, 12vw, 64px); font-weight: 900; letter-spacing: -0.03em; }
-.lp-wordmark .lp-full { margin-top: 10px; font-size: 13.5px; font-weight: 400; letter-spacing: 0.16em; text-transform: uppercase; color: var(--lp-dim); }
-.lp-value { margin: -4px 0 6px; text-align: center; font-size: 15px; line-height: 1.5; color: var(--lp-dim); max-width: 380px; }
-
 /* ---------- State B: the organisation ---------- */
 .lp-org-mark { display: grid; place-items: center; }
 .lp-org-title { margin: 0; font-size: 22px; font-weight: 750; text-align: center; letter-spacing: -0.01em; }
@@ -171,9 +165,6 @@
 .lp-workspace:hover:not(:disabled) { border-color: var(--focus); }
 .lp-workspace-last { color: var(--lp-dim); font-size: 13px; font-weight: 400; }
 
-/* Waiting for an organisation's branding. */
-.lp-loading { width: 100%; height: 220px; border-radius: 16px; background: var(--lp-card); border: 1px solid var(--lp-line); opacity: 0.6; }
-
 /* ---------- Organisation marks (also used inside the app) ---------- */
 /* A fixed box; the image fits inside it whatever its shape (a flex box, so max-height has a height to measure). */
 .org-mark { display: inline-flex; align-items: center; justify-content: center; flex: none; overflow: hidden; }
@@ -199,3 +190,135 @@
   .lp-center > *:nth-child(4) { animation-delay: 0.12s; }
 }
 @keyframes lp-rise { from { opacity: 0; transform: translateY(6px); } }
+
+/* =====================================================================================================================
+   State A, the platform page (LandingPage.jsx): "Clean timeline" (docs/DECISIONS.md, the landing page)
+   Neutral: no logo, no organisation, no claims. One wide timeline runs behind the page with a "Today" line; the
+   wordmark is still; the headline's last word turns over; a small board shows a card moving to Done; a soft ring of
+   light grows from behind the code card now and then. Everything that moves animates only transform and opacity,
+   stops for reduced motion, and pauses while the tab is hidden or the art is off screen.
+   ===================================================================================================================== */
+.landing.lp-a {
+  --lp-teal: #1d7368;   /* the turning word and the timeline's "Today": 5.4:1 on the light page */
+  --lp-band: color-mix(in srgb, var(--brand-steel) 14%, transparent);
+  --lp-ring: color-mix(in srgb, var(--brand-steel) 35%, transparent);
+  overflow: hidden;
+  background: radial-gradient(circle at 1px 1px, var(--lp-dots) 1px, transparent 0) 0 0 / 22px 22px, var(--lp-bg);
+}
+:root:is([data-theme="dark"], [data-theme="futuristic"]) .landing.lp-a { --lp-teal: #4fd1c0; --lp-band: rgba(143, 179, 212, 0.18); --lp-ring: rgba(143, 179, 212, 0.2); }
+:root[data-theme="futuristic"] .landing.lp-a { --lp-teal: #3ee6d4; --lp-band: rgba(110, 140, 255, 0.22); --lp-ring: rgba(62, 230, 212, 0.26); }
+
+/* The timeline behind everything */
+.lp-a-bg { position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.lp-a-band { position: absolute; left: 0; right: 0; bottom: 6%; height: 200px; display: grid; align-content: center; gap: 16px; padding-left: 3%; }
+.lp-a-band i { display: block; height: 14px; border-radius: 7px; background: var(--lp-band); width: var(--w); margin-left: var(--s); transform-origin: left center; animation: lp-a-fill 9s ease-in-out infinite; animation-delay: var(--d); }
+.lp-a-band b { position: absolute; top: 0; bottom: 0; left: 54%; width: 2px; background: color-mix(in srgb, var(--lp-teal) 60%, transparent); }
+.lp-a-band b span { position: absolute; top: -20px; left: -16px; font: 600 10.5px/1 ui-monospace, "JetBrains Mono", Consolas, monospace; letter-spacing: 0.08em; color: var(--lp-dim); }
+@keyframes lp-a-fill { 0% { transform: scaleX(0); opacity: 1; } 45%, 88% { transform: scaleX(1); opacity: 1; } 100% { transform: scaleX(1); opacity: 0; } }
+/* Phones and tablets: only the board moves (the timeline would sit behind the card and board). */
+@media (max-width: 1023px) { .lp-a-band { display: none; } }
+/* Futuristic: neon edges and faint scan lines. */
+:root[data-theme="futuristic"] .lp-a-bg::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(transparent 0 3px, rgba(255, 255, 255, 0.03) 3px 4px); }
+
+/* Layout: one column; two from 1024px */
+.lp-a-main {
+  flex: 1; width: 100%; max-width: 1180px; margin: 0 auto; display: grid; gap: 28px; align-content: center;
+  padding: clamp(56px, 9vh, 96px) max(16px, env(safe-area-inset-right, 0px)) 32px max(16px, env(safe-area-inset-left, 0px));
+}
+@media (min-width: 1024px) { .lp-a-main { grid-template-columns: minmax(0, 1fr) minmax(340px, 400px); gap: 56px; align-items: center; padding-inline: 48px; } }
+
+/* The hero */
+.lp-a-hero { display: grid; gap: 16px; align-content: start; justify-items: center; text-align: center; min-width: 0; }
+@media (min-width: 1024px) { .lp-a-hero { justify-items: start; text-align: left; } }
+.lp-a-wm { margin: 0; display: grid; gap: 10px; line-height: 1; justify-items: inherit; }
+.lp-a-pms { font-size: clamp(56px, 8vw, 92px); font-weight: 900; letter-spacing: -0.04em; color: var(--lp-ink); }
+.lp-a-full { font-size: 12.5px; font-weight: 600; letter-spacing: 0.32em; text-transform: uppercase; color: var(--lp-dim); }
+.lp-a-head { margin: 8px 0 0; font-size: clamp(26px, 3.6vw, 42px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; color: var(--lp-ink); }
+.lp-a-rot { display: inline-block; height: 1.15em; overflow: hidden; vertical-align: bottom; color: var(--lp-teal); }
+.lp-a-rot > span { display: block; animation: lp-a-rot 10s cubic-bezier(.7, 0, .2, 1) infinite; }
+.lp-a-rot i { display: block; height: 1.15em; font-style: normal; text-align: left; }
+@keyframes lp-a-rot { 0%, 20% { transform: translateY(0); } 25%, 45% { transform: translateY(-1.15em); } 50%, 70% { transform: translateY(-2.3em); } 75%, 95% { transform: translateY(-3.45em); } 100% { transform: translateY(-4.6em); } }
+.lp-a-lede { margin: 0; max-width: 44ch; font-size: 16px; line-height: 1.55; color: var(--lp-dim); }
+.lp-a-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 6px 0 0; padding: 0; list-style: none; }
+@media (min-width: 1024px) { .lp-a-chips { justify-content: flex-start; } }
+.lp-a-chips li { position: relative; display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border: 1px solid var(--lp-line); border-radius: 999px; background: var(--lp-card); color: var(--lp-ink); font-size: 13px; font-weight: 600; transition: transform 0.2s var(--ease, ease); }
+.lp-a-chips li::after { content: ""; position: absolute; inset: -1px; border-radius: inherit; box-shadow: 0 6px 18px color-mix(in srgb, var(--brand-steel) 35%, transparent), 0 0 0 1px color-mix(in srgb, var(--lp-teal) 45%, transparent); opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+.lp-a-chips li:hover { transform: translateY(-2px); }
+.lp-a-chips li:hover::after { opacity: 1; }
+.lp-a-chips svg { width: 15px; height: 15px; color: var(--lp-teal); }
+
+/* The side: the code card, with the ring behind it and the board below */
+.lp-a-side { position: relative; display: grid; gap: 18px; justify-items: center; min-width: 0; }
+.lp-a-side > .lp-card { width: min(100%, 400px); position: relative; z-index: 1; }
+.lp-a-ring { position: absolute; left: 50%; top: 120px; width: 180px; height: 180px; margin: -90px 0 0 -90px; border-radius: 50%; z-index: 0; pointer-events: none;
+  background: radial-gradient(circle, transparent 58%, var(--lp-ring) 66%, transparent 72%); animation: lp-a-ring 6s cubic-bezier(.2, .6, .3, 1) infinite; }
+@keyframes lp-a-ring { 0% { transform: scale(0.6); opacity: 0.9; } 100% { transform: scale(6); opacity: 0; } }
+:root[data-theme="futuristic"] .lp-a-card, :root[data-theme="futuristic"] .lp-a-board { box-shadow: 0 0 0 1px rgba(140, 160, 255, 0.3), 0 0 26px rgba(62, 230, 212, 0.16), var(--lp-shadow); }
+
+/* The code field: a glow in the platform accent on focus, and the icon turns */
+.lp-a-input:focus-within { box-shadow: 0 0 0 4px color-mix(in srgb, var(--focus) 22%, transparent), 0 0 24px color-mix(in srgb, var(--lp-teal) 22%, transparent); }
+.lp-a-input svg { transition: transform 0.25s var(--ease, ease); }
+.lp-a-input:focus-within svg { transform: scale(1.12) rotate(-8deg); color: var(--focus); }
+.lp-a-card .lp-field { margin-bottom: -8px; }
+.lp-a-noerror { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Continue: the arrow slides on hover; while checking, a shimmer runs across and a spinner turns */
+.lp-a-go { position: relative; overflow: hidden; }
+.lp-a-arrow { transition: transform 0.2s var(--ease, ease); }
+.lp-a-go:hover .lp-a-arrow { transform: translateX(4px); }
+.lp-a-go.checking { cursor: progress; }
+.lp-a-go.checking::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.28) 50%, transparent 70%); transform: translateX(-100%); animation: lp-a-shimmer 1.2s linear infinite; }
+:root:is([data-theme="dark"], [data-theme="futuristic"]) .lp-a-go.checking::after { background: linear-gradient(100deg, transparent 30%, rgba(17, 24, 33, 0.22) 50%, transparent 70%); }
+@keyframes lp-a-shimmer { to { transform: translateX(100%); } }
+.lp-a-spin { animation: lp-a-spin 0.9s linear infinite; }
+@keyframes lp-a-spin { to { transform: rotate(360deg); } }
+
+/* A refusal: one gentle shake */
+.lp-shake { animation: lp-shake 0.42s cubic-bezier(.36, .07, .19, .97) 1; }
+@keyframes lp-shake { 10%, 90% { transform: translateX(-1px); } 20%, 80% { transform: translateX(3px); } 30%, 50%, 70% { transform: translateX(-6px); } 40%, 60% { transform: translateX(6px); } }
+
+/* The board: one card travels to Done and is ticked */
+.lp-a-board { width: min(100%, 320px); padding: 12px; border-radius: 14px; background: var(--lp-card); border: 1px solid var(--lp-line); box-shadow: var(--lp-shadow); }
+.lp-a-cap { display: block; margin-bottom: 8px; font: 600 10px/1 ui-monospace, "JetBrains Mono", Consolas, monospace; letter-spacing: 0.12em; text-transform: uppercase; color: var(--lp-dim); }
+.lp-a-kb { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.lp-a-col { display: grid; align-content: start; gap: 6px; min-height: 118px; padding: 6px; border-radius: 8px; background: color-mix(in srgb, var(--lp-ink) 6%, transparent); }
+.lp-a-col b { height: 12px; font-size: 10px; line-height: 12px; font-weight: 600; color: var(--lp-dim); }
+.lp-a-slot { height: 22px; border-radius: 5px; border: 1px dashed color-mix(in srgb, var(--lp-ink) 14%, transparent); }
+.lp-a-kcard { position: relative; height: 22px; border-radius: 5px; background: var(--lp-card); border: 1px solid var(--lp-line); }
+.lp-a-kcard::after { content: ""; position: absolute; left: 6px; top: 8px; width: 60%; height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--lp-ink) 16%, transparent); }
+.lp-a-mover { position: absolute; left: 6px; top: 24px; width: calc((100% - 16px) / 3 - 12px); border-color: var(--lp-teal); animation: lp-a-move 9s ease-in-out infinite; }
+@keyframes lp-a-move { 0%, 15% { transform: translateX(0); } 35%, 50% { transform: translateX(calc(100% + 20px)); } 70%, 100% { transform: translateX(calc(200% + 40px)); } }
+.lp-a-tick { position: absolute; right: 10px; top: 27px; width: 16px; height: 16px; animation: lp-a-tick 9s ease-in-out infinite; }
+.lp-a-tick path { fill: none; stroke: var(--lp-teal); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+@keyframes lp-a-tick { 0%, 72% { transform: scale(0.3); opacity: 0; } 78%, 95% { transform: scale(1); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+
+/* The theme toggle, top right; last in the keyboard order after the card */
+.lp-a-theme { position: absolute; top: calc(14px + env(safe-area-inset-top, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); z-index: 2;
+  display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--lp-line); background: var(--lp-card); color: var(--lp-ink); cursor: pointer; }
+.lp-a-theme:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.lp-a-foot { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; }
+
+/* Becoming the organisation's page: its colour floods out from Continue, and the card morphs (View Transitions),
+   or the page crossfades where the browser has none. */
+.lp-flood { position: fixed; left: var(--fx); top: var(--fy); width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; z-index: 50; pointer-events: none;
+  background: var(--accent-solid); animation: lp-flood 0.9s cubic-bezier(.3, .6, .3, 1) forwards; }
+@keyframes lp-flood { 0% { transform: scale(0); opacity: 0.85; } 60% { transform: scale(70); opacity: 0.35; } 100% { transform: scale(90); opacity: 0; } }
+.lp-morph { view-transition-name: lp-card; }
+::view-transition-group(lp-card) { animation-duration: 0.45s; animation-timing-function: cubic-bezier(.3, .7, .2, 1); }
+.landing.lp-branded { animation: lp-in 0.35s ease both; }
+@keyframes lp-in { from { opacity: 0; } }
+
+/* Paused: the tab is hidden, or the art is off screen */
+.lp-paused *, .lp-paused *::after, .lp-offscreen, .lp-offscreen *, .lp-offscreen *::after { animation-play-state: paused !important; }
+
+/* Less motion: a still composition. Bars full, the card already in Done and ticked, the first word. */
+@media (prefers-reduced-motion: reduce) {
+  .landing *, .landing *::after, .landing.lp-branded, .lp-flood { animation: none !important; transition: none !important; }
+  .lp-a-ring, .lp-flood { display: none; }
+  .lp-a-mover { transform: translateX(calc(200% + 40px)); }
+  .lp-a-tick { opacity: 1; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
+:root[data-motion="reduced"] .landing *, :root[data-motion="reduced"] .landing *::after { animation: none !important; transition: none !important; }
+:root[data-motion="reduced"] .lp-a-ring { display: none; }
+:root[data-motion="reduced"] .lp-a-mover { transform: translateX(calc(200% + 40px)); }
