@@ -1,0 +1,52 @@
+// Pulse's app Worker, reached through the "pulse" Worker (gateway/). Keep this name: the MFA_KEY secret
+// lives here and can't be read back to move it. One Worker serves the Vite build (assets) and the /api backend,
+// backed by Postgres on Neon through Cloudflare Hyperdrive. Deploy with `npm run deploy`; apply schema
+// changes with `npm run db:migrate` (live Postgres) before deploying code that depends on them.
+{
+  "name": "omni-tracker",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-06",
+  // The Postgres driver needs Node's Buffer and sockets.
+  "compatibility_flags": ["nodejs_compat"],
+  // The database is in Singapore (Neon, aws-ap-southeast-1). The Worker is pinned there, so a page's several
+  // database calls are each a short hop; only the one trip from the browser is long. Smart Placement was
+  // tried first but kept the Worker in Johannesburg (Cf-Placement: local-JNB), where each query took ~0.8 s
+  // and signing in ~5 s. If the database ever moves, move this region with it.
+  "placement": { "mode": "targeted", "region": "aws:ap-southeast-1" },
+  "assets": {
+    "directory": "../project-management-system-frontend/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  // Workers AI, for Ask Pulse. Calls are billed to the account (a generous free daily allowance).
+  "ai": { "binding": "AI" },
+  "vars": {
+    // Pulse's address, for links in emails and Teams posts. Update it if the address ever changes.
+    "PUBLIC_URL": "https://pulse.utsa--wanza--ortfolio.workers.dev",
+    // Which database to use: "postgres" (Neon, through HYPERDRIVE) or "d1" (the old D1 database, kept as a
+    // fallback; it stopped receiving changes when Pulse moved to Postgres on 2026-11-16).
+    "DATABASE": "postgres"
+  },
+  // One trigger, every 5 minutes, to stay within the Workers Free limit of 5 cron triggers per account.
+  // worker/schedule.js picks what's due: automation (schedules, due dates, retries) every run; daily digests at
+  // 07:00 Harare on weekdays, the Monday Briefing at 08:00, and filter subscriptions in the first run of each hour.
+  "triggers": { "crons": ["*/5 * * * *"] },
+  // Postgres on Neon (project wild-sunset-31993352, branch "production"; PG_MAIN in .dev.vars). Locally, `npm run dev:api` points this at the
+  // Neon "dev" branch instead (PG_DEV in .dev.vars).
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "477f668798e640ce9af8d41f9cef1042" // "pulse-db"
+    }
+  ],
+  // The old D1 database: read-only history and the fallback (set DATABASE to "d1").
+  "d1_databases": [
+    {
+      "binding": "D1",
+      "database_name": "omni-tracker",
+      "database_id": "773ffacb-e945-4355-a516-510a55be2cfb",
+      "migrations_dir": "database/migrations-d1"
+    }
+  ]
+}

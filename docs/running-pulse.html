@@ -40,12 +40,12 @@
 <p class="lead">How to run the system on your computer from VS Code, how to look at its backend, how changes reach the live site, and what each part of Pulse does. Pulse was previously called OmniTrack. This edition covers the move to Postgres and upgrade Phases 0 to 5 (November 2026).</p>
 
 <h2>1. How the system is put together</h2>
-<p>Pulse has three parts. The code for all of them lives in the <code>frontend</code> folder of the project.</p>
+<p>Pulse has three parts. The screens are in <code>project-management-system-frontend</code>; the API, database migrations and deployment are in <code>project-management-system-backend</code>.</p>
 <table>
   <tr><th style="width:20%">Part</th><th>What it does</th><th style="width:33%">Where it is</th></tr>
   <tr><td>Screens (frontend)</td><td>What people see in the browser: dashboard, projects, work items, boards, backlog and timeline, search, the service desk, feature requests, Concept Notes, reports and settings. Built with React and TypeScript.</td><td><code>frontend/src/</code></td></tr>
   <tr><td>API (backend)</td><td>Handles every request under <code>/api</code>. All permission and visibility checks happen here. Runs as a Cloudflare Worker, with an hourly scheduled job.</td><td><code>frontend/worker/</code> (section 8 lists the files)</td></tr>
-  <tr><td>Database</td><td>Postgres on Neon (project <code>wild-sunset-31993352</code>). The branch <code>production</code> is the live database; the branch <code>dev</code> is for testing on your computer. The Worker reaches it through Cloudflare Hyperdrive (config <code>pulse-db</code>).</td><td><code>frontend/migrations/</code> (table structure, numbered in order)</td></tr>
+  <tr><td>Database</td><td>Postgres on Neon (project <code>wild-sunset-31993352</code>). The branch <code>production</code> is the live database; the branch <code>dev</code> is for testing on your computer. The Worker reaches it through Cloudflare Hyperdrive (config <code>pulse-db</code>).</td><td><code>project-management-system-backend/database/migrations/</code> (table structure, numbered in order)</td></tr>
 </table>
 <p><b>Live site:</b> https://pulse.utsa--wanza--ortfolio.workers.dev</p>
 <p>The old address (omni-tracker.utsa--wanza--ortfolio.workers.dev) redirects there, keeping view-only links and project pages.</p>
@@ -73,9 +73,11 @@
 <ol>
   <li>Install Node.js (version 22 or newer) from nodejs.org. To check it worked, open a terminal and run:<pre>node -v</pre></li>
   <li>Install VS Code and open the project folder (File &gt; Open Folder, then pick the Omni Tracker folder).</li>
-  <li>Open the terminal in VS Code: press Ctrl + ` (the backtick key, left of 1), or use Terminal &gt; New Terminal. Then install the packages:<pre>cd frontend
+  <li>Open the terminal in VS Code: press Ctrl + ` (the backtick key, left of 1), or use Terminal &gt; New Terminal. Then install the packages:<pre>cd project-management-system-frontend
+npm install
+cd ../project-management-system-backend
 npm install</pre></li>
-  <li>Create a file called <code>frontend/.dev.vars</code> with these lines. It is never committed, and its values are never printed or shared:
+  <li>Create a file called <code>project-management-system-backend/.dev.vars</code> with these lines. It is never committed, and its values are never printed or shared:
     <table>
       <tr><th style="width:24%">Line</th><th>What it is</th></tr>
       <tr><td><code>PG_DEV=</code></td><td>The connection string of the Neon <code>dev</code> branch (Neon console &gt; the project &gt; branch dev &gt; Connect). Used by <code>npm run dev:api</code>.</td></tr>
@@ -90,7 +92,7 @@ npm install</pre></li>
 <h2>3. Run the system: quick way</h2>
 <p>Use this when you just want to use or demonstrate the system.</p>
 <ol>
-  <li>In the VS Code terminal, run:<pre>cd frontend
+  <li>In the VS Code terminal, run:<pre>cd project-management-system-backend
 npm run dev:api</pre></li>
   <li>This builds the app, applies any new migrations to the Neon <code>dev</code> branch, and starts the backend. Wait until the terminal says it is Ready.</li>
   <li>Open http://localhost:8787 in your browser and sign in.</li>
@@ -102,9 +104,9 @@ npm run dev:api</pre></li>
 <p>Use this when you are changing the code. Screen changes show up the moment you save a file. You need two terminals: click the + or the split button in the terminal panel to open the second one.</p>
 <table>
   <tr><th style="width:16%"></th><th>Terminal 1: backend</th><th>Terminal 2: screens</th></tr>
-  <tr><td>Run</td><td><code>cd frontend</code><br><code>npm run dev:api</code></td><td><code>cd frontend</code><br><code>npm run dev</code></td></tr>
+  <tr><td>Run</td><td><code>cd project-management-system-backend</code><br><code>npm run dev:api</code></td><td><code>cd project-management-system-frontend</code><br><code>npm run dev</code></td></tr>
   <tr><td>Then</td><td>Leave it running.</td><td>Open http://localhost:5173</td></tr>
-  <tr><td>After a change</td><td>Changes to <code>worker/</code> reload by themselves; restart if they don't.</td><td>Changes to <code>src/</code> appear automatically.</td></tr>
+  <tr><td>After a change</td><td>Changes to <code>src/</code> reload by themselves; restart if they don't.</td><td>Changes to <code>src/</code> appear automatically.</td></tr>
 </table>
 <p>The screens on port 5173 pass every <code>/api</code> request to the backend on port 8787, so both terminals must be running.</p>
 <div class="note">Locally, every database query travels to Neon in Singapore, so pages are much slower than on the live site (where the Worker runs next to the database). Creating a work item can take 20 to 30 seconds locally. That's normal.</div>
@@ -200,7 +202,7 @@ npm run dev:api</pre></li>
 <h2>7. Testing</h2>
 <table>
   <tr><th style="width:36%">Test</th><th>How to run it</th></tr>
-  <tr><td>Unit tests (PQL, the SLA clock, the hourly timetable)</td><td><code>npm test</code> from <code>frontend</code>. The deploy runs them too and stops if one fails.</td></tr>
+  <tr><td>Unit tests (PQL, the SLA clock, the hourly timetable)</td><td><code>npm test</code> in each of the two folders. The deploy runs them too and stops if one fails.</td></tr>
   <tr><td>Type checks and build</td><td><code>npm run build</code></td></tr>
   <tr><td>The API, end to end</td><td>The Postman collection in <code>postman/</code>, with the Local environment, against <code>npm run dev:api</code>. Run it on its own (it creates and deletes its own test project, and signs its accounts out at the end):<pre>npx -y newman@6 run postman/Pulse.postman_collection.json -e postman/Local.postman_environment.json --env-var "qaPassword=…" --timeout-request 120000</pre>Only the "Public" folder is safe against the live site.</td></tr>
   <tr><td>Demo data</td><td><code>npm run demo:seed</code> and <code>npm run demo:remove</code> load and remove the demo records (every id starts with <code>demo-</code>). These work on the <b>live</b> database. To try them on dev instead:<pre>node scripts/demo-data.mjs seed &gt; demo-data.sql
@@ -213,26 +215,26 @@ node scripts/db.mjs exec dev demo-data.sql</pre></td></tr>
 <h3>A. The code (in VS Code)</h3>
 <table>
   <tr><th style="width:38%">File</th><th>What is in it</th></tr>
-  <tr><td><code>worker/index.ts</code></td><td>Sign-in, accounts, projects, feature requests, Concept Notes, settings, Ask Pulse's snapshot, the activity log, and the routing to everything below. Search for a path such as <code>/api/systems</code> to find the code behind it.</td></tr>
-  <tr><td><code>worker/access.ts</code></td><td>The one visibility rule: own items for developers, and security levels.</td></tr>
-  <tr><td><code>worker/workitems.ts</code></td><td>Work items: create, edit, workflow moves, comments, links, attachments, time logs.</td></tr>
-  <tr><td><code>worker/workflows.ts</code>, <code>workflowData.ts</code>, <code>boards.ts</code></td><td>Statuses, workflows and boards.</td></tr>
-  <tr><td><code>worker/sprints.ts</code></td><td>Backlog, sprints, the timeline and the agile reports.</td></tr>
-  <tr><td><code>worker/pql.ts</code>, <code>search.ts</code></td><td>PQL to SQL, search, saved filters, subscriptions and dashboards.</td></tr>
-  <tr><td><code>worker/automation.ts</code></td><td>Automation rules, and the events every change sends.</td></tr>
-  <tr><td><code>worker/integrations.ts</code></td><td>GitHub, API tokens (and their rate limit), outbound webhooks.</td></tr>
-  <tr><td><code>worker/schemes.ts</code>, <code>admin.ts</code>, <code>customfields.ts</code></td><td>Notification schemes, opt-outs, security levels and custom fields.</td></tr>
-  <tr><td><code>worker/servicedesk.ts</code></td><td>The service desk: queues, the portal, SLA clocks and alerts, reports.</td></tr>
-  <tr><td><code>worker/notify.ts</code>, <code>digest.ts</code>, <code>ask.ts</code></td><td>The bell, email and Teams; the daily digests and Monday Briefing; Ask Pulse.</td></tr>
-  <tr><td><code>worker/auth.ts</code>, <code>webauthn.ts</code></td><td>Password hashing, tokens, sealed secrets, authenticator codes; passkeys.</td></tr>
-  <tr><td><code>worker/retention.ts</code>, <code>schedule.ts</code>, <code>pg.ts</code></td><td>The retention clean-up; the hourly timetable; the Postgres adapter.</td></tr>
-  <tr><td><code>migrations/*.sql</code></td><td>The tables and columns, in the order they were added (0001 to 0007).</td></tr>
+  <tr><td><code>src/index.ts</code></td><td>Sign-in, accounts, projects, feature requests, Concept Notes, settings, Ask Pulse's snapshot, the activity log, and the routing to everything below. Search for a path such as <code>/api/systems</code> to find the code behind it.</td></tr>
+  <tr><td><code>src/access.ts</code></td><td>The one visibility rule: own items for developers, and security levels.</td></tr>
+  <tr><td><code>src/workitems.ts</code></td><td>Work items: create, edit, workflow moves, comments, links, attachments, time logs.</td></tr>
+  <tr><td><code>src/workflows.ts</code>, <code>workflowData.ts</code>, <code>boards.ts</code></td><td>Statuses, workflows and boards.</td></tr>
+  <tr><td><code>src/sprints.ts</code></td><td>Backlog, sprints, the timeline and the agile reports.</td></tr>
+  <tr><td><code>src/pql.ts</code>, <code>search.ts</code></td><td>PQL to SQL, search, saved filters, subscriptions and dashboards.</td></tr>
+  <tr><td><code>src/automation.ts</code></td><td>Automation rules, and the events every change sends.</td></tr>
+  <tr><td><code>src/integrations.ts</code></td><td>GitHub, API tokens (and their rate limit), outbound webhooks.</td></tr>
+  <tr><td><code>src/schemes.ts</code>, <code>admin.ts</code>, <code>customfields.ts</code></td><td>Notification schemes, opt-outs, security levels and custom fields.</td></tr>
+  <tr><td><code>src/servicedesk.ts</code></td><td>The service desk: queues, the portal, SLA clocks and alerts, reports.</td></tr>
+  <tr><td><code>src/notify.ts</code>, <code>digest.ts</code>, <code>ask.ts</code></td><td>The bell, email and Teams; the daily digests and Monday Briefing; Ask Pulse.</td></tr>
+  <tr><td><code>src/auth.ts</code>, <code>webauthn.ts</code></td><td>Password hashing, tokens, sealed secrets, authenticator codes; passkeys.</td></tr>
+  <tr><td><code>src/retention.ts</code>, <code>schedule.ts</code>, <code>pg.ts</code></td><td>The retention clean-up; the hourly timetable; the Postgres adapter.</td></tr>
+  <tr><td><code>database/migrations/*.sql</code></td><td>The tables and columns, in the order they were added (0001 to 0007).</td></tr>
   <tr><td><code>src/data/roles.ts</code></td><td>Roles, permissions and their defaults (shared by screens and API).</td></tr>
   <tr><td><code>src/data/retention.ts</code></td><td>How long each kind of record is kept (shown in Settings).</td></tr>
   <tr><td><code>scripts/db.mjs</code></td><td>The database tool: migrate, status, exec, backup.</td></tr>
   <tr><td><code>docs/API.md</code></td><td>The API reference for other systems.</td></tr>
 </table>
-<p class="small">All paths are inside <code>frontend/</code> except <code>docs/</code>.</p>
+<p class="small">Paths are inside <code>project-management-system-backend/</code> unless they start with <code>src/data</code> or <code>src/components</code> (<code>project-management-system-frontend/</code>) or <code>docs/</code>.</p>
 
 <h3>B. The live system (dashboards)</h3>
 <table>
@@ -244,7 +246,7 @@ node scripts/db.mjs exec dev demo-data.sql</pre></td></tr>
 <div class="note">Be careful in the Neon SQL Editor on the <code>production</code> branch. Edits and deletes change the live data immediately. Use it for looking (SELECT queries) unless you are sure, and take a backup first (section 9).</div>
 
 <h3>C. From the terminal</h3>
-<p>From the <code>frontend</code> folder:</p>
+<p>From the <code>project-management-system-backend</code> folder:</p>
 <pre>npm run db:status                      which migrations are applied on live, and row counts
 node scripts/db.mjs status dev         the same for the dev branch
 node scripts/db.mjs exec dev file.sql  run a .sql file on dev, in one transaction</pre>
@@ -255,7 +257,7 @@ node scripts/db.mjs exec dev file.sql  run a .sql file on dev, in one transactio
 <h2>9. Putting changes live</h2>
 <ol>
   <li>Make and test your change locally (sections 4 and 7).</li>
-  <li>If the change adds a file to <code>frontend/migrations/</code>, release in this order:
+  <li>If the change adds a file to <code>project-management-system-backend/database/migrations/</code>, release in this order:
     <ol type="a">
       <li>Back up the live database to a file, and check it isn't empty:<pre>node scripts/db.mjs backup main ../backup-before-&lt;change&gt;.sql</pre></li>
       <li>Make a restore point in Neon: a branch of <code>production</code> called <code>backup-before-&lt;change&gt;</code> (Neon console &gt; Branches &gt; New branch, or the Neon CLI with <code>--no-compute</code>).</li>
@@ -269,8 +271,8 @@ git push</pre></li>
 </ol>
 <div class="note"><b>Migrations come first.</b> The automatic deploy doesn't apply them, and the live site fails on a new column until it's applied. Backup files (<code>backup-*.sql</code>), <code>.dev.vars</code>, <code>.env*</code> and <code>.neon</code> must never be committed; <code>.gitignore</code> already leaves them out.</div>
 <p><b>If something fails,</b> stop and don't try fixes on the live database. The restore points are the backup file (restore by migrating an empty database and running the file) and the Neon branch (Neon can restore <code>production</code> from it). The restore points so far are <code>backup-before-phase-0</code> to <code>backup-before-phase-5</code>.</p>
-<p><b>If an automatic deploy fails</b> with a Cloudflare error, run it again from the Actions tab. If it keeps failing, deploy from your computer from the <code>frontend</code> folder with <code>npm run deploy</code>.</p>
-<p><b>Adding a cron trigger:</b> don't. The account is at the Workers Free limit of five cron triggers; add new scheduled work to <code>worker/schedule.ts</code> and the hourly job instead.</p>
+<p><b>If an automatic deploy fails</b> with a Cloudflare error, run it again from the Actions tab. If it keeps failing, deploy from your computer from the <code>project-management-system-backend</code> folder with <code>npm run deploy</code>.</p>
+<p><b>Adding a cron trigger:</b> don't. The account is at the Workers Free limit of five cron triggers; add new scheduled work to <code>src/schedule.ts</code> and the hourly job instead.</p>
 
 <h2>10. Troubleshooting</h2>
 <table>
@@ -292,7 +294,7 @@ git push</pre></li>
   <tr><td>Commits don't appear on a work item</td><td>Check Integrations &gt; GitHub &gt; Recent events: the secret must match GitHub's, and the key (INFRA-12) must be in the commit message, branch name or pull request title.</td></tr>
   <tr><td>A webhook isn't arriving</td><td>Open the webhook's Deliveries in Integrations: each shows the response or error, the next try, and a Retry button. Items with a security level are never sent.</td></tr>
   <tr><td>An API client gets 401, 403 or 429</td><td>401: the token expired or was revoked. 403: a read token tried to change something, or the path isn't open to tokens. 429: over 120 requests a minute; wait a minute.</td></tr>
-  <tr><td>Ask Pulse says it isn't switched on, or doesn't respond</td><td>Check the Workers AI line in <code>frontend/wrangler.jsonc</code>, then the Logs for the omni-tracker Worker. Usage limits apply per person (or per view-only link).</td></tr>
+  <tr><td>Ask Pulse says it isn't switched on, or doesn't respond</td><td>Check the Workers AI line in <code>project-management-system-backend/wrangler.jsonc</code>, then the Logs for the omni-tracker Worker. Usage limits apply per person (or per view-only link).</td></tr>
 </table>
 
 </body>

@@ -37,15 +37,15 @@ Browser ──► "pulse" Worker (gateway) ──► "omni-tracker" Worker ─�
 ```
 
 - **Front end:** React 18 and Vite, in JavaScript with JSDoc types that `npm run build` checks (`tsc --checkJs`), with hand-written SVG charts. Routing uses the URL hash.
-- **API:** one Cloudflare Worker, `frontend/worker/`. Every permission check happens here; the UI only hides what
-  a user can't do.
-- **Database:** Postgres 18 on Neon, reached through Cloudflare Hyperdrive. `worker/pg.js` gives it a small
+- **API:** one Cloudflare Worker, `project-management-system-backend/src/`. Every permission check happens here; the
+  UI only hides what a user can't do. The same Worker serves the front end's build.
+- **Database:** Postgres 18 on Neon, reached through Cloudflare Hyperdrive. `src/pg.js` gives it a small
   D1-shaped API (`prepare` → `bind` → `first`/`all`/`run`, and `batch` as one transaction).
 - **Placement:** the Worker is pinned to `aws:ap-southeast-1`, next to the database, so each page's queries are
   short hops.
 - **Tenancy:** every query runs in its organisation and workspace, enforced by Postgres row-level security
-  (`worker/pg.js`, migrations 0013–0014). See `docs/multi-tenancy-plan.md` and `DECISIONS.md`.
-- **Scheduled jobs:** one cron trigger, every 5 minutes. `worker/schedule.js` decides what's due:
+  (`src/pg.js`, migrations 0013–0014). See `docs/multi-tenancy-plan.md` and `docs/DECISIONS.md`.
+- **Scheduled jobs:** one cron trigger, every 5 minutes. `src/schedule.js` decides what's due:
   - **Every run:** automation (schedules, due dates, retries) and work item SLAs.
   - **Hourly:** filter subscriptions.
   - **At their time:** daily digests, the Monday briefing and the retention clean-up.
@@ -53,21 +53,30 @@ Browser ──► "pulse" Worker (gateway) ──► "omni-tracker" Worker ─�
 ## Repository layout
 
 ```
-frontend/              the app: everything is built and deployed from here
-  src/                 React app (components/, data/ for types and shared logic)
-  worker/              the API Worker (index.js routes; a module per area)
-  migrations/          Postgres schema changes, applied in order
+project-management-system-frontend/   the screens (React and Vite)
+  src/                 React app (components/, data/ for types and shared logic, also used by the API)
+  public/              static files
+  tests/               Vitest tests of the shared logic
+  index.html, vite.config.js
+project-management-system-backend/    the API, database and deployment
+  src/                 the API Worker (index.js routes; a module per area)
+  database/migrations/ Postgres schema changes, applied in order (migrations-d1/: the old D1 history)
+  database/backups/    backups of production (ignored by git)
   scripts/db.mjs       migrate, status, backup and run SQL against a database
   scripts/demo-data.mjs  demo records for presentations (every id starts "demo-")
   scripts/demo-org.mjs   the demo organisation "Demo Co" (Development and Marketing workspaces)
   scripts/platform-admin.mjs  makes the first Platform Administrator
-  tests/               Vitest unit tests
+  tests/               Vitest tests that run the real Worker on PGlite
   gateway/             the "pulse" Worker that fronts the app (deployed by hand)
-docs/                  API reference and guides
-postman/               Postman collection and environments for the API
-DECISIONS.md           why things are the way they are: read before changing a feature
-UPGRADE-LOG.md         what each upgrade phase built
+  postman/             Postman collection and environments for the API
+  docs/API.md          the API reference
+  wrangler.jsonc       the Worker: the API plus the front end's dist/ as its assets
+docs/                  guides, DECISIONS.md (read before changing a feature), UPGRADE-LOG.md
 ```
+
+It deploys as **one** Worker: the backend's `npm run build` builds the front end first, and `wrangler.jsonc` serves
+`../project-management-system-frontend/dist`. The API imports shared rules from the front end's `src/data/`, so
+both folders need `npm install`.
 
 ## Running it locally
 
@@ -76,48 +85,61 @@ You need Node 22 and access to the Neon project.
 1. Clone the repository and install dependencies:
    ```sh
    git clone https://github.com/mm7ee/Project-Management-System.git "Project Management System"
-   cd "Project Management System/frontend"
-   npm install
+   cd "Project Management System"
+   npm run install:all      # npm install in both folders
+   npx wrangler@4 login     # once: Ask Pulse's Workers AI binding runs on Cloudflare even locally
    ```
-2. Create `frontend/.dev.vars` with these values. Ask the project owner for them; never commit this file.
+2. Create `project-management-system-backend/.dev.vars` with these values. Ask the project owner for them; never commit this file.
    ```
    MFA_KEY=...        # encrypts two-step secrets; must match the deployed Worker's secret
    PG_MAIN=...        # production database connection string (migrations and backups)
    PG_DEV=...         # the Neon "dev" branch, used when running locally
    QA_PASSWORD=...    # the QA accounts' password, for smoke tests
    ```
-3. Start the API and app against the dev database:
-   ```sh
-   npm run dev:api
-   ```
-   This builds the app, applies any new migrations to the **dev** branch, and serves Pulse at
-   http://127.0.0.1:8787. For faster front-end work, run `npm run dev` (Vite) alongside it.
-4. Run the tests:
+3. Run it. The backend always uses the Neon **dev** branch (and applies any new migrations to it first), never
+   production.
+
+   | To run | From the repository root | Or in its own folder | Open |
+   | --- | --- | --- | --- |
+   | **Both** | `npm run dev` | `npm run dev:all` (backend) | http://localhost:5173 |
+   | **Frontend only** | `npm run dev:frontend` | `npm run dev` (frontend) | http://localhost:5173 |
+   | **Backend only** | `npm run dev:backend` | `npm run dev` (backend) | http://127.0.0.1:8787/api/... |
+   | **The built app, as deployed** | | `npm run dev:api` (backend) | http://127.0.0.1:8787 |
+
+   - **Both:** one terminal, each line labelled `[frontend]` or `[backend]`. Ctrl+C stops both, and if one stops,
+     so does the other. In VS Code, **Terminal → Run Task → Pulse: frontend + backend** does the same in two
+     panels.
+   - **Frontend only:** the screens with live reloading. Vite sends `/api` to http://127.0.0.1:8787. If the backend
+     isn't running, API calls answer 503 with a message saying so. Set `PULSE_API` to point it elsewhere.
+   - **Backend only:** the API, without building the screens. Until the frontend is built, the page at
+     http://127.0.0.1:8787 just points you to the frontend.
+   - **The two can start and stop in any order.** Start the backend later and the frontend picks it up.
+4. Run the tests: `npm test` at the root runs both folders' tests (or `npm test` in either folder).
    ```sh
    npm test
    ```
 
 ## Deploying
 
-Every push to `main` deploys. GitHub Actions (`.github/workflows/deploy.yml`) runs `npm ci`, `npm test`, then
-`wrangler deploy` for the `omni-tracker` Worker (it keeps its original name: renaming the repository didn't change
+Every push to `main` deploys. GitHub Actions (`.github/workflows/deploy.yml`) runs `npm ci` and `npm test` in both
+folders, then `wrangler deploy` from the backend for the `omni-tracker` Worker (it keeps its original name: renaming the repository didn't change
 it, and the two-step verification key is stored on it). It needs the repository secrets `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_ACCOUNT_ID`.
 
 The pipeline does **not** touch the database. When a change adds a migration, release it in this order:
 
 ```sh
-cd frontend
-npm run db:backup -- ../backup-before-<change>.sql   # a full copy of production first
+cd project-management-system-backend
+npm run db:backup -- database/backups/backup-before-<change>.sql   # a full copy of production first
 npm run db:migrate                                   # apply new migrations to production
 npm run db:status                                    # confirm they show as applied
 git push origin main                                 # then deploy the code that needs them
 ```
 
-Pushing code before its migration is applied breaks the live site. Backups are written to the repository root
-and ignored by git (`backup-*.sql`).
+Pushing code before its migration is applied breaks the live site. Backups go in `database/backups/` and are
+ignored by git (`backup-*.sql`).
 
-The gateway Worker rarely changes. To deploy it by hand, from `frontend/`:
+The gateway Worker rarely changes. To deploy it by hand, from `project-management-system-backend/`:
 
 ```sh
 npx wrangler@4 deploy --config gateway/wrangler.jsonc
@@ -125,14 +147,16 @@ npx wrangler@4 deploy --config gateway/wrangler.jsonc
 
 ## Useful commands
 
-All of these run from `frontend/`.
+All of these run from `project-management-system-backend/`. Running the app is under
+[Running it locally](#running-it-locally).
 
 | Command | What it does |
 | --- | --- |
-| `npm run dev:api` | Build, migrate the dev branch, and serve Pulse locally |
-| `npm run dev` | Vite dev server for the front end |
-| `npm test` | Unit tests (Vitest) |
-| `npm run build` | Type-check the app and Worker, then build |
+| `npm run dev` | The API on its own, against the dev branch |
+| `npm run dev:all` | The API and the frontend together |
+| `npm run dev:api` | Build, migrate the dev branch, and serve the whole app locally, as deployed |
+| `npm test` | Tests (Vitest); each folder has its own |
+| `npm run build` | Build the front end, then type-check the Worker |
 | `npm run db:status` | Which migrations production has applied |
 | `npm run db:migrate` | Apply new migrations to **production** |
 | `npm run db:migrate:dev` | Apply new migrations to the dev branch |
@@ -147,7 +171,7 @@ All of these run from `frontend/`.
   `schema_migrations`, and are never edited after release.
 - **Shared rules** (permissions, password policy, limits) live in `src/data/` and are used by both the Worker and
   the UI, so the server enforces exactly what the screen shows.
-- **Decisions** worth remembering go in `DECISIONS.md`, with the date.
+- **Decisions** worth remembering go in `docs/DECISIONS.md`, with the date.
 - **Secrets** stay out of the repository: `.dev.vars`, `.env*` and backups are ignored by git.
 
 ## Administration
@@ -192,4 +216,5 @@ six people, work, SLAs, approvals and rules.
 ## API
 
 Other systems can use Pulse's API with a personal API token (Settings → Security & privacy → API tokens). See
-[docs/API.md](docs/API.md) and the Postman collection in [postman/](postman/).
+[project-management-system-backend/docs/API.md](project-management-system-backend/docs/API.md) and the Postman
+collection in [project-management-system-backend/postman/](project-management-system-backend/postman/).

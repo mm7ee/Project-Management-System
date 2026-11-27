@@ -1,0 +1,13 @@
+{
+  "name": "pulse",
+  "private": true,
+  "description": "Shortcuts for running Pulse's two halves from the repository root. No packages of its own.",
+  "scripts": {
+    "install:all": "npm --prefix project-management-system-frontend install && npm --prefix project-management-system-backend install",
+    "dev": "node project-management-system-backend/scripts/dev-all.mjs",
+    "dev:frontend": "npm --prefix project-management-system-frontend run dev",
+    "dev:backend": "npm --prefix project-management-system-backend run dev",
+    "test": "npm --prefix project-management-system-frontend test && npm --prefix project-management-system-backend test",
+    "build": "npm --prefix project-management-system-backend run build"
+  }
+}

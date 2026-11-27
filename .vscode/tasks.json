@@ -1,0 +1,32 @@
+{
+  // Terminal > Run Task... runs these. "Pulse: frontend + backend" starts both, each in its own terminal panel.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Pulse: backend",
+      "detail": "The API on http://127.0.0.1:8787, against the Neon dev branch",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": { "cwd": "${workspaceFolder}/project-management-system-backend" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "group": "pulse", "panel": "dedicated" }
+    },
+    {
+      "label": "Pulse: frontend",
+      "detail": "Vite on http://localhost:5173, /api sent to the backend",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": { "cwd": "${workspaceFolder}/project-management-system-frontend" },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "group": "pulse", "panel": "dedicated" }
+    },
+    {
+      "label": "Pulse: frontend + backend",
+      "dependsOn": ["Pulse: backend", "Pulse: frontend"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
+    }
+  ]
+}

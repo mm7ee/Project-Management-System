@@ -1,9 +1,9 @@
 # Every push to main rebuilds Pulse and deploys the app Worker "omni-tracker" to Cloudflare. People reach it at
-# https://pulse.utsa--wanza--ortfolio.workers.dev through the "pulse" Worker (frontend/gateway, deployed by hand).
+# https://pulse.utsa--wanza--ortfolio.workers.dev through the "pulse" Worker (project-management-system-backend/gateway, deployed by hand).
 # Needs repo secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID.
 # Database migrations are NOT run here: the database is Postgres on Neon and its connection string
 # lives only in .dev.vars on the machine that runs them. Apply them first with `npm run db:migrate`
-# (frontend/) before pushing code that needs a new column, or the deployed Worker will fail on it.
+# (project-management-system-backend/) before pushing code that needs a new column, or the deployed Worker will fail on it.
 name: Deploy to Cloudflare
 
 on:
@@ -18,21 +18,28 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: |
+            project-management-system-frontend/package-lock.json
+            project-management-system-backend/package-lock.json
       - run: npm ci
-      # The PQL unit tests (Vitest): a query that compiles wrongly stops the deploy.
+        working-directory: project-management-system-frontend
+      - run: npm ci
+        working-directory: project-management-system-backend
+      # The tests (Vitest), both halves: a failing test stops the deploy.
       - run: npm test
+        working-directory: project-management-system-frontend
+      - run: npm test
+        working-directory: project-management-system-backend
       # Retry once: Cloudflare's API occasionally times out (504) mid-deploy.
+      # The backend deploys the one Worker: it builds the frontend (its dist/ is the Worker's assets) and the API.
       - run: npm run deploy || (sleep 30 && npx --yes wrangler@4 deploy)
+        working-directory: project-management-system-backend
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

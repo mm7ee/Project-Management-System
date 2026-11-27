@@ -17,7 +17,7 @@ own people. Nobody ever sees anything of another organisation, and people see on
 Someone with the database's connection string makes the first one:
 
 ```
-cd frontend
+cd project-management-system-backend
 node scripts/platform-admin.mjs create main <username> "<Full name>"
 ```
 
