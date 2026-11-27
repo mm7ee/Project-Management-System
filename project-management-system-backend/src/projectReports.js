@@ -20,6 +20,7 @@ import { DEFAULT_LIMITS } from "../../project-management-system-frontend/src/dat
 import { RAG_RULES } from "../../project-management-system-frontend/src/data/projectHealth";
 import { STAGE_KEYS, STAGE_LABEL, buildProjectReport, describeFilters, parseFilters, progressByWeek, weekOf, weeksBetween } from "../../project-management-system-frontend/src/data/projectReport";
 import { xlsx } from "./xlsx";
+import { lifecycleReport } from "./lifecycle";
 import { currentWorkspace, settingRow } from "./settings";
 /**
  * Open, overdue and done work items per project, as `viewer` may see them. Exported for the tests.
@@ -344,6 +345,22 @@ export async function projectReportsApi(c, path, method) {
     ];
     /** @type {Cell[][]} */ const throughput = [["Project", "Items resolved in the period", "Hours logged in the period"], ...trends.throughput.map(/** @returns {Cell[]} */ (x) => [x.name, x.resolved, x.hours])];
     /** @type {Cell[][]} */ const itemSheet = [["Item", "Project", "Type", "Status", "Status category", "Priority", "Assignee", "Story points", "Due", "Created", "Resolved", "Overdue"], ...items];
+    // The project lifecycle: stages, time in each, rework, pass rates, findings (worker/lifecycle.js).
+    const life = await lifecycleReport(c);
+    /** @type {Cell[][]} */ const lifecycle = life.hasLifecycle
+      ? [
+          ["Phase", "Stage", "Projects now", "Overdue now", "Average business days in stage", "Target (business days)", "On time", "Late", "Sent back"],
+          ...life.stages.map(/** @returns {Cell[]} */ (s) => [s.phase, s.name, s.projects, s.overdue, s.avgDays, s.targetDays, s.onTime, s.late, s.sendBacks]),
+          [],
+          ["Active projects", life.totals.active],
+          ["Overdue in their stage", life.totals.overdue],
+          ["Closed", life.totals.closed],
+          ["Average sign-off turnaround (days)", life.signoffTurnaroundDays],
+          ["Bottlenecks", life.bottlenecks.join(", ")],
+          ...Object.entries(life.passRates).map(/** @returns {Cell[]} */ ([k, v]) => [`${k} pass rate %`, v.rate]),
+          ...Object.entries(life.findings).map(/** @returns {Cell[]} */ ([k, v]) => [`${k} security findings open / total`, `${v.open} / ${v.total}`]),
+        ]
+      : [["No project is on a lifecycle yet."]];
     const bytes = xlsx([
       { name: "Summary", rows: summary, header: false, widths: [52, 40] },
       { name: "Projects", rows: projects },
@@ -351,6 +368,7 @@ export async function projectReportsApi(c, path, method) {
       { name: "Trends by week", rows: weeks },
       { name: "Throughput", rows: throughput },
       { name: "Work items", rows: itemSheet },
+      { name: "Lifecycle", rows: lifecycle },
     ]);
     await c.audit("report_exported", null, { report: "projects", format: "xlsx", filters: describeFilters(report.filters, (id) => names.get(id) ?? id) });
     return new Response(bytes, {

@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lifecycle mock-ups</title>
+<style>
+:root {
+  --page: #f7f9fd; --card: #fff; --text: #121427; --muted: #464b66; --faint: #676c85; --border: #e1e5ef; --track: #eceff6;
+  --brand: #2c3280; --brand-ink: #2c3280; --brand-tint: #eceefb; --sb: #011f5b; --hi: #1ba9e1;
+  --ok: #0e8a6b; --ok-tint: #e7f5f0; --ok-ink: #0b6e55; --warn: #e09a00; --warn-tint: #fdf3d8; --warn-ink: #7a5600;
+  --bad: #c8102e; --bad-tint: #fdf0f1; --bad-ink: #b00d27; --violet: #5b5fc7; --violet-tint: #efeffb;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; color: var(--text);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #0b0c22; --card: #13163a; --text: #e9ebf7; --muted: #aeb2cf; --faint: #8a8fb3; --border: #252a57; --track: #1e2250;
+    --brand: #4b52b8; --brand-ink: #a9aef0; --brand-tint: rgba(117,124,208,.18); --ok-tint: rgba(20,163,127,.18); --ok-ink: #6fdcb4;
+    --warn-tint: rgba(224,154,0,.16); --warn-ink: #ffd27a; --bad-tint: rgba(229,72,77,.16); --bad-ink: #ff9ea1; --violet-tint: rgba(139,132,240,.18);
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); padding: 24px 16px 60px; }
+main { max-width: 1240px; margin: 0 auto; display: grid; gap: 28px; }
+h1 { margin: 0; font-size: 24px; }
+h2 { margin: 0 0 4px; font-size: 18px; }
+p.lede { margin: 6px 0 0; color: var(--muted); max-width: 80ch; line-height: 1.5; font-size: 14px; }
+.note { margin: 0 0 12px; color: var(--muted); font-size: 13.5px; line-height: 1.5; max-width: 90ch; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; }
+.mock { border: 1px dashed var(--border); border-radius: 14px; padding: 16px; background: var(--page); }
+
+/* ---- Stage tracker ---- */
+.proj-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 14px; }
+.proj-head b { font-size: 18px; }
+.pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 650; }
+.pill.cyan { background: var(--brand-tint); color: var(--brand-ink); }
+.pill.warn { background: var(--warn-tint); color: var(--warn-ink); }
+.pill.bad { background: var(--bad-tint); color: var(--bad-ink); }
+.pill.ok { background: var(--ok-tint); color: var(--ok-ink); }
+.tracker { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; }
+.phase { flex: none; display: grid; gap: 8px; padding: 10px 10px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--border); }
+.phase > small { font-size: 10.5px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
+.phase.here { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-tint); }
+.steps { display: flex; align-items: flex-start; }
+.step { position: relative; width: 92px; display: grid; justify-items: center; gap: 6px; text-align: center; font-size: 11.5px; line-height: 1.25; color: var(--muted); cursor: pointer; }
+.step + .step::before { content: ""; position: absolute; top: 13px; right: 50%; width: 100%; height: 3px; background: var(--track); z-index: 0; }
+.step.done + .step::before, .step.done + .step.current::before { background: var(--ok); }
+.dot { position: relative; z-index: 1; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 800; background: var(--card); border: 2px solid var(--border); color: var(--faint); }
+.step.done .dot { background: var(--ok); border-color: var(--ok); color: #fff; }
+.step.current .dot { background: var(--brand); border-color: var(--brand); color: #fff; box-shadow: 0 0 0 5px var(--brand-tint); }
+.step.current { color: var(--text); font-weight: 700; }
+.step.sentback .dot { border-color: var(--warn); color: var(--warn-ink); background: var(--warn-tint); }
+.step.overdue .dot { box-shadow: 0 0 0 5px var(--bad-tint); background: var(--bad); border-color: var(--bad); }
+.step .tag { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 99px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; border: 2px solid var(--border); }
+
+/* ---- Stage panel ---- */
+.panel { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 14px; }
+.panel h3 { margin: 0 0 8px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+.panel-head { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.panel-head b { font-size: 17px; }
+.box { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
+.list { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; font-size: 13.5px; }
+.list li { display: flex; align-items: flex-start; gap: 8px; }
+.tick { flex: none; width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; font-size: 12px; font-weight: 800; }
+.tick.yes { background: var(--ok); color: #fff; }
+.tick.no { border: 2px solid var(--border); }
+.tick.wait { background: var(--warn-tint); color: var(--warn-ink); }
+.doc { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; font-size: 13px; }
+.doc + .doc { margin-top: 6px; }
+.doc .ico { width: 30px; height: 36px; border-radius: 5px; background: var(--brand-tint); color: var(--brand-ink); display: grid; place-items: center; font-size: 10px; font-weight: 800; }
+.doc small { display: block; color: var(--faint); }
+.doc .lock { margin-left: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 7px 6px; border-top: 1px solid var(--border); vertical-align: top; }
+th { font-size: 11.5px; color: var(--faint); font-weight: 650; border-top: 0; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); color: var(--text); font: inherit; font-size: 13.5px; font-weight: 650; }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+.btn[disabled] { opacity: .5; }
+.actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+.missing { flex-basis: 100%; padding: 10px 12px; border-radius: 10px; background: var(--warn-tint); color: var(--warn-ink); font-size: 13px; }
+.missing ul { margin: 4px 0 0; padding-left: 18px; }
+.hist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.hist b { color: var(--text); }
+
+/* ---- Sign-off (approver's view) ---- */
+.sign { display: grid; gap: 10px; max-width: 520px; }
+.sign textarea { width: 100%; min-height: 64px; border: 1px solid var(--border); border-radius: 10px; padding: 8px; font: inherit; background: var(--card); color: var(--text); }
+.bell { display: flex; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); font-size: 13px; max-width: 520px; }
+.bell .b { width: 30px; height: 30px; border-radius: 9px; background: var(--violet-tint); color: var(--violet); display: grid; place-items: center; font-weight: 800; flex: none; }
+
+/* ---- Pipeline ---- */
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.chip { padding: 5px 12px; border-radius: 99px; border: 1px solid var(--border); background: var(--card); font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.chip.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+.pipe { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; align-items: flex-start; }
+.pphase { flex: none; display: grid; gap: 8px; }
+.pphase > small { font-size: 10.5px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); padding-left: 2px; }
+.cols { display: flex; gap: 8px; }
+.col { width: 172px; display: grid; gap: 7px; align-content: start; padding: 8px; border-radius: 12px; background: var(--track); min-height: 120px; }
+.col h4 { margin: 0 0 2px; font-size: 12.5px; display: flex; justify-content: space-between; }
+.col h4 span { color: var(--faint); font-weight: 600; }
+.pc { display: grid; gap: 5px; padding: 9px; border-radius: 10px; background: var(--card); border: 1px solid var(--border); font-size: 12.5px; }
+.pc b { font-size: 13px; line-height: 1.25; }
+.pc .meta { display: flex; justify-content: space-between; color: var(--faint); font-size: 11.5px; }
+.pc.late { border-left: 3px solid var(--bad); }
+.pc.back { border-left: 3px solid var(--warn); }
+.bar { height: 5px; border-radius: 3px; background: var(--track); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--brand); }
+.closed { width: 172px; padding: 10px; border-radius: 12px; background: var(--ok-tint); color: var(--ok-ink); font-size: 13px; font-weight: 650; }
+@media (max-width: 860px) { .panel { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Project lifecycle: mock-ups</h1>
+    <p class="lede">For approval (step 1). Static drawings of the proposed screens, with Omnicontact's 16 stages and its real projects placed as the dry-run mapping would place them. Colours follow the app's tokens, light and dark; status colours stay the fixed ones.</p>
+  </header>
+
+  <section class="card">
+    <h2>1. Stage tracker (project page)</h2>
+    <p class="note">At the top of every project with a lifecycle: the stages grouped by phase. Done stages are green, the current one is in the brand colour, a stage the project was sent back from is amber, and an overdue current stage turns red. Clicking any stage opens its panel (below).</p>
+    <div class="mock">
+      <div class="proj-head">
+        <b>WhatsApp Customer Channel</b>
+        <span class="pill cyan">B · Requirements and Design</span>
+        <span class="pill warn">BRS Sign Off · day 6 of 5 business days</span>
+        <span class="pill cyan">Progress 24% (lifecycle 21%, work items 30%)</span>
+      </div>
+      <div class="tracker" role="list" aria-label="Stages">
+        <div class="phase"><small>A · Initiation</small><div class="steps">
+          <div class="step done"><span class="dot">✓</span>PCN Draft</div>
+          <div class="step done"><span class="dot">✓</span>Risk Assessment</div>
+          <div class="step done"><span class="dot">✓</span>PCN Sign Off</div>
+        </div></div>
+        <div class="phase here"><small>B · Requirements and Design</small><div class="steps">
+          <div class="step done"><span class="dot">✓</span>Technical Discovery</div>
+          <div class="step sentback"><span class="dot">↺</span>BRS Draft<span class="tag pill warn">sent back once</span></div>
+          <div class="step current overdue"><span class="dot">6</span>BRS Sign Off<span class="tag pill bad">1 day over</span></div>
+          <div class="step"><span class="dot">7</span>BSS Draft</div>
+          <div class="step"><span class="dot">8</span>BSS Sign Off</div>
+        </div></div>
+        <div class="phase"><small>C · Build</small><div class="steps">
+          <div class="step"><span class="dot">9</span>Dev Work</div>
+          <div class="step"><span class="dot">10</span>Servers</div>
+        </div></div>
+        <div class="phase"><small>D · Assurance</small><div class="steps">
+          <div class="step"><span class="dot">11</span>Security</div>
+          <div class="step"><span class="dot">12</span>QATs</div>
+          <div class="step"><span class="dot">13</span>UATs</div>
+        </div></div>
+        <div class="phase"><small>E · Release</small><div class="steps">
+          <div class="step"><span class="dot">14</span>Deployment</div>
+          <div class="step"><span class="dot">15</span>Post Deploy</div>
+        </div></div>
+        <div class="phase"><small>F · Closure</small><div class="steps">
+          <div class="step"><span class="dot">16</span>Close</div>
+        </div></div>
+      </div>
+      <div class="legend"><span><i style="background:var(--ok);border-color:var(--ok)"></i>Done</span><span><i style="background:var(--brand);border-color:var(--brand)"></i>Current</span><span><i style="background:var(--warn-tint);border-color:var(--warn)"></i>Sent back</span><span><i style="background:var(--bad);border-color:var(--bad)"></i>Overdue</span><span><i></i>Upcoming</span></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>2. Stage panel: BRS Sign Off</h2>
+    <p class="note">Opens from the tracker. The checklist, the deliverables (with versions and locks), the sign-offs, history and comments. <b>Advance</b> is enabled only when the exit criteria are met; otherwise it lists exactly what is missing, computed by the same rules the server enforces.</p>
+    <div class="mock panel">
+      <div class="panel-head"><b>6 · BRS Sign Off</b><span class="pill cyan">Approval</span><span class="pill warn">Due Fri 28 Nov, 17:00 (5 business days) · 1 day over</span><span class="pill cyan">Responsible: Project lead (Tafadzwa M.)</span></div>
+      <div class="box">
+        <h3>Deliverable signed at this stage</h3>
+        <div class="doc"><span class="ico">BRS</span><div>WhatsApp Channel BRS <b>v2</b><small>Submitted for sign-off by Tafadzwa M. · 20 Nov · replaces v1 (declined)</small></div><span class="lock pill warn">Locks on approval</span></div>
+        <div class="doc"><span class="ico">BRS</span><div>WhatsApp Channel BRS v1<small>Declined by Rudo K. · 14 Nov: "Missing the opt-out flow"</small></div><span class="lock pill">history</span></div>
+        <h3 style="margin-top:14px">Sign-offs (round 2 of 2) · all must approve</h3>
+        <table>
+          <tr><th>Signatory</th><th>Role</th><th>Status</th><th>When</th><th>Comment</th></tr>
+          <tr><td>Rudo K.</td><td>Business owner</td><td><span class="pill ok">Approved</span></td><td>24 Nov 10:12</td><td>Opt-out flow covered.</td></tr>
+          <tr><td>Farai C.</td><td>Manager</td><td><span class="pill warn">Pending</span></td><td>reminded 26 Nov</td><td>—</td></tr>
+        </table>
+        <p class="note" style="margin:8px 0 0">Tafadzwa submitted v2, so can't sign it (segregation of duties).</p>
+      </div>
+      <div class="box">
+        <h3>Exit criteria</h3>
+        <ul class="list">
+          <li><span class="tick yes">✓</span>BRS v2 attached</li>
+          <li><span class="tick wait">…</span>Business signatories approve v2 (1 of 2)</li>
+        </ul>
+        <h3 style="margin-top:14px">History</h3>
+        <ul class="hist">
+          <li><b>20 Nov</b> · Tafadzwa M. advanced BRS Draft → BRS Sign Off (v2 submitted)</li>
+          <li><b>14 Nov</b> · Rudo K. declined → back to BRS Draft: "Missing the opt-out flow"</li>
+          <li><b>10 Nov</b> · Tafadzwa M. advanced BRS Draft → BRS Sign Off (v1)</li>
+          <li><b>03 Nov</b> · Technical Discovery → BRS Draft</li>
+        </ul>
+      </div>
+      <div class="actions">
+        <button class="btn primary" disabled>Advance to BSS Draft</button>
+        <button class="btn">Send back…</button>
+        <button class="btn">Remind signatories</button>
+        <button class="btn">Comment</button>
+        <div class="missing"><b>Not ready to advance:</b><ul><li>Farai C. (Manager) hasn't signed BRS v2 yet.</li></ul></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>3. Signing off (the signatory's view)</h2>
+    <p class="note">The request reaches the signatory in the bell and by email; the link opens this after they've signed in. A decline needs a comment and sends the project back to the stage the template names.</p>
+    <div class="mock" style="display:grid;gap:12px">
+      <div class="bell"><span class="b">✎</span><div><b>Your sign-off is needed: BRS v2</b><br>WhatsApp Customer Channel · BRS Sign Off · requested by Tafadzwa M. · due Fri</div></div>
+      <div class="box sign">
+        <b>Sign off WhatsApp Channel BRS v2</b>
+        <div class="doc"><span class="ico">BRS</span><div>WhatsApp Channel BRS v2<small>Open the document · what you approve is this exact version</small></div></div>
+        <textarea placeholder="Comment (required to decline)"></textarea>
+        <div style="display:flex;gap:8px"><button class="btn primary">Approve</button><button class="btn">Decline…</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>4. Pipeline (portfolio view)</h2>
+    <p class="note">Every active project by stage, grouped by phase; filter by phase, lead and workspace. A red edge is an overdue stage, amber a project that was sent back. Closed projects collapse into one count. Placed from the dry-run mapping; WhatsApp Customer Channel (mapped to Dev Work) is shown at BRS Sign Off only to match the example above.</p>
+    <div class="mock">
+      <div class="filters"><span class="chip on">All phases</span><span class="chip">A Initiation</span><span class="chip">B Requirements</span><span class="chip">C Build</span><span class="chip">D Assurance</span><span class="chip">E Release</span><span class="chip">Workspace: All</span><span class="chip">Lead: Anyone</span></div>
+      <div class="pipe">
+        <div class="pphase"><small>A · Initiation</small><div class="cols">
+          <div class="col"><h4>PCN Draft <span>2</span></h4>
+            <div class="pc"><b>Omni-Health</b><span class="meta"><span>HR</span><span>day 1</span></span></div>
+            <div class="pc"><b>Predictive Staffing Model</b><span class="meta"><span>Projects</span><span>day 1</span></span></div></div>
+          <div class="col"><h4>PCN Sign Off <span>1</span></h4>
+            <div class="pc"><b>Agent Wellness Tracker</b><span class="meta"><span>HR</span><span>0 of 1 signed</span></span></div></div>
+        </div></div>
+        <div class="pphase"><small>B · Requirements and Design</small><div class="cols">
+          <div class="col"><h4>Tech Discovery <span>2</span></h4>
+            <div class="pc"><b>Debt Collections Workbench</b><span class="meta"><span>Projects</span><span>day 1</span></span></div>
+            <div class="pc"><b>AI Chat Assistant</b><span class="meta"><span>Projects</span><span>day 1</span></span></div></div>
+          <div class="col"><h4>BRS Sign Off <span>1</span></h4>
+            <div class="pc late back"><b>WhatsApp Customer Channel</b><span class="meta"><span>Projects</span><span>1 day over</span></span><div class="bar"><i style="width:24%"></i></div></div></div>
+        </div></div>
+        <div class="pphase"><small>C · Build</small><div class="cols">
+          <div class="col"><h4>Dev Work <span>9</span></h4>
+            <div class="pc"><b>Recruitment & Onboarding Portal</b><span class="meta"><span>HR</span><span>72%</span></span><div class="bar"><i style="width:72%"></i></div></div>
+            <div class="pc"><b>Learning Management System</b><span class="meta"><span>HR</span><span>65%</span></span><div class="bar"><i style="width:65%"></i></div></div>
+            <div class="pc"><b>Client SLA Reporting Hub</b><span class="meta"><span>Projects</span><span>48%</span></span><div class="bar"><i style="width:48%"></i></div></div>
+            <div class="pc"><b>Sales Commission Calculator</b><span class="meta"><span>Projects</span><span>35%</span></span><div class="bar"><i style="width:35%"></i></div></div>
+            <div class="pc" style="text-align:center;color:var(--faint)">+ 5 more</div></div>
+        </div></div>
+        <div class="pphase"><small>D · Assurance</small><div class="cols">
+          <div class="col"><h4>QATs <span>3</span></h4>
+            <div class="pc"><b>Procurement Requests</b><span class="meta"><span>Projects</span><span>day 1</span></span></div>
+            <div class="pc"><b>Fleet & Transport Booking</b><span class="meta"><span>Projects</span><span>day 1</span></span></div>
+            <div class="pc"><b>Customer Feedback Kiosk</b><span class="meta"><span>Projects</span><span>day 1</span></span></div></div>
+        </div></div>
+        <div class="pphase"><small>E · Release</small><div class="cols">
+          <div class="col"><h4>Deployment <span>2</span></h4>
+            <div class="pc"><b>Shift Swap Mobile App</b><span class="meta"><span>CHG pending</span><span>day 1</span></span></div>
+            <div class="pc"><b>Document E-Signature</b><span class="meta"><span>Projects</span><span>day 1</span></span></div></div>
+        </div></div>
+        <div class="pphase"><small>F · Closure</small><div class="cols"><div class="closed">17 closed (Live / Completed)</div></div></div>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>

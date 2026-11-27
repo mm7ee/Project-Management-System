@@ -26,6 +26,7 @@ import WorkItemPage from "./WorkItemPage";
 import BoardView from "./BoardView";
 import BacklogView from "./BacklogView";
 import TimelineView from "./TimelineView";
+import LifecyclePage, { LifecycleStrip } from "./LifecyclePage";
 import { DateLine, ProgressBar, ScheduleChip, StatusPill, updatedText } from "./SystemCard";
 /**
  * @param {{ title: string; icon?: ReactNode; count?: ReactNode; action?: ReactNode; children: ReactNode; tone?: "alert" }} props
@@ -157,9 +158,14 @@ export default function ProjectPage(p) {
         <a href={`#/projects/${system.id}/timeline`} className={p.section === "timeline" ? "on" : ""} aria-current={p.section === "timeline" ? "page" : undefined}>
           Timeline
         </a>
+        <a href={`#/projects/${system.id}/lifecycle`} className={p.section === "lifecycle" ? "on" : ""} aria-current={p.section === "lifecycle" ? "page" : undefined}>
+          Lifecycle
+        </a>
       </nav>
 
-      {p.section === "backlog" ? (
+      {p.section === "lifecycle" ? (
+        <LifecyclePage system={system} me={me} users={users} now={now} readOnly={p.readOnly} onChanged={p.onChanged} />
+      ) : p.section === "backlog" ? (
         <BacklogView system={system} users={users} now={now} readOnly={p.readOnly} canEditPoints={p.canAssignOthers} onChanged={p.onChanged} />
       ) : p.section === "timeline" ? (
         <TimelineView scope={{ systemId: system.id }} users={users} now={now} readOnly={p.readOnly} />
@@ -173,6 +179,7 @@ export default function ProjectPage(p) {
         )
       ) : (
         <>
+          <LifecycleStrip systemId={system.id} />
           {/* What is holding the project up, before anything else. */}
           {(openBlockers.length > 0 || stalled !== null || onHold.length > 0) && (
             <section className="blocker-band" aria-label="Blockers">
@@ -893,7 +900,7 @@ function SaveAsTemplate({ system, attempt, onChanged }) {
  * @property {() => void} onNewFeature
  * @property {() => Promise<void>} onChanged
  * @property {boolean} canEditPcn
- * @property {"overview" | "items" | "board" | "backlog" | "timeline"} section
+ * @property {"overview" | "items" | "board" | "backlog" | "timeline" | "lifecycle"} section
  * @property {boolean} canAssignOthers
  * @property {string} [itemKey]
  * @property {boolean} canCreateItems

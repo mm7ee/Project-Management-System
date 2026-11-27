@@ -1241,3 +1241,34 @@ The plan, and the 13 recommendations approved with "continue", are in `docs/admi
   otherwise it is a draft and the administrators are told.
 - **The logo is read in the administrator's browser** (only the organisation's own uploaded logo). The server never
   decodes images.
+
+## Project lifecycles (2026-11-27)
+
+- **Templates are data,** per organisation (optionally per workspace), validated by `src/data/lifecycle.js`
+  `cleanTemplate`, versioned like workflows: a draft is published as a version, and **a project stays on the version it
+  started with**. Only Organisation Administrators change templates (row-level security: only the organisation's
+  handle writes them). The stages of a published version are repeated as rows (`lifecycle_stages`) for reports.
+- **The rules are one module, shared:** the server enforces the gates (`evaluateGate`); the screen shows exactly the
+  server's "missing" list. Never check a gate only in the browser.
+- **Moves:** advance (the gate met; lead, Manager, Administrator or the stage's owner), send back (only to stages the
+  template names, with a reason), skip (only where allowed, requested with a justification, approved by a Manager or
+  Administrator who didn't ask). Every move is a `project_stage_history` row the app can't change or delete, and an
+  activity log entry.
+- **Sign-offs:** named people or roles, each with an optional alternate. **Segregation of duties** (the default): whoever
+  uploaded the version being signed can't sign it; their alternate does. A named signatory who isn't an active member
+  is replaced by their alternate. A decision is made once (a trigger refuses changes). A decline needs a comment and
+  goes to the stage the template names. PCN Sign Off reuses the Concept Note's own signatories, not a copy.
+- **Locked documents:** the approved version of a stage's deliverable is locked; closing locks them all. A trigger
+  refuses changing or deleting a locked document; a project with locked documents can't be deleted.
+- **The project's Status follows its stage** (draft → Idea, sign-offs and assessments → Upcoming, work → In progress,
+  testing → Testing, deployment and closure → To deploy; closed → Live). Progress follows the stage weights unless the
+  project takes its progress from work items.
+- **Time is business time** on the organisation's calendar (`workCalendar.js`). The 5-minute cron warns at 80% of a
+  stage's target, escalates once when it's overdue, and reminds pending signatories every N business days.
+- **Reused, not rebuilt:** work items for checklist tasks and bugs from failed tests; the service desk Change request at
+  Deployment (approved through Change Approval); notifications; automation (trigger `stage_changed`); Ask PMS.
+- **The stage mapping** of existing projects is the SQL function `lifecycle_map_projects`, tested against
+  `mapExistingProject` so the two never disagree. A project the rules can't place is left without a lifecycle and
+  reported, never guessed. Earlier stages are recorded as migrated; their gates aren't required after the fact.
+- **Omnicontact's named signatories** (Waraidzo, Mutsa, with alternates) are proposed, pending its approval; they are
+  template data, changed in Settings → Project Lifecycle.

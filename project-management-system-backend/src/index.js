@@ -56,6 +56,7 @@ import { customFieldsApi } from "./customfields";
 import { adminApi } from "./admin";
 import { chatApi } from "./chat";
 import { projectReportsApi } from "./projectReports";
+import { afterSignoff, askLifecycleLines, lifecycleApi, runLifecycleClock, startLifecycle } from "./lifecycle";
 import { levelsFor } from "./access";
 /**
  * Requests made with a personal API token, and the token's name, for the activity log.
@@ -1338,6 +1339,7 @@ async function api(req, env, path, ctx) {
     (await serviceDeskApi(itemCtx, path, method)) ??
     (await integrationsApi(itemCtx, env, path, method)) ??
     (await chatApi(itemCtx, path, method)) ??
+    (await lifecycleApi(itemCtx, path, method)) ??
     (await projectReportsApi(itemCtx, path, method));
   if (itemsResponse) return itemsResponse;
   /**
@@ -2288,6 +2290,7 @@ async function api(req, env, path, ctx) {
       ...(guest ? [] : await askSearchLines(itemCtx)),
       ...(can("manage_automation") ? await askAutomationLines(db) : []),
       ...(await askServiceDeskLines(itemCtx)),
+      ...(await askLifecycleLines(itemCtx)),
       ...(await askIntegrationLines(itemCtx)),
       ...(sprints.length
         ? [
@@ -2513,6 +2516,8 @@ async function api(req, env, path, ctx) {
     if (b.developers?.length) await audit(db, req, me, "system_developers", id, { name, ...(await setDevelopers(id, b.developers)) });
     if (system.lead) alert([{ userId: system.lead, kind: "assigned", title: `You now lead ${name}`, body: `${me.name} made you the lead on this new project.`, link: `#/projects/${id}` }]);
     if (pcn) askToSign(system, pcn);
+    // Its lifecycle: the workspace's (or the organisation's) default, from its first stage (worker/lifecycle.js).
+    await startLifecycle(itemCtx, id, null).catch((e) => console.error("Couldn't start the lifecycle", id, e));
     return json(system, 201);
   }
   // A signatory approves or declines a PCN themselves. For someone without an account, a manager
@@ -2551,6 +2556,8 @@ async function api(req, env, path, ctx) {
       from: before,
       to: pcnStatus(/** @type {NonNullable<typeof next.pcn>} */ (next.pcn)),
     });
+    // At PCN Sign Off, the last approval moves the project on and a decline sends it back (worker/lifecycle.js).
+    await afterSignoff(itemCtx, current.id);
     return json(next);
   }
   const sysMatch = path.match(/^\/api\/systems\/([a-z0-9-]+)$/);
@@ -2695,6 +2702,8 @@ async function api(req, env, path, ctx) {
     need("manage_systems");
     const id = sysMatch[1];
     const gone = await getSystem(db, id);
+    // Signed-off documents are a record: a project that has them isn't deleted (migration 0025).
+    if (await db.prepare("SELECT 1 FROM documents WHERE system_id = ? AND locked_at IS NOT NULL").bind(id).first()) throw new HttpError(409, "This project has signed-off documents, so it can't be deleted");
     await db.batch([
       db.prepare("DELETE FROM document_chunks WHERE doc_id IN (SELECT id FROM documents WHERE system_id = ?)").bind(id),
       db.prepare("DELETE FROM documents WHERE system_id = ?").bind(id),
@@ -2885,6 +2894,7 @@ async function api(req, env, path, ctx) {
     const doc = await /** @type {Promise<Record<string, string> | null>} */ (/** @type {unknown} */ (db.prepare("SELECT * FROM documents WHERE id = ?").bind(docMatch[1]).first()));
     if (!doc) throw new HttpError(404, "Document not found");
     if (doc.work_item_id) throw new HttpError(400, "Remove attachments from their work item");
+    if (doc.locked_at) throw new HttpError(409, "This document was signed off and is locked: upload a new version instead");
     if (doc.uploaded_by !== me.id && !can("manage_systems")) throw new HttpError(403, "Only whoever added it or a manager can remove a document");
     await db.batch([db.prepare("DELETE FROM document_chunks WHERE doc_id = ?").bind(doc.id), db.prepare("DELETE FROM documents WHERE id = ?").bind(doc.id)]);
     const system = await getSystem(db, doc.system_id).catch(() => null);
@@ -3556,6 +3566,8 @@ export default {
       await retryAutomationJobs(tenv).catch((e) => console.error("Automation retries failed", w.id, e));
       // Work item SLAs: warnings and breaches, each told once (worker/sla.js).
       await runWorkItemSla(tenv, (e) => runEvent(tenv, e)).catch((e) => noteFailure(tenv.DB, "Work item SLAs", e));
+      // Project lifecycles: stages due soon or overdue, and sign-offs waiting too long (worker/lifecycle.js).
+      await runLifecycleClock(tenv).catch((e) => noteFailure(tenv.DB, "Project lifecycle reminders", e));
       await retryWebhooks(tenv).catch((e) => console.error("Webhook retries failed", w.id, e));
       if (!due.hourly) continue;
       await runSubscriptions(tenv).catch((e) => noteFailure(tenv.DB, "Filter subscriptions", e));

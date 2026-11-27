@@ -14,6 +14,7 @@ import { STAGE_COLOR, TooltipLayer } from "./chartKit";
 import { Columns, Donut } from "./DashCharts";
 import { LineChart } from "./AgileCharts";
 import Panel from "../Panel";
+import LifecycleReport from "./LifecycleReport";
 import CountUp from "../CountUp";
 import { organisationName } from "../../data/tenant";
 import OrgMark from "../OrgMark";
@@ -575,6 +576,7 @@ export default function ReportsPage({ me, users, workspaces, now }) {
             </div>
           </State>
         </Panel>
+        <LifecycleReport />
       </div>
     </TooltipLayer>
   );

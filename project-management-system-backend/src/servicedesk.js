@@ -656,6 +656,19 @@ export async function serviceDeskApi(c, path, method) {
   throw new HttpError(404, "Not found");
 }
 /**
+ * A Change request raised by the system for a member of staff (the project lifecycle's Deployment stage): the
+ * service desk's first enabled Change type, in the person's name. Throws (503) when there is none.
+ * @param {ItemContext} c
+ * @param {{ summary: string; description: string }} b
+ * @returns {Promise<{ id: string; key: string }>}
+ */
+export async function raiseChangeRequest(c, b) {
+  const type = (await loadTypes(c.db, true)).find((t) => t.kind === "change");
+  if (!type) throw new HttpError(503, "The service desk has no Change request type");
+  const row = await raiseRequest(c, { typeId: type.id, summary: b.summary, description: b.description, priority: "MEDIUM" }, { name: c.me.name, email: null, userId: c.me.id });
+  return { id: row.id, key: keyOf(row) };
+}
+/**
  * @param {ItemContext} c
  * @param {RaiseBody} b
  * @param {{ name: string; email: string | null; userId?: string; linkId?: string; requesterHash?: string }} who

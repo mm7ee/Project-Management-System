@@ -1,0 +1,924 @@
+{
+  "$comment": "Omnicontact's project lifecycle as migration 0026 stores it (generated from src/data/lifecycleTemplates.js). Named signatories are proposed, awaiting Omnicontact's approval; all of it is editable in Settings → Project Lifecycle.",
+  "name": "Omnicontact Project Lifecycle",
+  "settings": {
+    "selfSignoff": false,
+    "advanceBy": [
+      "lead",
+      "manager",
+      "admin",
+      "stageOwner"
+    ],
+    "sendBackBy": [
+      "lead",
+      "manager",
+      "admin"
+    ],
+    "skipApprovedBy": [
+      "manager",
+      "admin"
+    ],
+    "signoffReminderDays": 2,
+    "overdueEscalateTo": [
+      "manager"
+    ],
+    "progress": {
+      "lifecycleWeight": 0.6
+    },
+    "onClose": {
+      "status": "LIVE"
+    }
+  },
+  "phases": [
+    {
+      "code": "A",
+      "name": "Initiation"
+    },
+    {
+      "code": "B",
+      "name": "Requirements and Design"
+    },
+    {
+      "code": "C",
+      "name": "Build"
+    },
+    {
+      "code": "D",
+      "name": "Assurance"
+    },
+    {
+      "code": "E",
+      "name": "Release"
+    },
+    {
+      "code": "F",
+      "name": "Closure"
+    }
+  ],
+  "stages": [
+    {
+      "code": "PCN_DRAFT",
+      "name": "PCN Draft",
+      "phase": "A",
+      "type": "draft",
+      "responsible": [
+        "lead"
+      ],
+      "ownerId": null,
+      "targetDays": 5,
+      "weight": 2,
+      "exit": [
+        {
+          "kind": "pcn_complete",
+          "label": "Project Concept Note complete"
+        }
+      ],
+      "deliverables": [
+        {
+          "key": "pcn",
+          "name": "Project Concept Note",
+          "source": "pcn"
+        }
+      ],
+      "signoff": null,
+      "testing": null,
+      "deployment": null,
+      "transitions": {
+        "sendBackTo": [],
+        "canSkip": false
+      },
+      "automation": {
+        "onEnter": [
+          "notify:responsible"
+        ],
+        "onExit": [],
+        "onOverdue": [
+          "remind:responsible",
+          "escalate:manager"
+        ]
+      },
+      "checklistAsWorkItems": false
+    },
+    {
+      "code": "RISK",
+      "name": "Risk Assessment",
+      "phase": "A",
+      "type": "assessment",
+      "responsible": [
+        "lead",
+        "manager"
+      ],
+      "ownerId": null,
+      "targetDays": 3,
+      "weight": 2,
+      "exit": [
+        {
+          "kind": "risk_register",
+          "label": "Risk register has at least one entry"
+        },
+        {
+          "kind": "checklist",
+          "label": "Assessment reviewed",
+          "key": "reviewed",
+          "by": [
+            "manager",
+            "admin"
+          ]
+        },
+        {
+          "kind": "risks_mitigated",
+          "label": "Every High/Critical risk has an owner and a mitigation",
+          "severities": [
+            "High",
+            "Critical"
+          ]
+        }
+      ],
+      "deliverables": [
+        {
+          "key": "risk_register",
+          "name": "Risk register",
+          "source": "risk_register"
+        }
+      ],
+      "signoff": null,
+      "testing": null,
+      "deployment": null,
+      "transitions": {
+        "sendBackTo": [
+          "PCN_DRAFT"
+        ],
+        "canSkip": true
+      },
+      "automation": {
+        "onEnter": [
+          "notify:responsible"
+        ],
+        "onExit": [],
+        "onOverdue": [
+          "escalate:manager"
+        ]
+      },
+      "checklistAsWorkItems": false
+    },
+    {
+      "code": "PCN_SIGNOFF",
+      "name": "PCN Sign Off",
+      "phase": "A",
+      "type": "approval",
+      "responsible": [
+        "lead"
+      ],
+      "ownerId": null,
+      "targetDays": 5,
+      "weight": 2,
+      "exit": [
+        {
+          "kind": "signoffs",
+          "label": "All Concept Note signatories approve"
+        }
+      ],
+      "deliverables": [],
+      "signoff": {
+        "source": "pcn_signatories",
+        "signatories": [],
+        "onDecline": "PCN_DRAFT",
+        "lockDeliverables": [
+          "pcn"
+        ]
+      },
+      "testing": null,
+      "deployment": null,
+      "transitions": {
+        "sendBackTo": [
+          "PCN_DRAFT"
+        ],
+        "canSkip": false
+      },
+      "automation": {
+        "onEnter": [
+          "request:signoffs"
+        ],
+        "onExit": [],
+        "onOverdue": [
+          "remind:signatories",
+          "escalate:manager"
+        ]
+      },
+      "checklistAsWorkItems": false
+    },
+    {
+      "code": "DISCOVERY",
+      "name": "Technical Discovery",
+      "phase": "B",
+      "type": "work",
+      "responsible": [
+        "team_lead",
+        "developer"
+      ],
+      "ownerId": null,
+      "targetDays": 10,
+      "weight": 5,
+      "exit": [
+        {
+          "kind": "deliverable",
+          "label": "Discovery notes attached",
+          "key": "discovery_notes"
+        },
+        {
+          "kind": "checklist",
+          "label": "Current-state analysis",
+          "key": "current_state"
+        },
+        {
+          "kind": "checklist",
+          "label": "Integrations identified",
+          "key": "integrations"
+        },
+        {
+          "kind": "checklist",
+          "label": "Constraints recorded",
+          "key": "constraints"
+        },
+        {
+          "kind": "checklist",
+          "label": "Feasibility confirmed",
+          "key": "feasibility"
+        }
+      ],
+      "deliverables": [
+        {
+          "key": "discovery_notes",
+          "name": "Discovery notes",
+          "source": "document"
+        }
+      ],
+      "signoff": null,
+      "testing": null,
+      "deployment": null,
+      "transitions": {
+        "sendBackTo": [
+          "PCN_DRAFT"
+        ],
+        "canSkip": true
+      },
+      "automation": {
+        "onEnter": [
+          "notify:responsible"
+        ],
+        "onExit": [],
+        "onOverdue": [
+          "escalate:manager"
+        ]
+      },
+      "checklistAsWorkItems": true
+    },
+    {
+      "code": "BRS_DRAFT",
+      "name": "BRS Draft",
+      "phase": "B",
+      "type": "draft",
+      "responsible": [
+        "lead",
+        "assistant"
+      ],
+      "ownerId": null,
+      "targetDays": 10,
+      "weight": 5,
+      "exit": [
+        {
+          "kind": "deliverable",
+          "label": "Business Requirements Specification attached",
+          "key": "brs"
+        }
+      ],
+      "deliverables": [
+        {
+          "key": "brs",
+          "name": "Business Requirements Specification (BRS)",
+          "source": "document",
+          "versioned": true
+        }
+      ],
+      "signoff": null,
+      "testing": null,
+      "deployment": null,
+      "transitions": {
+        "sendBackTo": [
+          "DISCOVERY"
+        ],
+        "canSkip": false
+      },
+      "automation": {
+        "onEnter": [
+          "notify:responsible"
+        ],
+        "onExit": [],
+        "onOverdue": [
+          "escalate:manager"
+        ]
+      },
+      "checklistAsWorkItems": false
+    },
+    {
+      "code": "BRS_SIGNOFF",
+      "name": "BRS Sign Off",
+      "phase": "B",
+      "type": "approval",
+      "responsible": [
+        "lead"
+      ],
+      "ownerId": null,
+      "targetDays": 5,
+      "weight": 3,
+      "exit": [
+        {
+          "kind": "signoffs",
+          "label": "Business signatories approve the BRS version submitted"
+        }
+      ],
+      "deliverables": [],
+      "signoff": {
+        "signatories": [
+          {
+            "kind": "user",
+            "userId": "waraidzo",
+            "name": "Waraidzo",
+            "label": "Business (Manager)",
+            "alternate": {
+              "userId": "mutsa",
+              "name": "Mutsa"
+            }
+          },
+          {
+            "kind": "user",
+            "userId": "mutsa",
+            "name": "Mutsa",
+            "label": "Systems",
+            "alternate": {
+              "userId": "admin",
+              "name": "Admin"
+            }
+          }
+        ],
+        "onDecline": "BRS_DRAFT",
+        "lockDeliverables": [
+          "brs"
+        ]
+      },
+      "testing": null,
+      "deployment": null,
+      "transitions": {
+        "sendBackTo": [
+          "BRS_DRAFT"
+        ],
+        "canSkip": false
+      },
+      "automation": {
+        "onEnter": [
+          "request:signoffs"
+        ],
+        "onExit": [],
+        "onOverdue": [
+          "remind:signatories",
+          "escalate:manager"
+        ]
+      },
+      "checklistAsWorkItems": false
+    },
+    {
+      "code": "BSS_DRAFT",
+      "name": "BSS Draft",
+      "phase": "B",
+      "type": "draft",
+      "responsible": [
+        "team_lead"
+      ],
+      "ownerId": null,
+      "targetDays": 10,
+      "weight": 5,
+      "exit": [
+        {
+          "kind": "deliverable",
+          "label": "Business Solution Specification attached",
+          "key": "bss"
+        },
+        {
+          "kind": "linked",
+          "label": "BSS linked to the signed BRS",
+          "from": "bss",
+          "to": "brs"
+        }
+      ],
+      "deliverables": [
+        {
+          "key": "bss",
+          "name": "Business Solution Specification (BSS)",
+          "source": "document",
+          "versioned": true
+        }
+      ],
+      "signoff": null,
+      "testing": null,
+      "deployment": null,
+      "transitions": {
+        "sendBackTo": [
+          "BRS_DRAFT",
+          "DISCOVERY"
+        ],
+        "canSkip": false
+      },
+      "automation": {
+        "onEnter": [
+          "notify:responsible"
+        ],
+        "onExit": [],
+        "onOverdue": [
+          "escalate:manager"
+        ]
+      },
+      "checklistAsWorkItems": false
+    },
+    {
+      "code": "BSS_SIGNOFF",
+      "name": "BSS Sign Off",
+      "phase": "B",
+      "type": "approval",
+      "responsible": [
+        "lead"
+      ],
+      "ownerId": null,
+      "targetDays": 5,
+      "weight": 3,
+      "exit": [
+        {
+          "kind": "signoffs",
+          "label": "Technical and business signatories approve the BSS version submitted"
+        }
+      ],
+      "deliverables": [],
+      "signoff": {
+        "signatories": [
+          {
+            "kind": "user",
+            "userId": "mutsa",
+            "name": "Mutsa",
+            "label": "Technical",
+            "alternate": {
+              "userId": "admin",
+              "name": "Admin"
+            }
+          },
+          {
+            "kind": "user",
+            "userId": "waraidzo",
+            "name": "Waraidzo",
+            "label": "Business",
+            "alternate": {
+              "userId": "mutsa",
+              "name": "Mutsa"
+            }
+          }
+        ],
+        "onDecline": "BSS_DRAFT",
+        "lockDeliverables": [
+          "bss"
+        ]
+      },
+      "testing": null,
+      "deployment": null,
+      "transitions": {
+        "sendBackTo": [
+          "BSS_DRAFT"
+        ],
+        "canSkip": false
+      },
+      "automation": {
+        "onEnter": [
+          "request:signoffs"
+        ],
+        "onExit": [],
+        "onOverdue": [
+          "remind:signatories",
+          "escalate:manager"
+        ]
+      },
+      "checklistAsWorkItems": false
+    },
+    {
+      "code": "DEV",
+      "name": "Dev Work",
+      "phase": "C",
+      "type": "work",
+      "responsible": [
+        "team_lead",
+        "developer"
+      ],
+      "ownerId": null,
+      "targetDays": 40,
+      "weight": 30,
+      "exit": [
+        {
+          "kind": "work_items_done",
+          "label": "All in-scope work items Done (or deferred with approval)",
+          "allowDeferredWithApproval": true
+        }
+      ],
+      "deliverables": [],
+      "signoff": null,
+      "testing": null,
+      "deployment": null,
+      "transitions": {
+        "sendBackTo": [
+          "BSS_DRAFT"
+        ],
+        "canSkip": false
+      },
+      "automation": {
+        "onEnter": [
+          "notify:responsible"
+        ],
+        "onExit": [],
+        "onOverdue": [
+          "escalate:manager"
+        ]
+      },
+      "checklistAsWorkItems": false
+    },
+    {
+      "code": "SERVERS",
+      "name": "Server Allocation and Provisioning",
+      "phase": "C",
+      "type": "work",
+      "responsible": [
+        "team_lead"
+      ],
+      "ownerId": null,
+      "targetDays": 5,
+      "weight": 4,
+      "exit": [
+        {
+          "kind": "environments",
+          "label": "Dev, QA, UAT and Prod provisioned and verified",
+          "required": [
+            "Dev",
+            "QA",
+            "UAT",
+            "Prod"
+          ]
+        }
+      ],
+      "deliverables": [],
+      "signoff": null,
+      "testing": null,
+      "deployment": null,
+      "transitions": {
+        "sendBackTo": [
+          "DEV"
+        ],
+        "canSkip": true
+      },
+      "automation": {
+        "onEnter": [
+          "notify:responsible"
+        ],
+        "onExit": [],
+        "onOverdue": [
+          "escalate:manager"
+        ]
+      },
+      "checklistAsWorkItems": false
+    },
+    {
+      "code": "SECURITY",
+      "name": "Security Assessment",
+      "phase": "D",
+      "type": "assessment",
+      "responsible": [
+        "team_lead"
+      ],
+      "ownerId": null,
+      "targetDays": 5,
+      "weight": 4,
+      "exit": [
+        {
+          "kind": "security_clear",
+          "label": "No open Critical/High findings (or risk-accepted by a Manager)",
+          "blocking": [
+            "Critical",
+            "High"
+          ]
+        }
+      ],
+      "deliverables": [],
+      "signoff": null,
+      "testing": null,
+      "deployment": null,
+      "transitions": {
+        "sendBackTo": [
+          "DEV"
+        ],
+        "canSkip": false
+      },
+      "automation": {
+        "onEnter": [
+          "notify:responsible"
+        ],
+        "onExit": [],
+        "onOverdue": [
+          "escalate:manager"
+        ]
+      },
+      "checklistAsWorkItems": false
+    },
+    {
+      "code": "QAT",
+      "name": "QATs",
+      "phase": "D",
+      "type": "testing",
+      "responsible": [
+        "assistant",
+        "team_lead"
+      ],
+      "ownerId": null,
+      "targetDays": 10,
+      "weight": 8,
+      "exit": [
+        {
+          "kind": "test_pass_rate",
+          "label": "QAT pass rate at least 95%",
+          "suite": "QAT",
+          "min": 0.95
+        },
+        {
+          "kind": "no_open_bugs",
+          "label": "No open Critical/High bugs",
+          "priorities": [
+            "Critical",
+            "High"
+          ]
+        },
+        {
+          "kind": "security_clear",
+          "label": "Security findings still resolved or accepted",
+          "blocking": [
+            "Critical",
+            "High"
+          ]
+        }
+      ],
+      "deliverables": [],
+      "signoff": null,
+      "testing": {
+        "suite": "QAT",
+        "passThreshold": 0.95,
+        "failedCreatesBug": true
+      },
+      "deployment": null,
+      "transitions": {
+        "sendBackTo": [
+          "DEV"
+        ],
+        "canSkip": false
+      },
+      "automation": {
+        "onEnter": [
+          "notify:responsible"
+        ],
+        "onExit": [],
+        "onOverdue": [
+          "escalate:manager"
+        ]
+      },
+      "checklistAsWorkItems": false
+    },
+    {
+      "code": "UAT",
+      "name": "UATs",
+      "phase": "D",
+      "type": "testing",
+      "responsible": [
+        "lead"
+      ],
+      "ownerId": null,
+      "targetDays": 10,
+      "weight": 8,
+      "exit": [
+        {
+          "kind": "signoffs",
+          "label": "UAT sign-off from the business owner"
+        }
+      ],
+      "deliverables": [],
+      "signoff": {
+        "signatories": [
+          {
+            "kind": "user",
+            "userId": "waraidzo",
+            "name": "Waraidzo",
+            "label": "Business owner",
+            "alternate": {
+              "userId": "mutsa",
+              "name": "Mutsa"
+            }
+          }
+        ],
+        "onDecline": "DEV",
+        "lockDeliverables": []
+      },
+      "testing": {
+        "suite": "UAT",
+        "failedCreatesBug": true,
+        "onFailSendBackTo": "DEV"
+      },
+      "deployment": null,
+      "transitions": {
+        "sendBackTo": [
+          "DEV"
+        ],
+        "canSkip": false
+      },
+      "automation": {
+        "onEnter": [
+          "notify:responsible",
+          "request:signoffs"
+        ],
+        "onExit": [],
+        "onOverdue": [
+          "remind:signatories",
+          "escalate:manager"
+        ]
+      },
+      "checklistAsWorkItems": false
+    },
+    {
+      "code": "DEPLOY",
+      "name": "Deployment",
+      "phase": "E",
+      "type": "deployment",
+      "responsible": [
+        "team_lead"
+      ],
+      "ownerId": null,
+      "targetDays": 3,
+      "weight": 4,
+      "exit": [
+        {
+          "kind": "change_approved",
+          "label": "Change request approved"
+        },
+        {
+          "kind": "deployment_recorded",
+          "label": "Deployment plan, rollback plan, date/time and approver recorded"
+        }
+      ],
+      "deliverables": [],
+      "signoff": null,
+      "testing": null,
+      "deployment": {
+        "createChangeRequest": true
+      },
+      "transitions": {
+        "sendBackTo": [
+          "UAT",
+          "DEV"
+        ],
+        "canSkip": false
+      },
+      "automation": {
+        "onEnter": [
+          "create:change_request",
+          "notify:responsible"
+        ],
+        "onExit": [],
+        "onOverdue": [
+          "escalate:manager"
+        ]
+      },
+      "checklistAsWorkItems": false
+    },
+    {
+      "code": "POST_DEPLOY",
+      "name": "Post Deployment Testing",
+      "phase": "E",
+      "type": "testing",
+      "responsible": [
+        "team_lead",
+        "assistant"
+      ],
+      "ownerId": null,
+      "targetDays": 2,
+      "weight": 3,
+      "exit": [
+        {
+          "kind": "test_pass_rate",
+          "label": "All production smoke checks pass",
+          "suite": "SMOKE",
+          "min": 1
+        }
+      ],
+      "deliverables": [],
+      "signoff": null,
+      "testing": {
+        "suite": "SMOKE",
+        "passThreshold": 1,
+        "failedCreatesBug": false,
+        "onFailSendBackTo": "DEPLOY"
+      },
+      "deployment": null,
+      "transitions": {
+        "sendBackTo": [
+          "DEPLOY"
+        ],
+        "canSkip": false
+      },
+      "automation": {
+        "onEnter": [
+          "notify:responsible"
+        ],
+        "onExit": [],
+        "onOverdue": [
+          "escalate:manager"
+        ]
+      },
+      "checklistAsWorkItems": false
+    },
+    {
+      "code": "CLOSE",
+      "name": "Close Project",
+      "phase": "F",
+      "type": "closure",
+      "responsible": [
+        "lead",
+        "manager"
+      ],
+      "ownerId": null,
+      "targetDays": 5,
+      "weight": 12,
+      "exit": [
+        {
+          "kind": "deliverable",
+          "label": "Closure report attached",
+          "key": "closure_report"
+        },
+        {
+          "kind": "checklist",
+          "label": "Lessons learned recorded",
+          "key": "lessons"
+        },
+        {
+          "kind": "checklist",
+          "label": "Handed over to support / maintenance",
+          "key": "handover"
+        },
+        {
+          "kind": "signoffs",
+          "label": "Final sign-off"
+        }
+      ],
+      "deliverables": [
+        {
+          "key": "closure_report",
+          "name": "Closure report",
+          "source": "document"
+        }
+      ],
+      "signoff": {
+        "signatories": [
+          {
+            "kind": "user",
+            "userId": "waraidzo",
+            "name": "Waraidzo",
+            "label": "Final sign-off",
+            "alternate": {
+              "userId": "mutsa",
+              "name": "Mutsa"
+            }
+          }
+        ],
+        "onDecline": "CLOSE",
+        "lockDeliverables": []
+      },
+      "testing": null,
+      "deployment": null,
+      "transitions": {
+        "sendBackTo": [
+          "POST_DEPLOY"
+        ],
+        "canSkip": false
+      },
+      "automation": {
+        "onEnter": [],
+        "onExit": [
+          "set:status",
+          "lock:deliverables",
+          "stop:slas"
+        ],
+        "onOverdue": [
+          "escalate:manager"
+        ]
+      },
+      "checklistAsWorkItems": false
+    }
+  ]
+}

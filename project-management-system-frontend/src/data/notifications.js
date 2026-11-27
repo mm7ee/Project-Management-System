@@ -1,6 +1,6 @@
 // Notifications and digests, shared by the Worker (which writes them) and the bell in the app.
 export {};
-/** @typedef {"assigned" | "update_requested" | "signature" | "daily_digest" | "monday_briefing" | "account_locked" | "mentioned" | "watching" | "sprint" | "subscription" | "automation" | "service_desk" | "sla" | "chat" | "approval" | "theme"} NotificationKind */
+/** @typedef {"assigned" | "update_requested" | "signature" | "daily_digest" | "monday_briefing" | "account_locked" | "mentioned" | "watching" | "sprint" | "subscription" | "automation" | "service_desk" | "sla" | "chat" | "approval" | "theme" | "stage" | "signoff"} NotificationKind */
 /**
  * @typedef {Object} DigestItem
  * @property {string} text

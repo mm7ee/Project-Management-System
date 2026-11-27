@@ -1,6 +1,6 @@
 /** @import { Status } from '../data/systems' */
 /** @import { User } from '../data/roles' */
-import { Columns3, MessagesSquare, Eye, Search, Headset, FileBarChart, FileText, FolderKanban, LayoutDashboard, ListChecks, Plus, Settings, X } from "lucide-react";
+import { Milestone, Columns3, MessagesSquare, Eye, Search, Headset, FileBarChart, FileText, FolderKanban, LayoutDashboard, ListChecks, Plus, Settings, X } from "lucide-react";
 import { initials } from "../data/systems";
 import { ROLE_LABEL } from "../data/roles";
 import { BRAND } from "../data/brand";
@@ -43,6 +43,12 @@ export default function Sidebar(p) {
               <FolderKanban size={16} className="nav-icon" /> Projects
             </span>
             {p.counts.ALL > 0 && <span className="nav-count">{p.counts.ALL}</span>}
+          </button>
+
+          <button className={`nav-item ${p.view === "pipeline" ? "active" : ""}`} onClick={go(() => p.onView("pipeline"))}>
+            <span>
+              <Milestone size={16} className="nav-icon" /> Pipeline
+            </span>
           </button>
 
           {p.canReports && p.simple && (
@@ -158,7 +164,7 @@ export default function Sidebar(p) {
   );
 }
 /** @typedef {"ALL" | Status | "OVERDUE" | "REQUESTED" | "MAINTENANCE" | "MINE" | "BLOCKED"} Filter */
-/** @typedef {"dashboard" | "projects" | "project" | "features" | "boards" | "search" | "service-desk" | "chat" | "pcns" | "reports" | "users" | "activity" | "settings"} View */
+/** @typedef {"dashboard" | "projects" | "project" | "pipeline" | "features" | "boards" | "search" | "service-desk" | "chat" | "pcns" | "reports" | "users" | "activity" | "settings"} View */
 /**
  * @typedef {Object} Props
  * @property {User} me

@@ -1661,7 +1661,8 @@ export async function askItemLines(c, nameOf, limit = 120) {
  *   | { type: "field_changed"; itemId: string; fields: string[]; by?: string }
  *   | { type: "sprint_started" | "sprint_completed"; sprintId: string; systemId: string; by?: string }
  *   | { type: "sla_warning" | "sla_breached"; itemId: string; target: "response" | "resolution"; by?: string }
- *   | { type: "approval_granted" | "approval_rejected"; itemId: string; by?: string }} ItemEvent  by: who set it off (a user id, or "automation")
+ *   | { type: "approval_granted" | "approval_rejected"; itemId: string; by?: string }
+ *   | { type: "stage_changed"; systemId: string; from: string; to: string; by?: string }} ItemEvent  by: who set it off (a user id, or "automation")
  */
 /**
  * @typedef {Object} ItemContext

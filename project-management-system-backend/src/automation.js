@@ -873,6 +873,20 @@ async function runRules(env, e, depth) {
   for (const l of rules) {
     const rule = l.row;
     try {
+      // A project's lifecycle moved (worker/lifecycle.js): the rule runs on that project's items matching its
+      // condition, when the stage it names (code or name; none: any) is the one entered.
+      if (e.type === "stage_changed") {
+        if (!(await inScope(db, rule, e.systemId))) continue;
+        if (rule.trigger_value && !(await stageMatches(db, e.systemId, e.to, rule.trigger_value))) continue;
+        const limited = await overLimit(env, rule, undefined);
+        if (limited) {
+          await logRun(db, rule, { trigger: e.type, status: "skipped", message: limited, touched: [], depth });
+          continue;
+        }
+        const rows = await matchingItems(db, rule, Date.now(), " AND w.system_id = ?", [e.systemId]);
+        await runJob(env, l, rows, { trigger: e.type, depth, bulk: true, by: e.by }, `${e.type}:${e.systemId}:${e.to}:${nonce}`, null);
+        continue;
+      }
       if (e.type === "sprint_started" || e.type === "sprint_completed") {
         if (!(await inScope(db, rule, e.systemId))) continue;
         const limited = await overLimit(env, rule, undefined);
@@ -899,6 +913,15 @@ async function runRules(env, e, depth) {
       await logRun(db, rule, { trigger: e.type, status: "error", message: err instanceof Error ? err.message : "Something went wrong", touched: [], depth }).catch(() => undefined);
     }
   }
+}
+/**
+ * Whether a rule's "stage is …" names the stage entered (by code, or by its name in the project's lifecycle).
+ * @param {D1Database} db @param {string} systemId @param {string} code @param {string} want
+ */
+async function stageMatches(db, systemId, code, want) {
+  if (want.trim().toUpperCase() === code) return true;
+  const r = /** @type {{ name: string } | null} */ (await db.prepare("SELECT s.name FROM project_lifecycle l JOIN lifecycle_stages s ON s.template_id = l.template_id AND s.code = ? WHERE l.system_id = ?").bind(code, systemId).first());
+  return !!r && r.name.toLowerCase() === want.trim().toLowerCase();
 }
 /**
  * A rule and one item: in scope, the PQL condition and the condition groups hold, within the limits? Then run it.

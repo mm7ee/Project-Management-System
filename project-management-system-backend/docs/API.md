@@ -290,8 +290,64 @@ Values that make no sense are ignored. The screen keeps the same filters in its 
     and the burn-up (`scope`, `done`).
   - `throughput`: items resolved and hours logged per project.
 - **`GET /api/reports/projects/export.xlsx`** downloads the same report as an Excel workbook, with sheets
-  Summary, Projects, Resourcing, Trends by week, Throughput and Work items (one row per item). Each export is
-  written to the activity log (`report_exported`).
+  Summary, Projects, Resourcing, Trends by week, Throughput, Work items (one row per item) and Lifecycle. Each
+  export is written to the activity log (`report_exported`).
+
+## Project lifecycle
+
+Each organisation has lifecycle templates (phases, stages and their gates); each project is on one version of one
+(migrations 0025–0026, `src/lifecycle.js`, rules in `src/data/lifecycle.js`). Omnicontact's default is the 16-stage
+lifecycle (`docs/design/omnicontact-lifecycle.json`). Everything is per workspace like the rest of the project, and
+another organisation's template, project or sign-off is a `404`.
+
+**Templates** (members read the published ones; Organisation Administrators change them, others get `403`):
+
+- `GET /api/lifecycle/templates` → `{ templates: [{ id, familyId, version, status, isDefault, name, definition, projects }] }`
+  (drafts and history only for administrators).
+- `POST /api/lifecycle/templates` `{ name, definition? }`: a new draft; without `definition`, the standard 16 stages.
+- `PUT /api/lifecycle/templates/:id` `{ name?, definition? }`: change a draft (`409` for a published version).
+- `POST /api/lifecycle/templates/:id/publish` `{ default? }`: publish the draft as its version.
+- `POST /api/lifecycle/templates/:id/draft`: start the next version from a published one.
+- `POST /api/lifecycle/templates/:id/default`: the template new projects get.
+- A definition that doesn't make a usable lifecycle is `400` with the reason (e.g. "BRS Sign Off can only send back
+  to an earlier stage (not DEV)").
+
+**A project** (`/api/systems/:id/lifecycle`):
+
+- `GET` → `{ lifecycle: { template, stage, enteredAt, state, migrated, sla, gate, ready, next, progress, sentBackFrom,
+  can, history, checklist, signoffs, requests, documents, records, risks, findings, tests, testSummary, environments,
+  pcn } }`, or `{ lifecycle: null, defaultTemplate, canStart }`.
+  - `gate`: each exit criterion `{ label, ok, missing? }`. `sla`: `{ dueAt, usedDays, state: running | warning | overdue }`
+    in the organisation's business days.
+- `POST …/start` `{ templateId?, stage?, reason? }` (manage_systems). New projects start automatically.
+- `POST …/advance` `{ comment? }`: `409` `{ code: "gate_not_met", missing: [...] }` until the gate is met; `403` for anyone
+  but the project lead, a Manager or an Administrator. From the last stage it closes the project: status Live,
+  deliverables locked, SLAs stopped.
+- `POST …/send-back` `{ to, reason }`: only to a stage the template names; a reason is required.
+- `POST …/skip` `{ reason }`, `POST …/defer` `{ reason }`: requests; `POST …/requests/:rid` `{ decision: approve|reject, note? }`
+  by a Manager or Administrator who didn't ask (`403` for the requester). An approved skip moves the project on.
+- `POST …/signoffs` `{ documentId? }`: a new round of sign-offs (the version to sign; by default the latest of the
+  stage's locked deliverable). `POST …/remind`.
+- `POST …/signoffs/:sid` `{ decision: approve|decline, comment }`: only the signatory (anyone else gets `404`); a
+  decline needs a comment and sends the project to the stage the template names; the last approval locks the signed
+  version and moves the project on. Whoever submitted the document can't sign it (segregation of duties): their
+  alternate is asked instead. A decision can't be changed (`409`).
+- `PUT …/checklist/:key` `{ done, note? }`. `POST …/deliverables` `{ documentId, key, linkedTo? }`: a project document as
+  the next version of a deliverable.
+- Registers: `POST …/risks`, `PATCH|DELETE …/risks/:id`; `POST …/findings`, `PATCH|DELETE …/findings/:id`,
+  `POST …/findings/:id/accept` `{ reason, until }` (Managers); `POST …/tests`, `DELETE …/tests/:id`,
+  `POST …/tests/:id/runs` `{ result: pass|fail|blocked, notes? }` (a failure raises a bug work item);
+  `POST …/environments`, `POST …/environments/:id/verify`, `DELETE …/environments/:id`.
+- `PUT …/records/deployment|closure|discovery` `{ … }`: the stage's record (deployment plan, rollback plan, date and
+  time, approver…).
+- `GET /api/lifecycle/pipeline`: every project with a lifecycle, by stage. `GET /api/lifecycle/report`: the figures in
+  Reports → Projects. `GET /api/lifecycle/signoffs/mine`: sign-offs waiting for me.
+- A signed (locked) document can't be removed (`409`), and a project with signed documents can't be deleted (`409`).
+- Activity log actions: `stage_changed`, `lifecycle_started`, `signoff_requested`, `signoff_approved`,
+  `signoff_declined`, `stage_skip_requested`, `stage_deferral_requested`, `stage_request_approved|rejected`,
+  `stage_checklist`, `deliverable_added`, `risk_added`, `security_finding_added|updated`, `security_risk_accepted`,
+  `test_run`, `environment_verified`, `stage_record_saved`. Notifications: kinds `stage` and `signoff`.
+- Automation: the trigger **A project moves to another lifecycle stage** (`stage_changed`, optional "stage is").
 
 ## Service desk
 

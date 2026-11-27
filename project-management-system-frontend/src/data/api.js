@@ -62,7 +62,7 @@ export async function uploadChatFile(conversationId, file) {
  * Uploads one file to a project's documents (multipart, so it can't go through `api`).
  * @param {string} systemId
  * @param {File} file
- * @returns {Promise<void>}
+ * @returns {Promise<{ id?: string }>} the new document's id
  */
 export async function uploadDocument(systemId, file) {
   const form = new FormData();
@@ -70,6 +70,7 @@ export async function uploadDocument(systemId, file) {
   const res = await fetch(`/api/systems/${systemId}/documents`, { method: "POST", credentials: "same-origin", body: form });
   const payload = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(res.status, payload.error ?? `Upload failed (${res.status})`, payload.code);
+  return { id: typeof payload.id === "string" ? payload.id : undefined };
 }
 /**
  * Loads everything the signed-in user can see. `data` is null when signed out.

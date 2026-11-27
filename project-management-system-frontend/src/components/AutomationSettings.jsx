@@ -997,6 +997,12 @@ function RuleEditor({ draft, users, systems, statuses, orgAdmin, onCancel, onSav
               {statusSelect(r.triggerValue ?? "", (v) => set({ triggerValue: v || undefined }), "To status", true)}
             </label>
           )}
+          {TRIGGERS[r.trigger].value === "stage" && (
+            <label className="field">
+              <span>Stage is (optional)</span>
+              <input value={r.triggerValue ?? ""} placeholder="Any stage, or e.g. BRS Sign Off" maxLength={60} onChange={(e) => set({ triggerValue: e.target.value || undefined })} />
+            </label>
+          )}
           {TRIGGERS[r.trigger].value === "field" && (
             <label className="field">
               <span>Field</span>

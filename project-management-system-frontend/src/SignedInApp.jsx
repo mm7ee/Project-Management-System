@@ -12,7 +12,7 @@
 /** @import { User } from './data/roles' */
 import { BRAND } from "./data/brand";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertOctagon, Palette, ArrowLeft, Building2, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, LockKeyhole, Menu, Zap, Plug, BellRing, Lock, ListPlus, Headset, Layers, LayoutTemplate, Plus, ScrollText, Shapes, Timer, Search, Send, ShieldCheck, Sparkles, Users, Workflow } from "lucide-react";
+import { AlertOctagon, Palette, ArrowLeft, Building2, Eye, FileText, Fingerprint, Gauge, History, LifeBuoy, Link2, LockKeyhole, Menu, Zap, Plug, BellRing, Lock, ListPlus, Headset, Layers, LayoutTemplate, Plus, ScrollText, Shapes, Timer, Search, Send, ShieldCheck, Sparkles, Users, Workflow, Milestone } from "lucide-react";
 import { getSchedule } from "./data/systems";
 import { api } from "./data/api";
 import { isAssigned } from "./data/roles";
@@ -41,6 +41,8 @@ import ConceptNotesPage from "./components/ConceptNotesPage";
 import DashboardPage from "./components/DashboardPage";
 import ProjectsPage from "./components/ProjectsPage";
 import BoardsPage from "./components/BoardsPage";
+import PipelinePage from "./components/PipelinePage";
+import LifecycleSettings from "./components/LifecycleSettings";
 import SearchPage from "./components/SearchPage";
 import CustomDashboards from "./components/CustomDashboards";
 import WorkspaceSwitcher from "./components/WorkspaceSwitcher";
@@ -78,7 +80,7 @@ const greeting = () => {
  */
 const VIEW_PREFS = "pms:view-prefs";
 // #/projects/<id>/items is its Work items tab; #/projects/<id>/items/<KEY-n> one work item.
-const PROJECT_ROUTE = /^#\/projects\/([a-z0-9-]+)(?:\/(pcn|items|board|backlog|timeline)(?:\/([A-Z]{2,10}-\d{1,7}))?)?\/?$/;
+const PROJECT_ROUTE = /^#\/projects\/([a-z0-9-]+)(?:\/(pcn|items|board|backlog|timeline|lifecycle)(?:\/([A-Z]{2,10}-\d{1,7}))?)?\/?$/;
 /**
  * @returns {string | null}
  */
@@ -650,7 +652,7 @@ export default function Dashboard({ data, reload }) {
               onNewFeature={() => setFeatureEdit({ feature: null, systemId: selected.id })}
               onChanged={reload}
               canEditPcn={can("manage_systems") || selected.pcnBy === me.id}
-              section={projectTab === "backlog" ? "backlog" : projectTab === "timeline" ? "timeline" : showBoard ? "board" : showItems ? "items" : "overview"}
+              section={projectTab === "lifecycle" ? "lifecycle" : projectTab === "backlog" ? "backlog" : projectTab === "timeline" ? "timeline" : showBoard ? "board" : showItems ? "items" : "overview"}
               canAssignOthers={can("edit_work_items")}
               itemKey={showItems ? itemKey : undefined}
               canCreateItems={can("create_work_items")}
@@ -704,6 +706,7 @@ export default function Dashboard({ data, reload }) {
                       { group: ORG, key: "org-people", label: "Members & roles", icon: Users, content: <OrgAdmin me={me} section="people" /> },
                       ...(can("manage_users") ? [{ group: ORG, key: "roles", label: "Roles & permissions", icon: ShieldCheck, content: <UsersPage section="roles" {...usersPageProps} /> }] : []),
                       { group: ORG, key: "org-templates", label: "Templates", icon: LayoutTemplate, content: <OrgAdmin me={me} section="templates" /> },
+                      { group: ORG, key: "org-lifecycle", label: "Project Lifecycle", icon: Milestone, content: <LifecycleSettings users={users} /> },
                       { group: ORG, key: "org-audit", label: "Audit log", icon: ScrollText, content: <OrgAdmin me={me} section="audit" /> },
                     ]
                   : []),
@@ -753,6 +756,8 @@ export default function Dashboard({ data, reload }) {
           <ServiceDeskPage users={users} canWork={can("work_service_desk")} canReports={can("reports") || can("manage_service_desk")} />
         ) : view === "search" && !data.viewOnly ? (
           <SearchPage key={searchFor?.n ?? 0} users={users} workspaces={data.workspaces} now={now} canShare={can("share_searches")} initialPql={searchFor?.pql} />
+        ) : view === "pipeline" ? (
+          <PipelinePage users={users} />
         ) : view === "boards" ? (
           <BoardsPage workspaces={data.workspaces} systems={systems} users={users} me={me} now={now} readOnly={!!data.viewOnly} canAssignOthers={can("edit_work_items")} />
         ) : view === "pcns" ? (
