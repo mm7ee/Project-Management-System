@@ -4,7 +4,7 @@ import { flushSync } from "react-dom";
 /** @import { BrandingView } from '../data/branding' */
 import { ArrowRight, Fingerprint, KeyRound, Layers, LifeBuoy, LockKeyhole, ShieldCheck, UserRound } from "lucide-react";
 import { ApiError, api } from "../data/api";
-import { cleanCode, forgetOrg, initialOrgCode, lastWorkspace, rememberOrg, rememberWorkspace } from "../data/tenant";
+import { cleanCode, codeInLink, forgetOrg, initialOrgCode, lastWorkspace, rememberOrg, rememberWorkspace } from "../data/tenant";
 import { passkeysSupported, signWithPasskey } from "../data/passkeys";
 import { BRAND } from "../data/brand";
 import { applyBranding, setTitle } from "../brandTheme";
@@ -30,10 +30,10 @@ const NOT_FOUND = "We couldn't find that organisation. Check the code with your 
  * @param {{ onSignedIn: () => void }} arg1
  */
 export default function Login({ onSignedIn }) {
-  // Which organisation: from a link (#/o/<code>), else the last one used on this device, else asked first.
-  const [orgCode, setOrgCode] = useState(initialOrgCode);
-  // The field shows the code being checked, a remembered one included.
-  const [orgDraft, setOrgDraft] = useState(orgCode);
+  // Which organisation: a sign-in link (#/o/<code>) opens its page straight away. Otherwise the platform page comes
+  // first, with the code last used on this device already filled in: one Continue away.
+  const [orgCode, setOrgCode] = useState(codeInLink);
+  const [orgDraft, setOrgDraft] = useState(initialOrgCode);
   const [branding, setBranding] = useState(/** @type {BrandingView | null} */ (null));
   // Each refusal on the platform page counts up, so its card shakes again.
   const [errorKey, setErrorKey] = useState(0);
