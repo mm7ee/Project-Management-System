@@ -1431,3 +1431,21 @@ Design: `docs/design/project-cockpit-mockups.html`, screenshots in `docs/design/
   figures equal to Reports → Projects and to their PQL lists, header, stepper, attention, forecast and series, the
   stage in health in both places, another organisation's 404). `npm test`: 360 passed (163 frontend, 197 backend).
   Postman: three requests under "Overview".
+
+## Project page, phase 2: header, stepper and KPI tiles (2026-11-28)
+
+Screenshots (dev data): `docs/design/cockpit/live-*.png`.
+
+- **A sticky project header** on every tab: the project's name and key, its workspace, the lead and the team (with
+  "+N"), its status, its health with the reasons on hover or focus, the stage and its clock ("day 7 of 5 · 2 over"),
+  and the quick actions the person may use: Advance stage (enabled only when the gate is met, saying what's missing
+  otherwise), Request update, Add work item (opens the list with the summary box ready), Copy link, and a menu
+  (Update progress, Documents, Open the app). The tabs live in the header; on a phone they're a list.
+- **The lifecycle stepper:** the 16 stages by phase, each with its state as an icon and words (done with its date,
+  sent back before, current, over its target, skipped, placed here when the lifecycle started, upcoming). Clicking one
+  opens its drawer: what its gate needs, its sign-offs, its deliverables and its history, with a link to the
+  Lifecycle tab. Below 900px it folds into "Stage 6 of 16", which opens the full list.
+- **KPI tiles** with 30-day sparklines: overall progress, forecast finish (with how it was worked out), open and
+  overdue work items (each opens Search with its PQL list), blockers, High/Critical risks, and security findings or,
+  in testing, the QAT and UAT pass rates. They swipe sideways on a phone.
+- The old header, tabs and lifecycle strip are gone; the rest of the Overview is unchanged until phase 3.

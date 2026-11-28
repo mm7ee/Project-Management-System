@@ -324,6 +324,16 @@ function QuickCreate({ system, users, onCreated }) {
   const required = fields.filter((f) => f.required);
   const missing = required.some((f) => values[f.id] == null || values[f.id] === "" || (Array.isArray(values[f.id]) && !/** @type {string[]} */ (values[f.id]).length));
   const [summary, setSummary] = useState("");
+  // "Add work item" in the project's header comes here with the summary box ready to type in.
+  const [focusNew] = useState(() => {
+    try {
+      const want = sessionStorage.getItem("pms:quick-create") === system.id;
+      sessionStorage.removeItem("pms:quick-create");
+      return want;
+    } catch {
+      return false;
+    }
+  });
   const [parent, setParent] = useState("");
   const [parents, setParents] = useState(/** @type {WorkItemSummary[] | (() => WorkItemSummary[])} */ ([]));
   const [busy, setBusy] = useState(false);
@@ -375,7 +385,7 @@ function QuickCreate({ system, users, onCreated }) {
           </option>
         ))}
       </select>
-      <input value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="What needs doing? Press Enter to add it" aria-label="Summary" maxLength={255} />
+      <input value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="What needs doing? Press Enter to add it" aria-label="Summary" maxLength={255} autoFocus={focusNew} />
       {type !== "EPIC" && (
         <select value={parent} onChange={(e) => setParent(e.target.value)} aria-label={type === "SUBTASK" ? "Parent (required)" : "Epic (optional)"} required={type === "SUBTASK"}>
           <option value="">{type === "SUBTASK" ? "Choose its parent…" : "No epic"}</option>

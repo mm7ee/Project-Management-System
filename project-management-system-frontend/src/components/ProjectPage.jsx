@@ -6,7 +6,7 @@
 /** @import { Pcn, SignoffStatus } from '../data/pcn' */
 /** @import { ChannelAvailability, RequestChannel, RequestDelivery } from '../data/updateRequests' */
 import { useEffect, useRef, useState } from "react";
-import { AlertOctagon, ArrowLeft, ArrowUpRight, BellRing, CheckCircle2, Download, ExternalLink, FileText, History, LayoutTemplate, Link2, Pencil, Plus, RotateCcw, Trash2, Upload, UserMinus, Wrench, X } from "lucide-react";
+import { AlertOctagon, ArrowLeft, BellRing, CheckCircle2, Download, ExternalLink, FileText, History, LayoutTemplate, Link2, Plus, RotateCcw, Trash2, Upload, UserMinus, Wrench, X } from "lucide-react";
 import { HEALTH_META, initials } from "../data/systems";
 import { byUrgency, isLate, isOpen } from "../data/features";
 import { MAX_DOCUMENT_BYTES, formatBytes, stalledDays } from "../data/project";
@@ -26,15 +26,16 @@ import WorkItemPage from "./WorkItemPage";
 import BoardView from "./BoardView";
 import BacklogView from "./BacklogView";
 import TimelineView from "./TimelineView";
-import LifecyclePage, { LifecycleStrip } from "./LifecyclePage";
+import LifecyclePage from "./LifecyclePage";
+import { CockpitHeader, KpiTiles, Stepper, useOverview } from "./ProjectCockpit";
 import DocumentsTab from "./DocumentsTab";
-import { DateLine, ProgressBar, ScheduleChip, StatusPill, updatedText } from "./SystemCard";
+import { DateLine, ProgressBar, ScheduleChip, updatedText } from "./SystemCard";
 /**
- * @param {{ title: string; icon?: ReactNode; count?: ReactNode; action?: ReactNode; children: ReactNode; tone?: "alert" }} props
+ * @param {{ id?: string; title: string; icon?: ReactNode; count?: ReactNode; action?: ReactNode; children: ReactNode; tone?: "alert" }} props
  */
-function Card({ title, icon, count, action, children, tone }) {
+function Card({ id, title, icon, count, action, children, tone }) {
   return (
-    <section className={`p-card ${tone === "alert" ? "p-card-alert" : ""}`}>
+    <section id={id} className={`p-card ${tone === "alert" ? "p-card-alert" : ""}`}>
       <header className="p-card-head">
         <h3>
           {icon} {title} {count !== undefined && <span className="p-count">{count}</span>}
@@ -77,7 +78,8 @@ export default function ProjectPage(p) {
       live = false;
     };
   }, [system.id, stamp]);
-  const canOpen = system.status === "LIVE" || system.status === "COMPLETED";
+  // The header, the stepper and the KPI tiles (GET /api/systems/:id/overview), refreshed with the project's data.
+  const overview = useOverview(system.id, `${stamp}|${p.requests.length}|${system.progress}|${system.status}`);
   const lead = users.find((u) => u.id === system.lead);
   const developers = users.filter((u) => u.role === "developer" && u.projectIds?.includes(system.id));
   const nameOf = /** @param {string} [id] */ (id) => users.find((u) => u.id === id)?.name ?? "Someone";
@@ -104,68 +106,34 @@ export default function ProjectPage(p) {
         setSaving(false);
       }
     });
+  // Request update from the header: the form lives in the Overview's side column.
+  const askForUpdate = () => {
+    if (p.section !== "overview") window.location.hash = `#/projects/${system.id}`;
+    setSentNote(null);
+    setAsking(true);
+    setTimeout(() => document.getElementById("p-requests")?.scrollIntoView({ behavior: "smooth", block: "center" }), 60);
+  };
   return (
     <div className="page project-page">
-      <button className="back-link no-print" onClick={p.onBack}>
-        <ArrowLeft size={16} /> All projects
-      </button>
-
-      <header className="project-head">
-        <div className="project-title">
-          <span className="project-mono">{system.short}</span>
-          <div>
-            <h2>{system.name}</h2>
-            <div className="drawer-pills">
-              <StatusPill status={system.status} />
-              {system.health === "Stable" && <span className="pill fill-light">Stable</span>}
-              {openBlockers.length > 0 && (
-                <span className="flag flag-blocked">
-                  <AlertOctagon size={13} /> Blocked
-                </span>
-              )}
-              {stalled !== null && <span className="flag flag-stalled">No progress for {stalled} days</span>}
-            </div>
-          </div>
-        </div>
-        <div className="page-actions no-print">
-          {p.canUpdate && (
-            <button className="btn btn-amber" onClick={p.onUpdate}>
-              <Pencil size={15} /> Update progress
-            </button>
-          )}
-          <a className={`btn btn-navy ${canOpen && system.url ? "" : "disabled"}`} href={canOpen && system.url ? system.url : undefined} target="_blank" rel="noreferrer" aria-disabled={!canOpen}>
-            {canOpen ? "Open the app" : "Not live yet"} {canOpen && <ArrowUpRight size={16} />}
-          </a>
-        </div>
-      </header>
+      <CockpitHeader
+        system={system}
+        data={overview.data}
+        section={p.section}
+        me={me}
+        readOnly={p.readOnly}
+        canUpdate={p.canUpdate}
+        canRequest={p.canRequest}
+        canCreateItems={p.canCreateItems && !p.readOnly}
+        onBack={p.onBack}
+        onUpdate={p.onUpdate}
+        onRequest={askForUpdate}
+        onAdvanced={() => {
+          overview.reload();
+          p.onChanged();
+        }}
+      />
 
       {error && <p className="form-error banner">{error}</p>}
-
-      <nav className="p-tabs no-print" aria-label="Project sections">
-        <a href={`#/projects/${system.id}`} className={p.section === "overview" ? "on" : ""} aria-current={p.section === "overview" ? "page" : undefined}>
-          Overview
-        </a>
-        <a href={`#/projects/${system.id}/items`} className={p.section === "items" ? "on" : ""} aria-current={p.section === "items" && !p.itemKey ? "page" : undefined}>
-          Work items <span className="mono">{system.key}</span>
-        </a>
-        <a href={`#/projects/${system.id}/board`} className={p.section === "board" ? "on" : ""} aria-current={p.section === "board" ? "page" : undefined}>
-          Board
-        </a>
-        {system.agileMode === "scrum" && (
-          <a href={`#/projects/${system.id}/backlog`} className={p.section === "backlog" ? "on" : ""} aria-current={p.section === "backlog" ? "page" : undefined}>
-            Backlog
-          </a>
-        )}
-        <a href={`#/projects/${system.id}/timeline`} className={p.section === "timeline" ? "on" : ""} aria-current={p.section === "timeline" ? "page" : undefined}>
-          Timeline
-        </a>
-        <a href={`#/projects/${system.id}/lifecycle`} className={p.section === "lifecycle" ? "on" : ""} aria-current={p.section === "lifecycle" ? "page" : undefined}>
-          Lifecycle
-        </a>
-        <a href={`#/projects/${system.id}/docs`} className={p.section === "docs" ? "on" : ""} aria-current={p.section === "docs" && !p.itemKey ? "page" : undefined}>
-          Documents
-        </a>
-      </nav>
 
       {p.section === "docs" ? (
         <DocumentsTab system={system} me={me} users={users} doc={p.itemKey} readOnly={p.readOnly} onChanged={p.onChanged} />
@@ -185,7 +153,24 @@ export default function ProjectPage(p) {
         )
       ) : (
         <>
-          <LifecycleStrip systemId={system.id} />
+          {overview.data ? (
+            <>
+              <Stepper data={overview.data} system={system} users={users} now={now} />
+              <KpiTiles data={overview.data} system={system} onSearch={p.onSearch} onBlockers={() => document.getElementById("p-blockers")?.scrollIntoView({ behavior: "smooth", block: "start" })} />
+            </>
+          ) : overview.error ? (
+            <p className="form-error banner" role="alert">
+              {overview.error}{" "}
+              <button className="link-btn" onClick={overview.reload}>
+                Try again
+              </button>
+            </p>
+          ) : (
+            <div className="ck-skeleton" aria-busy="true" aria-label="Loading the project's figures">
+              <span />
+              <span />
+            </div>
+          )}
           {/* What is holding the project up, before anything else. */}
           {(openBlockers.length > 0 || stalled !== null || onHold.length > 0) && (
             <section className="blocker-band" aria-label="Blockers">
@@ -363,7 +348,7 @@ export default function ProjectPage(p) {
                 {system.health && <p className="health-note">{HEALTH_META[system.health]}</p>}
               </Card>
 
-              <BlockersCard system={system} open={openBlockers} resolved={resolved} now={now} nameOf={nameOf} me={me} canContribute={p.canContribute} canManage={p.canManage} inputRef={blockerInput} attempt={attempt} onChanged={p.onChanged} />
+              <BlockersCard id="p-blockers" system={system} open={openBlockers} resolved={resolved} now={now} nameOf={nameOf} me={me} canContribute={p.canContribute} canManage={p.canManage} inputRef={blockerInput} attempt={attempt} onChanged={p.onChanged} />
 
               <Card
                 title="Feature requests"
@@ -431,7 +416,7 @@ export default function ProjectPage(p) {
 
             <aside className="project-side">
               {(p.requests.length > 0 || p.canRequest) && (
-                <section className="requests flush">
+                <section className="requests flush" id="p-requests">
                   {p.requests.map((r) => (
                     <div key={r.id} className="request">
                       <BellRing size={16} />
@@ -599,17 +584,18 @@ export default function ProjectPage(p) {
 }
 /**
  * @param {SectionProps & {
+ *   id?: string;
  *   open: Blocker[];
  *   resolved: Blocker[];
  *   inputRef: RefObject<HTMLTextAreaElement>;
  * }} arg4
  */
-function BlockersCard({ system, open, resolved, now, me, nameOf, canContribute, canManage, inputRef, attempt, onChanged }) {
+function BlockersCard({ id, system, open, resolved, now, me, nameOf, canContribute, canManage, inputRef, attempt, onChanged }) {
   const [text, setText] = useState("");
   const [resolving, setResolving] = useState(/** @type {string | null | (() => string | null)} */ (null));
   const [resolution, setResolution] = useState("");
   return (
-    <Card title="Blockers" icon={<AlertOctagon size={17} />} count={`${open.length} open`} tone={open.length ? "alert" : undefined}>
+    <Card id={id} title="Blockers" icon={<AlertOctagon size={17} />} count={`${open.length} open`} tone={open.length ? "alert" : undefined}>
       {open.length ? (
         <ul className="blocker-list">
           {open.map((b) => (
@@ -912,6 +898,7 @@ function SaveAsTemplate({ system, attempt, onChanged }) {
  * @property {boolean} canCreateItems
  * @property {boolean} readOnly
  * @property {(index: number, decision: SignoffStatus, remarks?: string) => Promise<void>} onSignPcn
+ * @property {(pql: string) => void} [onSearch] Opens Search with this PQL (the KPI tiles' drill-down).
  */
 /**
  * @typedef {Object} SectionProps

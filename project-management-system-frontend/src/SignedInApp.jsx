@@ -660,6 +660,15 @@ export default function Dashboard({ data, reload }) {
               canCreateItems={can("create_work_items")}
               readOnly={!!data.viewOnly}
               onSignPcn={(index, decision, remarks) => signPcn(selected.id, index, decision, remarks)}
+              onSearch={
+                data.viewOnly
+                  ? undefined
+                  : (pql) => {
+                      setSearchFor((s) => ({ pql, n: (s?.n ?? 0) + 1 }));
+                      setView("search");
+                      closeProject();
+                    }
+              }
             />
           ) : (
             <div className="empty">
