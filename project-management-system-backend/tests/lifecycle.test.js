@@ -280,8 +280,8 @@ describe("project lifecycles", () => {
       }
     });
     // B gets a template of its own to map onto (the function takes any organisation and template).
-    await db`INSERT INTO lifecycle_templates (id, organization_id, family_id, version, status, is_default, name, definition, created_at) SELECT ${`b${tid.slice(1)}`}, ${orgs.b.id}, ${`b${tid.slice(1)}`}, 1, 'published', 1, 'Mapped', definition, ${now} FROM lifecycle_templates WHERE id = ${tid}`;
-    const out = await db`SELECT * FROM lifecycle_map_projects(${orgs.b.id}, ${`b${tid.slice(1)}`})`;
+    await db`INSERT INTO lifecycle_templates (id, organization_id, family_id, version, status, is_default, name, definition, created_at) SELECT ${`map${tag}`}, ${orgs.b.id}, ${`map${tag}`}, 1, 'published', 1, 'Mapped', definition, ${now} FROM lifecycle_templates WHERE id = ${tid}`;
+    const out = await db`SELECT * FROM lifecycle_map_projects(${orgs.b.id}, ${`map${tag}`})`;
     for (const [i, c] of cases.entries()) {
       const row = out.find((/** @type {any} */ r) => r.system_id === `map-${i}-${tag}`);
       expect([row.stage, c.status]).toEqual([mapExistingProject(c).stage, c.status]);
@@ -294,6 +294,6 @@ describe("project lifecycles", () => {
     const hist = await db`SELECT kind, by_name FROM project_stage_history WHERE system_id = ${`map-5-${tag}`}`;
     expect(hist).toEqual([{ kind: "migrate", by_name: "Migration 0026" }]);
     // Running it again changes nothing: already-mapped projects are left alone.
-    expect((await db`SELECT * FROM lifecycle_map_projects(${orgs.b.id}, ${`b${tid.slice(1)}`})`).map((/** @type {any} */ r) => r.system_id)).toEqual([`map-10-${tag}`]);
+    expect((await db`SELECT * FROM lifecycle_map_projects(${orgs.b.id}, ${`map${tag}`})`).map((/** @type {any} */ r) => r.system_id)).toEqual([`map-10-${tag}`]);
   }, SLOW);
 });
