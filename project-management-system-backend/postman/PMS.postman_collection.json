@@ -12516,6 +12516,42 @@
           }
         },
         {
+          "name": "Overview: the team",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"a list of people\", () => pm.expect(pm.response.json().people).to.be.an(\"array\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems/{{systemId}}/team",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems",
+                "{{systemId}}",
+                "team"
+              ]
+            }
+          }
+        },
+        {
           "name": "Admin deletes the system",
           "event": [
             {

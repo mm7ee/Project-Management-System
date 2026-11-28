@@ -1334,3 +1334,23 @@ The plan, and the 13 recommendations approved with "continue", are in `docs/admi
 - **Layout:** three columns (burn-up two wide beside time in stage; created vs resolved beside a two-wide cumulative
   flow; workload across), two on a tablet, one on a phone, where the wide drawings scroll sideways so their labels
   stay readable.
+
+## Project page, phase 5: Risks & Security, Testing, Team, Activity and Chat tabs (2026-11-28)
+
+- **Each tab has its own address** (`#/projects/:id/risks`, `/testing`, `/team`, `/activity`, `/chat`) and loads its own
+  data when opened. **A project's key works too:** `#/projects/WCC/risks` goes to the same page by its id.
+- **Risks & Security** reads the lifecycle's registers: a 5×5 likelihood × impact heat map of open risks (each square
+  coloured by the rating rule, `riskRating`, with its count; clicking one filters the register), the register sorted by
+  rating, and findings by severity with the age of the oldest open one and any accepted risk. Changing them stays in the
+  Lifecycle tab, where the gate rules are.
+- **Testing:** per suite, the pass rate (waived tests aside, as the gate counts it), its trend (each day, each case's
+  latest result so far), what's failing now with the bug it raised, and every case.
+- **Team** (`GET /api/systems/:id/team`): role, hours logged here (30 days, in all), open and done work here, and the
+  share of each person's open work that is on this project, through the access rule.
+- **Activity:** the project's history (the last 100 changes) with filters (stages and sign-offs, work items, documents,
+  updates and blockers, people and settings) and a search. Stage moves, sign-off requests, deliverables and stage
+  comments now read as sentences.
+- **Chat:** the project's channel inside the page (ChatPage `docked`), or a button to open it when nobody has written
+  yet. Not on a view-only link.
+- **Not done yet:** the Work tab's list / board / backlog toggle with saved views and bulk edit (the Work items, Board
+  and Backlog tabs stay as they were); the Timeline's critical path; inline document preview.

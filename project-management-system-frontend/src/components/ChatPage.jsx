@@ -96,7 +96,7 @@ const listTime =
  * Chat: direct messages, group chats and project channels.
  * @param {Props} arg8
  */
-export default function ChatPage({ me, users, canModerate, openId, onUnread }) {
+export default function ChatPage({ me, users, canModerate, openId, onUnread, docked = false }) {
   const [conversations, setConversations] = useState(/** @type {Conversation[] | null | (() => Conversation[] | null)} */ (null));
   const [activeId, setActiveId] = useState(/** @type {string | null | (() => string | null)} */ (openId ?? null));
   const [filter, setFilter] = useState("");
@@ -136,15 +136,17 @@ export default function ChatPage({ me, users, canModerate, openId, onUnread }) {
     await loadList().catch(() => undefined);
   };
   return (
-    <div className="page chat-page">
-      <header className="page-head">
-        <div>
-          <h2>
-            <MessagesSquare size={20} aria-hidden="true" /> Chat
-          </h2>
-          <p>Message colleagues directly, in groups, or in a project's channel.</p>
-        </div>
-      </header>
+    <div className={`page chat-page ${docked ? "docked" : ""}`}>
+      {!docked && (
+        <header className="page-head">
+          <div>
+            <h2>
+              <MessagesSquare size={20} aria-hidden="true" /> Chat
+            </h2>
+            <p>Message colleagues directly, in groups, or in a project's channel.</p>
+          </div>
+        </header>
+      )}
       <div className={`chat ${activeId ? "chat-open" : ""}`}>
         <aside className="chat-list" aria-label="Conversations">
           <div className="chat-list-actions">
@@ -1263,6 +1265,7 @@ function ConversationDetails({ conversation, me, users, nameOf, canModerate, onC
  * @property {boolean} canModerate
  * @property {string | null} [openId]
  * @property {(n: number) => void} onUnread
+ * @property {boolean} [docked] One conversation (openId) inside another page: no page header, no list of conversations.
  */
 /**
  * @typedef {Object} ViewProps

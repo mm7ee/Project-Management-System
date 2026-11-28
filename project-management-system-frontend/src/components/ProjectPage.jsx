@@ -30,6 +30,7 @@ import LifecyclePage from "./LifecyclePage";
 import { CockpitHeader, KpiTiles, Stepper, useOverview } from "./ProjectCockpit";
 import { AttentionPanel, NextDays, SummaryCard } from "./ProjectOverview";
 import ProjectCharts from "./ProjectCharts";
+import { ActivityTab, ProjectChat, RisksTab, TeamTab, TestingTab } from "./ProjectTabs";
 import DocumentsTab from "./DocumentsTab";
 import { DateLine, ProgressBar, ScheduleChip, updatedText } from "./SystemCard";
 /**
@@ -137,7 +138,17 @@ export default function ProjectPage(p) {
 
       {error && <p className="form-error banner">{error}</p>}
 
-      {p.section === "docs" ? (
+      {p.section === "risks" ? (
+        <RisksTab system={system} now={now} />
+      ) : p.section === "testing" ? (
+        <TestingTab system={system} now={now} />
+      ) : p.section === "team" ? (
+        <TeamTab system={system} capacityHours={overview.data?.series.workload.capacityHours ?? p.limits.capacityHours ?? 30} />
+      ) : p.section === "activity" ? (
+        <ActivityTab history={history} users={users} systems={p.systems} now={now} />
+      ) : p.section === "chat" && !p.readOnly ? (
+        <ProjectChat system={system} me={me} users={users} />
+      ) : p.section === "docs" ? (
         <DocumentsTab system={system} me={me} users={users} doc={p.itemKey} readOnly={p.readOnly} onChanged={p.onChanged} />
       ) : p.section === "lifecycle" ? (
         <LifecyclePage system={system} me={me} users={users} now={now} readOnly={p.readOnly} onChanged={p.onChanged} />
@@ -870,7 +881,7 @@ function SaveAsTemplate({ system, attempt, onChanged }) {
  * @property {() => void} onNewFeature
  * @property {() => Promise<void>} onChanged
  * @property {boolean} canEditPcn
- * @property {"overview" | "items" | "board" | "backlog" | "timeline" | "lifecycle" | "docs"} section
+ * @property {"overview" | "items" | "board" | "backlog" | "timeline" | "lifecycle" | "docs" | "risks" | "testing" | "team" | "activity" | "chat"} section
  * @property {boolean} canAssignOthers
  * @property {string} [itemKey]
  * @property {boolean} canCreateItems

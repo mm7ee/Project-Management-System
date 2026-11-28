@@ -497,6 +497,8 @@ export function describe(e, users, systems) {
       return `Commented on ${str(d.stage)}: "${str(d.comment)}"`;
     case "stage_changed":
       return `${d.kind === "send_back" || d.kind === "decline" ? "Sent" : "Moved"} ${str(d.name)} from ${str(d.from)} to ${str(d.to)}${d.reason ? `: ${str(d.reason)}` : ""}`;
+    case "deliverable_added":
+      return `Made "${str(d.document)}" the ${str(d.deliverable)}${d.version ? ` (version ${str(d.version)})` : ""}`;
     case "signoff_requested":
       return `Asked for sign-off on ${str(d.stage)}`;
     default:

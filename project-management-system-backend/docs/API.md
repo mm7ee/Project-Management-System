@@ -341,6 +341,15 @@ can't see is never counted, charted or listed.
   signed in to the workspace; not a view-only link. A stage the project's lifecycle doesn't have is a `400`. Comments
   are a record: never changed or deleted (except with the project).
 
+### The team
+
+- `GET /api/systems/:id/team` → `{ people: [{ id, name, title, role, lead, hoursRecent, hoursAll, openHere, openAll,
+  doneRecent, share }] }`: the lead and the developers on the project, the hours they logged on it (the last 30 days
+  and in all), their open work items here and in all, what they finished here in 30 days, and the share of their open
+  work that is here (%). Counted through the viewer's access rule, so items the viewer can't see aren't in it.
+  View-only links may read it. Another workspace's project is a `404`.
+- The lifecycle view's test runs carry `bug_key`, the bug a failed run raised.
+
 ## Project lifecycle
 
 Each organisation has lifecycle templates (phases, stages and their gates); each project is on one version of one

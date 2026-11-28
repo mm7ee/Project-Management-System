@@ -560,7 +560,7 @@ async function lifecycleView(c, systemId) {
     c.db.prepare("SELECT r.*, a.name AS owner_name FROM risk_register r LEFT JOIN accounts a ON a.id = r.owner_id WHERE r.system_id = ? ORDER BY r.created_at").bind(sys.id).all(),
     c.db.prepare("SELECT f.*, a.name AS accepted_name FROM security_findings f LEFT JOIN accounts a ON a.id = f.accepted_by WHERE f.system_id = ? ORDER BY f.created_at").bind(sys.id).all(),
     c.db.prepare("SELECT t.*, a.name AS assignee_name FROM test_cases t LEFT JOIN accounts a ON a.id = t.assignee_id WHERE t.system_id = ? ORDER BY t.suite, t.position, t.created_at").bind(sys.id).all(),
-    c.db.prepare("SELECT r.*, a.name AS run_name FROM test_runs r LEFT JOIN accounts a ON a.id = r.run_by WHERE r.system_id = ? ORDER BY r.run_at").bind(sys.id).all(),
+    c.db.prepare("SELECT r.*, a.name AS run_name, s.key || '-' || w.number AS bug_key FROM test_runs r LEFT JOIN accounts a ON a.id = r.run_by LEFT JOIN work_items w ON w.id = r.bug_item_id LEFT JOIN systems s ON s.id = w.system_id WHERE r.system_id = ? ORDER BY r.run_at").bind(sys.id).all(),
     c.db.prepare("SELECT e.*, a.name AS verified_name FROM project_environments e LEFT JOIN accounts a ON a.id = e.verified_by WHERE e.system_id = ? ORDER BY e.name").bind(sys.id).all(),
     c.db.prepare("SELECT d.id, d.name, d.kind, d.url, d.stage_code, d.deliverable_key, d.version, d.locked_at, d.uploaded_at, a.name AS uploaded_name FROM documents d LEFT JOIN accounts a ON a.id = d.uploaded_by WHERE d.system_id = ? AND d.work_item_id IS NULL ORDER BY d.uploaded_at").bind(sys.id).all(),
     c.db.prepare("SELECT kind, data, updated_at FROM stage_records WHERE system_id = ?").bind(sys.id).all(),

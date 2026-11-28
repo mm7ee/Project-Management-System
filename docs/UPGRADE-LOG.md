@@ -1480,3 +1480,18 @@ Screenshots (dev data): `docs/design/cockpit/live-p4-*.png`.
 - **No migration.** The overview adds each team member's username (for their list).
 - **Tests:** `tests/chartInsights.test.js` (frontend, 6) and one more in `tests/overview.test.js` (backend: each chart
   part's list has the chart's count). `npm test`: 375 passed (175 frontend, 200 backend).
+
+## Project page, phase 5: the other tabs (2026-11-28)
+
+Screenshots (dev data): `docs/design/cockpit/live-p5-*.png`.
+
+- **Risks & Security:** the 5×5 heat map (click a square to filter), the risk register, and security findings by
+  severity and age.
+- **Testing:** each suite's pass rate and its trend, failing tests linked to their bugs, and every test case.
+- **Team:** each person's role, hours logged here, open and done work, and how much of their open work is here.
+- **Activity:** the project's history with filters and a search.
+- **Chat:** the project's channel, inside the project page.
+- Every tab has its own address; `#/projects/WCC/…` (the project's key) works too.
+- **No migration.** Tests: `tests/projectTabs.test.js` (frontend, 2: the pass-rate trend, the activity filters) and one
+  more in `tests/overview.test.js` (backend: the team's hours and open work through the visibility rule).
+  `npm test`: 378 passed (177 frontend, 201 backend).

@@ -50,7 +50,12 @@ const TABS = /** @type {const} */ ([
   ["board", "Board", "/board"],
   ["backlog", "Backlog", "/backlog"],
   ["timeline", "Timeline", "/timeline"],
+  ["risks", "Risks & Security", "/risks"],
+  ["testing", "Testing", "/testing"],
   ["docs", "Documents", "/docs"],
+  ["team", "Team", "/team"],
+  ["activity", "Activity", "/activity"],
+  ["chat", "Chat", "/chat"],
 ]);
 const plural = (/** @type {number} */ n, /** @type {string} */ one, /** @type {string} */ many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const shortDate = (/** @type {string} */ d) => new Date(`${d.slice(0, 10)}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
@@ -100,7 +105,8 @@ export function CockpitHeader(p) {
   const team = /** @type {{ id: string; name: string }[]} */ (data?.project.team ?? []);
   const lead = data?.project.lead ?? null;
   const canOpen = (system.status === "LIVE" || system.status === "COMPLETED") && !!system.url;
-  const tabs = TABS.filter(([k]) => k !== "backlog" || system.agileMode === "scrum");
+  // Backlog only for scrum projects; the chat isn't on a view-only link.
+  const tabs = TABS.filter(([k]) => (k !== "backlog" || system.agileMode === "scrum") && (k !== "chat" || !p.readOnly));
   const base = `#/projects/${system.id}`;
   const advanceWhy = !life ? "" : life.closed ? "The project is closed" : !life.ready ? `Still needed: ${life.missing.join("; ")}` : !life.canAdvance ? "Only the project lead, a Manager or an Administrator can advance it" : `Move on from ${life.stage.name}`;
   const HealthIcon = health ? RAG_ICON[/** @type {keyof typeof RAG_ICON} */ (health.rag)] : CheckCircle2;

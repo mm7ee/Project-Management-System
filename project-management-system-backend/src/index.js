@@ -1197,7 +1197,7 @@ async function api(req, env, path, ctx) {
     (method === "GET" &&
       (path === "/api/data" ||
         path === "/api/notifications" ||
-        /^\/api\/systems\/[a-z0-9-]+\/(history|overview|summary|stage-comments)$/.test(path) ||
+        /^\/api\/systems\/[a-z0-9-]+\/(history|overview|summary|stage-comments|team)$/.test(path) ||
         path === "/api/items" ||
         path === "/api/boards" ||
         path === "/api/statuses" ||

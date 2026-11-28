@@ -80,7 +80,7 @@ const greeting = () => {
  */
 const VIEW_PREFS = "pms:view-prefs";
 // #/projects/<id>/items is its Work items tab; #/projects/<id>/items/<KEY-n> one work item.
-const PROJECT_ROUTE = /^#\/projects\/([a-z0-9-]+)(?:\/(pcn|items|board|backlog|timeline|lifecycle|docs)(?:\/([A-Z]{2,10}-\d{1,7}|[a-z_]{2,30}(?:-\d{1,4})?))?)?\/?$/;
+const PROJECT_ROUTE = /^#\/projects\/([a-z0-9-]+)(?:\/(pcn|items|board|backlog|timeline|lifecycle|docs|risks|testing|team|activity|chat)(?:\/([A-Z]{2,10}-\d{1,7}|[a-z_]{2,30}(?:-\d{1,4})?))?)?\/?$/;
 /**
  * @returns {string | null}
  */
@@ -224,6 +224,17 @@ export default function Dashboard({ data, reload }) {
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
+  // A project's address by its key (#/projects/WCC/risks) goes to the same page by its id, which links use.
+  useEffect(() => {
+    const byKey = () => {
+      const m = window.location.hash.match(/^#\/projects\/([A-Z][A-Z0-9]{1,9})(\/.*)?$/);
+      const found = m && systems.find((x) => x.key === m[1]);
+      if (found) window.location.replace(`${window.location.pathname}${window.location.search}#/projects/${found.id}${m[2] ?? ""}`);
+    };
+    byKey();
+    window.addEventListener("hashchange", byKey);
+    return () => window.removeEventListener("hashchange", byKey);
+  }, [systems]);
   const openProject = /** @param {string} id */ (id) => {
     window.location.hash = `/projects/${id}`;
   };
@@ -654,7 +665,7 @@ export default function Dashboard({ data, reload }) {
               onNewFeature={() => setFeatureEdit({ feature: null, systemId: selected.id })}
               onChanged={reload}
               canEditPcn={can("manage_systems") || selected.pcnBy === me.id}
-              section={projectTab === "docs" ? "docs" : projectTab === "lifecycle" ? "lifecycle" : projectTab === "backlog" ? "backlog" : projectTab === "timeline" ? "timeline" : showBoard ? "board" : showItems ? "items" : "overview"}
+              section={projectTab === "docs" ? "docs" : projectTab === "lifecycle" ? "lifecycle" : projectTab === "risks" || projectTab === "testing" || projectTab === "team" || projectTab === "activity" || projectTab === "chat" ? projectTab : projectTab === "backlog" ? "backlog" : projectTab === "timeline" ? "timeline" : showBoard ? "board" : showItems ? "items" : "overview"}
               canAssignOthers={can("edit_work_items")}
               itemKey={showItems || projectTab === "docs" ? itemKey : undefined}
               canCreateItems={can("create_work_items")}

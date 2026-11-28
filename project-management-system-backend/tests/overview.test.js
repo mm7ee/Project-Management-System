@@ -242,6 +242,20 @@ describe("the project overview", () => {
     expect(changed).toBe("42501");
   }, SLOW);
 
+  it("the team: hours logged and open work here, through the visibility rule", async () => {
+    // Tom gets OVW-13 (open) and the restricted OVW-16, and logs an hour and a half on OVW-13.
+    for (const k of ["OVW-13", "OVW-16"]) expect((await as("ada", `/api/items/${k}`, { method: "PATCH", body: { assignee: id("tom") } })).status).toBe(200);
+    expect((await as("tom", "/api/items/OVW-13/worklogs", { method: "POST", body: { minutes: 90 } })).status).toBeLessThan(300);
+    const mine = await as("mia", `/api/systems/${systemId}/team`);
+    expect(mine.status, JSON.stringify(mine.data)).toBe(200);
+    const tom = mine.data.people.find((/** @type {any} */ x) => x.id === id("tom"));
+    expect(tom).toMatchObject({ name: "tom", lead: true, role: "developer", hoursRecent: 1.5, hoursAll: 1.5, openHere: 1, openAll: 1, share: 100 });
+    // The Administrator also sees the restricted item; the Manager doesn't.
+    const all = (await as("ada", `/api/systems/${systemId}/team`)).data.people.find((/** @type {any} */ x) => x.id === id("tom"));
+    expect(all.openHere).toBe(2);
+    expect((await as("bob", `/api/systems/${systemId}/team`)).status).toBe(404);
+  }, SLOW);
+
   it("another organisation's project is a 404; nothing but GET", async () => {
     expect((await as("bob", `/api/systems/${systemId}/overview`)).status).toBe(404);
     expect((await as("ada", `/api/systems/${systemId}/overview`, { method: "POST" })).status).toBe(405);
