@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project cockpit mock-ups</title>
+<!-- Mock-up of the redesigned project page (sample data). Open with ?theme=dark for the dark theme, ?drawer=1 for the
+     stage drawer. Resize the window for tablet (two columns) and phone layouts. -->
+<style>
+body{margin:0}
+:root,.light{--canvas:#f7f9fd;--card:#ffffff;--border:#e1e5ef;--track:#eceff6;--grid:#eef0f6;--text:#121427;--muted:#464b66;--faint:#636882;--heading:#1f2933;--solid:#011f5b;--link:#0039a6;--sb:#18202b;--ok:#0e8a6b;--ok-ink:#0b6e55;--warn:#e09a00;--warn-ink:#7a5600;--warn-tint:#fdf3d8;--bad:#c8102e;--bad-ink:#b00d27;--bad-tint:#fdf0f1;--info-tint:#e8edf9;--c1:#2d63c8;--c2:#eba300;--c3:#d6336c;--c4:#18a0d8;--c6:#7d55d6;--e1:0 1px 2px rgba(15,23,42,.06);--e3:0 18px 44px rgba(15,23,42,.18)}
+.dark{--canvas:#0b0c22;--card:#13163a;--border:#252a57;--track:#1e2250;--grid:#1b1e47;--text:#e9ebf7;--muted:#aeb2cf;--faint:#9297ba;--heading:#e3e8ee;--solid:#2a52b8;--link:#8fb3d4;--sb:#0f1130;--ok:#14a37f;--ok-ink:#6fdcb4;--warn:#e09a00;--warn-ink:#ffd27a;--warn-tint:rgba(224,154,0,.14);--bad:#e5484d;--bad-ink:#ff9ea1;--bad-tint:rgba(229,72,77,.16);--info-tint:rgba(128,149,255,.16);--c1:#4f80e6;--c2:#b88200;--c3:#e0507f;--c4:#1d9ad0;--c6:#9a72f0;--e1:0 1px 2px rgba(0,0,0,.4);--e3:0 20px 50px rgba(0,0,0,.55);color-scheme:dark}
+a{color:var(--link)}
+.app{display:flex;min-height:100vh;background:var(--canvas);color:var(--text);font-family:Inter,"Segoe UI",system-ui,-apple-system,sans-serif;font-size:14px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:var(--e1);padding:18px 20px;min-width:0}
+.btn{display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:0 14px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font:600 13.5px inherit;font-family:inherit;cursor:pointer;white-space:nowrap}
+.btn-solid{background:var(--solid);border-color:var(--solid);color:#fff}
+.btn[disabled]{opacity:.55;cursor:not-allowed}
+.icon-btn{width:38px;padding:0;justify-content:center}
+.pill{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:999px;font-size:12.5px;font-weight:600;white-space:nowrap;border:0;font-family:inherit}
+.chip{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:22px;padding:0 8px;border-radius:6px;font-size:11.5px;font-weight:700;white-space:nowrap}
+.k-title{margin:0;font-size:12.5px;font-weight:600;color:var(--muted)}
+.k-num{font-size:28px;font-weight:800;letter-spacing:-.02em;color:var(--heading);line-height:1.1}
+.k-sub{font-size:12px;color:var(--faint)}
+.tile{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:6px;min-width:0;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px;box-shadow:var(--e1);cursor:pointer}
+.tile:hover{border-color:var(--link)}
+:focus-visible{outline:2px solid var(--link);outline-offset:2px}
+.h3{margin:0;font-size:15px;font-weight:700;color:var(--heading)}
+.insight{margin:4px 0 0;font-size:13px;color:var(--muted)}
+.foot{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-top:10px;font-size:12px;color:var(--faint)}
+.link-btn{all:unset;cursor:pointer;color:var(--link);font-weight:600;font-size:12.5px;display:inline-flex;gap:5px;align-items:center}
+.stage{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;flex:1 1 0;min-width:0;text-align:center;padding:4px 2px;border-radius:8px}
+.stage:hover,.stage.sel{background:var(--track)}
+.dot{position:relative;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;flex:none;box-sizing:border-box}
+.pulse::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:2px solid var(--bad);animation:pulse 2.4s ease-out infinite}
+@keyframes pulse{0%{transform:scale(.9);opacity:.8}100%{transform:scale(1.5);opacity:0}}
+@media (prefers-reduced-motion:reduce){.pulse::after{animation:none;opacity:.5}}
+.s-name{font-size:11px;line-height:1.25;font-weight:600}
+.s-date{font-size:10.5px;color:var(--faint)}
+.av{display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--solid);color:#fff;font-size:11.5px;font-weight:700;border:2px solid var(--card);margin-left:-5px;box-sizing:border-box}
+.axis{font:10.5px Inter,"Segoe UI",system-ui,sans-serif;fill:var(--faint)}
+.tab{padding:12px 2px;font-size:13.5px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;white-space:nowrap;text-decoration:none}
+.tab.on{color:var(--heading);border-bottom-color:var(--solid)}
+.dark .tab.on{border-bottom-color:#8fb3d4}
+.row-act{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--border)}
+.sb{flex:none;width:232px;background:var(--sb);padding:18px 14px;display:flex;flex-direction:column;gap:4px;box-sizing:border-box}
+.sb a{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;color:#c6cfda;font-size:13.5px;font-weight:500;text-decoration:none}
+main{flex:1;min-width:0;overflow-x:clip;display:flex;flex-direction:column}
+.head{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--border);box-shadow:var(--e1);padding:14px 28px 0}
+.body{padding:22px 28px 40px;display:flex;flex-direction:column;gap:18px}
+.kpis{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px}
+.cols{display:flex;gap:16px;align-items:flex-start}.col-main{flex:2 1 0;min-width:0;display:flex;flex-direction:column;gap:16px}.col-side{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:16px}.pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.s8{grid-column:span 8}.s4{grid-column:span 4}.s12{grid-column:span 12}.r2{grid-row:span 2}
+.legend{display:inline-flex;gap:5px;align-items:center}
+.legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+.tabs-select{display:none}
+.stepper-compact{display:none}
+.why{display:none;position:absolute;top:34px;left:0;z-index:9;width:330px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--e3);padding:12px 14px;font-size:12.5px}
+.mob-only{display:none}
+.has-why:hover .why,.has-why:focus-within .why,.tip .why{display:block}
+
+/* Tablet: two columns */
+@media (max-width:1100px){
+  .sb{width:72px;padding:18px 10px}.sb .wide{display:none}
+  .kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.col-main,.col-side{display:contents}
+  .o-att,.o-bu,.o-pair,.o-wl,.o-about{grid-column:span 2}
+  .o-att{order:1}.o-ai{order:2}.o-next{order:3}.o-bu{order:4}.o-pair{order:5}.o-tis{order:6}.o-act{order:7}.o-wl{order:8}.o-about{order:9}
+  .phase-name{font-size:9.5px!important}
+}
+/* Phone */
+@media (max-width:640px){
+  .sb{display:none}
+  .head{padding:10px 16px 12px}
+  .body{padding:14px 16px 32px;gap:14px}
+  .desk-only{display:none!important}
+  .mob-only{display:flex}
+  .stepper-full{display:none}
+  .stepper-compact{display:flex}
+  .kpis{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;gap:10px;margin:0 -16px;padding:0 16px 4px}
+  .kpis .tile{flex:0 0 150px;scroll-snap-align:start}
+  .cols{display:flex;flex-direction:column}.pair{grid-template-columns:minmax(0,1fr)}
+  .tabs-nav{display:none!important}
+  .tabs-select{display:block}
+  h1{font-size:18px!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hrow{flex-wrap:nowrap!important}.hrow>div{min-width:0!important}
+  .row-act{flex-wrap:wrap}
+  .row-act .btn{margin-left:30px}
+  .why{width:280px}
+}
+/* Stage drawer */
+.drawer-back{position:fixed;inset:0;background:rgba(10,12,30,.35);z-index:20}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(460px,100vw);z-index:21;background:var(--card);border-left:1px solid var(--border);box-shadow:var(--e3);overflow:auto;padding:20px 22px;box-sizing:border-box;color:var(--text)}
+.drawer h3{margin:18px 0 8px;font-size:12px;font-weight:750;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.drow{display:flex;gap:10px;align-items:center;padding:9px 0;border-top:1px solid var(--border);font-size:13px}
+</style>
+</head>
+<body>
+<div class="app light" id="app">
+
+  <nav class="sb" aria-label="Main">
+    <div style="display:flex;align-items:center;gap:10px;padding:4px 6px 16px">
+      <span style="display:grid;place-items:center;width:34px;height:34px;border-radius:9px;background:#011f5b;color:#fff;font-weight:800;font-size:13px;flex:none">OC</span>
+      <b class="wide" style="color:#fff;font-size:15px">Omnicontact</b>
+    </div>
+    <div class="wide" style="display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:14px;border:1px solid rgba(143,179,212,.35);background:rgba(255,255,255,.05);margin-bottom:12px">
+      <span style="display:grid;place-items:center;width:34px;height:34px;border-radius:10px;background:#1ba9e1;color:#0b0c22">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
+      </span>
+      <span style="display:grid;line-height:1.2"><span style="font-size:10px;font-weight:750;letter-spacing:.12em;text-transform:uppercase;color:rgba(214,223,236,.75)">Workspace</span><b style="color:#fff;font-size:16px">Projects</b></span>
+    </div>
+    <span class="wide" style="display:contents">
+      <a href="#">Dashboard</a><a href="#" style="background:rgba(255,255,255,.08);color:#fff">Projects</a><a href="#">Pipeline</a><a href="#">My work</a><a href="#">Boards</a><a href="#">Reports</a><a href="#">Chat</a>
+    </span>
+  </nav>
+
+  <main>
+    <!-- 1. Sticky project header -->
+    <header class="head">
+      <div class="hrow" style="display:flex;flex-wrap:wrap;align-items:center;gap:12px 14px">
+        <a href="#" class="desk-only" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--muted);text-decoration:none">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>Projects
+        </a>
+        <a href="#" class="mob-only" aria-label="Back to projects" style="color:var(--muted)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></a>
+        <span style="display:grid;place-items:center;width:40px;height:40px;border-radius:11px;background:var(--solid);color:#fff;font-weight:800;font-size:13px;flex:none">WCC</span>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0;flex:0 1 auto">
+          <h1 style="margin:0;font-size:22px;font-weight:800;letter-spacing:-.01em;color:var(--heading)">WhatsApp Customer Channel</h1>
+          <span class="chip desk-only" style="background:var(--track);color:var(--muted);font-family:ui-monospace,Consolas,monospace">WCC</span>
+          <span class="pill desk-only" style="background:var(--info-tint);color:var(--link)"><span style="width:8px;height:8px;border-radius:3px;background:#1ba9e1"></span>Projects workspace</span>
+        </div>
+        <div class="desk-only" style="display:flex;align-items:center;margin-left:8px" aria-label="Lead Mutsa Mwanza and 6 team members">
+          <span class="av" style="margin-left:0;width:34px;height:34px;box-shadow:0 0 0 2px var(--c2)" title="Lead: Mutsa Mwanza">MM</span>
+          <span class="av" style="background:#2d63c8" title="Tafadzwa Moyo">TM</span>
+          <span class="av" style="background:#7d55d6" title="Rudo Chikwanha">RC</span>
+          <span class="av" style="background:#0e8a6b" title="John Dube">JD</span>
+          <span class="av" style="background:var(--track);color:var(--muted)" title="3 more">+3</span>
+        </div>
+        <div style="flex:1 1 auto"></div>
+        <div class="desk-only" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+          <button class="btn" disabled title="Waiting on 1 of 2 sign-offs"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 5l7 7-7 7"/></svg>Advance stage</button>
+          <button class="btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>Request update</button>
+          <button class="btn btn-solid"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add work item</button>
+          <button class="btn icon-btn" aria-label="Share"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg></button>
+          <button class="btn icon-btn" aria-label="Export the one-pager (PDF)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 18v-6M9 15l3 3 3-3"/></svg></button>
+          <button class="btn icon-btn" aria-label="More actions"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg></button>
+        </div>
+        <button class="btn icon-btn mob-only" aria-label="More actions"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M5 12h.01M12 12h.01M19 12h.01"/></svg></button>
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:12px">
+        <span class="pill" style="background:var(--info-tint);color:var(--link)"><span style="width:7px;height:7px;border-radius:50%;background:currentColor"></span>Upcoming</span>
+        <div class="has-why" style="position:relative">
+          <button class="pill" style="font-weight:700;background:var(--warn-tint);color:var(--warn-ink);cursor:help" aria-describedby="why">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>At risk
+          </button>
+          <div id="why" class="why" role="tooltip">
+            <b style="display:block;margin-bottom:6px;color:var(--heading)">At risk because</b>
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <span>· BRS Sign Off is 2 business days over its 5-day target</span>
+              <span>· 4 of 23 open work items are overdue (17%, more than 10%)</span>
+              <span>· 1 open blocker, raised 5 days ago</span>
+            </div>
+            <span style="display:block;margin-top:8px;color:var(--faint)">The same rule as Reports → Projects.</span>
+          </div>
+        </div>
+        <span class="desk-only" style="width:1px;height:20px;background:var(--border)"></span>
+        <b style="font-size:13px;color:var(--heading)">Stage 6 of 16 · BRS Sign Off</b>
+        <span style="display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--bad-ink);font-weight:600">
+          <span class="desk-only" style="position:relative;width:90px;height:6px;border-radius:99px;background:var(--bad);overflow:hidden" aria-hidden="true"><span style="position:absolute;left:71%;top:0;bottom:0;width:2px;background:var(--card)"></span></span>
+          day 7 of 5 · 2 over
+        </span>
+      </div>
+
+      <div class="mob-only" style="gap:8px;margin-top:12px">
+        <button class="btn" disabled style="flex:1;justify-content:center">Advance stage</button>
+        <button class="btn btn-solid" style="flex:1;justify-content:center"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add item</button>
+      </div>
+
+      <nav class="tabs-nav" aria-label="Project sections" style="display:flex;gap:24px;margin-top:10px;overflow-x:auto">
+        <a class="tab on" href="#" aria-current="page">Overview</a><a class="tab" href="#">Lifecycle</a>
+        <a class="tab" href="#">Work <span style="font-family:ui-monospace,Consolas,monospace;font-size:11.5px;color:var(--faint)">23</span></a>
+        <a class="tab" href="#">Timeline</a><a class="tab" href="#">Risks &amp; Security</a><a class="tab" href="#">Testing</a>
+        <a class="tab" href="#">Documents</a><a class="tab" href="#">Team</a><a class="tab" href="#">Activity</a><a class="tab" href="#">Chat</a>
+      </nav>
+    </header>
+
+    <div class="body">
+      <!-- 2. Lifecycle stepper -->
+      <section class="card stepper-full" aria-label="Lifecycle stages" style="padding:14px 16px">
+        <div id="phases" style="display:flex;gap:10px"></div>
+        <div style="display:flex;flex-wrap:wrap;gap:16px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:11.5px;color:var(--faint)">
+          <span class="legend"><i style="border-radius:50%;background:var(--ok)"></i>Completed, with date</span>
+          <span class="legend"><i style="border-radius:50%;border:2px solid var(--warn);box-sizing:border-box"></i>Sent back once</span>
+          <span class="legend"><i style="border-radius:50%;background:var(--bad)"></i>Current, over target</span>
+          <span class="legend"><i style="border-radius:50%;border:2px solid var(--border);box-sizing:border-box"></i>Upcoming</span>
+          <span style="margin-left:auto">Click a stage for its checklist, sign-offs, history and comments</span>
+        </div>
+      </section>
+      <button class="card stepper-compact" style="box-sizing:border-box;width:100%;text-align:left;font:inherit;color:inherit;align-items:center;gap:12px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px 14px;cursor:pointer" aria-label="Stage 6 of 16, BRS Sign Off. Show all stages">
+        <span class="dot pulse" style="background:var(--bad);color:#fff;font-size:11px;font-weight:800">6</span>
+        <span style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:0">
+          <b style="font-size:13.5px;color:var(--heading)">Stage 6 of 16 · BRS Sign Off</b>
+          <span style="display:flex;gap:3px" aria-hidden="true" id="mini"></span>
+        </span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--faint)" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+
+      <!-- 3. KPI tiles -->
+      <section class="kpis" aria-label="Key figures">
+        <button class="tile" aria-label="Overall progress 38%">
+          <span class="k-title">Overall progress</span>
+          <span style="display:flex;align-items:center;gap:10px">
+            <svg width="54" height="54" viewBox="0 0 54 54" role="img" aria-label="38 percent"><circle cx="27" cy="27" r="22" fill="none" style="stroke:var(--track)" stroke-width="7"/><circle cx="27" cy="27" r="22" fill="none" style="stroke:var(--c1)" stroke-width="7" stroke-linecap="round" stroke-dasharray="52.5 138.2" transform="rotate(-90 27 27)"/></svg>
+            <span class="k-num">38%</span>
+          </span>
+          <span class="k-sub">Stages 31% · work 62%</span>
+        </button>
+        <button class="tile" aria-label="Forecast finish 30 January, 7 days after the target">
+          <span class="k-title">Forecast finish</span>
+          <span class="k-num" style="font-size:22px">30 Jan</span>
+          <span class="pill" style="height:22px;align-self:flex-start;background:var(--bad-tint);color:var(--bad-ink);font-size:11.5px">+7 days vs 23 Jan</span>
+          <span class="k-sub">50% likely · 85%: 13 Feb</span>
+        </button>
+        <button class="tile" aria-label="23 open work items, 2 fewer than 7 days ago">
+          <span class="k-title">Open work items</span><span class="k-num">23</span>
+          <span class="k-sub" style="color:var(--ok-ink);font-weight:600">▼ 2 in 7 days</span>
+          <svg viewBox="0 0 100 26" width="100%" height="26" aria-hidden="true"><polyline fill="none" style="stroke:var(--c1)" stroke-width="2" stroke-linejoin="round" points="0,8 12,7 24,9 36,6 48,8 60,10 72,12 84,14 100,17"/></svg>
+        </button>
+        <button class="tile" aria-label="4 overdue work items">
+          <span class="k-title">Overdue items</span><span class="k-num" style="color:var(--bad-ink)">4</span>
+          <span class="k-sub">17% of open items</span>
+          <svg viewBox="0 0 100 26" width="100%" height="26" aria-hidden="true"><polyline fill="none" style="stroke:var(--bad)" stroke-width="2" stroke-linejoin="round" points="0,22 12,22 24,18 36,18 48,14 60,14 72,10 84,10 100,6"/></svg>
+        </button>
+        <button class="tile" aria-label="1 open blocker">
+          <span class="k-title">Open blockers</span><span class="k-num">1</span><span class="k-sub">Oldest 5 days</span>
+          <svg viewBox="0 0 100 26" width="100%" height="26" aria-hidden="true"><polyline fill="none" style="stroke:var(--c2)" stroke-width="2" stroke-linejoin="round" points="0,20 20,20 40,10 55,10 70,20 84,20 92,10 100,10"/></svg>
+        </button>
+        <button class="tile" aria-label="2 open high or critical risks">
+          <span class="k-title">Risks: High / Critical</span><span class="k-num">2</span><span class="k-sub">of 6 open · all have owners</span>
+          <svg viewBox="0 0 100 26" width="100%" height="26" aria-hidden="true"><polyline fill="none" style="stroke:var(--c3)" stroke-width="2" stroke-linejoin="round" points="0,14 30,14 45,8 70,8 85,14 100,14"/></svg>
+        </button>
+        <button class="tile" aria-label="Security findings: not assessed yet">
+          <span class="k-title">Security: Critical / High</span><span class="k-num" style="color:var(--faint)">–</span>
+          <span class="k-sub">Not assessed yet (stage 11)</span>
+          <span class="k-sub" style="margin-top:auto">The QAT/UAT pass rate tile appears from stage 12</span>
+        </button>
+      </section>
+
+      <label class="tabs-select">
+        <span style="display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:4px">Section</span>
+        <select style="width:100%;min-height:42px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font:600 14px inherit;font-family:inherit;padding:0 10px">
+          <option>Overview</option><option>Lifecycle</option><option>Work (23)</option><option>Timeline</option><option>Risks &amp; Security</option><option>Testing</option><option>Documents</option><option>Team</option><option>Activity</option><option>Chat</option>
+        </select>
+      </label>
+
+      <!-- 4. Overview grid -->
+      <div class="cols">
+        <div class="col-main">
+          <section class="card o-att" aria-labelledby="att" style="padding-bottom:8px;border-color:color-mix(in srgb,var(--bad) 35%,var(--border))">
+          <div style="display:flex;align-items:center;gap:10px">
+            <h2 id="att" class="h3" style="font-size:17px">What needs attention</h2>
+            <span class="chip" style="background:var(--bad-tint);color:var(--bad-ink)">6</span>
+            <span style="flex:1"></span><span style="font-size:12px;color:var(--faint)">Most urgent first</span>
+          </div>
+          <ol id="attention" style="list-style:none;margin:10px 0 0;padding:0"></ol>
+        </section>
+          <section class="card o-bu" aria-labelledby="bu">
+          <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap">
+            <div style="flex:1 1 300px;min-width:0">
+              <h2 id="bu" class="h3">Burn-up and forecast</h2>
+              <p class="insight">Scope grew 17% since 5 Sep (52 → 61 items). At the current pace the work is 50% likely done by 30 Jan, 7 days after the target.</p>
+            </div>
+            <div style="display:flex;gap:14px;font-size:12px;color:var(--muted);flex-wrap:wrap">
+              <span class="legend"><i style="height:3px;width:14px;background:var(--c2)"></i>Scope</span>
+              <span class="legend"><i style="height:3px;width:14px;background:var(--c1)"></i>Done</span>
+              <span class="legend"><i style="width:14px;background:color-mix(in srgb,var(--c1) 22%,transparent)"></i>Forecast 50–85%</span>
+            </div>
+          </div>
+          <div style="position:relative;margin-top:10px">
+            <svg viewBox="0 0 720 240" width="100%" role="img" aria-label="Burn-up: scope rose from 52 to 61 items; 38 are done; the forecast finishes between late January and 13 February">
+              <g style="stroke:var(--grid)"><line x1="40" y1="20" x2="700" y2="20"/><line x1="40" y1="74.3" x2="700" y2="74.3"/><line x1="40" y1="128.6" x2="700" y2="128.6"/><line x1="40" y1="182.9" x2="700" y2="182.9"/><line x1="40" y1="210" x2="700" y2="210"/></g>
+              <text class="axis" x="32" y="24" text-anchor="end">70</text><text class="axis" x="32" y="78" text-anchor="end">50</text><text class="axis" x="32" y="132" text-anchor="end">30</text><text class="axis" x="32" y="187" text-anchor="end">10</text>
+              <text class="axis" x="40" y="228">Sep</text><text class="axis" x="142" y="228">Oct</text><text class="axis" x="263" y="228">Nov</text><text class="axis" x="381" y="228">Dec</text><text class="axis" x="505" y="228">Jan</text><text class="axis" x="626" y="228">Feb</text>
+              <polygon points="370,106.9 562.5,44.4 672.5,44.4" style="fill:color-mix(in srgb,var(--c1) 22%,transparent)"/>
+              <line x1="370" y1="106.9" x2="617.5" y2="44.4" style="stroke:var(--c1)" stroke-width="2" stroke-dasharray="5 4"/>
+              <polyline fill="none" style="stroke:var(--c2)" stroke-width="2.5" stroke-linejoin="round" points="40,68.9 67.5,68.9 95,66.1 122.5,66.1 150,60.7 177.5,60.7 205,52.6 232.5,52.6 260,47.1 287.5,47.1 315,44.4 342.5,44.4 370,44.4"/>
+              <line x1="370" y1="44.4" x2="700" y2="44.4" style="stroke:var(--c2)" stroke-width="2" stroke-dasharray="3 4"/>
+              <polyline fill="none" style="stroke:var(--c1)" stroke-width="2.5" stroke-linejoin="round" points="40,188.3 67.5,182.9 95,177.4 122.5,169.3 150,163.9 177.5,155.7 205,150.3 232.5,142.2 260,134 287.5,128.6 315,120.4 342.5,112.3 370,106.9"/>
+              <line x1="370" y1="20" x2="370" y2="210" style="stroke:var(--muted)" stroke-width="1.5"/>
+              <text class="axis" x="374" y="16" style="fill:var(--muted);font-weight:700">Today</text>
+              <line x1="590" y1="20" x2="590" y2="210" style="stroke:var(--bad)" stroke-width="1.5" stroke-dasharray="4 3"/>
+              <text class="axis" x="586" y="16" text-anchor="end" style="fill:var(--bad-ink);font-weight:700">Target 23 Jan</text>
+              <circle cx="617.5" cy="44.4" r="4.5" style="fill:var(--c1);stroke:var(--card)" stroke-width="2"/>
+              <circle cx="672.5" cy="44.4" r="4.5" style="fill:var(--card);stroke:var(--c1)" stroke-width="2"/>
+              <text class="axis" x="617.5" y="36" text-anchor="middle" style="fill:var(--text);font-weight:700">50%</text>
+              <text class="axis" x="672.5" y="36" text-anchor="middle" style="fill:var(--text);font-weight:700">85%</text>
+              <circle cx="315" cy="120.4" r="5" style="fill:var(--c1);stroke:var(--card)" stroke-width="2"/>
+            </svg>
+            <div class="desk-only" role="tooltip" style="position:absolute;left:43.75%;top:50%;transform:translate(-50%,10px);background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:var(--e3);padding:8px 11px;font-size:12px;line-height:1.5;pointer-events:none;white-space:nowrap">
+              <b style="color:var(--heading)">Week of 14 Nov</b><br><span style="color:var(--muted)">Scope</span> 61 · <span style="color:var(--muted)">Done</span> 33<br><span style="color:var(--link)">Click to list the 33 done items</span>
+            </div>
+          </div>
+          <div class="foot">
+            <span>Forecast: 10,000 simulated runs from the last 10 weeks of throughput. <a href="#">How it's worked out</a></span>
+            <button class="link-btn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 3h18v18H3zM3 9h18M3 15h18M9 3v18"/></svg>Data table</button>
+          </div>
+        </section>
+          <div class="pair o-pair">
+          <section class="card o-cr" aria-labelledby="cr">
+          <h2 id="cr" class="h3">Created vs resolved</h2>
+          <p class="insight">More resolved than created in 5 of the last 8 weeks.</p>
+          <svg viewBox="0 0 340 200" width="100%" role="img" aria-label="Created and resolved work items per week for 8 weeks" style="margin-top:8px">
+            <g style="stroke:var(--grid)"><line x1="30" y1="20" x2="330" y2="20"/><line x1="30" y1="80" x2="330" y2="80"/><line x1="30" y1="140" x2="330" y2="140"/><line x1="30" y1="170" x2="330" y2="170"/></g>
+            <text class="axis" x="24" y="24" text-anchor="end">5</text><text class="axis" x="24" y="84" text-anchor="end">3</text><text class="axis" x="24" y="144" text-anchor="end">1</text>
+            <g style="fill:var(--c1)"><rect x="35" y="80" width="13" height="90" rx="2"/><rect x="72.5" y="110" width="13" height="60" rx="2"/><rect x="110" y="50" width="13" height="120" rx="2"/><rect x="147.5" y="140" width="13" height="30" rx="2"/><rect x="185" y="80" width="13" height="90" rx="2"/><rect x="222.5" y="110" width="13" height="60" rx="2"/><rect x="260" y="140" width="13" height="30" rx="2"/></g>
+            <g style="fill:var(--c2)"><rect x="49" y="110" width="13" height="60" rx="2"/><rect x="86.5" y="80" width="13" height="90" rx="2"/><rect x="124" y="110" width="13" height="60" rx="2"/><rect x="161.5" y="80" width="13" height="90" rx="2"/><rect x="199" y="80" width="13" height="90" rx="2"/><rect x="236.5" y="80" width="13" height="90" rx="2"/><rect x="274" y="80" width="13" height="90" rx="2"/><rect x="311.5" y="110" width="13" height="60" rx="2"/></g>
+            <text class="axis" x="48" y="188" text-anchor="middle">6 Oct</text><text class="axis" x="123" y="188" text-anchor="middle">20</text><text class="axis" x="198" y="188" text-anchor="middle">3 Nov</text><text class="axis" x="273" y="188" text-anchor="middle">17</text><text class="axis" x="311" y="188" text-anchor="middle">24</text>
+          </svg>
+          <div class="foot"><span style="display:inline-flex;gap:12px"><span class="legend"><i style="background:var(--c1)"></i>Created</span><span class="legend"><i style="background:var(--c2)"></i>Resolved</span></span><button class="link-btn">Data table</button></div>
+        </section>
+          <section class="card o-cfd" aria-labelledby="cfd">
+          <h2 id="cfd" class="h3">Cumulative flow</h2>
+          <p class="insight">In progress has held at 6–9 items: no bottleneck.</p>
+          <svg viewBox="0 0 340 200" width="100%" role="img" aria-label="Cumulative flow by status over 12 weeks" style="margin-top:8px">
+            <polygon points="30,135.7 105,114.3 180,97.1 255,80 330,67.1 330,39.3 255,41.4 180,45.7 105,56.4 30,58.6" style="fill:color-mix(in srgb,var(--c4) 45%,var(--card))"/>
+            <polygon points="30,148.6 105,131.4 180,116.4 255,97.1 330,82.1 330,67.1 255,80 180,97.1 105,114.3 30,135.7" style="fill:var(--c2)"/>
+            <polygon points="30,152.9 105,137.9 180,122.9 255,105.7 330,88.6 330,82.1 255,97.1 180,116.4 105,131.4 30,148.6" style="fill:var(--c6)"/>
+            <polygon points="30,170 30,152.9 105,137.9 180,122.9 255,105.7 330,88.6 330,170" style="fill:var(--c1)"/>
+            <line x1="30" y1="170" x2="330" y2="170" style="stroke:var(--border)"/>
+            <text class="axis" x="30" y="188">5 Sep</text><text class="axis" x="180" y="188" text-anchor="middle">17 Oct</text><text class="axis" x="330" y="188" text-anchor="end">28 Nov</text>
+          </svg>
+          <div class="foot"><span style="display:inline-flex;gap:10px;flex-wrap:wrap"><span class="legend"><i style="background:color-mix(in srgb,var(--c4) 45%,var(--card))"></i>To do</span><span class="legend"><i style="background:var(--c2)"></i>In progress</span><span class="legend"><i style="background:var(--c6)"></i>Review</span><span class="legend"><i style="background:var(--c1)"></i>Done</span></span></div>
+        </section>
+          </div>
+          <section class="card o-wl" aria-labelledby="wl">
+          <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap">
+            <div style="flex:1 1 280px"><h2 id="wl" class="h3">Workload this week</h2><p class="insight">Tafadzwa is 4 h over the 30 h weekly capacity; Mutsa has 18 h free.</p></div>
+            <span style="font-size:12px;color:var(--faint)">Remaining estimates due this week + hours logged</span>
+          </div>
+          <svg viewBox="0 0 720 150" width="100%" role="img" aria-label="Hours of work per person this week against a 30 hour capacity" style="margin-top:10px">
+            <g class="axis" style="fill:var(--muted);font-size:12px"><text x="140" y="30" text-anchor="end">Tafadzwa Moyo</text><text x="140" y="62" text-anchor="end">John Dube</text><text x="140" y="94" text-anchor="end">Rudo Chikwanha</text><text x="140" y="126" text-anchor="end">Mutsa Mwanza (lead)</text></g>
+            <g style="fill:var(--track)"><rect x="150" y="16" width="446" height="20" rx="4"/><rect x="150" y="48" width="446" height="20" rx="4"/><rect x="150" y="80" width="446" height="20" rx="4"/><rect x="150" y="112" width="446" height="20" rx="4"/></g>
+            <rect x="150" y="16" width="379" height="20" rx="4" style="fill:var(--bad)"/>
+            <g style="fill:var(--c1)"><rect x="150" y="48" width="301" height="20" rx="4"/><rect x="150" y="80" width="245" height="20" rx="4"/><rect x="150" y="112" width="134" height="20" rx="4"/></g>
+            <line x1="484" y1="8" x2="484" y2="140" style="stroke:var(--heading)" stroke-width="2" stroke-dasharray="4 3"/>
+            <text class="axis" x="488" y="8" style="fill:var(--heading);font-weight:700">Capacity 30 h</text>
+            <g class="axis" style="fill:var(--text);font-weight:600;font-size:11.5px"><text x="604" y="30" style="fill:var(--bad-ink)">34 h · 4 over</text><text x="604" y="62">27 h</text><text x="604" y="94">22 h</text><text x="604" y="126">12 h</text></g>
+          </svg>
+          <div class="foot"><span>Capacity is set per workspace. Click a bar for that person's items.</span><button class="link-btn">Data table</button></div>
+        </section>
+          <details class="card o-about" style="padding:14px 20px">
+          <summary style="cursor:pointer;font-weight:700;color:var(--heading)">About this project <span style="font-weight:500;color:var(--faint);font-size:12.5px">· description, dates, lead and Concept Note</span></summary>
+        </details>
+        </div>
+        <div class="col-side">
+          <section class="card o-ai" aria-labelledby="ai">
+            <div style="display:flex;align-items:center;gap:8px">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" style="color:var(--c6)" aria-hidden="true"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg>
+              <h2 id="ai" class="h3">Summary</h2><span style="flex:1"></span>
+              <button class="link-btn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>Regenerate</button>
+            </div>
+            <p style="margin:10px 0 0;font-size:13.5px;line-height:1.55">WhatsApp Customer Channel is at BRS Sign Off, 2 business days past its 5-day target, waiting on Waraidzo's approval of BRS v2. One blocker is open: the client's WhatsApp Business API credentials, raised 5 days ago. 4 of 23 open work items are overdue, and the forecast finish is 7 days after the target.</p>
+            <div class="foot"><span>Written by AI from this project's data only · every number checked</span><span>Today 10:42</span></div>
+          </section>
+          <section class="card o-next" aria-labelledby="next">
+            <div style="display:flex;align-items:center;gap:8px">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--muted)" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              <h2 id="next" class="h3">Next 14 days</h2>
+            </div>
+            <ul id="upcoming" style="list-style:none;margin:8px 0 0;padding:0"></ul>
+          </section>
+          <section class="card o-tis" aria-labelledby="tis">
+          <h2 id="tis" class="h3">Time in each stage vs target</h2>
+          <p class="insight">2 of 6 stages ran over; BRS Sign Off is 2 days over so far.</p>
+          <svg viewBox="0 0 340 214" width="100%" role="img" aria-label="Business days in each stage against its target" style="margin-top:8px">
+            <g class="axis" style="fill:var(--muted);font-size:11px"><text x="108" y="34" text-anchor="end">PCN Draft</text><text x="108" y="64" text-anchor="end">Risk Assessment</text><text x="108" y="94" text-anchor="end">PCN Sign Off</text><text x="108" y="124" text-anchor="end">Tech Discovery</text><text x="108" y="154" text-anchor="end">BRS Draft</text><text x="108" y="184" text-anchor="end" style="font-weight:700;fill:var(--heading)">BRS Sign Off</text></g>
+            <g style="fill:var(--c1)"><rect x="115" y="22" width="66.7" height="16" rx="3"/><rect x="115" y="52" width="50" height="16" rx="3"/><rect x="115" y="112" width="133.3" height="16" rx="3"/><rect x="115" y="142" width="150" height="16" rx="3"/></g>
+            <g style="fill:var(--bad)"><rect x="115" y="82" width="100" height="16" rx="3"/><rect x="115" y="172" width="116.7" height="16" rx="3"/></g>
+            <g style="stroke:var(--heading)" stroke-width="2"><line x1="198.3" y1="18" x2="198.3" y2="42"/><line x1="165" y1="48" x2="165" y2="72"/><line x1="198.3" y1="78" x2="198.3" y2="102"/><line x1="281.7" y1="108" x2="281.7" y2="132"/><line x1="281.7" y1="138" x2="281.7" y2="162"/><line x1="198.3" y1="168" x2="198.3" y2="192"/></g>
+            <g class="axis" style="fill:var(--text);font-weight:600"><text x="204" y="34">4 / 5</text><text x="171" y="64">3 / 3</text><text x="221" y="94" style="fill:var(--bad-ink)">6 / 5 · +1</text><text x="288" y="124">8 / 10</text><text x="288" y="154">9 / 10</text><text x="237" y="184" style="fill:var(--bad-ink)">7 / 5 · +2</text></g>
+            <text class="axis" x="115" y="208">Bars: business days used · tick: target</text>
+          </svg>
+        </section>
+          <section class="card o-act" aria-labelledby="act">
+          <div style="display:flex;align-items:center;gap:8px">
+            <h2 id="act" class="h3">Recent activity</h2><span style="flex:1"></span><a href="#" style="font-size:12.5px;font-weight:600">View all</a>
+          </div>
+          <div role="group" aria-label="Filter activity" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px" id="filters"></div>
+          <ol id="activity" style="list-style:none;margin:10px 0 0;padding:0"></ol>
+        </section>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div id="drawer" hidden>
+    <div class="drawer-back"></div>
+    <aside class="drawer" role="dialog" aria-label="Stage 6, BRS Sign Off">
+      <div style="display:flex;align-items:flex-start;gap:10px">
+        <span class="dot pulse" style="background:var(--bad);color:#fff;font-size:11px;font-weight:800;margin-top:3px">6</span>
+        <div style="flex:1">
+          <div style="font-size:11px;font-weight:750;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)">Requirements &amp; Design · stage 6 of 16</div>
+          <h2 style="margin:2px 0 0;font-size:20px;color:var(--heading)">BRS Sign Off</h2>
+          <div style="margin-top:4px;font-size:13px;color:var(--bad-ink);font-weight:600">Day 7 of 5 business days · 2 over · escalated 27 Nov</div>
+        </div>
+        <button class="btn icon-btn" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      </div>
+
+      <h3>Done when</h3>
+      <div class="drow"><span class="dot" style="width:20px;height:20px;background:var(--ok);color:#fff"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><span style="flex:1">BRS attached (v2)</span><small style="color:var(--ok-ink);font-weight:700">Done</small></div>
+      <div class="drow"><span class="dot" style="width:20px;height:20px;background:var(--ok);color:#fff"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span><span style="flex:1">Mutsa Mwanza approves (systems)</span><small style="color:var(--ok-ink);font-weight:700">Done</small></div>
+      <div class="drow"><span class="dot" style="width:20px;height:20px;border:2px solid var(--warn)"></span><span style="flex:1">Waraidzo Mhaka approves (business)</span><small style="color:var(--warn-ink);font-weight:700">Waiting</small></div>
+
+      <h3>Sign-offs</h3>
+      <div class="drow"><span class="av" style="margin:0;width:30px;height:30px;background:#a34a00;border:0">WM</span><span style="flex:1;display:flex;flex-direction:column"><b>Waraidzo Mhaka</b><small style="color:var(--faint)">Business · alternate Mutsa · asked 25 Nov, reminded 27 Nov</small></span><button class="btn" style="min-height:32px;font-size:12.5px">Remind</button></div>
+      <div class="drow"><span class="av" style="margin:0;width:30px;height:30px;border:0">MM</span><span style="flex:1;display:flex;flex-direction:column"><b>Mutsa Mwanza</b><small style="color:var(--faint)">Systems · approved v2 on 26 Nov, 1 business day after the request</small></span><span class="chip" style="background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok-ink)">Approved</span></div>
+
+      <h3>Deliverables</h3>
+      <div class="drow"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--link)" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><span style="flex:1;display:flex;flex-direction:column"><b>BRS v2</b><small style="color:var(--faint)">Written in PMS · submitted by Tafadzwa on 25 Nov</small></span><button class="link-btn">Preview</button></div>
+      <div class="drow" style="color:var(--faint)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><span style="flex:1;display:flex;flex-direction:column"><span>BRS v1</span><small>19 Nov · replaced after Mutsa's comments</small></span><button class="link-btn">Preview</button></div>
+
+      <h3>History</h3>
+      <div class="drow"><small style="width:56px;color:var(--faint)">27 Nov</small><span>Escalated to the Managers (over target)</span></div>
+      <div class="drow"><small style="width:56px;color:var(--faint)">25 Nov</small><span>Sign-off requested for BRS v2</span></div>
+      <div class="drow"><small style="width:56px;color:var(--faint)">19 Nov</small><span>Entered from BRS Draft by Tafadzwa; gate met (BRS v1 attached)</span></div>
+
+      <h3>Comments</h3>
+      <div class="drow" style="align-items:flex-start"><span class="av" style="margin:0;width:28px;height:28px;font-size:10.5px;background:#a34a00;border:0">WM</span><span style="display:flex;flex-direction:column;gap:2px"><span>Reviewing section 7 (integrations) with the client on Monday, then I'll sign.</span><small style="color:var(--faint)">Waraidzo · yesterday</small></span></div>
+      <label style="display:block;margin-top:10px"><span style="position:absolute;left:-9999px">Add a comment</span><textarea rows="2" placeholder="Add a comment…" style="width:100%;box-sizing:border-box;border-radius:10px;border:1px solid var(--border);background:var(--canvas);color:var(--text);padding:9px 11px;font:inherit;font-size:13px"></textarea></label>
+
+      <div style="display:flex;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+        <button class="btn" disabled title="1 sign-off outstanding">Advance stage</button>
+        <button class="btn">Send back…</button>
+        <span style="flex:1"></span>
+        <a href="#" style="align-self:center;font-size:12.5px;font-weight:600">Open in Lifecycle</a>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+const q = new URLSearchParams(location.search);
+const app = document.getElementById("app");
+if (q.get("theme") === "dark") app.className = "app dark";
+if (q.get("tip")) app.classList.add("tip");
+if (q.get("drawer")) document.getElementById("drawer").hidden = false;
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+const S = (n, name, state, date) => ({ n, name, state, date });
+const phases = [
+  ["Initiation", 3, [S(1, "PCN Draft", "done", "12 Oct"), S(2, "Risk Assessment", "done", "15 Oct"), S(3, "PCN Sign Off", "back", "23 Oct")]],
+  ["Requirements & Design", 5, [S(4, "Tech Discovery", "done", "5 Nov"), S(5, "BRS Draft", "done", "18 Nov"), S(6, "BRS Sign Off", "current", "day 7 of 5"), S(7, "BSS Draft", "up", ""), S(8, "BSS Sign Off", "up", "")]],
+  ["Build", 2, [S(9, "Dev Work", "up", ""), S(10, "Servers", "up", "")]],
+  ["Assurance", 3, [S(11, "Security", "up", ""), S(12, "QATs", "up", ""), S(13, "UATs", "up", "")]],
+  ["Release", 2, [S(14, "Deployment", "up", ""), S(15, "Post Deploy", "up", "")]],
+  ["Closure", 1, [S(16, "Close", "up", "")]],
+];
+const tick = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+const back = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-1"/></svg>';
+const dot = (s) =>
+  s.state === "done" ? `<span class="dot" style="background:var(--ok);color:#fff">${tick}</span>`
+  : s.state === "back" ? `<span class="dot" style="background:var(--warn-tint);color:var(--warn-ink);border:2px solid var(--warn)">${back}</span>`
+  : s.state === "current" ? `<span class="dot pulse" style="background:var(--bad);color:#fff;font-size:11px;font-weight:800">${s.n}</span>`
+  : `<span class="dot" style="border:2px solid var(--border);color:var(--faint);font-size:10.5px;font-weight:700">${s.n}</span>`;
+const label = { done: "completed", back: "completed, sent back once", current: "current, over target", up: "upcoming" };
+document.getElementById("phases").innerHTML = phases.map(([name, flex, stages]) => `
+  <div style="flex:${flex} 1 0;min-width:0;display:flex;flex-direction:column;gap:8px">
+    <div class="phase-name" style="display:flex;align-items:center;gap:8px;font-size:10.5px;font-weight:750;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(name)}</span><span style="flex:1;height:1px;background:var(--border)"></span></div>
+    <div style="display:flex;gap:2px">${stages.map((s) => `
+      <button class="stage${s.state === "current" && q.get("drawer") ? " sel" : ""}" aria-label="Stage ${s.n}, ${esc(s.name)}: ${label[s.state]}${s.date ? " " + esc(s.date) : ""}. Open details">
+        ${dot(s)}
+        <span class="s-name" style="${s.state === "current" ? "color:var(--bad-ink);font-weight:800" : s.state === "up" ? "color:var(--faint)" : ""}">${esc(s.name)}</span>
+        <span class="s-date" style="${s.state === "current" ? "color:var(--bad-ink);font-weight:700" : ""}">${esc(s.date) || "&nbsp;"}</span>
+      </button>`).join("")}</div>
+  </div>`).join("");
+document.getElementById("mini").innerHTML = phases.flatMap(([, , st]) => st).map((s) =>
+  `<span style="flex:1;height:5px;border-radius:3px;background:${s.state === "done" ? "var(--ok)" : s.state === "back" ? "var(--warn)" : s.state === "current" ? "var(--bad)" : "var(--track)"}"></span>`).join("");
+
+const tone = { bad: "background:var(--bad-tint);color:var(--bad-ink)", warn: "background:var(--warn-tint);color:var(--warn-ink)", info: "background:var(--info-tint);color:var(--link)" };
+const attention = [
+  ["Blocker", tone.bad, "Waiting for the client’s WhatsApp Business API credentials", "Raised by Mutsa Mwanza 5 days ago · holds up WCC-39 and WCC-44", "Resolve"],
+  ["Sign-off", tone.warn, "BRS v2 is waiting on Waraidzo Mhaka", "Requested 3 business days ago · Mutsa approved on 26 Nov", "Send reminder"],
+  ["Stage late", tone.bad, "BRS Sign Off is 2 business days over its target", "Escalated to the Managers on 27 Nov", "Open stage"],
+  ["Overdue", tone.warn, "WCC-41 Message template approval flow", "Due 21 Nov (5 days ago) · Tafadzwa Moyo", "Open"],
+  ["Overdue", tone.warn, "WCC-38 Opt-in consent capture, and 2 more", "Oldest due 24 Nov · John Dube, Rudo Chikwanha", "Show 3"],
+  ["Update", tone.info, "An update was requested 4 working days ago", "Admin asked: “When does the pilot number go live?”", "Post update"],
+];
+document.getElementById("attention").innerHTML = attention.map(([kind, style, title, meta, action], i) => `
+  <li class="row-act">
+    <span style="width:18px;font-size:12px;font-weight:700;color:var(--faint);text-align:right">${i + 1}</span>
+    <span class="chip" style="${style};min-width:86px">${kind}</span>
+    <span style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 200px">
+      <b style="font-size:13.5px;color:var(--heading)">${esc(title)}</b>
+      <small style="font-size:12px;color:var(--faint)">${esc(meta)}</small>
+    </span>
+    <button class="btn" style="min-height:34px;font-size:12.5px">${action}</button>
+  </li>`).join("");
+
+const upcoming = [
+  ["1 Dec", "Monday", "WCC-44 Sandbox webhook test", "Work item due · Tafadzwa"],
+  ["4 Dec", "Thursday", "Sprint 7 ends", "9 of 14 items done"],
+  ["8 Dec", "Monday", "BSS Draft target, if BRS is signed on Monday", "Lifecycle"],
+  ["10 Dec", "Wednesday", "Risk review: data residency", "Risk owner: Mutsa"],
+  ["11 Dec", "Friday", "Milestone: pilot number provisioned", "Epic WCC-2"],
+];
+document.getElementById("upcoming").innerHTML = upcoming.map(([d, wd, what, kind]) => `
+  <li style="display:flex;gap:12px;padding:9px 0;border-top:1px solid var(--border);font-size:13px">
+    <span style="flex:none;width:70px;display:flex;flex-direction:column;line-height:1.2"><b style="color:var(--heading)">${d}</b><small style="color:var(--faint);font-size:11.5px">${wd}</small></span>
+    <span style="display:flex;flex-direction:column;gap:2px;min-width:0"><span>${esc(what)}</span><small style="color:var(--faint);font-size:11.5px">${esc(kind)}</small></span>
+  </li>`).join("");
+
+document.getElementById("filters").innerHTML = ["All", "Stages", "Work", "Documents", "People"].map((f, i) =>
+  `<button class="pill" aria-pressed="${i === 0}" style="cursor:pointer;height:26px;${i === 0 ? "background:var(--solid);color:#fff" : "background:var(--track);color:var(--muted)"}">${f}</button>`).join("");
+const activity = [
+  ["TM", "#2d63c8", "Tafadzwa moved WCC-44 to In review", "4 hours ago"],
+  ["RC", "#7d55d6", "Rudo logged 3 h on WCC-39", "6 hours ago"],
+  ["JD", "#0e8a6b", "John resolved WCC-36 Delivery receipts", "Yesterday"],
+  ["WM", "#a34a00", "Waraidzo commented on BRS Sign Off", "Yesterday"],
+  ["MM", "#011f5b", "Mutsa approved BRS v2", "26 Nov"],
+  ["TM", "#2d63c8", "Tafadzwa submitted BRS v2 for sign-off", "25 Nov"],
+  ["AD", "#5b6280", "Admin requested an update", "24 Nov"],
+  ["MM", "#011f5b", "Mutsa raised a blocker: API credentials", "23 Nov"],
+];
+document.getElementById("activity").innerHTML = activity.map(([who, colour, what, when]) => `
+  <li style="display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--border)">
+    <span class="av" style="margin:0;width:28px;height:28px;font-size:10.5px;background:${colour};border:0;flex:none">${who}</span>
+    <span style="display:flex;flex-direction:column;gap:2px;min-width:0;font-size:13px"><span>${esc(what)}</span><small style="color:var(--faint);font-size:11.5px">${when}</small></span>
+  </li>`).join("");
+</script>
+</body>
+</html>

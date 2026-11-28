@@ -22,6 +22,8 @@ export const RAG_RULES = /** @type {const} */ ({
   staleFactorRed: 2,
   /** An update request left unanswered for more than this many working days (Mon–Fri) is overdue. */
   requestOverdueWorkingDays: 3,
+  /** A lifecycle stage over its target: Amber; at this many times its target: Red. */
+  stageOverFactorRed: 2,
 });
 /** @type {Record<Rag, { label: string; tone: string; rank: number }>} */ export const RAG_META = {
   RED: { label: "Off track", tone: "red", rank: 3 },
@@ -68,6 +70,11 @@ export function ragOf(s, facts, now, limits) {
     const age = facts.oldestBlockerAt ? Math.floor((now - Date.parse(facts.oldestBlockerAt)) / DAY) : 0;
     if (age > R.blockerDaysRed) red.push(`Blocked for ${age} days`);
     else amber.push(`${facts.openBlockers} open ${facts.openBlockers === 1 ? "blocker" : "blockers"}`);
+  }
+  const st = facts.stage;
+  if (st && st.targetDays > 0 && st.usedDays > st.targetDays) {
+    const over = Math.round((st.usedDays - st.targetDays) * 10) / 10;
+    (st.usedDays >= st.targetDays * R.stageOverFactorRed ? red : amber).push(`${st.name} is ${over} business ${over === 1 ? "day" : "days"} over its ${st.targetDays}-day target`);
   }
   const stalled = stalledDays(s, now, limits);
   if (stalled !== null) (stalled >= limits.stallDays * R.staleFactorRed ? red : amber).push(`No progress update for ${stalled} days`);
@@ -133,4 +140,11 @@ export function needsAttention(s, hasOpenBlocker, now, limits) {
  * @property {string | null} [oldestBlockerAt] When the oldest open blocker was raised.
  * @property {number} openItems
  * @property {number} overdueItems
+ * @property {StageFact | null} [stage] The project's current lifecycle stage, when it has one and it has a target.
+ */
+/**
+ * @typedef {Object} StageFact
+ * @property {string} name
+ * @property {number} usedDays Business days spent in the stage so far.
+ * @property {number} targetDays
  */

@@ -1408,3 +1408,26 @@ Guide: `docs/project-documents.md`. Screenshots: `docs/screenshots/documents/`.
   passed (151 frontend, 192 backend).
 - **Not included:** the Econet logo (printouts use the organisation's own letterhead); Word (.docx) export (print or
   save as PDF instead).
+
+## Project page, phase 1: the overview endpoint (2026-11-28)
+
+Design: `docs/design/project-cockpit-mockups.html`, screenshots in `docs/design/cockpit/`. Decisions: DECISIONS.md,
+"Project page".
+
+- **`GET /api/systems/:id/overview`** returns everything the new project page's Overview needs in one call: the
+  header (lead, team, workspace, health and its reasons), the lifecycle stepper, the KPI tiles (progress, forecast
+  finish, open, overdue and done work items, blockers, High/Critical risks, security findings, test pass rates), what
+  needs attention (ranked, each with its action), the next 14 days, and the series for the burn-up, created vs
+  resolved, cumulative flow, time in each stage and workload charts, plus 30-day sparklines. The screens come in the
+  next phases.
+- **Health now counts the lifecycle:** a stage over its target is At risk, at twice its target Off track, in Reports →
+  Projects as on the project page. Some projects' health in Reports changes.
+- **Forecasts:** a Monte Carlo forecast from work-item throughput (50% and 85% dates, or "not enough history"), and one
+  from the remaining stages' targets.
+- **Workload limits** gain the weekly hours per person (`capacityHours`, default 30).
+- **Fixed:** assigning a developer to a project failed with a database error.
+- **No migration.** Tests: `tests/cockpit.test.js` (frontend, 12: health with the stage, the forecasts including too
+  little history, the attention ranking) and `tests/overview.test.js` (backend, 5: a restricted item left out, the
+  figures equal to Reports → Projects and to their PQL lists, header, stepper, attention, forecast and series, the
+  stage in health in both places, another organisation's 404). `npm test`: 360 passed (163 frontend, 197 backend).
+  Postman: three requests under "Overview".

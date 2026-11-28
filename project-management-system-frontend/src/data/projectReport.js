@@ -3,7 +3,7 @@
 /** @import { Limits } from './project' */
 /** @import { Feature } from './features' */
 /** @import { Role, User } from './roles' */
-/** @import { Rag } from './projectHealth' */
+/** @import { Rag, StageFact } from './projectHealth' */
 // The Projects report: filters, rows, figures and resourcing, worked out once. The Worker calls
 // `buildProjectReport` with figures it counted in SQL (work items through worker/access.ts), and both the
 // screen and the exports show its result, so they always agree.
@@ -130,7 +130,7 @@ export function buildProjectReport(input) {
     const open = blockers.filter((b) => b.systemId === s.id);
     const oldest = open.map((b) => b.raisedAt).sort()[0] ?? null;
     const counts = items[s.id] ?? { open: 0, overdue: 0, done: 0 };
-    const { rag, reasons } = ragOf(s, { openBlockers: open.length, oldestBlockerAt: oldest, openItems: counts.open, overdueItems: counts.overdue }, now, limits);
+    const { rag, reasons } = ragOf(s, { openBlockers: open.length, oldestBlockerAt: oldest, openItems: counts.open, overdueItems: counts.overdue, stage: input.stages?.[s.id] ?? null }, now, limits);
     if (f.rag && rag !== f.rag) continue;
     const reqs = requests.filter((r) => r.systemId === s.id);
     const devIds = (devsOf.get(s.id) ?? []).filter((id) => users.find((u) => u.id === id)?.role === "developer");
@@ -317,6 +317,7 @@ export function weeksBetween(from, to) {
  * @property {Limits} limits
  * @property {number} now
  * @property {ProjectReportFilters} filters
+ * @property {Record<string, StageFact>} [stages] Each project's current lifecycle stage (over its target counts against health).
  */
 /**
  * @typedef {Object} ProjectRow

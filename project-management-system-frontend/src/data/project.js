@@ -2,7 +2,7 @@
 /** @import { User } from './roles' */
 /** @import { Feature } from './features' */
 import { isOpen } from "./features";
-/** @type {Limits} */ export const DEFAULT_LIMITS = { projects: 3, features: 5, stallDays: 14 };
+/** @type {Limits} */ export const DEFAULT_LIMITS = { projects: 3, features: 5, stallDays: 14, capacityHours: 30 };
 /**
  * Workspaces group projects by the part of the business they serve. Administrators edit the list.
  * @type {string[]}
@@ -114,6 +114,7 @@ export function suggestDevelopers(users, systems, features, limits, now, exclude
  * @property {number} projects
  * @property {number} features
  * @property {number} stallDays
+ * @property {number} [capacityHours] Hours a person can work in a week (the project page's workload chart). 30 by default.
  */
 /**
  * @typedef {Object} Workload

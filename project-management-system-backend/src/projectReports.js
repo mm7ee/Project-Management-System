@@ -20,15 +20,16 @@ import { DEFAULT_LIMITS } from "../../project-management-system-frontend/src/dat
 import { RAG_RULES } from "../../project-management-system-frontend/src/data/projectHealth";
 import { STAGE_KEYS, STAGE_LABEL, buildProjectReport, describeFilters, parseFilters, progressByWeek, weekOf, weeksBetween } from "../../project-management-system-frontend/src/data/projectReport";
 import { xlsx } from "./xlsx";
-import { lifecycleReport } from "./lifecycle";
+import { lifecycleReport, stageFacts } from "./lifecycle";
 import { currentWorkspace, settingRow } from "./settings";
 /**
  * Open, overdue and done work items per project, as `viewer` may see them. Exported for the tests.
  * @param {Viewer} viewer
  * @param {string} today
+ * @param {string} [systemId] one project only (its page)
  * @returns {{ sql: string; args: unknown[] }}
  */
-export function itemCountsQuery(viewer, today) {
+export function itemCountsQuery(viewer, today, systemId) {
   const a = itemAccess(viewer, "w");
   return {
     sql: `SELECT w.system_id,
@@ -36,9 +37,9 @@ export function itemCountsQuery(viewer, today) {
             SUM(CASE WHEN st.category <> 'DONE' AND w.due_date IS NOT NULL AND w.due_date < ? THEN 1 ELSE 0 END) AS overdue,
             SUM(CASE WHEN st.category = 'DONE' THEN 1 ELSE 0 END) AS done
           FROM work_items w JOIN work_statuses st ON st.id = w.status
-          WHERE ${a.sql}
+          WHERE ${a.sql}${systemId ? " AND w.system_id = ?" : ""}
           GROUP BY w.system_id`,
-    args: [today, ...a.args],
+    args: [today, ...a.args, ...(systemId ? [systemId] : [])],
   };
 }
 /**
@@ -50,7 +51,7 @@ async function loadReport(c, f) {
   const { db } = c;
   const today = c.now.slice(0, 10);
   const counts = itemCountsQuery(c.viewer, today);
-  const [systems, users, assigned, items, blockers, requests, features, limitsRow] = await Promise.all([
+  const [systems, users, assigned, items, blockers, requests, features, limitsRow, stages] = await Promise.all([
     /** @type {Promise<D1Result<{ data: string; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT data FROM systems").all())),
     /** @type {Promise<D1Result<{ id: string; name: string; role: Role; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT id, name, role FROM users").all())),
     /** @type {Promise<D1Result<{ user_id: string; system_id: string; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT user_id, system_id FROM assignments").all())),
@@ -66,6 +67,7 @@ async function loadReport(c, f) {
     /** @type {Promise<D1Result<{ system_id: string; created_at: string; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT system_id, created_at FROM requests").all())),
     /** @type {Promise<D1Result<{ assignee: string; n: number; }>>} */ (/** @type {unknown} */ (db.prepare("SELECT assignee, COUNT(*) AS n FROM features WHERE assignee IS NOT NULL AND status NOT IN ('COMPLETED', 'CANCELLED') GROUP BY assignee").all())),
     /** @type {Promise<{ value: string; } | null>} */ (/** @type {unknown} */ (settingRow(db, "workload_limits"))),
+    stageFacts(c),
   ]);
   /** @type {Limits} */ const limits = limitsRow ? { ...DEFAULT_LIMITS, ...JSON.parse(limitsRow.value) } : DEFAULT_LIMITS;
   const all = systems.results.map((r) => /** @type {System} */ (JSON.parse(r.data)));
@@ -80,6 +82,7 @@ async function loadReport(c, f) {
     limits,
     now: Date.parse(c.now),
     filters: f,
+    stages,
   });
   return { report, systems: all, names: new Map(users.results.map((u) => [u.id, u.name])) };
 }

@@ -293,6 +293,38 @@ Values that make no sense are ignored. The screen keeps the same filters in its 
   Summary, Projects, Resourcing, Trends by week, Throughput, Work items (one row per item) and Lifecycle. Each
   export is written to the activity log (`report_exported`).
 
+## Project overview
+
+A project's page in one call (`src/overview.js`): `GET /api/systems/:id/overview`. Anyone who can see the project,
+view-only links included. Another workspace's project, or one that doesn't exist, is a `404`. Work items are counted
+through the viewer's access rule (security levels, a developer's own items, view-only links), so an item the viewer
+can't see is never counted, charted or listed.
+
+- `project`: `{ id, key, name, status, workspace, startedAt, dueAt, lead: { id, name } | null, team: [{ id, name, role }] }`.
+- `health`: `{ rag: "RED" | "AMBER" | "GREEN" | "NONE", label, reasons }`, the rule Reports → Projects uses
+  (`src/data/projectHealth.js`), with the lifecycle stage over its target as a reason.
+- `lifecycle` (null without one): `{ phases, stages: [{ code, name, phase, n, state, date, sentBack, targetDays }], stage:
+  { code, name, n, total, phase, type }, closed, enteredAt, sla, targetDays, ready, canAdvance, missing }`. A stage's
+  `state` is `done`, `skipped`, `migrated`, `current`, `overdue` or `upcoming`.
+- `kpis`: `progress { value, stages, work }`; `forecast { items, lifecycle, target, finish, basis, varianceDays }`
+  (`items`: the Monte Carlo forecast, `{ status: "ok" | "insufficient" | "done", p50, p85, history, explanation }`;
+  `lifecycle`: `{ businessDays, date }`; `finish` is the later of the two); `openItems { value, change7, pql }`;
+  `overdueItems { value, share, pql }`; `doneItems { value, pql }`; `blockers { value, oldestDays }`; `risks {
+  highCritical, open, unowned }`; `security { criticalHigh, open, total, stage }`; `tests` (QAT, UAT and smoke pass
+  rates, from the testing stage on).
+- `attention`: `{ total, entries: [{ kind, id, since, title, detail, action: { kind, label, ref?, href?, pql? } }] }`,
+  ranked (`src/data/attention.js`): blockers, sign-offs waiting, the stage over its target, the stage near it with its
+  gate unmet, overdue work items, update requests, no progress update; the oldest first within each.
+- `upcoming`: the next 14 days (work items and epics due, sprints ending, the stage's target, the project's due date).
+- `series`: `weeks` (12 weeks: created, resolved, scope, done), `cumulative` (status category at the end of each
+  week), `days` (30 days: open, overdue, blockers, High/Critical risks), `timeInStage` (business days against each
+  target), `workload` (`capacityHours`, and per team member the hours logged this week and the remaining estimates
+  due by Sunday).
+- `pql`: the work-item lists behind the figures (`open`, `overdue`, `done`, `all`); `POST /api/search` with one
+  gives the same count as its tile.
+- `PUT /api/settings/limits` takes `capacityHours` (1 to 80, default 30): the weekly hours per person in the
+  workload chart.
+
 ## Project lifecycle
 
 Each organisation has lifecycle templates (phases, stages and their gates); each project is on one version of one

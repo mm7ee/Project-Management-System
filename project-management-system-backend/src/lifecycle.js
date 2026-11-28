@@ -616,6 +616,65 @@ async function lifecycleView(c, systemId) {
   };
 }
 
+/**
+ * What a project's page needs from its lifecycle (src/overview.js): where it is, the clock, the gate, who may move
+ * it, its history and the sign-offs waiting. Null when the project has no lifecycle.
+ * @param {ItemContext} c @param {string} systemId
+ */
+export async function lifecycleSnapshot(c, systemId) {
+  const life = await lifeOf(c.db, systemId);
+  if (!life) return null;
+  const sys = await project(c, systemId);
+  const { def } = await defOf(c, life);
+  const stage = /** @type {Stage} */ (stageOf(def, life.stage_code));
+  const closed = life.state === "closed";
+  const [facts, cal, history, pending] = await Promise.all([
+    gatherFacts(c, sys, life, stage),
+    loadCalendar(c.db),
+    c.db.prepare("SELECT from_code, to_code, kind, reason, by_name, at FROM project_stage_history WHERE system_id = ? ORDER BY id").bind(systemId).all(),
+    closed ? Promise.resolve([]) : currentRound(c.db, systemId, stage.code),
+  ]);
+  const gate = evaluateGate(stage, facts);
+  const who = mover(c, sys, stage);
+  return {
+    def,
+    life,
+    stage,
+    closed,
+    cal,
+    sla: closed ? null : stageSla(life.stage_entered_at, stage.targetDays, Date.parse(c.now), cal),
+    gate,
+    ready: gateMet(gate),
+    canAdvance: !closed && !c.guest && !transitionProblem(def, stage.code, "advance", null, who),
+    history: /** @type {{ from_code: string | null; to_code: string; kind: string; reason: string | null; by_name: string; at: string }[]} */ (history.results),
+    pendingSignoffs: pending.filter((s) => s.status === "pending"),
+    pcnPending: stage.signoff?.source === "pcn_signatories" ? (sys.pcn?.signatories ?? []).filter((s) => s.status === "PENDING") : [],
+    tests: facts.tests,
+    items: facts.items,
+  };
+}
+/**
+ * Every active project's current stage with a target, for the health rule (Reports → Projects and the project page
+ * use the same figures).
+ * @param {ItemContext} c
+ * @returns {Promise<Record<string, import("../../project-management-system-frontend/src/data/projectHealth").StageFact>>}
+ */
+export async function stageFacts(c) {
+  const [rows, cal] = await Promise.all([
+    c.db.prepare("SELECT l.system_id, l.template_id, l.stage_code, l.stage_entered_at, t.definition FROM project_lifecycle l JOIN lifecycle_templates t ON t.id = l.template_id WHERE l.state = 'active'").all(),
+    loadCalendar(c.db),
+  ]);
+  /** @type {Map<string, TemplateDefinition>} */ const defs = new Map();
+  /** @type {Record<string, import("../../project-management-system-frontend/src/data/projectHealth").StageFact>} */ const out = {};
+  for (const r of /** @type {{ system_id: string; template_id: string; stage_code: string; stage_entered_at: string; definition: string }[]} */ (rows.results)) {
+    if (!defs.has(r.template_id)) defs.set(r.template_id, cleanTemplate(r.definition));
+    const st = stageOf(/** @type {TemplateDefinition} */ (defs.get(r.template_id)), r.stage_code);
+    const sla = st?.targetDays ? stageSla(r.stage_entered_at, st.targetDays, Date.parse(c.now), cal) : null;
+    if (st && sla) out[r.system_id] = { name: st.name, usedDays: sla.usedDays, targetDays: /** @type {number} */ (st.targetDays) };
+  }
+  return out;
+}
+
 // ---------- the routes ----------
 /**
  * @param {ItemContext} c

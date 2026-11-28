@@ -1,0 +1,176 @@
+// A project's page in one call (src/overview.js), through the real Worker on PGlite (or the Neon dev branch with
+// PMS_DB=dev): its figures agree with Reports → Projects and with the work-item lists behind them, an item the viewer
+// can't see is never counted, the lifecycle stage counts against health in both places, and another organisation's
+// project is a 404.
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { hashPassword } from "../src/auth.js";
+import { purgeDueOrganizations } from "../src/platform.js";
+import { testBackend, testDatabase, workerClient } from "./helpers/worker.js";
+
+const url = testDatabase();
+const tag = Date.now().toString(36);
+const SLOW = url === "pglite" ? 120_000 : 900_000;
+const PASSWORD = "Overview-Test-Pass-47!";
+const DAY = 86_400_000;
+
+/** One short stage with a 5-day target, so the test can put the project over it. */
+const TINY = {
+  settings: { selfSignoff: false, advanceBy: ["lead", "manager", "admin"], sendBackBy: ["lead", "manager", "admin"], skipApprovedBy: ["manager", "admin"], signoffReminderDays: 2, overdueEscalateTo: ["manager"], progress: { lifecycleWeight: 1 }, onClose: { status: "LIVE" } },
+  phases: [{ code: "A", name: "Build" }, { code: "B", name: "Close" }],
+  stages: [
+    { code: "BUILD", name: "Dev Work", phase: "A", type: "work", responsible: ["lead"], targetDays: 5, weight: 60, exit: [{ kind: "checklist", key: "built", label: "Built" }], transitions: { sendBackTo: [], canSkip: false } },
+    { code: "CLOSE", name: "Close Project", phase: "B", type: "closure", responsible: ["lead"], targetDays: 5, weight: 40, exit: [{ kind: "checklist", key: "handover", label: "Handed over" }], transitions: { sendBackTo: ["BUILD"], canSkip: false } },
+  ],
+};
+
+describe("the project overview", () => {
+  /** @type {Awaited<ReturnType<typeof testBackend>>} */ let backend;
+  /** @type {any} */ let db;
+  /** @type {ReturnType<typeof workerClient>} */ let api;
+  const orgs = { a: { id: `zzoa${tag}`, code: `zz-oa-${tag}` }, b: { id: `zzob${tag}`, code: `zz-ob-${tag}` } };
+  const people = {
+    ada: { org: orgs.a.id, orgAdmin: 1, role: "admin" },
+    mia: { org: orgs.a.id, orgAdmin: 0, role: "manager" },
+    tom: { org: orgs.a.id, orgAdmin: 0, role: "developer" },
+    bob: { org: orgs.b.id, orgAdmin: 1, role: "admin" },
+  };
+  const id = (/** @type {string} */ p) => `${p}-${tag}`;
+  /** @type {Record<string, string>} */ const cookie = {};
+  const as = (/** @type {string} */ who, /** @type {string} */ path, /** @type {{ method?: string; body?: unknown }} */ o = {}) => api.call(path, { ...o, cookie: cookie[who] });
+  let systemId = "";
+  const overview = async (/** @type {string} */ who) => {
+    const r = await as(who, `/api/systems/${systemId}/overview`);
+    expect(r.status, JSON.stringify(r.data)).toBe(200);
+    return r.data;
+  };
+
+  beforeAll(async () => {
+    backend = await testBackend(url);
+    db = backend.sql;
+    const [{ organization_id: source }] = await db`SELECT organization_id FROM tenancy_legacy`;
+    const now = new Date().toISOString();
+    const hash = await hashPassword(PASSWORD);
+    await db.begin(async (/** @type {any} */ tx) => {
+      for (const o of Object.values(orgs)) {
+        await tx`INSERT INTO organizations (id, name, code, status, created_at, updated_at) VALUES (${o.id}, ${`Org ${o.code}`}, ${o.code}, 'active', ${now}, ${now})`;
+        await tx`SELECT tenancy_seed_organization(${o.id}, ${source})`;
+        await tx`INSERT INTO workspaces (id, organization_id, name, key, created_at, updated_at) VALUES (${`${o.id}-ws`}, ${o.id}, 'Projects', 'PRJ', ${now}, ${now})`;
+      }
+      for (const [p, d] of Object.entries(people)) {
+        await tx`INSERT INTO accounts (id, username, name, role, password_hash, organization_id, org_admin, email)
+                 VALUES (${id(p)}, ${id(p)}, ${p}, ${d.role}, ${hash}, ${d.org}, ${d.orgAdmin}, ${`${p}-${tag}@example.test`})`;
+        await tx`INSERT INTO workspace_members (organization_id, workspace_id, user_id, role, joined_at) VALUES (${d.org}, ${`${d.org}-ws`}, ${id(p)}, ${d.role}, ${now})`;
+      }
+    });
+    api = workerClient(backend);
+    for (const p of Object.keys(people)) cookie[p] = await api.signIn(id(p), PASSWORD);
+
+    // A default lifecycle, so the new project starts on it.
+    const t = await as("ada", "/api/lifecycle/templates", { method: "POST", body: { name: "Tiny", definition: TINY } });
+    expect(t.status, JSON.stringify(t.data)).toBe(201);
+    expect((await as("ada", `/api/lifecycle/templates/${t.data.template.id}/publish`, { method: "POST", body: { default: true } })).status).toBe(200);
+
+    const started = new Date(Date.now() - 70 * DAY).toISOString().slice(0, 10);
+    const due = new Date(Date.now() + 60 * DAY).toISOString().slice(0, 10);
+    const p = await as("ada", "/api/systems", { method: "POST", body: { name: `Payroll ${tag}`, startedAt: started, dueAt: due, key: "OVW", lead: id("tom"), status: "WIP" } });
+    expect(p.status, JSON.stringify(p.data)).toBe(201);
+    systemId = p.data.id;
+    expect((await as("ada", `/api/systems/${systemId}`, { method: "PATCH", body: { developers: [id("tom")] } })).status).toBeLessThan(300);
+
+    // 16 work items: 12 done over the last 8 weeks, 4 open (2 of them overdue), plus a restricted overdue one.
+    const level = await as("ada", "/api/security-levels", { method: "POST", body: { name: `Board ${tag}`, roles: [], people: [] } });
+    expect(level.status, JSON.stringify(level.data)).toBe(201);
+    const past = (/** @type {number} */ d) => new Date(Date.now() - d * DAY).toISOString().slice(0, 10);
+    /** @type {string[]} */ const keys = [];
+    for (let i = 0; i < 16; i++) {
+      const r = await as("ada", "/api/items", { method: "POST", body: { systemId, type: "TASK", summary: `Item ${i}`, priority: "MEDIUM", ...(i === 12 || i === 13 ? { dueDate: past(3 + i) } : {}), ...(i === 15 ? { dueDate: past(2), securityLevel: level.data.id } : {}) } });
+      expect(r.status, JSON.stringify(r.data)).toBe(201);
+      keys.push(r.data.key);
+    }
+    const [{ id: doneStatus }] = await db`SELECT id FROM work_statuses WHERE organization_id = ${orgs.a.id} AND category = 'DONE' ORDER BY position LIMIT 1`;
+    for (let i = 0; i < 16; i++) {
+      const created = new Date(Date.now() - 65 * DAY).toISOString();
+      if (i < 12) {
+        // Resolved at about 1.5 a week over the last 8 complete weeks.
+        const resolved = new Date(Date.now() - (7 + Math.floor(i * 4.5)) * DAY).toISOString();
+        await db`UPDATE work_items SET status = ${doneStatus}, resolution = 'DONE', resolved_at = ${resolved}, created_at = ${created} WHERE system_id = ${systemId} AND number = ${i + 1}`;
+      } else {
+        await db`UPDATE work_items SET created_at = ${created} WHERE system_id = ${systemId} AND number = ${i + 1}`;
+      }
+    }
+    expect((await as("tom", `/api/systems/${systemId}/blockers`, { method: "POST", body: { text: "Waiting for the API keys" } })).status).toBeLessThan(300);
+  }, SLOW);
+
+  afterAll(async () => {
+    if (!db) return;
+    await db`UPDATE organizations SET status = 'archived', delete_after = '2000-01-01T00:00:00.000Z' WHERE id IN (${orgs.a.id}, ${orgs.b.id})`;
+    await purgeDueOrganizations(backend.root);
+    await backend.close();
+  }, SLOW);
+
+  it("counts only what the viewer can see: the restricted item is left out for a Manager", async () => {
+    const admin = await overview("ada");
+    const manager = await overview("mia");
+    expect(admin.kpis.openItems.value).toBe(4);
+    expect(admin.kpis.overdueItems.value).toBe(3);
+    expect(manager.kpis.openItems.value).toBe(3);
+    expect(manager.kpis.overdueItems.value).toBe(2);
+    expect(manager.kpis.doneItems.value).toBe(12);
+    // Nor in the charts or the attention list.
+    expect(manager.series.weeks.at(-1).scope).toBe(15);
+    expect(admin.series.weeks.at(-1).scope).toBe(16);
+    expect(JSON.stringify(manager.attention)).not.toContain("Item 15");
+    expect(JSON.stringify(admin.attention)).toContain("Item 15");
+  }, SLOW);
+
+  it("the figures match Reports → Projects, and the work-item lists behind the tiles", async () => {
+    const o = await overview("mia");
+    const report = await as("mia", "/api/reports/projects/summary");
+    expect(report.status, JSON.stringify(report.data)).toBe(200);
+    const row = report.data.rows.find((/** @type {any} */ r) => r.id === systemId);
+    expect(row).toMatchObject({ openItems: o.kpis.openItems.value, overdueItems: o.kpis.overdueItems.value, doneItems: o.kpis.doneItems.value, openBlockers: o.kpis.blockers.value, rag: o.health.rag });
+    expect(row.reasons).toEqual(o.health.reasons);
+    for (const [k, pql] of [["openItems", o.pql.open], ["overdueItems", o.pql.overdue], ["doneItems", o.pql.done]]) {
+      const found = await as("mia", "/api/search", { method: "POST", body: { pql } });
+      expect(found.status, JSON.stringify(found.data)).toBe(200);
+      expect(found.data.total, `${k}: ${pql}`).toBe(o.kpis[k].value);
+    }
+  }, SLOW);
+
+  it("header, stepper, attention, forecast and series", async () => {
+    const o = await overview("mia");
+    expect(o.project).toMatchObject({ id: systemId, key: "OVW", workspace: "Projects", lead: { id: id("tom"), name: "tom" } });
+    expect(o.lifecycle.stage).toMatchObject({ code: "BUILD", n: 1, total: 2 });
+    expect(o.lifecycle.stages.map((/** @type {any} */ s) => s.state)).toEqual(["current", "upcoming"]);
+    expect(o.lifecycle.missing).toEqual(['Tick "Built"']);
+    // The blocker first, then the overdue items, oldest first.
+    expect(o.attention.entries.map((/** @type {any} */ e) => e.kind)).toEqual(["blocker", "overdue_item", "overdue_item"]);
+    expect(o.attention.entries[1].title).toBe("OVW-14 Item 13");
+    // 12 resolved over 8+ weeks of history: a forecast, with both dates, after today.
+    expect(o.kpis.forecast.items.status).toBe("ok");
+    expect(o.kpis.forecast.items.p85.weeks).toBeGreaterThanOrEqual(o.kpis.forecast.items.p50.weeks);
+    expect(o.kpis.forecast.lifecycle.businessDays).toBeGreaterThan(0);
+    expect(o.series.weeks).toHaveLength(12);
+    expect(o.series.days).toHaveLength(30);
+    expect(o.series.days.at(-1)).toMatchObject({ open: 3, overdue: 2, blockers: 1 });
+    expect(o.series.workload.people.map((/** @type {any} */ p) => p.id)).toEqual([id("tom")]);
+    expect(o.series.workload.capacityHours).toBe(30);
+  }, SLOW);
+
+  it("a stage over its target counts against health here and in the report alike", async () => {
+    await db`UPDATE project_lifecycle SET stage_entered_at = ${new Date(Date.now() - 21 * DAY).toISOString()} WHERE system_id = ${systemId}`;
+    const o = await overview("mia");
+    expect(o.lifecycle.stages[0].state).toBe("overdue");
+    expect(o.health.rag).toBe("RED");
+    expect(o.health.reasons.some((/** @type {string} */ r) => /^Dev Work is [\d.]+ business days over its 5-day target$/.test(r))).toBe(true);
+    expect(o.attention.entries.map((/** @type {any} */ e) => e.kind)).toContain("stage_overdue");
+    const row = (await as("mia", "/api/reports/projects/summary")).data.rows.find((/** @type {any} */ r) => r.id === systemId);
+    expect(row.rag).toBe("RED");
+    expect(row.reasons).toEqual(o.health.reasons);
+  }, SLOW);
+
+  it("another organisation's project is a 404; nothing but GET", async () => {
+    expect((await as("bob", `/api/systems/${systemId}/overview`)).status).toBe(404);
+    expect((await as("ada", `/api/systems/${systemId}/overview`, { method: "POST" })).status).toBe(405);
+  }, SLOW);
+});

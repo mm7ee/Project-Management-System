@@ -58,6 +58,7 @@ import { chatApi } from "./chat";
 import { projectReportsApi } from "./projectReports";
 import { afterSignoff, askLifecycleLines, lifecycleApi, runLifecycleClock, startLifecycle } from "./lifecycle";
 import { projectDocsApi } from "./projectDocs";
+import { overviewApi } from "./overview";
 import { levelsFor } from "./access";
 /**
  * Requests made with a personal API token, and the token's name, for the activity log.
@@ -1195,7 +1196,7 @@ async function api(req, env, path, ctx) {
     (method === "GET" &&
       (path === "/api/data" ||
         path === "/api/notifications" ||
-        /^\/api\/systems\/[a-z0-9-]+\/history$/.test(path) ||
+        /^\/api\/systems\/[a-z0-9-]+\/(history|overview)$/.test(path) ||
         path === "/api/items" ||
         path === "/api/boards" ||
         path === "/api/statuses" ||
@@ -1341,6 +1342,7 @@ async function api(req, env, path, ctx) {
     (await integrationsApi(itemCtx, env, path, method)) ??
     (await chatApi(itemCtx, path, method)) ??
     (await projectDocsApi(itemCtx, path, method)) ??
+    (await overviewApi(itemCtx, path, method)) ??
     (await lifecycleApi(itemCtx, path, method)) ??
     (await projectReportsApi(itemCtx, path, method));
   if (itemsResponse) return itemsResponse;
@@ -2400,7 +2402,7 @@ async function api(req, env, path, ctx) {
             `SELECT u.id, u.name, COUNT(s.id) AS n FROM users u
          LEFT JOIN assignments a ON a.user_id = u.id
          LEFT JOIN systems s ON s.id = a.system_id
-         WHERE u.role = 'developer' GROUP BY u.id ORDER BY n, u.name`,
+         WHERE u.role = 'developer' GROUP BY u.id, u.name ORDER BY n, u.name`,
           )
           .all()
       )
@@ -2975,6 +2977,7 @@ async function api(req, env, path, ctx) {
       projects: b.projects !== undefined ? whole(b.projects, "Projects per developer", 50) : current.projects,
       features: b.features !== undefined ? whole(b.features, "Feature requests per developer", 200) : current.features,
       stallDays: b.stallDays !== undefined ? whole(b.stallDays, "Days without progress", 365) : current.stallDays,
+      capacityHours: b.capacityHours !== undefined ? whole(b.capacityHours, "Weekly hours per person", 80) : (current.capacityHours ?? DEFAULT_LIMITS.capacityHours),
     };
     await saveSetting(db, "workload_limits").bind(JSON.stringify(next)).run();
     await audit(db, req, me, "limits_updated", null, { from: current, to: next });

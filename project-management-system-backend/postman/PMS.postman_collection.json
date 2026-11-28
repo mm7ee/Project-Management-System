@@ -12293,6 +12293,115 @@
           }
         },
         {
+          "name": "Overview: the project page in one call",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const o = pm.response.json();",
+                  "pm.test(\"the header and health\", () => { pm.expect(o.project.id).to.eql(pm.environment.get(\"systemId\")); pm.expect([\"RED\", \"AMBER\", \"GREEN\", \"NONE\"]).to.include(o.health.rag); pm.expect(o.health.reasons).to.be.an(\"array\"); });",
+                  "pm.test(\"the KPI tiles, each traceable to a PQL list\", () => { pm.expect(o.kpis.openItems.value).to.be.a(\"number\"); pm.expect(o.kpis.openItems.pql).to.include(\"statusCategory != Done\"); pm.expect(o.kpis.overdueItems.pql).to.include(\"due < now()\"); });",
+                  "pm.test(\"attention, ranked, and the series\", () => { pm.expect(o.attention.entries).to.be.an(\"array\"); pm.expect(o.series.weeks).to.have.length(12); pm.expect(o.series.days).to.have.length(30); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems/{{systemId}}/overview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems",
+                "{{systemId}}",
+                "overview"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Overview: the Viewer sees it too",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{viewerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems/{{systemId}}/overview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems",
+                "{{systemId}}",
+                "overview"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Overview: a project that doesn't exist is 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/systems/no-such-project/overview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "systems",
+                "no-such-project",
+                "overview"
+              ]
+            }
+          }
+        },
+        {
           "name": "Admin deletes the system",
           "event": [
             {

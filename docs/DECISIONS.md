@@ -1272,3 +1272,31 @@ The plan, and the 13 recommendations approved with "continue", are in `docs/admi
   reported, never guessed. Earlier stages are recorded as migrated; their gates aren't required after the fact.
 - **Omnicontact's named signatories** (Waraidzo, Mutsa, with alternates) are proposed, pending its approval; they are
   template data, changed in Settings → Project Lifecycle.
+
+## Project page: one call, health with the lifecycle, forecasts and what needs attention (2026-11-28)
+
+- **One call for the Overview,** `GET /api/systems/:id/overview` (`src/overview.js`): the header, the stepper, the KPI
+  tiles, what needs attention, the next 14 days and every chart's series, from a fixed set of grouped queries (no query
+  per item). The other tabs load their own data when opened.
+- **The same figures as Reports → Projects:** open, overdue and done work items come from the report's own query
+  (`itemCountsQuery`, now for one project too), health from the same rule. A test checks the two agree, and that each
+  tile's PQL list gives the same count.
+- **Visibility:** work items always through `itemAccess`. Overall progress blends the stages with the share of work
+  items done *that the viewer can see*, so a restricted item never moves a figure.
+- **Health gains the lifecycle** (`RAG_RULES.stageOverFactorRed`): a stage over its target is At risk ("BRS Sign Off is 2
+  business days over its 5-day target"), at twice its target Off track. Reports → Projects passes each project's stage
+  too (`stageFacts`), so the report, the page and the exports agree. Some projects' health changes with this.
+- **Forecasts** (`src/data/forecast.js`):
+  - **From work items:** a Monte Carlo simulation, 10,000 runs, each drawing weeks at random from the last 8–12 complete
+    weeks of throughput until the open items are done; the 50% and 85% dates. Seeded from the project, so the same data
+    gives the same dates. **Too little history** (fewer than 4 weeks, or fewer than 10 items resolved) gives no forecast,
+    and says why.
+  - **From the lifecycle:** what is left of the current stage's target plus the targets after it, in business days.
+  - **The headline finish is the later of the two:** the work and the remaining stages must both be done.
+- **What needs attention** (`src/data/attention.js`) ranks by kind, then the oldest first: blockers, sign-offs waiting
+  on someone, the stage over its target, the stage near its target with its gate unmet, overdue work items (the first 5,
+  then one "N more" entry with its list), update requests, no progress update. Each entry carries its one action.
+- **Workload capacity** is `capacityHours` in the workload limits (default 30 a week), set per workspace; no migration.
+- **View-only links** may open the overview, as they open the project page.
+- **Fixed on the way:** assigning a developer to a project failed with a database error since migration 0014 made
+  `users` a view (`GROUP BY u.id` without `u.name`).
