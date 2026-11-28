@@ -76,6 +76,11 @@
     linear-gradient(160deg, color-mix(in srgb, var(--org-tint, var(--accent-dark)) 22%, var(--lp-bg)) 0%, var(--lp-bg) 60%);
 }
 
+/* The web behind the sign-in page (and the forced password change): fixed to the screen, under everything. */
+.lp-web, .lp-particles { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+.landing:has(> .lp-web, > .lp-particles) > :is(main, header, footer, nav) { position: relative; z-index: 1; }
+@media print { .lp-web, .lp-particles { display: none; } }
+
 /* ---------- Layout ---------- */
 .lp-center {
   flex: 1;
