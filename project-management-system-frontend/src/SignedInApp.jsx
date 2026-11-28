@@ -598,6 +598,7 @@ export default function Dashboard({ data, reload }) {
           me={me}
           developer={me.role === "developer" && !can("manage_features")}
           onOpenProject={openProject}
+          context={selectedId ? { projectId: selectedId, section: projectTab ?? "overview" } : undefined}
           onSearch={
             data.viewOnly
               ? undefined

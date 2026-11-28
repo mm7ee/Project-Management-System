@@ -357,6 +357,32 @@ can't see is never counted, charted or listed.
 `{ state, type, status, priority, assignee, label, q, sort, dir }`. Anything else is dropped (`src/data/pagePrefs.js`).
 `GET /api/documents/:id?preview` serves a PDF for the in-page preview (framed by PMS only).
 
+## Ask AI: the assistant
+
+`POST /api/assistant` with `{ question, history?: [{ q, a }], context?: { projectId?, section? } }` (`src/assistant.js`).
+The model looks things up with read tools, each run as the person asking through the same code and checks as the API
+(row-level security, `itemAccess`, permissions), so it sees no more than they could. Answers stream as server-sent
+events:
+
+- `{ type: "step", tool, label }` for each lookup, as it runs;
+- then `{ type: "answer", text, sources: [{ id, label, href }], unverified, model, tools, ms }`. `text` cites sources
+  as `[S1]`; a citation that names no source is removed. `unverified` lists figures in the answer that nothing looked
+  up contains;
+- or `{ type: "error", code: "agent_failed", message }`. The panel then answers the earlier way (`POST /api/ask`).
+
+Tools: `find_projects`, `get_project_overview`, `get_lifecycle_status`, `list_signoffs_pending`, `get_risks`,
+`get_security_findings`, `get_test_results`, `search_items` (PQL), `get_report` (`projects` needs "Generate reports";
+`agile`; `service_desk`), `get_workload` (everyone for Administrators, Managers, Team Leaders and those who assign
+developers; otherwise their own), `get_activity`, `search_chat` (only conversations they belong to). View-only links
+aren't offered `get_report`, `get_workload` or `search_chat`. There are no write tools yet.
+
+- **Limits:** 8 tool calls and 60 seconds a request; `question` up to 2,000 characters (`400`); 20 requests in 10 minutes
+  a person, counted in the activity log (`429 assistant_limit`). Without Workers AI: `503 assistant_off`.
+- **Logged:** each request is an `assistant_asked` activity entry, with the project if one was open, the model, the
+  tools, the number of calls, the outcome (`answered`, `failed`, `timed_out`), the time, the unverified-figure count and
+  the tokens. The question isn't kept.
+- **Model:** `@cf/meta/llama-4-scout-17b-16e-instruct`.
+
 ## Project lifecycle
 
 Each organisation has lifecycle templates (phases, stages and their gates); each project is on one version of one

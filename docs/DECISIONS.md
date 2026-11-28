@@ -1400,3 +1400,27 @@ The plan, and the 13 recommendations approved with "continue", are in `docs/admi
   API of a Worker on this machine (npm run dev:api) as a QA account. It refuses any other address, so it can't reach the
   live site; titles start "Demo:", and anything already there is skipped. The older `scripts/demo-data.mjs` writes SQL
   from before organisations and workspaces existed, so it isn't used for this.
+
+## Ask AI as an assistant, phase (a): tools instead of a snapshot (2026-11-28)
+
+Plan: `docs/assistant-plan.md`. Approved: pgvector on Neon, Workers AI `toMarkdown`, `schedule_report` as filter
+subscriptions, external providers built but off until an organisation allows them, a rate limit with budgets set by
+organisations, a release per phase.
+
+- **The model looks things up with tools** (`src/assistant.js`) instead of reading one large snapshot. Each tool is
+  the same code the API uses (`projectOverview`, `lifecycleSnapshot`, `runQuery`, `loadReport`, `sprintHealth`…), run
+  with the person's own context, so row-level security keeps other organisations out and `itemAccess` keeps restricted
+  items out. A tool the person couldn't use isn't offered to the model at all.
+- **What the model sends is checked before anything runs:** arguments against each tool's schema (unknown keys
+  dropped; wrong types, lengths, ranges and enums refused); an unknown tool name is an error sent back to it.
+- **Tool results are data:** wrapped in a `<data>` marker that is random for each request, with the rule that text
+  inside is never an instruction; API tokens, bearer tokens, passwords and credentials in URLs are stripped first.
+- **Grounding:** every figure in an answer must appear in a tool result (or the question); any that don't are listed
+  to the person ("Check 17: not found in the data"). Citations must name a source a tool returned; others are
+  removed. The rules are in `src/data/assistant.js`, shared by the Worker and the tests.
+- **Limits:** 8 tool calls and 60 seconds a request. The 20-in-10-minutes limit is now counted in the activity log,
+  so it holds across Worker instances (the old one was per instance).
+- **Logged, without the question:** `assistant_asked` with the model, tools, calls, outcome, time and tokens.
+- **The earlier answer stays as the fallback:** if the model fails part-way, the panel asks `/api/ask` (the snapshot)
+  and says it did. `/api/ask` and `/api/ask/pql` are unchanged.
+- **Model:** Llama 4 Scout, as before. Choosing per request (the registry and Auto) is phase (e).

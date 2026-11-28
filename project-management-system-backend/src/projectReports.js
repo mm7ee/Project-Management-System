@@ -47,7 +47,7 @@ export function itemCountsQuery(viewer, today, systemId) {
  * @param {ProjectReportFilters} f
  * @returns {Promise<{ report: ProjectReport; systems: System[]; names: Map<string, string> }>}
  */
-async function loadReport(c, f) {
+export async function loadReport(c, f) {
   const { db } = c;
   const today = c.now.slice(0, 10);
   const counts = itemCountsQuery(c.viewer, today);

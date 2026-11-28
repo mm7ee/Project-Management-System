@@ -12402,6 +12402,94 @@
           }
         },
         {
+          "name": "Assistant: a question streams what it looked up, then a cited answer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Live has Workers AI; a local Worker without the AI binding answers 503 assistant_off.",
+                  "if (pm.response.code === 503) { pm.test(\"the assistant is off here\", () => pm.expect(pm.response.json().code).to.eql(\"assistant_off\")); return; }",
+                  "pm.test(\"status is 200, as events\", () => { pm.response.to.have.status(200); pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"text/event-stream\"); });",
+                  "const events = pm.response.text().split(\"\\n\\n\").map((b) => b.replace(/^data:\\s*/, \"\").trim()).filter(Boolean).map((b) => JSON.parse(b));",
+                  "const last = events[events.length - 1];",
+                  "pm.test(\"ends with an answer or an error\", () => pm.expect([\"answer\", \"error\"]).to.include(last.type));",
+                  "if (last.type === \"answer\") pm.test(\"the answer says what it used\", () => { pm.expect(last.text).to.be.a(\"string\"); pm.expect(last.sources).to.be.an(\"array\"); pm.expect(last.unverified).to.be.an(\"array\"); pm.expect(last.model).to.include(\"@cf/\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\":\"How is this project doing?\",\"context\":{\"projectId\":\"{{systemId}}\",\"section\":\"overview\"}}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/assistant",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assistant"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Assistant: a question is required",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400, or 503 where the assistant is off\", () => pm.expect([400, 503]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"question\":\"\"}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/assistant",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assistant"
+              ]
+            }
+          }
+        },
+        {
           "name": "Overview: the summary",
           "event": [
             {

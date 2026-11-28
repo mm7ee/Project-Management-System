@@ -4,10 +4,54 @@
 /** @import { User } from '../data/roles' */
 import { BRAND } from "../data/brand";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowUp, Check, Copy, RotateCcw, Sparkles, X } from "lucide-react";
+import { AlertTriangle, ArrowUp, Check, CircleCheck, Copy, RotateCcw, Sparkles, X } from "lucide-react";
 import { ApiError, shareToken } from "../data/api";
 import { isLate, isOpen } from "../data/features";
+import { modelLabel, readEvents } from "../data/assistant";
 import AskToPql from "./AskToPql";
+/** Source links the app can open (a project and its tabs, a chat, reports). */
+const OPENABLE = /^#\/(projects|chat|reports)(\/|$)/;
+/**
+ * Sends a question. A view-only link carries its token.
+ * @param {string} path @param {unknown} body
+ */
+const post = (path, body) =>
+  fetch(path, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json", ...(shareToken ? { "x-share-token": shareToken } : {}) },
+    body: JSON.stringify(body),
+  });
+/** @param {Response} res */
+const failure = async (res) => {
+  const payload = await res.json().catch(() => ({}));
+  return new ApiError(res.status, payload.error ?? "The assistant didn't respond. Try again in a moment.", payload.code);
+};
+/**
+ * The earlier answer, from one snapshot of what the person may see, streamed as it's written. Used when the
+ * assistant can't run its tools (an older server, or the model failing mid-way).
+ * @param {string} question
+ * @param {{ q: string; a: string }[]} history
+ * @param {(f: (t: Turn) => Partial<Turn>) => void} patch
+ */
+async function askSnapshot(question, history, patch) {
+  const res = await post("/api/ask", { question, history });
+  if (!res.ok || !res.body) throw await failure(res);
+  let answer = "";
+  let stuck = false;
+  patch(() => ({ snapshot: true }));
+  await readEvents(res.body, (event) => {
+    // Number-only pieces can arrive in `response` as JSON numbers, so don't filter by type.
+    const piece = event.choices?.[0]?.delta?.content ?? event.response;
+    if (piece !== undefined && piece !== null) answer += String(piece);
+    // The model very occasionally loops on one character; stop it rather than show it.
+    if (/([^\s\-=_*#`.])\1{29,}/.test(answer)) stuck = true;
+    else if (answer) patch(() => ({ a: answer }));
+    return stuck;
+  });
+  if (stuck) throw new ApiError(502, "The assistant got stuck on that one. Ask again, perhaps in different words.");
+  patch(() => ({ a: answer.trim() || "Sorry, I couldn't put an answer together. Try asking another way." }));
+}
 const PRIORITY_ORDER = /** @type {const} */ ({ CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 });
 /**
  * Copies an answer; "Draft:" sections are copied on their own when there is one.
@@ -43,7 +87,7 @@ const escapeRe =
  * The conversation stays while the page is open; follow-ups carry the last two turns.
  * @param {Props} arg1
  */
-export default function AskPanel({ open, onClose, systems, users, features, me, developer, onOpenProject, onSearch }) {
+export default function AskPanel({ open, onClose, systems, users, features, me, developer, onOpenProject, onSearch, context }) {
   const [turns, setTurns] = useState(/** @type {Turn[] | (() => Turn[])} */ ([]));
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
@@ -95,53 +139,27 @@ export default function AskPanel({ open, onClose, systems, users, features, me, 
     setDraft("");
     const history = turns
       .filter((t) => t.a)
-      .slice(-2)
+      .slice(-4)
       .map((t) => ({ q: t.q, a: /** @type {NonNullable<typeof t.a>} */ (t.a) }));
-    setTurns((t) => [...t, { q }]);
+    setTurns((t) => [...t, { q, steps: [] }]);
     setBusy(true);
-    // The answer streams in (server-sent events), so it shows as it's written.
-    const show = /** @param {string} a */ (a) => setTurns((t) => t.map((x, i) => (i === t.length - 1 ? { ...x, a } : x)));
+    /** @param {(t: Turn) => Partial<Turn>} f */
+    const patch = (f) => setTurns((t) => t.map((x, i) => (i === t.length - 1 ? { ...x, ...f(x) } : x)));
     try {
-      const res = await fetch("/api/ask", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json", ...(shareToken ? { "x-share-token": shareToken } : {}) },
-        body: JSON.stringify({ question: q, history }),
-      });
-      if (!res.ok || !res.body) {
-        const payload = await res.json().catch(() => ({}));
-        throw new ApiError(res.status, payload.error ?? "The assistant didn't respond. Try again in a moment.", payload.code);
-      }
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let answer = "";
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split("\n\n");
-        buffer = events.pop() ?? "";
-        for (const ev of events) {
-          const data = ev.replace(/^data:\s*/m, "").trim();
-          if (!data || data === "[DONE]") continue;
-          try {
-            // Number-only pieces can arrive in `response` as JSON numbers, so don't filter by type.
-            const event = JSON.parse(data);
-            const piece = event.choices?.[0]?.delta?.content ?? event.response;
-            if (piece !== undefined && piece !== null) answer += String(piece);
-          } catch {
-            // A partial or non-JSON line: skip it.
+      // The assistant looks things up with tools, as the person asking, and cites what it found.
+      const res = await post("/api/assistant", { question: q, history, context });
+      let answered = false;
+      // An older server (404) or the assistant off (503): the snapshot answer below says why, or answers.
+      if (res.ok && res.body) {
+        await readEvents(res.body, (event) => {
+          if (event.type === "step") patch((t) => ({ steps: [...(t.steps ?? []), String(event.label)] }));
+          if (event.type === "answer") {
+            answered = true;
+            patch(() => ({ a: String(event.text), sources: event.sources ?? [], unverified: event.unverified ?? [], meta: { model: String(event.model), tools: (event.tools ?? []).length, ms: Number(event.ms) } }));
           }
-        }
-        // The model very occasionally loops on one character; stop it rather than show it.
-        if (/([^\s\-=_*#`.])\1{29,}/.test(answer)) {
-          await reader.cancel().catch(() => undefined);
-          throw new Error("The assistant got stuck on that one. Ask again, perhaps in different words.");
-        }
-        if (answer) show(answer);
-      }
-      show(answer.trim() || "Sorry, I couldn't put an answer together. Try asking another way.");
+        });
+      } else if (![404, 405, 503].includes(res.status)) throw await failure(res);
+      if (!answered) await askSnapshot(q, history.slice(-2), patch);
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : "Couldn't reach the server. Check your connection.";
       setTurns((t) => t.map((x, i) => (i === t.length - 1 ? { ...x, error: msg } : x)));
@@ -174,10 +192,35 @@ export default function AskPanel({ open, onClose, systems, users, features, me, 
         );
       });
   }, [systems, onOpenProject, onClose]);
-  const inline = /** @param {string} text */ (text) => text.split(/\*\*(.+?)\*\*/g).map((part, i) => (i % 2 ? <b key={i}>{linkify(part)}</b> : <span key={i}>{linkify(part)}</span>));
+  /** @param {string} href */
+  const go = (href) => {
+    window.location.hash = href.slice(1);
+    onClose();
+  };
+  // [S2] marks become numbered links to the source they cite.
+  /** @param {string} text @param {Source[]} sources */
+  const cite = (text, sources) =>
+    text.split(/\s?\[(S\d+)\]/g).map((part, i) => {
+      if (i % 2 === 0) return <span key={i}>{linkify(part)}</span>;
+      const n = sources.findIndex((s) => s.id === part);
+      const s = sources[n];
+      if (!s) return null;
+      return OPENABLE.test(s.href) ? (
+        <button key={i} type="button" className="ask-cite" title={s.label} onClick={() => go(s.href)}>
+          {n + 1}
+        </button>
+      ) : (
+        <sup key={i} className="ask-cite" title={s.label}>
+          {n + 1}
+        </sup>
+      );
+    });
+  /** @type {Source[]} */ let citing = [];
+  const inline = /** @param {string} text */ (text) => text.split(/\*\*(.+?)\*\*/g).map((part, i) => (i % 2 ? <b key={i}>{cite(part, citing)}</b> : <span key={i}>{cite(part, citing)}</span>));
   // A light reading of the model's markdown: paragraphs, "-" and "1." lists, ``` code blocks
   // and headings (shown as bold lines).
-  const render = /** @param {string} answer */ (answer) => {
+  const render = /** @param {string} answer @param {Source[]} [sources] */ (answer, sources = []) => {
+    citing = sources;
     /** @type {ReactNode[]} */ const blocks = [];
     /** @type {string[]} */ let list = [];
     let ordered = false;
@@ -276,20 +319,61 @@ export default function AskPanel({ open, onClose, systems, users, features, me, 
               <div className="ask-q">{t.q}</div>
               {t.a && (
                 <div className="ask-a">
-                  {render(t.a)}
-                  {(!busy || i < turns.length - 1) && <CopyAnswer text={t.a} />}
+                  {render(t.a, t.sources)}
+                  {!!t.sources?.length && (
+                    <ol className="ask-sources" aria-label="Sources">
+                      {t.sources.map((s) => (
+                        <li key={s.id}>
+                          {OPENABLE.test(s.href) ? (
+                            <button type="button" onClick={() => go(s.href)}>
+                              {s.label}
+                            </button>
+                          ) : (
+                            <span>{s.label}</span>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                  {t.meta && (
+                    <p className="ask-meta">
+                      {t.unverified?.length ? (
+                        <span className="ask-unverified" title="These figures weren't in anything the assistant looked up. Check them before you rely on them.">
+                          <AlertTriangle size={13} /> Check {t.unverified.slice(0, 4).join(", ")}: not found in the data
+                        </span>
+                      ) : (
+                        <span className="ask-verified">
+                          <CircleCheck size={13} /> Figures checked against the data
+                        </span>
+                      )}
+                      <span>
+                        {modelLabel(t.meta.model)} · {t.meta.tools} {t.meta.tools === 1 ? "lookup" : "lookups"} · {(t.meta.ms / 1000).toFixed(1)} s
+                      </span>
+                    </p>
+                  )}
+                  {t.snapshot && !busy && <p className="ask-meta">Answered from a snapshot of the data.</p>}
+                  {(!busy || i < turns.length - 1) && <CopyAnswer text={t.a.replace(/\s?\[S\d+\]/g, "")} />}
                   {onSearch && !shareToken && (!busy || i < turns.length - 1) && <AskToPql question={t.q} onSearch={onSearch} />}
                 </div>
               )}
               {t.error && <div className="ask-a ask-error">{t.error}</div>}
               {!t.a && !t.error && (
                 <div className="ask-a ask-thinking" aria-live="polite">
+                  {!!t.steps?.length && (
+                    <ul className="ask-steps">
+                      {t.steps.map((s, n) => (
+                        <li key={n}>
+                          <Check size={12} /> {s}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                   <span className="ask-dots">
                     <i />
                     <i />
                     <i />
                   </span>
-                  Reading the latest data…
+                  {t.steps?.length ? "Working it out…" : "Reading the latest data…"}
                 </div>
               )}
             </div>
@@ -333,6 +417,17 @@ export default function AskPanel({ open, onClose, systems, users, features, me, 
  * @property {string} q
  * @property {string} [a]
  * @property {string} [error]
+ * @property {string[]} [steps]  what the assistant looked up, as it goes
+ * @property {Source[]} [sources]  what the answer cites
+ * @property {string[]} [unverified]  figures in the answer that nothing looked up contains
+ * @property {{ model: string; tools: number; ms: number }} [meta]
+ * @property {boolean} [snapshot]  answered the earlier way, from one snapshot
+ */
+/**
+ * @typedef {Object} Source
+ * @property {string} id
+ * @property {string} label
+ * @property {string} href
  */
 /**
  * @typedef {Object} Props
@@ -345,4 +440,5 @@ export default function AskPanel({ open, onClose, systems, users, features, me, 
  * @property {boolean} developer
  * @property {(id: string) => void} onOpenProject
  * @property {(pql: string) => void} [onSearch]
+ * @property {{ projectId?: string; section?: string }} [context]  the page the person is on
  */

@@ -1533,3 +1533,17 @@ Screenshots: `docs/design/cockpit/final-*.png`.
 - **Sample data** for the project page on the dev branch: `node scripts/demo-cockpit.mjs` (with `npm run dev:api`
   running).
 - **No migration.**
+
+## Ask AI as an assistant, phase (a): it looks things up (2026-11-28)
+
+Plan: `docs/assistant-plan.md`. Mock-ups: `docs/design/assistant-mockups.html`.
+
+- **Ask AI looks things up** instead of reading a snapshot: projects, a project's overview, lifecycle, sign-offs
+  waiting, risks, security findings, tests, work items (PQL), reports, workload, history and the person's own chats.
+  Every lookup runs as the person asking, so the answer never includes what they couldn't see.
+- **The panel shows its work:** each lookup as it happens, then the answer with numbered citations, the sources (click
+  one to open it), the model, how many lookups and how long it took. A figure that isn't in the data is flagged:
+  "Check 17: not found in the data".
+- **It knows the page you're on:** asked from a project, "this project" means that one.
+- **No migration.** API: `POST /api/assistant` (`docs/API.md`). Tests: `tests/assistant.test.js` (frontend, 14;
+  backend, 9). `npm test`: 414 passed (203 frontend, 211 backend).

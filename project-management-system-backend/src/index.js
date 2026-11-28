@@ -56,6 +56,7 @@ import { customFieldsApi } from "./customfields";
 import { adminApi } from "./admin";
 import { chatApi } from "./chat";
 import { projectReportsApi } from "./projectReports";
+import { assistantApi } from "./assistant";
 import { afterSignoff, askLifecycleLines, lifecycleApi, runLifecycleClock, startLifecycle } from "./lifecycle";
 import { projectDocsApi } from "./projectDocs";
 import { overviewApi } from "./overview";
@@ -1205,7 +1206,7 @@ async function api(req, env, path, ctx) {
         path === "/api/timeline" ||
         path.startsWith("/api/reports/agile/") ||
         /^\/api\/items\/[A-Z]{2,10}-\d{1,7}(\/comments)?$/.test(path))) ||
-    (method === "POST" && (path === "/api/ask" || path === "/api/requests")) ||
+    (method === "POST" && (path === "/api/ask" || path === "/api/assistant" || path === "/api/requests")) ||
     (method === "DELETE" && /^\/api\/requests\/[a-f0-9]+$/.test(path));
   if (guest && !guestAllowed) {
     throw new HttpError(403, "This link is view-only");
@@ -1346,7 +1347,8 @@ async function api(req, env, path, ctx) {
     (await overviewApi(itemCtx, path, method)) ??
     (await projectPageApi(itemCtx, path, method)) ??
     (await lifecycleApi(itemCtx, path, method)) ??
-    (await projectReportsApi(itemCtx, path, method));
+    (await projectReportsApi(itemCtx, path, method)) ??
+    (await assistantApi(itemCtx, path, method));
   if (itemsResponse) return itemsResponse;
   /**
    * After a project changes workspace: it takes the new workspace's workflow, unless some of its work
@@ -3526,6 +3528,7 @@ function readerMayWrite(path) {
     path.startsWith("/api/chat/") ||
     path === "/api/search" ||
     path === "/api/ask" ||
+    path === "/api/assistant" ||
     path === "/api/ask/pql"
   );
 }

@@ -2,6 +2,7 @@
 /** @import { FeatureStatus, Priority } from '../data/features' */
 /** @import { ActivityEntry, Role, User } from '../data/roles' */
 /** @import { WorkItemType, WorkPriority, WorkStatus } from '../data/workitems' */
+import { BRAND } from "../data/brand";
 import { useCallback, useEffect, useState } from "react";
 import { channelList, cleanChannels } from "../data/updateRequests";
 import { AlertTriangle, Download, LogIn, RefreshCw, Search } from "lucide-react";
@@ -303,6 +304,14 @@ export function describe(e, users, systems) {
     }
     case "integration_updated":
       return `Changed the ${str(d.integration)} integration: ${(/** @type {string[]} */ (d.changed) ?? []).join(", ")}`;
+    case "assistant_asked": {
+      // The question itself isn't kept: only what the assistant did.
+      const tools = /** @type {string[]} */ (Array.isArray(d.tools) ? d.tools : []);
+      const where = e.target ? ` about ${sysName(e.target)}` : "";
+      const did = tools.length ? `, looking up ${[...new Set(tools)].map((t) => t.replace(/^(get|list|find|search)_/, "").replace(/_/g, " ")).join(", ")}` : "";
+      const outcome = d.outcome === "answered" ? "" : d.outcome === "timed_out" ? " (it ran out of time)" : " (it couldn't answer)";
+      return `Asked ${BRAND.assistantName} a question${where}${did}${outcome}`;
+    }
     case "api_token_created":
       return `Made the API token "${str(d.token)}" (${str(d.scope) === "write" ? "read and write" : "read only"}, ${str(d.days)} days)`;
     case "api_token_revoked":

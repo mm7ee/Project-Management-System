@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ask AI assistant mock-ups</title>
+<!-- Mock-ups of the upgraded Ask AI panel (sample data from the WhatsApp Customer Channel demo project). Four states,
+     side by side: the model picker and skills, tool progress with a cited answer, an extraction into work items with
+     its confirmation card, and two models compared. Add ?theme=dark for the dark theme. -->
+<style>
+body{margin:0}
+:root,.light{--canvas:#eef1f7;--card:#ffffff;--border:#e1e5ef;--track:#eceff6;--text:#121427;--muted:#464b66;--faint:#636882;--heading:#1f2933;--solid:#011f5b;--link:#0039a6;--ok:#0e8a6b;--ok-ink:#0b6e55;--ok-tint:#e7f5f0;--warn-ink:#7a5600;--warn-tint:#fdf3d8;--bad:#c8102e;--bad-ink:#b00d27;--bad-tint:#fdf0f1;--info-tint:#e8edf9;--ai:#7d55d6;--ai-tint:#f1ecfc;--e2:0 6px 18px rgba(15,23,42,.09),0 1px 2px rgba(15,23,42,.06);--e3:0 18px 44px rgba(15,23,42,.18)}
+.dark{--canvas:#0b0c22;--card:#13163a;--border:#252a57;--track:#1e2250;--text:#e9ebf7;--muted:#aeb2cf;--faint:#9297ba;--heading:#e3e8ee;--solid:#2a52b8;--link:#8fb3d4;--ok:#14a37f;--ok-ink:#6fdcb4;--ok-tint:rgba(20,163,127,.18);--warn-ink:#ffd27a;--warn-tint:rgba(224,154,0,.14);--bad:#e5484d;--bad-ink:#ff9ea1;--bad-tint:rgba(229,72,77,.16);--info-tint:rgba(128,149,255,.16);--ai:#9a72f0;--ai-tint:rgba(154,114,240,.16);--e2:0 8px 24px rgba(0,0,0,.45);--e3:0 20px 50px rgba(0,0,0,.55);color-scheme:dark}
+.page{min-height:100vh;background:var(--canvas);color:var(--text);font-family:Inter,"Segoe UI",system-ui,sans-serif;font-size:13.5px;padding:24px;box-sizing:border-box}
+.page>h1{margin:0 0 4px;font-size:20px;color:var(--heading)}
+.page>p{margin:0 0 18px;color:var(--muted)}
+.row{display:flex;gap:22px;align-items:flex-start}
+.cap{margin:0 0 8px;font-size:12px;font-weight:750;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.panel{width:430px;flex:none;height:860px;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--border);border-radius:16px;box-shadow:var(--e3);overflow:hidden}
+.ph{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--border)}
+.ph b{font-size:15px;color:var(--heading)}
+.ph small{color:var(--faint)}
+.grow{flex:1}
+.ib{display:grid;place-items:center;width:30px;height:30px;border-radius:8px;border:0;background:var(--track);color:var(--muted)}
+.picker{position:relative;display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border-radius:999px;border:1px solid var(--border);background:var(--card);color:var(--text);font:600 12.5px Inter,system-ui,sans-serif}
+.menu{position:absolute;top:36px;right:0;z-index:3;width:300px;padding:6px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--e3)}
+.menu h4{margin:8px 8px 4px;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.mi{display:flex;gap:10px;align-items:flex-start;padding:7px 8px;border-radius:8px}
+.mi.on{background:var(--info-tint)}
+.mi div{flex:1;display:grid;gap:1px}
+.mi b{font-size:13px;color:var(--heading)}
+.mi small{font-size:11.5px;color:var(--faint)}
+.mi .tag{font-size:10.5px;font-weight:700;color:var(--ok-ink);background:var(--ok-tint);padding:1px 6px;border-radius:5px;white-space:nowrap;align-self:center}
+.mi.off{opacity:.55}
+.mi.off .tag{color:var(--muted);background:var(--track)}
+.body{flex:1;overflow:hidden;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.ctx{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:999px;background:var(--track);color:var(--muted);font-size:12px;font-weight:600}
+.chip.ai{background:var(--ai-tint);color:var(--ai)}
+.skills{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.skill{padding:9px 10px;border:1px solid var(--border);border-radius:10px;font-size:12.5px;font-weight:600;color:var(--heading);background:var(--card)}
+.skill small{display:block;font-weight:400;color:var(--faint);font-size:11px;margin-top:2px}
+.q{align-self:flex-end;max-width:85%;padding:8px 12px;border-radius:14px 14px 4px 14px;background:var(--solid);color:#fff}
+.steps{display:grid;gap:5px;padding:9px 11px;border-radius:10px;background:var(--track);font-size:12.5px}
+.step{display:flex;gap:8px;align-items:center;color:var(--muted)}
+.step i{width:16px;height:16px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:10px;font-weight:800;background:var(--ok);color:#fff;flex:none}
+.step.run i{background:none;border:2px solid var(--ai);border-top-color:transparent}
+.step code{font:11px ui-monospace,Consolas,monospace;color:var(--faint)}
+.a{display:grid;gap:7px;line-height:1.55}
+.a p{margin:0}
+.a ul{margin:0;padding-left:18px}
+sup.c{display:inline-grid;place-items:center;min-width:15px;height:15px;padding:0 3px;border-radius:4px;background:var(--info-tint);color:var(--link);font-size:10px;font-weight:800;vertical-align:2px;margin-left:1px}
+.cites{display:grid;gap:4px;padding:8px 10px;border:1px solid var(--border);border-radius:10px;font-size:12px}
+.cites a{color:var(--link);text-decoration:none}
+.cites span{color:var(--faint)}
+.meta{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:11.5px;color:var(--faint)}
+.meta .ok{color:var(--ok-ink);font-weight:700}
+.acts{display:flex;flex-wrap:wrap;gap:6px}
+.btn{display:inline-flex;align-items:center;gap:5px;height:28px;padding:0 10px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font:600 12px Inter,system-ui,sans-serif}
+.btn.solid{background:var(--solid);border-color:var(--solid);color:#fff}
+.btn.ghost{border-color:transparent;background:var(--track)}
+.in{display:flex;gap:8px;align-items:flex-end;padding:10px 12px;border-top:1px solid var(--border)}
+.in .box{flex:1;min-height:40px;padding:9px 11px;border-radius:12px;border:1px solid var(--border);color:var(--faint);font-size:13px}
+.send{width:36px;height:36px;border-radius:10px;border:0;background:var(--solid);color:#fff;display:grid;place-items:center}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{padding:5px 6px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
+th{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint)}
+.pr{font-size:10.5px;font-weight:800;padding:1px 5px;border-radius:4px}
+.pr.m{background:var(--bad-tint);color:var(--bad-ink)}.pr.s{background:var(--warn-tint);color:var(--warn-ink)}.pr.c{background:var(--track);color:var(--muted)}
+.confirm{border:2px solid var(--ai);border-radius:12px;padding:11px 12px;display:grid;gap:8px;background:var(--ai-tint)}
+.confirm b{color:var(--heading)}
+.confirm ul{margin:0;padding-left:18px;font-size:12.5px}
+.confirm small{color:var(--muted)}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.col{border:1px solid var(--border);border-radius:10px;padding:9px 10px;display:grid;gap:6px;font-size:12.5px;align-content:start}
+.col h5{margin:0;font-size:12.5px;color:var(--heading)}
+.col h5 small{display:block;font-weight:500;color:var(--faint);font-size:11px}
+.col .meta{font-size:11px}
+.warnline{padding:6px 9px;border-radius:8px;background:var(--warn-tint);color:var(--warn-ink);font-size:12px}
+.note{font-size:11.5px;color:var(--faint)}
+</style>
+</head>
+<body>
+<div class="page light" id="pg">
+<h1>Ask AI: the assistant</h1>
+<p>Sample data from the WhatsApp Customer Channel demo project. The panel opens from the top bar (as today) and knows the page you're on.</p>
+<div class="row">
+
+<!-- A: picker, context and skills -->
+<div>
+<p class="cap">1 · Model picker, context and skills</p>
+<section class="panel" aria-label="Model picker">
+  <div class="ph"><b>Ask AI</b><small>· New conversation</small><span class="grow"></span>
+    <span class="picker">✦ Auto ▾
+      <div class="menu">
+        <h4>Let PMS choose</h4>
+        <div class="mi on"><div><b>Auto</b><small>Picks the model for each question: quick lookups fast, analysis deeper</small></div><span class="tag">✓</span></div>
+        <h4>Or choose how</h4>
+        <div class="mi"><div><b>Fast</b><small>GLM 4.7 Flash · short lookups</small></div><span class="tag">On Cloudflare</span></div>
+        <div class="mi"><div><b>Balanced</b><small>Llama 4 Scout · today's model</small></div><span class="tag">On Cloudflare</span></div>
+        <div class="mi"><div><b>Deep reasoning</b><small>GLM 5.2 · plans, forecasts, multi-step</small></div><span class="tag">On Cloudflare</span></div>
+        <div class="mi"><div><b>Long documents</b><small>Gemma 4 26B · 256k context</small></div><span class="tag">On Cloudflare</span></div>
+        <h4>Other providers</h4>
+        <div class="mi off"><div><b>Claude, GPT, Gemini</b><small>Off: Omnicontact keeps its data on Cloudflare. An Organisation Administrator can allow them in Settings → AI.</small></div><span class="tag">Off</span></div>
+      </div>
+    </span>
+    <button class="ib" aria-label="Conversations">☰</button>
+  </div>
+  <div class="body">
+    <div class="ctx"><span class="chip ai">◎ On: WhatsApp Customer Channel</span><span class="chip">Stage 6 · BRS Sign Off</span><span class="chip">+ Attach</span></div>
+    <p class="note" style="margin:0">I know the page you're on. Ask anything, or start with one of these:</p>
+    <div class="skills" style="margin-top:250px">
+      <div class="skill">Summarise status<small>Where it stands, in 3 lines</small></div>
+      <div class="skill">What's blocking it?<small>Blockers, sign-offs, overdue work</small></div>
+      <div class="skill">Draft the weekly update<small>For the update request</small></div>
+      <div class="skill">Steering committee brief<small>One page, with decisions needed</small></div>
+      <div class="skill">Check the next stage gate<small>What BSS Draft still needs</small></div>
+      <div class="skill">Forecast the finish<small>…and explain the risk</small></div>
+      <div class="skill">Extract requirements<small>From BRS v2, into work items</small></div>
+      <div class="skill">Your workspace's skills<small>2 shared by administrators</small></div>
+    </div>
+  </div>
+  <div class="in"><div class="box">Ask about WhatsApp Customer Channel…</div><button class="send" aria-label="Send">➤</button></div>
+</section>
+</div>
+
+<!-- B: tool progress and a cited answer -->
+<div>
+<p class="cap">2 · Tool progress and a cited, checked answer</p>
+<section class="panel" aria-label="Tool progress">
+  <div class="ph"><b>Ask AI</b><small>· Gate readiness</small><span class="grow"></span><span class="picker">✦ Auto ▾</span><button class="ib">☰</button></div>
+  <div class="body">
+    <div class="q">Is WhatsApp ready to move on from BRS Sign Off?</div>
+    <div class="steps">
+      <div class="step"><i>✓</i>Reading the project's lifecycle <code>get_lifecycle_status</code></div>
+      <div class="step"><i>✓</i>Checking sign-offs waiting <code>list_signoffs_pending</code></div>
+      <div class="step"><i>✓</i>Reading BRS v2 · 4 passages <code>search_documents</code></div>
+      <div class="step"><i>✓</i>Looking at its open work <code>search_items</code></div>
+    </div>
+    <div class="a">
+      <p><b>Not yet.</b> BRS Sign Off needs one more approval: <b>Mutsa</b> (Business, for Waraidzo), requested today<sup class="c">1</sup>. Everything else in its gate is met.</p>
+      <p>Two things will slow BSS Draft after it:</p>
+      <ul>
+        <li>BRS v2 §7 still marks the CRM integration "to be confirmed"<sup class="c">2</sup>.</li>
+        <li>WCC-23 (time zones) is 47 days overdue and touches the same screens<sup class="c">3</sup>.</li>
+      </ul>
+      <p>Suggested next step: remind Mutsa, and confirm §7 with the client before the BSS starts.</p>
+    </div>
+    <div class="cites">
+      <div><sup class="c">1</sup> <a href="#">Lifecycle · BRS Sign Off · sign-offs</a> <span>· live</span></div>
+      <div><sup class="c">2</sup> <a href="#">BRS v2 · §7 Integration requirements</a> <span>· page 6</span></div>
+      <div><sup class="c">3</sup> <a href="#">WCC-23 Dates show in the wrong time zone</a></div>
+    </div>
+    <div class="meta"><span>Llama 4 Scout · Balanced (Auto)</span><span>4 tools · 6.2 s</span><span class="ok">✓ numbers checked</span></div>
+    <div class="acts"><button class="btn solid">Send the reminder</button><button class="btn">👍</button><button class="btn">👎</button><button class="btn ghost">Copy</button><button class="btn ghost">Insert into a comment</button><button class="btn ghost">Re-run with ▾</button></div>
+  </div>
+  <div class="in"><div class="box">Ask a follow-up…</div><button class="send">➤</button></div>
+</section>
+</div>
+
+<!-- C: extraction and the confirmation card -->
+<div>
+<p class="cap">3 · Extraction, then a confirmation card</p>
+<section class="panel" aria-label="Extraction">
+  <div class="ph"><b>Ask AI</b><small>· BRS v2 requirements</small><span class="grow"></span><span class="picker">✦ Auto ▾</span><button class="ib">☰</button></div>
+  <div class="body">
+    <div class="q">Extract the requirements from BRS v2 and make them work items</div>
+    <div class="steps"><div class="step"><i>✓</i>Reading BRS v2 · 11 pages <code>get_document</code></div><div class="step"><i>✓</i>Extracting requirements · checked against the schema <code>extract</code></div></div>
+    <p style="margin:0">I found <b>5 functional requirements</b> in BRS v2 §5<sup class="c">1</sup>. Untick any you don't want.</p>
+    <table>
+      <thead><tr><th></th><th>ID</th><th>Requirement</th><th>Priority</th><th>Owner</th></tr></thead>
+      <tbody>
+        <tr><td>☑</td><td>FRN-01</td><td>Send approved template messages</td><td><span class="pr m">M</span></td><td>Vunganayi</td></tr>
+        <tr><td>☑</td><td>FRN-02</td><td>Route new chats to the agent queue</td><td><span class="pr m">M</span></td><td>Vunganayi</td></tr>
+        <tr><td>☑</td><td>FRN-03</td><td>Show delivery and read receipts</td><td><span class="pr s">S</span></td><td>–</td></tr>
+        <tr><td>☑</td><td>FRN-04</td><td>Customer opt-out with STOP</td><td><span class="pr m">M</span></td><td>–</td></tr>
+        <tr><td>☐</td><td>FRN-05</td><td>Emoji reactions from agents</td><td><span class="pr c">C</span></td><td>–</td></tr>
+      </tbody>
+    </table>
+    <div class="confirm">
+      <b>Create 4 work items in WCC?</b>
+      <ul>
+        <li>Story · FRN-01 Send approved template messages · High · epic WCC-11</li>
+        <li>Story · FRN-02 Route new chats to the agent queue · High · epic WCC-11</li>
+        <li>Story · FRN-03 Show delivery and read receipts · Medium</li>
+        <li>Story · FRN-04 Customer opt-out with STOP · High</li>
+      </ul>
+      <small>Each links back to BRS v2 §5. Created as you, with your permissions. Nothing changes until you confirm.</small>
+      <div class="acts"><button class="btn solid">Create 4 work items</button><button class="btn">Edit first</button><button class="btn ghost">Cancel</button></div>
+    </div>
+    <div class="meta"><span>Gemma 4 26B · Long documents (Auto)</span><span>2 tools · 9.8 s</span><span class="ok">✓ schema valid</span></div>
+  </div>
+  <div class="in"><div class="box">Ask a follow-up…</div><button class="send">➤</button></div>
+</section>
+</div>
+
+<!-- D: two models compared -->
+<div>
+<p class="cap">4 · The same question, two models</p>
+<section class="panel" aria-label="Compare">
+  <div class="ph"><b>Ask AI</b><small>· Forecast</small><span class="grow"></span><span class="picker">⇆ Compare ▾</span><button class="ib">☰</button></div>
+  <div class="body">
+    <div class="q">Forecast the finish date and explain the risk</div>
+    <div class="cmp">
+      <div class="col">
+        <h5>Llama 4 Scout<small>Balanced · on Cloudflare</small></h5>
+        <p style="margin:0">Most likely <b>16 Jan</b> for the work, but the stages need until <b>27 Apr</b><sup class="c">1</sup>, so April is the honest finish. The due date is 3 Jan.</p>
+        <p style="margin:0">Biggest risk: Meta business verification (Critical)<sup class="c">2</sup>.</p>
+        <div class="meta"><span>5.1 s · 3.2k tokens · $0.002</span><span class="ok">✓ numbers</span></div>
+        <button class="btn">Use this answer</button>
+      </div>
+      <div class="col">
+        <h5>GLM 5.2<small>Deep reasoning · on Cloudflare</small></h5>
+        <p style="margin:0">The finish is set by the lifecycle, not the work: <b>27 Apr</b><sup class="c">1</sup>, 114 days after the due date. The work alone is 50% likely by 16 Jan, 85% by 20 Mar<sup class="c">1</sup>.</p>
+        <p style="margin:0">Two risks compound: verification (Critical)<sup class="c">2</sup> blocks the pilot, and BRS sign-off is still open, which holds BSS Draft (10 days).</p>
+        <div class="meta"><span>14.8 s · 7.9k tokens · $0.011</span><span class="ok">✓ numbers</span></div>
+        <button class="btn">Use this answer</button>
+      </div>
+    </div>
+    <div class="cites"><div><sup class="c">1</sup> <a href="#">Overview · forecast (Monte Carlo + lifecycle)</a></div><div><sup class="c">2</sup> <a href="#">Risk register · Meta business verification</a></div></div>
+    <div class="acts"><span class="note" style="align-self:center">Which is better?</span><button class="btn">Left</button><button class="btn">Right</button><button class="btn ghost">About the same</button></div>
+    <div class="warnline">This month: 41% of Omnicontact's AI budget used · you: 12%.</div>
+  </div>
+  <div class="in"><div class="box">Ask a follow-up…</div><button class="send">➤</button></div>
+</section>
+</div>
+
+</div>
+</div>
+<script>if (new URLSearchParams(location.search).get("theme") === "dark") document.getElementById("pg").className = "page dark";</script>
+</body>
+</html>
