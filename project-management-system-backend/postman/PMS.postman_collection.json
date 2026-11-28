@@ -12564,6 +12564,127 @@
           }
         },
         {
+          "name": "Assistant skills: the ones for a project",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json();",
+                  "pm.test(\"project skills, prompts filled in\", () => { pm.expect(s.contexts).to.include(\"project\"); const st = s.skills.find((x) => x.id === \"status\"); pm.expect(st).to.be.an(\"object\"); pm.expect(st.prompt).to.not.include(\"{project}\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assistant/skills?projectId={{systemId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assistant",
+                "skills"
+              ],
+              "query": [
+                {
+                  "key": "projectId",
+                  "value": "{{systemId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Assistant skills: the workspace's own (organisation admins)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"200, or 403 for someone who isn't an organisation administrator\", () => pm.expect([200, 403]).to.include(pm.response.code));",
+                  "if (pm.response.code === 200) pm.test(\"skills and the tools they may use\", () => { const d = pm.response.json(); pm.expect(d.skills).to.be.an(\"array\"); pm.expect(d.tools.map((t) => t.name)).to.include(\"extract_from_document\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assistant/skills/custom",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assistant",
+                "skills",
+                "custom"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Assistant skills: an unknown tool is refused",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400, or 403 for someone who isn't an organisation administrator\", () => pm.expect([400, 403]).to.include(pm.response.code));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Postman check\",\"context\":\"project\",\"prompt\":\"Summarise {project}.\",\"tools\":[\"delete_everything\"]}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/assistant/skills/custom",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assistant",
+                "skills",
+                "custom"
+              ]
+            }
+          }
+        },
+        {
           "name": "Overview: the summary",
           "event": [
             {

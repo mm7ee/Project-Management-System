@@ -1,6 +1,6 @@
 # Ask AI as an assistant: the plan
 
-Status: **approved 2026-11-28; phases (a) and (b) built.** Mock-ups: `docs/design/assistant-mockups.html` (screenshots in
+Status: **approved 2026-11-28; phases (a) to (c) built.** Mock-ups: `docs/design/assistant-mockups.html` (screenshots in
 `docs/design/assistant/`). Written 2026-11-28.
 
 ## What's there today

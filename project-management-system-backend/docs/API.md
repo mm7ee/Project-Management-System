@@ -401,6 +401,41 @@ see its work item. Not for view-only links.
   returns the same with `done: { indexed, skipped, failed }`; call it again while `waiting` > 0. A document that fails
   is tried 3 times. Administrators, Managers, Team Leaders and those who manage projects; others `403`.
 
+### Extraction and skills (phase c)
+
+More tools: `list_documents` (a project's documents with their ids, deliverable, version, whether signed off and
+whether Ask AI has read them), `get_work_item` (one item with its description, last comments, children and, for a
+service desk request, its type and customer name), `get_lifecycle_report` (time in each stage against its target,
+bottlenecks), `extract_from_document` and `check_traceability`.
+
+- **`extract_from_document`** (`documentId`, `kind`): `requirements`, `risks`, `actions`, `milestones`,
+  `acceptance_criteria` or `defects` (`src/data/extraction.js` has each kind's columns and schema). A BRS or BSS
+  written in PMS gives its requirements from its own data. Anything else is read by the model (up to 3 windows of
+  16,000 characters); every row must pass the kind's schema and its main text must be found in the document (70% of
+  its words), or it's left out and counted. At most 150 rows.
+- **`check_traceability`** (`brsDocumentId`, `bssDocumentId`): each BRS requirement against the BSS's passages by
+  meaning: `Covered` (75% or more, or 55% when the BSS names the requirement's id), `Probably covered` (60%) or
+  `Gap`, with the BSS section. The BSS must have been read for search.
+- **Tables:** the answer event gains `tables: [{ title, columns: [{ key, label }], rows, note, kind?, documentId? }]`,
+  shown under the answer with Copy and Download CSV.
+- **Page context:** `context` also takes `itemKey` (the open work item), `document` (the open PMS document, as
+  `brs-2`) and `page` (outside a project, e.g. `service-desk`). Each is used only if the person may see it.
+
+**Skills** (`src/skills.js`; built-in ones in `src/data/skills.js`):
+
+- `POST /api/assistant { skill, context, history? }`: the skill's prompt, filled with what's open, is the question
+  (unless `question` is given); its instructions join the rules; its tools narrow what's offered (never past what the
+  person may use). The answer event carries `skill` (its label); the activity entry, its id. Unknown or switched-off
+  skill: `404 skill_unknown`.
+- `GET /api/assistant/skills?projectId&section&itemKey&document&page` → `{ contexts, skills: [{ id, label, context,
+  custom, prompt }] }`: the skills for where the person is (a project, its documents, a work item, a service request,
+  across projects, the service desk). A skill shows only to those offered its main tool. View-only links may read it.
+- The workspace's own (organisation administrators; others `403 org_admin_only`):
+  `GET /api/assistant/skills/custom` → `{ skills: [{ id, name, context, prompt, tools, enabled, updatedAt }],
+  contexts, tools: [{ name, description }] }`; `POST` `{ name, context, prompt, tools }` → `201 { id }`; `PATCH /:id`
+  (any of those, and `enabled`); `DELETE /:id`. In the prompt, `{project}`, `{document}` and `{item}` become the names
+  of what's open. Up to 40 a workspace; unknown tools `400`. Their id in `skill` is `custom:<id>`.
+
 ## Project lifecycle
 
 Each organisation has lifecycle templates (phases, stages and their gates); each project is on one version of one

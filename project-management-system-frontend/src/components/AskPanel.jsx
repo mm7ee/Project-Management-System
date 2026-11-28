@@ -4,10 +4,90 @@
 /** @import { User } from '../data/roles' */
 import { BRAND } from "../data/brand";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowUp, Check, CircleCheck, Copy, RotateCcw, Sparkles, X } from "lucide-react";
-import { ApiError, shareToken } from "../data/api";
+import { AlertTriangle, ArrowUp, Check, CircleCheck, Copy, Download, RotateCcw, Sparkles, X, Zap } from "lucide-react";
+import { ApiError, api, shareToken } from "../data/api";
 import { isLate, isOpen } from "../data/features";
 import { modelLabel, readEvents } from "../data/assistant";
+import { toCsv } from "../data/extraction";
+import { CONTEXT_LABELS } from "../data/skills";
+/** @type {Record<string, string>} */
+const SKILL_HEADINGS = { ...CONTEXT_LABELS, document: "For this project's documents", project: "For this project", item: "For this work item", request: "For this request" };
+/**
+ * A table an answer carries (an extraction, a traceability check), with its note and CSV.
+ * @param {{ table: import("../data/extraction").AnswerTable }} props
+ */
+function AnswerTableView({ table }) {
+  const [copied, setCopied] = useState(false);
+  const csv = () => toCsv(table.columns, table.rows);
+  const file = `${table.title.replace(/[^\w\- ]+/g, "").trim().slice(0, 60) || "table"}.csv`;
+  return (
+    <figure className="ask-table">
+      <figcaption>
+        <b>{table.title}</b> <span className="muted">· {table.rows.length} {table.rows.length === 1 ? "row" : "rows"}</span>
+      </figcaption>
+      {table.rows.length ? (
+        <div className="ask-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                {table.columns.map((col) => (
+                  <th key={col.key} scope="col">
+                    {col.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {table.rows.map((r, i) => (
+                <tr key={i} className={r.coverage === "Gap" ? "gap" : r.coverage === "Probably covered" ? "maybe" : ""}>
+                  {table.columns.map((col) => (
+                    <td key={col.key}>{r[col.key] === undefined || r[col.key] === null ? "" : String(r[col.key])}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="muted">Nothing found.</p>
+      )}
+      {table.note && <p className="ask-table-note">{table.note}</p>}
+      {table.rows.length > 0 && (
+        <div className="ask-table-actions">
+          <button
+            type="button"
+            className="ask-copy"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(csv());
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1800);
+              } catch {
+                setCopied(false);
+              }
+            }}
+          >
+            {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? "Copied" : "Copy table"}
+          </button>
+          <button
+            type="button"
+            className="ask-copy"
+            onClick={() => {
+              const url = URL.createObjectURL(new Blob([`﻿${csv()}`], { type: "text/csv;charset=utf-8" }));
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = file;
+              a.click();
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }}
+          >
+            <Download size={13} /> Download CSV
+          </button>
+        </div>
+      )}
+    </figure>
+  );
+}
 import AskToPql from "./AskToPql";
 /** Source links the app can open (a project and its tabs, a chat, reports). */
 const OPENABLE = /^#\/(projects|chat|reports)(\/|$)/;
@@ -133,21 +213,37 @@ export default function AskPanel({ open, onClose, systems, users, features, me, 
       "What's due in the next 30 days?",
     ];
   }, [users, features, systems, me, developer]);
-  const ask = /** @param {string} question */ async (question) => {
-    const q = question.trim();
+  // The skills for where the person is (the server knows whether an open item is a service request).
+  const [skills, setSkills] = useState(/** @type {SkillButton[]} */ ([]));
+  const where = JSON.stringify(context ?? {});
+  useEffect(() => {
+    if (!open) return;
+    let live = true;
+    const q = new URLSearchParams(Object.entries(context ?? {}).filter((e) => typeof e[1] === "string" && e[1]));
+    api(`/assistant/skills?${q}`)
+      .then((r) => live && setSkills(/** @type {{ skills: SkillButton[] }} */ (r).skills ?? []))
+      .catch(() => live && setSkills([]));
+    return () => {
+      live = false;
+    };
+  }, [open, where]);
+  /** @param {string} question @param {SkillButton} [skill] */
+  const ask = async (question, skill) => {
+    const q = (skill ? skill.prompt : question).trim();
     if (!q || busy) return;
     setDraft("");
     const history = turns
       .filter((t) => t.a)
       .slice(-4)
       .map((t) => ({ q: t.q, a: /** @type {NonNullable<typeof t.a>} */ (t.a) }));
-    setTurns((t) => [...t, { q, steps: [] }]);
+    setTurns((t) => [...t, { q, steps: [], ...(skill ? { skill: skill.label } : {}) }]);
     setBusy(true);
     /** @param {(t: Turn) => Partial<Turn>} f */
     const patch = (f) => setTurns((t) => t.map((x, i) => (i === t.length - 1 ? { ...x, ...f(x) } : x)));
     try {
       // The assistant looks things up with tools, as the person asking, and cites what it found.
-      const res = await post("/api/assistant", { question: q, history, context });
+      // A skill sends only its id: the server builds its question and decides its tools.
+      const res = await post("/api/assistant", skill ? { skill: skill.id, history, context } : { question: q, history, context });
       let answered = false;
       // An older server (404) or the assistant off (503): the snapshot answer below says why, or answers.
       if (res.ok && res.body) {
@@ -155,7 +251,7 @@ export default function AskPanel({ open, onClose, systems, users, features, me, 
           if (event.type === "step") patch((t) => ({ steps: [...(t.steps ?? []), String(event.label)] }));
           if (event.type === "answer") {
             answered = true;
-            patch(() => ({ a: String(event.text), sources: event.sources ?? [], unverified: event.unverified ?? [], meta: { model: String(event.model), tools: (event.tools ?? []).length, ms: Number(event.ms) } }));
+            patch(() => ({ a: String(event.text), sources: event.sources ?? [], tables: event.tables ?? [], unverified: event.unverified ?? [], meta:{ model: String(event.model), tools: (event.tools ?? []).length, ms: Number(event.ms) } }));
           }
         });
       } else if (![404, 405, 503].includes(res.status)) throw await failure(res);
@@ -304,22 +400,51 @@ export default function AskPanel({ open, onClose, systems, users, features, me, 
         <div className="ask-body">
           {turns.length === 0 && (
             <div className="ask-empty">
-              <p>{developer ? "Plan your day, draft updates and messages, break requests into tasks, or get technical help with your work. Try:" : "Ask about projects, people, clients, feature requests, blockers or deadlines. Try:"}</p>
-              <div className="ask-examples">
-                {examples.map((e) => (
-                  <button key={e} onClick={() => ask(e)}>
-                    {e}
-                  </button>
-                ))}
-              </div>
+              {skills.length > 0 ? (
+                // Skills for where the person is: the first context's first (a project, a document, an item…).
+                [...new Set(skills.map((s) => s.context))].map((ctx) => (
+                  <section key={ctx} className="ask-skills" aria-label={SKILL_HEADINGS[ctx] ?? "Skills"}>
+                    <p className="ask-skills-h">{SKILL_HEADINGS[ctx] ?? "Skills"}</p>
+                    <div className="ask-examples">
+                      {skills
+                        .filter((s) => s.context === ctx)
+                        .map((s) => (
+                          <button key={s.id} title={s.prompt} onClick={() => ask("", s)}>
+                            <Zap size={13} aria-hidden="true" /> {s.label}
+                            {s.custom && <span className="ask-skill-own">Your organisation's</span>}
+                          </button>
+                        ))}
+                    </div>
+                  </section>
+                ))
+              ) : (
+                <>
+                  <p>{developer ? "Plan your day, draft updates and messages, break requests into tasks, or get technical help with your work. Try:" : "Ask about projects, people, clients, feature requests, blockers or deadlines. Try:"}</p>
+                  <div className="ask-examples">
+                    {examples.map((e) => (
+                      <button key={e} onClick={() => ask(e)}>
+                        {e}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
           {turns.map((t, i) => (
             <div key={i} className="ask-turn">
-              <div className="ask-q">{t.q}</div>
+              <div className="ask-q">
+                {t.skill && (
+                  <span className="ask-q-skill">
+                    <Zap size={12} aria-hidden="true" /> {t.skill}
+                  </span>
+                )}
+                {t.q}
+              </div>
               {t.a && (
                 <div className="ask-a">
                   {render(t.a, t.sources)}
+                  {t.tables?.map((tb, n) => <AnswerTableView key={n} table={tb} />)}
                   {!!t.sources?.length && (
                     <ol className="ask-sources" aria-label="Sources">
                       {t.sources.map((s) => (
@@ -380,6 +505,15 @@ export default function AskPanel({ open, onClose, systems, users, features, me, 
           ))}
           <div ref={end} />
         </div>
+        {turns.length > 0 && skills.length > 0 && !busy && (
+          <div className="ask-skill-row" aria-label="Skills">
+            {skills.slice(0, 8).map((s) => (
+              <button key={s.id} title={s.prompt} onClick={() => ask("", s)}>
+                <Zap size={12} aria-hidden="true" /> {s.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         <form
           className="ask-form"
@@ -422,6 +556,12 @@ export default function AskPanel({ open, onClose, systems, users, features, me, 
  * @property {string[]} [unverified]  figures in the answer that nothing looked up contains
  * @property {{ model: string; tools: number; ms: number }} [meta]
  * @property {boolean} [snapshot]  answered the earlier way, from one snapshot
+ * @property {import("../data/extraction").AnswerTable[]} [tables]  extractions and checks, shown under the answer
+ * @property {string} [skill]  the skill that asked
+ */
+/**
+ * A skill the server offers for where the person is.
+ * @typedef {{ id: string; label: string; context: string; custom: boolean; prompt: string }} SkillButton
  */
 /**
  * @typedef {Object} Source
@@ -440,5 +580,5 @@ export default function AskPanel({ open, onClose, systems, users, features, me, 
  * @property {boolean} developer
  * @property {(id: string) => void} onOpenProject
  * @property {(pql: string) => void} [onSearch]
- * @property {{ projectId?: string; section?: string }} [context]  the page the person is on
+ * @property {{ projectId?: string; section?: string; itemKey?: string; document?: string; page?: string }} [context]  the page the person is on
  */

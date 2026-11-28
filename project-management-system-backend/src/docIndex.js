@@ -212,6 +212,40 @@ export async function documentText(c, documentId, section) {
 }
 
 /**
+ * A document the person may open (the same rule as downloading it), or null.
+ * @param {ItemContext} c
+ * @param {string} documentId
+ */
+export async function visibleDocument(c, documentId) {
+  const vis = VISIBLE(c);
+  return /** @type {{ id: string; system_id: string; name: string; kind: string; url: string | null; version: number | null; deliverable_key: string | null; project: string; item_key: string | null } | null} */ (
+    await c.db
+      .prepare(
+        `SELECT d.id, d.system_id, d.name, d.kind, d.url, d.version, d.deliverable_key, (s.data::json ->> 'name') AS project,
+                CASE WHEN w.id IS NULL THEN NULL ELSE ws.key || '-' || w.number END AS item_key
+         FROM documents d JOIN systems s ON s.id = d.system_id LEFT JOIN work_items w ON w.id = d.work_item_id LEFT JOIN systems ws ON ws.id = w.system_id
+         WHERE d.id = ? AND ${vis.sql}`,
+      )
+      .bind(documentId, ...vis.args)
+      .first()
+  );
+}
+/** Where a document opens. @param {{ system_id: string; url: string | null; kind: string; item_key: string | null }} d */
+export const documentHref = (d) => hrefOf(d);
+
+/**
+ * A document's passages with their embeddings (for comparing two documents), in order. Visibility is the caller's
+ * check (visibleDocument).
+ * @param {ItemContext} c
+ * @param {string} documentId
+ * @returns {Promise<{ seq: number; section: string; text: string; embedding: number[] }[]>}
+ */
+export async function passageVectors(c, documentId) {
+  const rows = /** @type {{ seq: number; section: string; text: string; embedding: string }[]} */ ((await c.db.prepare("SELECT seq, section, text, embedding::text AS embedding FROM doc_passages WHERE document_id = ? ORDER BY seq").bind(documentId).all()).results);
+  return rows.map((r) => ({ seq: Number(r.seq), section: r.section, text: r.text, embedding: JSON.parse(r.embedding) }));
+}
+
+/**
  * @param {ItemContext} c
  * @param {string} path
  * @param {string} method

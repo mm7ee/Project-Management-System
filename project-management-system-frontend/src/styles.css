@@ -4607,3 +4607,25 @@ kbd { display: inline-block; min-width: 20px; padding: 1px 6px; border-radius: 5
 .aidoc-failures { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; }
 .aidoc-failures .muted { margin-left: 6px; }
 @media (max-width: 640px) { .aidoc-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Ask AI skills (one-click starters) and the tables answers carry. */
+.ask-skills + .ask-skills { margin-top: 16px; }
+.ask-skills-h { font-size: 12px !important; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--faint) !important; }
+.ask-examples button svg { color: var(--cyan); vertical-align: -2px; margin-right: 2px; }
+.ask-skill-own { margin-left: 8px; padding: 1px 7px; border-radius: 99px; background: var(--tint-cyan); color: var(--heading); font-size: 11px; font-weight: 600; }
+.ask-q-skill { display: flex; align-items: center; gap: 4px; margin-bottom: 4px; font-size: 11.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; opacity: .8; }
+.ask-skill-row { display: flex; gap: 6px; overflow-x: auto; margin: 0 22px 8px; padding-bottom: 2px; scrollbar-width: thin; }
+.ask-skill-row button { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 99px; background: transparent; color: var(--text); font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+.ask-skill-row button:hover { border-color: var(--cyan); background: var(--tint-cyan); }
+.ask-skill-row svg { color: var(--cyan); }
+.ask-table { margin: 12px 0 0; }
+.ask-table figcaption { font-size: 13px; margin-bottom: 6px; }
+.ask-table-wrap { max-height: 340px; overflow: auto; border: 1px solid var(--border); border-radius: 10px; }
+.ask-table table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.ask-table th { position: sticky; top: 0; background: var(--canvas); text-align: left; font-weight: 700; color: var(--heading); padding: 6px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.ask-table td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.ask-table tr:last-child td { border-bottom: 0; }
+.ask-table tr.gap td { background: var(--tint-red); }
+.ask-table tr.maybe td { background: var(--tint-amber); }
+.ask-a p.ask-table-note { margin-top: 6px; font-size: 12px; color: var(--muted); }
+.ask-table-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.ask-table td:first-child { white-space: nowrap; }

@@ -310,8 +310,17 @@ export function describe(e, users, systems) {
       const where = e.target ? ` about ${sysName(e.target)}` : "";
       const did = tools.length ? `, looking up ${[...new Set(tools)].map((t) => t.replace(/^(get|list|find|search)_/, "").replace(/_/g, " ")).join(", ")}` : "";
       const outcome = d.outcome === "answered" ? "" : d.outcome === "timed_out" ? " (it ran out of time)" : " (it couldn't answer)";
-      return `Asked ${BRAND.assistantName} a question${where}${did}${outcome}`;
+      const how = d.skill ? ` with the skill "${String(d.skill).replace(/^custom:.*/, "of your organisation").replace(/_/g, " ")}"` : "";
+      return `Asked ${BRAND.assistantName} a question${where}${how}${did}${outcome}`;
     }
+    case "documents_indexed":
+      return `Had ${BRAND.assistantName} read documents: ${str(d.indexed)} now searchable${Number(d.skipped) ? `, ${str(d.skipped)} without text` : ""}${Number(d.failed) ? `, ${str(d.failed)} failed` : ""}`;
+    case "ai_skill_added":
+      return `Added the ${BRAND.assistantName} skill "${str(d.skill)}"`;
+    case "ai_skill_changed":
+      return `Changed the ${BRAND.assistantName} skill "${str(d.skill)}"`;
+    case "ai_skill_removed":
+      return `Deleted the ${BRAND.assistantName} skill "${str(d.skill)}"`;
     case "api_token_created":
       return `Made the API token "${str(d.token)}" (${str(d.scope) === "write" ? "read and write" : "read only"}, ${str(d.days)} days)`;
     case "api_token_revoked":

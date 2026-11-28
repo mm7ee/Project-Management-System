@@ -1444,3 +1444,25 @@ organisations, a release per phase.
   Documents from before, and failures, are read from Settings → Ask AI documents (a few a request; 3 tries).
 - **Tests:** PGlite gets pgvector from `@electric-sql/pglite-pgvector` 0.0.17 (the build for our PGlite 0.5.16), a
   dev dependency only.
+
+## Ask AI, phase (c): extraction and task skills (2026-11-28)
+
+- **Extraction is checked twice before anything is shown:** each row against the kind's JSON schema (types, dates
+  as YYYY-MM-DD, ratings 1-5, lengths; unknown keys dropped), then its main text against the document (70% of its
+  words must be there), so a row the model invented never reaches the table. What was left out is counted and said.
+- **A document written in PMS isn't read by a model for its requirements:** the BRS and BSS give them from their own
+  data, with the ids the printed document shows. Exact, and free.
+- **Traceability by meaning:** each BRS requirement is embedded and compared with the BSS's passages (the vectors
+  already stored for search). Covered from 75% similarity (or 55% when the BSS names the requirement's id: both kits
+  number from FRN-01, so an id alone proves nothing), probably covered from 60%. The thresholds are a starting point
+  for the evaluation in phase (g).
+- **Tables travel beside the answer, not in it:** a tool returns a table; the model gets a summary and the first rows
+  and is told not to repeat it; the panel shows the whole table with Copy and Download CSV. CSV cells starting with
+  = + - @ get an apostrophe so a spreadsheet won't run them.
+- **Skills are server-side:** the browser sends a skill's id; the Worker fills its prompt with the names of what's
+  open (only things the person may see), adds its instructions and narrows its tools. A skill can never add a tool the
+  person isn't offered, and shows only to those offered its main tool. Drafting skills say "draft only": nothing is
+  created until write tools (phase d), which will need a confirmation.
+- **The organisation's own skills** (migration 0030, `ai_skills`): per workspace, added by its administrators, with
+  the tools each may use checked against the tool list. Up to 40 a workspace.
+- **Turning extracted rows into work items** comes with the write tools in phase (d), behind a confirmation card.

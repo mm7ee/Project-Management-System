@@ -58,6 +58,7 @@ import { chatApi } from "./chat";
 import { projectReportsApi } from "./projectReports";
 import { assistantApi } from "./assistant";
 import { docIndexApi, indexLater } from "./docIndex";
+import { skillsApi } from "./skills";
 import { afterSignoff, askLifecycleLines, lifecycleApi, runLifecycleClock, startLifecycle } from "./lifecycle";
 import { projectDocsApi } from "./projectDocs";
 import { overviewApi } from "./overview";
@@ -1205,6 +1206,7 @@ async function api(req, env, path, ctx) {
         path === "/api/statuses" ||
         path === "/api/backlog" ||
         path === "/api/timeline" ||
+        path === "/api/assistant/skills" ||
         path.startsWith("/api/reports/agile/") ||
         /^\/api\/items\/[A-Z]{2,10}-\d{1,7}(\/comments)?$/.test(path))) ||
     (method === "POST" && (path === "/api/ask" || path === "/api/assistant" || path === "/api/requests")) ||
@@ -1350,7 +1352,8 @@ async function api(req, env, path, ctx) {
     (await lifecycleApi(itemCtx, path, method)) ??
     (await projectReportsApi(itemCtx, path, method)) ??
     (await assistantApi(itemCtx, path, method)) ??
-    (await docIndexApi(itemCtx, path, method));
+    (await docIndexApi(itemCtx, path, method)) ??
+    (await skillsApi(itemCtx, path, method));
   if (itemsResponse) return itemsResponse;
   /**
    * After a project changes workspace: it takes the new workspace's workflow, unless some of its work

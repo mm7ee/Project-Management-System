@@ -1560,3 +1560,19 @@ Plan: `docs/assistant-plan.md`. Mock-ups: `docs/design/assistant-mockups.html`.
 - **Migration 0029** (`doc_passages`, `doc_index`, the `vector` extension). API: `docs/API.md`. Tests:
   `tests/passages.test.js` (frontend, 7), `tests/docIndex.test.js` (backend, 6). `npm test`: 427 passed (210
   frontend, 217 backend).
+
+## Ask AI, phase (c): extraction and skills (2026-11-28)
+
+- **Extract tables from documents:** requirements from a BRS or BSS, risks from a risk assessment, action items from
+  meeting notes, dates and milestones from a PCN, acceptance criteria from a BSS, defects from UAT feedback. Every row
+  is checked against the document; anything not found there is left out and counted. Copy the table or download it
+  as CSV.
+- **Check the BSS covers the BRS:** each requirement marked covered, probably covered or a gap, with the BSS section.
+- **Skills, one click away:** the Ask AI panel offers what fits the page. On a project: status, blockers, the weekly
+  update, the steering committee brief, stage-gate readiness, the forecast. On its documents: summarise, extract,
+  compare versions, traceability. On a work item: break into stories, write test cases, find duplicates, suggest an
+  assignee. On a service request: draft a reply, categorise, find similar resolved ones. Across projects: sign-offs
+  stuck over 10 days, time by stage, projects off track.
+- **Your organisation's own skills:** Settings → This workspace → Ask AI skills (organisation administrators).
+- **Migration 0030** (`ai_skills`). API: `docs/API.md`. Tests: `tests/extraction.test.js` (frontend, 10),
+  `tests/skills.test.js` (backend, 6). `npm test`: 443 passed (220 frontend, 223 backend).
