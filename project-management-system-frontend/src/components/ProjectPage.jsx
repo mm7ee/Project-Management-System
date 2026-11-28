@@ -30,7 +30,7 @@ import LifecyclePage from "./LifecyclePage";
 import { CockpitHeader, KpiTiles, Stepper, useOverview } from "./ProjectCockpit";
 import { AttentionPanel, NextDays, SummaryCard } from "./ProjectOverview";
 import ProjectCharts from "./ProjectCharts";
-import { ActivityTab, ProjectChat, RisksTab, TeamTab, TestingTab } from "./ProjectTabs";
+import { ActivityTab, ProjectChat, ProjectFiles, RisksTab, TeamTab, TestingTab } from "./ProjectTabs";
 import DocumentsTab from "./DocumentsTab";
 import { DateLine, ProgressBar, ScheduleChip, updatedText } from "./SystemCard";
 /**
@@ -149,10 +149,27 @@ export default function ProjectPage(p) {
       ) : p.section === "chat" && !p.readOnly ? (
         <ProjectChat system={system} me={me} users={users} />
       ) : p.section === "docs" ? (
-        <DocumentsTab system={system} me={me} users={users} doc={p.itemKey} readOnly={p.readOnly} onChanged={p.onChanged} />
+        <>
+          <DocumentsTab system={system} me={me} users={users} doc={p.itemKey} readOnly={p.readOnly} onChanged={p.onChanged} />
+          {!p.itemKey && <ProjectFiles system={system} documents={p.documents} users={users} now={now} />}
+        </>
       ) : p.section === "lifecycle" ? (
         <LifecyclePage system={system} me={me} users={users} now={now} readOnly={p.readOnly} onChanged={p.onChanged} />
-      ) : p.section === "backlog" ? (
+      ) : null}
+      {(p.section === "items" || p.section === "board" || p.section === "backlog") && !p.itemKey && (
+        <nav className="ck-work-switch seg" aria-label="Work views">
+          {/** @type {const} */ ([
+            ["items", "List", "/items"],
+            ["board", "Board", "/board"],
+            ...(system.agileMode === "scrum" ? /** @type {const} */ ([["backlog", "Backlog", "/backlog"]]) : []),
+          ]).map(([k, label, path]) => (
+            <a key={k} href={`#/projects/${system.id}${path}`} className={p.section === k ? "on" : ""} aria-current={p.section === k ? "page" : undefined}>
+              {label}
+            </a>
+          ))}
+        </nav>
+      )}
+      {p.section === "risks" || p.section === "testing" || p.section === "team" || p.section === "activity" || (p.section === "chat" && !p.readOnly) || p.section === "docs" || p.section === "lifecycle" ? null : p.section === "backlog" ? (
         <BacklogView system={system} users={users} now={now} readOnly={p.readOnly} canEditPoints={p.canAssignOthers} onChanged={p.onChanged} />
       ) : p.section === "timeline" ? (
         <TimelineView scope={{ systemId: system.id }} users={users} now={now} readOnly={p.readOnly} />
@@ -162,7 +179,7 @@ export default function ProjectPage(p) {
         p.itemKey ? (
           <WorkItemPage system={system} itemKey={p.itemKey} users={users} me={me} now={now} readOnly={p.readOnly} canCreate={p.canCreateItems} onChanged={p.onChanged} />
         ) : (
-          <WorkItemsTab system={system} users={users} now={now} canCreate={p.canCreateItems} canManage={p.canManage} readOnly={p.readOnly} onChanged={p.onChanged} />
+          <WorkItemsTab system={system} users={users} now={now} canCreate={p.canCreateItems} canManage={p.canManage} readOnly={p.readOnly} onChanged={p.onChanged} prefs={p.prefs} onPrefs={p.onPrefs} canBulk={p.canAssignOthers} />
         )
       ) : (
         <>
@@ -888,6 +905,8 @@ function SaveAsTemplate({ system, attempt, onChanged }) {
  * @property {boolean} readOnly
  * @property {(index: number, decision: SignoffStatus, remarks?: string) => Promise<void>} onSignPcn
  * @property {(pql: string) => void} [onSearch] Opens Search with this PQL (the KPI tiles' drill-down).
+ * @property {import("../data/roles").Prefs} [prefs] The person's preferences (saved views, remembered filters and tabs).
+ * @property {(p: import("../data/roles").Prefs) => Promise<void>} [onPrefs]
  */
 /**
  * @typedef {Object} SectionProps

@@ -6,6 +6,7 @@ import { AlertTriangle, CalendarDays, ChevronDown, ChevronRight, Link2, Printer,
 import { api } from "../data/api";
 import { formatDate } from "../time";
 import { TypeIcon, itemHref } from "./WorkItemBits";
+import { criticalPath } from "../data/criticalPath";
 /** @type {Record<Zoom, number>} */ const PX_PER_DAY = { weeks: 26, months: 6, quarters: 2.2 };
 const ROW = 36;
 const DAY = 86400000;
@@ -30,6 +31,7 @@ export default function TimelineView({ scope, users, now, readOnly }) {
   const [childrenOf, setChildrenOf] = useState(/** @type {Record<string, TimelineBar[]> | (() => Record<string, TimelineBar[]>)} */ ({}));
   const [drag, setDrag] = useState(/** @type {{ row: Row; mode: "move" | "start" | "end" | "link"; x0: number; dx: number; overKey?: string } | null | (() => { row: Row; mode: "move" | "start" | "end" | "link"; x0: number; dx: number; overKey?: string } | null)} */ (null));
   const [editing, setEditing] = useState(/** @type {Row | null | (() => Row | null)} */ (null));
+  const [showPath, setShowPath] = useState(true);
   const workspace = "workspace" in scope;
   const scopeQuery = workspace ? `workspace=${encodeURIComponent(scope.workspace)}` : `system=${encodeURIComponent(scope.systemId)}`;
   const load = useCallback(async () => {
@@ -207,6 +209,10 @@ export default function TimelineView({ scope, users, now, readOnly }) {
   const name = /** @param {string} [id] */ (id) => users.find((u) => u.id === id)?.name;
   const todayX = x(iso(now));
   const warnings = data.links.filter((l) => l.warning);
+  // A project's critical path, from its dependencies (none in a workspace's timeline, where only epics show).
+  const path = workspace ? null : criticalPath(data.projects.flatMap((pr) => [...pr.epics.flatMap((e) => [e, ...(e.children ?? [])]), ...pr.loose]), data.links);
+  const onPath = new Set(showPath && path ? path.keys : []);
+  const pathLink = (/** @type {TimelineLink} */ l) => onPath.has(l.from) && onPath.has(l.to) && path !== null && path.keys.indexOf(l.to) === path.keys.indexOf(l.from) + 1;
   return (
     <div className="timeline-wrap">
       <div className="board-bar no-print">
@@ -220,12 +226,28 @@ export default function TimelineView({ scope, users, now, readOnly }) {
         <button className="btn btn-ghost sm" onClick={() => scroller.current?.scrollTo({ left: Math.max(0, todayX - 200), behavior: "smooth" })}>
           <CalendarDays size={14} /> Today
         </button>
+        {!workspace && (
+          <label className="tl-path-toggle">
+            <input type="checkbox" checked={showPath} onChange={(e) => setShowPath(e.target.checked)} /> Critical path
+          </label>
+        )}
         <span className="muted tl-help">{readOnly ? "View only." : "Drag a bar to move it, its ends to change dates, or its dot onto another bar to say it blocks that one."}</span>
         <button className="btn btn-navy sm" onClick={() => window.print()}>
           <Printer size={14} /> Print / PDF
         </button>
       </div>
       {error && <p className="form-error banner">{error}</p>}
+      {!workspace && showPath && (
+        <p className="tl-path-note" role="status">
+          {path ? (
+            <>
+              <b>Critical path</b> ({path.keys.length} items, finishing {formatDate(path.finish)}): {path.keys.join(" → ")}. A delay to any of them moves the finish.
+            </>
+          ) : (
+            "No critical path yet: drag a bar's dot onto another bar to say it blocks it, and the chain that decides the finish is highlighted."
+          )}
+        </p>
+      )}
       {notice && (
         <p className="board-notice" role="status">
           {notice}
@@ -308,7 +330,7 @@ export default function TimelineView({ scope, users, now, readOnly }) {
                 <div
                   key={r.id}
                   data-bar={r.id}
-                  className={`tl-bar ${cls} ${r.bar?.derived ? "derived" : ""} ${drag?.overKey === r.id && drag.mode === "link" ? "link-target" : ""} ${r.canEdit ? "editable" : ""}`}
+                  className={`tl-bar ${cls} ${onPath.has(r.id) ? "critical" : ""} ${r.bar?.derived ? "derived" : ""} ${drag?.overKey === r.id && drag.mode === "link" ? "link-target" : ""} ${r.canEdit ? "editable" : ""}`}
                   style={{ top, left, width: w }}
                   onPointerDown={(ev) => startDrag(ev, r, "move")}
                   title={`${r.kind === "item" ? `${r.id} ` : ""}${r.label}: ${p.start ? formatDate(p.start) : "?"} to ${p.end ? formatDate(p.end) : "?"}${r.bar?.assignee ? ` · ${name(r.bar.assignee) ?? ""}` : ""}${r.bar?.derived ? " (from its work items)" : ""}`}
@@ -337,7 +359,7 @@ export default function TimelineView({ scope, users, now, readOnly }) {
                 const x2 = x(sb);
                 const y2 = ROW * (b + 1) + ROW / 2;
                 const mid = Math.max(x1 + 8, Math.min(x2 - 8, (x1 + x2) / 2));
-                return <path key={l.id} d={`M${x1},${y1} H${mid} V${y2} H${x2}`} className={`tl-dep ${l.warning ? "warn" : ""}`} markerEnd="url(#tl-arrow)" />;
+                return <path key={l.id} d={`M${x1},${y1} H${mid} V${y2} H${x2}`} className={`tl-dep ${l.warning ? "warn" : ""} ${pathLink(l) ? "crit" : ""}`} markerEnd="url(#tl-arrow)" />;
               })}
               <defs>
                 <marker id="tl-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">

@@ -46,9 +46,7 @@ const RAG_ICON = { RED: AlertOctagon, AMBER: AlertTriangle, GREEN: CheckCircle2,
 const TABS = /** @type {const} */ ([
   ["overview", "Overview", ""],
   ["lifecycle", "Lifecycle", "/lifecycle"],
-  ["items", "Work items", "/items"],
-  ["board", "Board", "/board"],
-  ["backlog", "Backlog", "/backlog"],
+  ["work", "Work", "/items"],
   ["timeline", "Timeline", "/timeline"],
   ["risks", "Risks & Security", "/risks"],
   ["testing", "Testing", "/testing"],
@@ -106,7 +104,9 @@ export function CockpitHeader(p) {
   const lead = data?.project.lead ?? null;
   const canOpen = (system.status === "LIVE" || system.status === "COMPLETED") && !!system.url;
   // Backlog only for scrum projects; the chat isn't on a view-only link.
-  const tabs = TABS.filter(([k]) => (k !== "backlog" || system.agileMode === "scrum") && (k !== "chat" || !p.readOnly));
+  const tabs = TABS.filter(([k]) => k !== "chat" || !p.readOnly);
+  // The list, the board and the backlog are the Work tab's views.
+  const tabOf = (/** @type {string} */ section) => (section === "items" || section === "board" || section === "backlog" ? "work" : section);
   const base = `#/projects/${system.id}`;
   const advanceWhy = !life ? "" : life.closed ? "The project is closed" : !life.ready ? `Still needed: ${life.missing.join("; ")}` : !life.canAdvance ? "Only the project lead, a Manager or an Administrator can advance it" : `Move on from ${life.stage.name}`;
   const HealthIcon = health ? RAG_ICON[/** @type {keyof typeof RAG_ICON} */ (health.rag)] : CheckCircle2;
@@ -294,15 +294,15 @@ export function CockpitHeader(p) {
 
       <nav className="ck-tabs" aria-label="Project sections">
         {tabs.map(([k, label, path]) => (
-          <a key={k} href={`${base}${path}`} className={p.section === k ? "on" : ""} aria-current={p.section === k ? "page" : undefined}>
+          <a key={k} href={`${base}${path}`} className={tabOf(p.section) === k ? "on" : ""} aria-current={tabOf(p.section) === k ? "page" : undefined}>
             {label}
-            {k === "items" && data ? <span className="ck-count">{data.kpis.openItems.value}</span> : null}
+            {k === "work" && data ? <span className="ck-count">{data.kpis.openItems.value}</span> : null}
           </a>
         ))}
       </nav>
       <label className="ck-tab-select">
         <span className="sr-only">Project section</span>
-        <select value={p.section} onChange={(e) => (window.location.hash = `${base}${tabs.find(([k]) => k === e.target.value)?.[2] ?? ""}`)}>
+        <select value={tabOf(p.section)} onChange={(e) => (window.location.hash = `${base}${tabs.find(([k]) => k === e.target.value)?.[2] ?? ""}`)}>
           {tabs.map(([k, label]) => (
             <option key={k} value={k}>
               {label}

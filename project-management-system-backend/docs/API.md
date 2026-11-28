@@ -350,6 +350,13 @@ can't see is never counted, charted or listed.
   View-only links may read it. Another workspace's project is a `404`.
 - The lifecycle view's test runs carry `bug_key`, the bug a failed run raised.
 
+### Preferences the project page keeps
+
+`PUT /api/me/prefs` also keeps `workViews` (`[{ id, systemId, name, filters }]`, at most 40), `workFilters`
+(`{ [systemId]: filters }`, at most 40) and `lastTabs` (`{ [systemId]: section }`, at most 80); `filters` is
+`{ state, type, status, priority, assignee, label, q, sort, dir }`. Anything else is dropped (`src/data/pagePrefs.js`).
+`GET /api/documents/:id?preview` serves a PDF for the in-page preview (framed by PMS only).
+
 ## Project lifecycle
 
 Each organisation has lifecycle templates (phases, stages and their gates); each project is on one version of one

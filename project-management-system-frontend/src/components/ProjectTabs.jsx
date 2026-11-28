@@ -5,7 +5,7 @@
 // Team (who, their role, hours logged here, open work here and the share of their open work that is), Activity (the
 // project's whole history, filtered) and Chat (the project's channel). Each loads its own data when it opens.
 import { useEffect, useMemo, useState } from "react";
-import { Bug, Hash, MessagesSquare, Search, ShieldAlert, Users } from "lucide-react";
+import { Bug, Eye, FileText, Hash, Link2, Lock, MessagesSquare, Search, ShieldAlert, Users, X } from "lucide-react";
 import { api } from "../data/api";
 import { riskRating } from "../data/lifecycle";
 import { initials } from "../data/systems";
@@ -545,4 +545,121 @@ export function ProjectChat({ system, me, users }) {
       </div>
     );
   return <ChatPage me={me} users={users} canModerate={false} openId={id} onUnread={noop} docked />;
+}
+
+// ---------- Documents: the project's files and links ----------
+const PREVIEWABLE = /^(application\/pdf|image\/(png|jpeg|gif|webp))$/;
+/**
+ * Every file and link on the project (not work-item attachments): its deliverable and version, whether the signed
+ * version is locked and who signed it, with a preview of PDFs and images inside the page.
+ * @param {{ system: System; documents: import("../data/project").ProjectDocument[]; users: User[]; now: number }} p
+ */
+export function ProjectFiles({ system, documents, users, now }) {
+  const { view } = useLifecycle(system.id);
+  const [preview, setPreview] = useState(/** @type {{ id: string; name: string; mime: string } | null} */ (null));
+  useEffect(() => {
+    if (!preview) return;
+    const esc = (/** @type {KeyboardEvent} */ e) => e.key === "Escape" && setPreview(null);
+    document.addEventListener("keydown", esc);
+    return () => document.removeEventListener("keydown", esc);
+  }, [preview]);
+  /** @type {any[]} */ const lifeDocs = view?.documents ?? [];
+  /** @type {any[]} */ const signoffs = view?.signoffs ?? [];
+  const byId = new Map(lifeDocs.map((d) => [d.id, d]));
+  const rows = documents.map((d) => ({ ...d, life: byId.get(d.id) }));
+  const name = (/** @type {string} */ id) => users.find((u) => u.id === id)?.name ?? "Someone";
+  if (!rows.length) return null;
+  return (
+    <section className="ck-card ck-pad ck-files" aria-labelledby="ck-files-t">
+      <div className="ck-card-head">
+        <h3 id="ck-files-t" className="ck-h3">
+          <FileText size={16} aria-hidden="true" /> Files and links · {rows.length}
+        </h3>
+        <span className="ck-grow" />
+        <small>Upload or add links on the Overview; mark a deliverable in the Lifecycle tab.</small>
+      </div>
+      <div className="ck-table-wrap tall">
+        <table className="ck-table left">
+          <thead>
+            <tr>
+              <th scope="col">Document</th>
+              <th scope="col">Deliverable</th>
+              <th scope="col">Signed</th>
+              <th scope="col">Added</th>
+              <th scope="col">
+                <span className="sr-only">Open</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((d) => {
+              const signed = signoffs.filter((x) => x.document_id === d.id && x.status === "approved");
+              const mime = d.mime ?? d.life?.mime ?? "";
+              const href = d.kind === "link" ? d.url : `/api/documents/${d.id}`;
+              return (
+                <tr key={d.id}>
+                  <th scope="row" className="wrap">
+                    <span className="ck-person">
+                      {d.kind === "link" ? <Link2 size={15} aria-hidden="true" /> : <FileText size={15} aria-hidden="true" />}
+                      <span>
+                        <b>{d.name}</b>
+                        <small>{d.kind === "link" ? "Link" : mime || "File"}</small>
+                      </span>
+                    </span>
+                  </th>
+                  <td>{d.life?.deliverable_key ? `${String(d.life.deliverable_key).toUpperCase()} v${d.life.version ?? 1}` : <span className="faint">–</span>}</td>
+                  <td className="wrap">
+                    {d.life?.locked_at ? (
+                      <span className="ck-chip ok">
+                        <Lock size={11} aria-hidden="true" /> Locked {formatDate(d.life.locked_at)}
+                      </span>
+                    ) : null}
+                    {signed.length ? <small className="ck-signed">{signed.map((x) => `${x.signer_name} ${formatDate(x.decided_at)}`).join(" · ")}</small> : !d.life?.locked_at ? <span className="faint">–</span> : null}
+                  </td>
+                  <td>
+                    {name(d.uploadedBy)} · {timeAgo(d.uploadedAt, now)}
+                  </td>
+                  <td className="ck-file-actions">
+                    {d.kind === "file" && PREVIEWABLE.test(mime) && (
+                      <button className="btn btn-ghost sm" onClick={() => setPreview({ id: d.id, name: d.name, mime })}>
+                        <Eye size={14} aria-hidden="true" /> Preview
+                      </button>
+                    )}
+                    <a className="link-btn" href={href} target="_blank" rel="noreferrer noopener">
+                      {d.kind === "link" ? "Open" : "Open in a tab"}
+                    </a>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {preview && (
+        <div className="backdrop modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setPreview(null)}>
+          <div className="modal ck-preview" role="dialog" aria-modal="true" aria-label={`Preview of ${preview.name}`}>
+            <div className="ck-card-head">
+              <h2 className="ck-h3">{preview.name}</h2>
+              <span className="ck-grow" />
+              <a className="link-btn" href={`/api/documents/${preview.id}?download`}>
+                Download
+              </a>
+              <button className="close-btn static" onClick={() => setPreview(null)} aria-label="Close the preview" autoFocus>
+                <X size={18} />
+              </button>
+            </div>
+            {preview.mime === "application/pdf" ? (
+              <object className="ck-preview-frame" data={`/api/documents/${preview.id}?preview`} type="application/pdf" aria-label={preview.name}>
+                <p className="lead-none">
+                  This browser can't show the PDF here. <a href={`/api/documents/${preview.id}`} target="_blank" rel="noreferrer noopener">Open it in a tab</a>.
+                </p>
+              </object>
+            ) : (
+              <img className="ck-preview-img" src={`/api/documents/${preview.id}`} alt={preview.name} />
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  );
 }

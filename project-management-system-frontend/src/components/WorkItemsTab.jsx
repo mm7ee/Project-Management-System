@@ -13,6 +13,8 @@ import { ItemPriority, ItemStatusPill, Rollup, TypeIcon, itemHref } from "./Work
 import { CustomFieldInput } from "./WorkItemExtras";
 import { useItemTypes } from "../data/itemTypes";
 import { assignable } from "../data/roles";
+import { DEFAULT_WORK_FILTERS, PAGE_PREF_LIMITS, cleanWorkFilters, isDefaultFilters, remember } from "../data/pagePrefs";
+import WorkViews, { BulkBar, newViewId } from "./WorkViews";
 /** @type {{ key: string; label: string }[]} */ const SORTS = [
   { key: "key", label: "Key" },
   { key: "priority", label: "Priority" },
@@ -27,16 +29,49 @@ import { assignable } from "../data/roles";
  * A project's work items: a list with filters and sorting, one page at a time, and quick create.
  * @param {Props} props
  */
-export default function WorkItemsTab({ system, users, now, canCreate, canManage, readOnly, onChanged }) {
-  const [state, setState] = useState(/** @type {State | (() => State)} */ ("open"));
-  const [type, setType] = useState("");
-  const [status, setStatus] = useState("");
-  const [priority, setPriority] = useState("");
-  const [assignee, setAssignee] = useState("");
-  const [label, setLabel] = useState("");
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState("key");
-  const [dir, setDir] = useState(/** @type {"asc" | "desc" | (() => "asc" | "desc")} */ ("desc"));
+export default function WorkItemsTab({ system, users, now, canCreate, canManage, readOnly, onChanged, prefs, onPrefs, canBulk = false }) {
+  // The filters start where this person left them on this project (their preferences), else the defaults.
+  const start = cleanWorkFilters(prefs?.workFilters?.[system.id] ?? DEFAULT_WORK_FILTERS);
+  const [state, setState] = useState(/** @type {State | (() => State)} */ (start.state));
+  const [type, setType] = useState(start.type);
+  const [status, setStatus] = useState(start.status);
+  const [priority, setPriority] = useState(start.priority);
+  const [assignee, setAssignee] = useState(start.assignee);
+  const [label, setLabel] = useState(start.label);
+  const [query, setQuery] = useState(start.q);
+  const [sort, setSort] = useState(/** @type {string} */ (start.sort));
+  const [dir, setDir] = useState(/** @type {"asc" | "desc" | (() => "asc" | "desc")} */ (start.dir));
+  const [selected, setSelected] = useState(/** @type {Set<string>} */ (new Set()));
+  /** @type {import("../data/pagePrefs").WorkFilters} */ const current = cleanWorkFilters({ state, type, status, priority, assignee, label, q: query, sort, dir });
+  const apply = (/** @type {import("../data/pagePrefs").WorkFilters} */ f) => {
+    setState(f.state);
+    setType(f.type);
+    setStatus(f.status);
+    setPriority(f.priority);
+    setAssignee(f.assignee);
+    setLabel(f.label);
+    setQuery(f.q);
+    setSort(f.sort);
+    setDir(f.dir);
+  };
+  // Remember the filters a moment after they settle.
+  const prefsRef = useRef(prefs);
+  prefsRef.current = prefs;
+  const key = JSON.stringify(current);
+  useEffect(() => {
+    if (!onPrefs || readOnly) return;
+    const t = setTimeout(() => {
+      const p = prefsRef.current;
+      if (!p) return;
+      const was = p.workFilters?.[system.id];
+      if (JSON.stringify(was ?? DEFAULT_WORK_FILTERS) === key) return;
+      const next = { ...(p.workFilters ?? {}) };
+      if (isDefaultFilters(current)) delete next[system.id];
+      onPrefs({ ...p, workFilters: isDefaultFilters(current) ? next : remember(next, system.id, current, PAGE_PREF_LIMITS.filters) }).catch(() => undefined);
+    }, 1200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, system.id]);
   const [page, setPage] = useState(/** @type {WorkItemPage | null | (() => WorkItemPage | null)} */ (null));
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState("");
@@ -129,6 +164,16 @@ export default function WorkItemsTab({ system, users, now, canCreate, canManage,
         </p>
       )}
 
+      {onPrefs && prefs && !readOnly && (
+        <WorkViews
+          systemId={system.id}
+          views={(prefs.workViews ?? []).filter((v) => v.systemId === system.id)}
+          current={current}
+          onApply={apply}
+          onSave={(name) => onPrefs({ ...prefs, workViews: [...(prefs.workViews ?? []), { id: newViewId(), systemId: system.id, name, filters: current }].slice(-PAGE_PREF_LIMITS.views) })}
+          onDelete={(id) => onPrefs({ ...prefs, workViews: (prefs.workViews ?? []).filter((v) => v.id !== id) })}
+        />
+      )}
       <div className="feature-search" role="search">
         <Search size={17} />
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search ${system.key ?? ""} work items by key, summary or description…`} aria-label="Search work items" />
@@ -220,12 +265,35 @@ export default function WorkItemsTab({ system, users, now, canCreate, canManage,
         )}
       </p>
       {error && <p className="form-error banner">{error}</p>}
+      {canBulk && !readOnly && selected.size > 0 && (
+        <BulkBar
+          keys={[...selected]}
+          statuses={statuses}
+          people={people}
+          onClear={() => setSelected(new Set())}
+          onDone={() => {
+            setSelected(new Set());
+            load();
+            onChanged();
+          }}
+        />
+      )}
 
       {page && page.items.length > 0 ? (
         <div className="table-wrap">
           <table className="table feature-table wi-table">
             <thead>
               <tr>
+                {canBulk && !readOnly && (
+                  <th scope="col" className="wi-pick">
+                    <input
+                      type="checkbox"
+                      aria-label="Select every work item shown"
+                      checked={page.items.length > 0 && page.items.every((i) => selected.has(i.key))}
+                      onChange={(e) => setSelected(e.target.checked ? new Set(page.items.map((i) => i.key)) : new Set())}
+                    />
+                  </th>
+                )}
                 <th scope="col">Key</th>
                 <th scope="col">Summary</th>
                 <th scope="col">Status</th>
@@ -237,7 +305,22 @@ export default function WorkItemsTab({ system, users, now, canCreate, canManage,
             </thead>
             <tbody>
               {page.items.map((i) => (
-                <Row key={i.id} item={i} assignee={userName(i.assignee)} now={now} systemId={system.id} />
+                <Row
+                  key={i.id}
+                  item={i}
+                  assignee={userName(i.assignee)}
+                  now={now}
+                  systemId={system.id}
+                  picked={canBulk && !readOnly ? selected.has(i.key) : undefined}
+                  onPick={(on) =>
+                    setSelected((s0) => {
+                      const n = new Set(s0);
+                      if (on) n.add(i.key);
+                      else n.delete(i.key);
+                      return n;
+                    })
+                  }
+                />
               ))}
             </tbody>
           </table>
@@ -254,15 +337,20 @@ export default function WorkItemsTab({ system, users, now, canCreate, canManage,
   );
 }
 /**
- * @param {{ item: WorkItemSummary; assignee?: string; now: number; systemId: string }} arg1
+ * @param {{ item: WorkItemSummary; assignee?: string; now: number; systemId: string; picked?: boolean; onPick?: (on: boolean) => void }} arg1
  */
-function Row({ item: i, assignee, now, systemId }) {
+function Row({ item: i, assignee, now, systemId, picked, onPick }) {
   const late = !!i.dueDate && !isDone(i) && new Date(i.dueDate).setHours(23, 59, 59, 999) < now;
   const open = () => {
     window.location.hash = itemHref(systemId, i.key).slice(1);
   };
   return (
-    <tr className="clickable" tabIndex={0} onClick={open} onKeyDown={(e) => e.key === "Enter" && open()} aria-label={`${i.key} ${i.summary}`}>
+    <tr className={`clickable ${picked ? "picked" : ""}`} tabIndex={0} onClick={open} onKeyDown={(e) => e.key === "Enter" && open()} aria-label={`${i.key} ${i.summary}`}>
+      {picked !== undefined && (
+        <td className="wi-pick" onClick={(e) => e.stopPropagation()}>
+          <input type="checkbox" checked={picked} onChange={(e) => onPick?.(e.target.checked)} aria-label={`Select ${i.key}`} onKeyDown={(e) => e.stopPropagation()} />
+        </td>
+      )}
       <td className="wi-key-cell">
         <TypeIcon type={i.type} />
         <a href={itemHref(systemId, i.key)} onClick={(e) => e.stopPropagation()} tabIndex={-1}>
@@ -532,6 +620,9 @@ function ProjectWorkSettings({ system, canManage, hasItems, onChanged }) {
  * @property {System} system
  * @property {User[]} users
  * @property {number} now
+ * @property {import("../data/roles").Prefs} [prefs] The person's preferences: their saved views and remembered filters.
+ * @property {(p: import("../data/roles").Prefs) => Promise<void>} [onPrefs]
+ * @property {boolean} [canBulk] May change several work items at once (edit any work item).
  * @property {boolean} canCreate
  * @property {boolean} canManage
  * @property {boolean} readOnly

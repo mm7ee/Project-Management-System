@@ -1,3 +1,5 @@
+/** @import { PagePrefs } from './pagePrefs' */
+import { cleanPagePrefs } from "./pagePrefs";
 // Roles and permissions, shared by the Worker (which enforces them) and the UI (which hides
 // what you can't do). The administrator can change which permissions each role has; these
 // are the defaults a fresh database starts with.
@@ -105,7 +107,7 @@ export function isAssigned(user, system) {
   return system.lead === user.id || !!user.projectIds?.includes(system.id);
 }
 /** @type {Prefs} */ export const DEFAULT_PREFS = { theme: "light", motion: "full", density: "comfortable", start: "DASHBOARD", projectsView: "grid", glass: "2", emailAlerts: "on", emailSummaries: "on" };
-/** @type {{ [K in keyof Prefs]: readonly string[] | null }} */ const PREF_CHOICES = {
+/** @type {{ [K in Exclude<keyof Prefs, keyof PagePrefs>]: readonly string[] | null }} */ const PREF_CHOICES = {
   theme: ["light", "futuristic", "system"],
   motion: ["full", "reduced"],
   density: ["comfortable", "compact"],
@@ -124,13 +126,14 @@ export function isAssigned(user, system) {
 export function cleanPrefs(raw, startKeys) {
   const r = /** @type {Record<string, unknown>} */ (raw && typeof raw === "object" ? raw : {});
   const out = { ...DEFAULT_PREFS };
-  for (const k of /** @type {(keyof Prefs)[]} */ (Object.keys(PREF_CHOICES))) {
+  for (const k of /** @type {(keyof typeof PREF_CHOICES)[]} */ (Object.keys(PREF_CHOICES))) {
     // The old plain dark theme was retired; its users move to the one now called Dark.
     const v = k === "theme" && r[k] === "dark" ? "futuristic" : r[k];
     const allowed = PREF_CHOICES[k] ?? startKeys;
-    if (typeof v === "string" && allowed.includes(v)) /** @type {Record<string, string>} */ (out)[k] = v;
+    if (typeof v === "string" && allowed.includes(v)) /** @type {Record<string, string>} */ (/** @type {unknown} */ (out))[k] = v;
   }
-  return out;
+  // What the project page remembers (src/data/pagePrefs.js), cleaned there.
+  return { ...out, ...cleanPagePrefs(r) };
 }
 export const START_KEYS = /** @type {const} */ (["DASHBOARD", "ALL", "MINE", "BLOCKED", "LIVE", "WIP", "TESTING", "TO_DEPLOY", "UPCOMING", "COMPLETED", "IDEA", "MAINTENANCE", "OVERDUE", "REQUESTED"]);
 /** @typedef {"admin" | "manager" | "team_lead" | "assistant" | "developer" | "viewer" | "reader"} Role */
@@ -208,6 +211,9 @@ export const START_KEYS = /** @type {const} */ (["DASHBOARD", "ALL", "MINE", "BL
  * @property {"1" | "2" | "3" | "4" | "5"} glass
  * @property {"on" | "off"} emailAlerts
  * @property {"on" | "off"} emailSummaries
+ * @property {PagePrefs["workViews"]} [workViews] Saved views on projects' Work tabs.
+ * @property {PagePrefs["workFilters"]} [workFilters] The filters last chosen on each project's Work tab.
+ * @property {PagePrefs["lastTabs"]} [lastTabs] The tab last open on each project.
  */
 /**
  * @typedef {Object} UpdateRequest

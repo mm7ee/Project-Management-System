@@ -256,6 +256,28 @@ describe("the project overview", () => {
     expect((await as("bob", `/api/systems/${systemId}/team`)).status).toBe(404);
   }, SLOW);
 
+  it("saved views, remembered filters and last tabs: cleaned, and each person's own", async () => {
+    const put = await as("tom", "/api/me/prefs", {
+      method: "PUT",
+      body: {
+        theme: "light",
+        workViews: [{ id: "abc123def", systemId, name: "My bugs", filters: { type: "BUG", assignee: "me", state: "open", injected: "x" } }, { id: "!!", systemId, name: "bad" }],
+        workFilters: { [systemId]: { state: "done", q: "login" } },
+        lastTabs: { [systemId]: "risks", other: "nowhere" },
+        secret: "kept?",
+      },
+    });
+    expect(put.status, JSON.stringify(put.data)).toBe(200);
+    expect(put.data.workViews).toEqual([{ id: "abc123def", systemId, name: "My bugs", filters: { state: "open", type: "BUG", status: "", priority: "", assignee: "me", label: "", q: "", sort: "key", dir: "desc" } }]);
+    expect(put.data.lastTabs).toEqual({ [systemId]: "risks" });
+    expect(put.data.secret).toBeUndefined();
+    const tom = (await as("tom", "/api/data")).data.prefs;
+    expect(tom.workViews.map((/** @type {any} */ v) => v.name)).toEqual(["My bugs"]);
+    expect(tom.workFilters[systemId]).toMatchObject({ state: "done", q: "login" });
+    // Mia's are her own.
+    expect((await as("mia", "/api/data")).data.prefs.workViews).toEqual([]);
+  }, SLOW);
+
   it("another organisation's project is a 404; nothing but GET", async () => {
     expect((await as("bob", `/api/systems/${systemId}/overview`)).status).toBe(404);
     expect((await as("ada", `/api/systems/${systemId}/overview`, { method: "POST" })).status).toBe(405);

@@ -1352,5 +1352,23 @@ The plan, and the 13 recommendations approved with "continue", are in `docs/admi
   comments now read as sentences.
 - **Chat:** the project's channel inside the page (ChatPage `docked`), or a button to open it when nobody has written
   yet. Not on a view-only link.
-- **Not done yet:** the Work tab's list / board / backlog toggle with saved views and bulk edit (the Work items, Board
-  and Backlog tabs stay as they were); the Timeline's critical path; inline document preview.
+
+## Project page: the Work tab, the critical path, document previews (2026-11-28)
+
+- **One Work tab** with List, Board and Backlog (scrum projects) as its views; their addresses are unchanged
+  (`/items`, `/board`, `/backlog`), so links already sent still open the same list.
+- **Saved views and remembered filters live in the person's preferences** (`src/data/pagePrefs.js`), not a table: views
+  per project (at most 40), the filters last chosen on each project's list (40 projects), and the tab last open on each
+  project (80, for the next phase). Only known keys and short, checked strings get through (`cleanPagePrefs`, run by the
+  Worker on every save); the newest are kept when a list is full. A view-only link keeps them in the browser only.
+- **Bulk edit** changes status, assignee or priority of up to 100 selected work items, one at a time through the same
+  `PATCH /api/items/:key` as editing one, so the workflow's transitions and who-may-assign-whom apply; anything refused is
+  listed with why. Only people who may edit any work item see it.
+- **The critical path** (`src/data/criticalPath.js`): for every item something blocks, walk back through the blocker that
+  finishes latest; the chain whose blocked item finishes last is critical (the longer one on a tie). Shown on a
+  project's timeline (bars and arrows outlined, with the chain named); without dependencies it says how to add them.
+- **Document previews:** the Documents tab lists every file and link with its deliverable and version, whether it's
+  locked and who signed it, and previews images and PDFs in the page. Chrome won't run its PDF viewer inside a
+  sandboxed frame, so `GET /api/documents/:id?preview` serves a PDF without the sandbox but with
+  `frame-ancestors 'self'` and `X-Frame-Options: SAMEORIGIN`; it is still sent as `application/pdf` with `nosniff`, so it
+  can never be read as a page. Every other download keeps the sandbox.

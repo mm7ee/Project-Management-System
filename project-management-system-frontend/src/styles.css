@@ -4462,3 +4462,38 @@ rect[data-hit]:not(.ck-bar):hover, rect[data-hit]:not(.ck-bar):focus-visible { f
 .chat-page.docked .chat { grid-template-columns: minmax(0, 1fr); height: calc(100vh - 260px); }
 .chat-page.docked .chat-list { display: none; }
 @media (max-width: 900px) { .ck-tab-row { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- The Work tab (WorkItemsTab.jsx, WorkViews.jsx), the critical path, the project's files ---------- */
+.ck-work-switch { display: inline-flex; margin-bottom: 12px; }
+.ck-work-switch { border-radius: var(--r-pill); background: var(--track); padding: 3px; gap: 2px; }
+.ck-work-switch a { padding: 6px 16px; border-radius: var(--r-pill); color: var(--muted); font-size: 13px; font-weight: 600; text-decoration: none; }
+.ck-work-switch a.on { background: var(--card); color: var(--heading); box-shadow: var(--e-1); }
+.wv { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+.wv-chip { display: inline-flex; align-items: center; border-radius: var(--r-pill); background: var(--track); overflow: hidden; }
+.wv-chip.on { background: var(--navy); }
+.wv-chip.on .wv-open, .wv-chip.on .wv-del { color: #fff; }
+.wv-open, .wv-del { border: 0; background: none; color: var(--text); font-family: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+.wv-open { padding: 5px 4px 5px 12px; }
+.wv-del { display: grid; place-items: center; padding: 5px 9px 5px 4px; color: var(--muted); }
+.wv-none { color: var(--faint); }
+.wv-form { display: inline-flex; gap: 6px; align-items: center; }
+.wv-form input { height: 32px; padding: 0 10px; border-radius: var(--r-md); border: 1px solid var(--input-line); background: var(--input-bg); color: var(--text); font-family: inherit; font-size: 13px; }
+.wi-bulk { position: sticky; top: 150px; z-index: 4; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: 0 0 10px; padding: 10px 14px; border-radius: var(--r-md); background: color-mix(in srgb, var(--navy) 10%, var(--card)); border: 1px solid color-mix(in srgb, var(--navy) 30%, var(--border)); box-shadow: var(--e-2); }
+.wi-bulk select { height: 34px; border-radius: var(--r-md); border: 1px solid var(--input-line); background: var(--input-bg); color: var(--text); font-family: inherit; padding: 0 8px; }
+.wi-bulk .btn { display: inline-flex; align-items: center; gap: 6px; }
+.wi-bulk-result { flex-basis: 100%; margin: 4px 0 0; font-size: 12.5px; color: var(--muted); }
+.wi-pick { width: 34px; text-align: center; }
+.wi-pick input { width: 16px; height: 16px; cursor: pointer; }
+tr.picked td { background: color-mix(in srgb, var(--focus) 8%, transparent); }
+.tl-path-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: var(--text); }
+.tl-path-note { margin: 0 0 10px; padding: 8px 12px; border-radius: var(--r-md); background: var(--info-tint); color: var(--text); font-size: 12.5px; }
+.tl-bar.critical { box-shadow: 0 0 0 2px var(--danger), 0 0 12px color-mix(in srgb, var(--danger) 45%, transparent); }
+.tl-dep.crit { stroke: var(--danger) !important; stroke-width: 2.5 !important; }
+.ck-files { margin-top: 16px; }
+.ck-signed { display: block; margin-top: 3px; font-size: 11.5px; color: var(--muted); }
+.ck-file-actions { white-space: nowrap; display: flex; gap: 10px; align-items: center; justify-content: flex-end; }
+.ck-file-actions .btn { display: inline-flex; gap: 5px; align-items: center; }
+.ck-preview { width: min(1000px, 94vw); max-width: none; display: flex; flex-direction: column; gap: 10px; }
+.ck-preview .close-btn.static { position: static; }
+.ck-preview-frame { width: 100%; height: 72vh; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--canvas); }
+.ck-preview-img { max-width: 100%; max-height: 72vh; object-fit: contain; align-self: center; border-radius: var(--r-md); }

@@ -1495,3 +1495,18 @@ Screenshots (dev data): `docs/design/cockpit/live-p5-*.png`.
 - **No migration.** Tests: `tests/projectTabs.test.js` (frontend, 2: the pass-rate trend, the activity filters) and one
   more in `tests/overview.test.js` (backend: the team's hours and open work through the visibility rule).
   `npm test`: 378 passed (177 frontend, 201 backend).
+
+## Project page: the Work tab, the critical path, document previews (2026-11-28)
+
+Screenshots (dev data): `docs/design/cockpit/live-p5b-*.png`.
+
+- **Work tab:** List, Board and Backlog in one tab. On the list, **save your filters as a view** (one click to bring
+  them back), the filters you last used are remembered for each project, and **select several items to change their
+  status, assignee or priority together**.
+- **Timeline:** the **critical path** (the chain of dependencies that decides when the linked work finishes) is
+  outlined and named; switch it off with the checkbox.
+- **Documents:** every file and link with its version, whether it's signed and locked and by whom, and a **Preview** of
+  PDFs and images without leaving the page.
+- **No migration.** Saved views and remembered filters are part of each person's preferences.
+- **Tests:** `tests/workTab.test.js` (frontend, 8: the preferences' cleaning and caps, the critical path including a loop)
+  and one more in `tests/overview.test.js` (backend: preferences cleaned on save, each person's own).

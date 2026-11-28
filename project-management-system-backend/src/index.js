@@ -2885,13 +2885,19 @@ async function api(req, env, path, ctx) {
     parts.reduce((at, p) => (out.set(p, at), at + p.length), 0);
     // Uploads are untrusted: only PDFs and images open in the browser, everything else downloads,
     // and nothing served here may run script on this origin.
-    const inline = /^(application\/pdf|image\/(png|jpeg|gif|webp))$/.test(doc.mime) && new URL(req.url).searchParams.get("download") === null;
+    const params = new URL(req.url).searchParams;
+    const inline = /^(application\/pdf|image\/(png|jpeg|gif|webp))$/.test(doc.mime) && params.get("download") === null;
+    // The project page previews a PDF inside the page, where Chrome won't run its PDF viewer in a sandboxed frame.
+    // Only then, and only for a PDF, the sandbox is left off: it is always sent as application/pdf with nosniff (so
+    // it can never be read as a page), the viewer keeps it apart from PMS, and only PMS's own pages may frame it.
+    const pdfPreview = inline && doc.mime === "application/pdf" && params.get("preview") !== null;
     return new Response(out, {
       headers: {
         "content-type": inline ? doc.mime : "application/octet-stream",
         "content-disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(doc.name)}`,
         "x-content-type-options": "nosniff",
-        "content-security-policy": "sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'",
+        "content-security-policy": pdfPreview ? "frame-ancestors 'self'" : "sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'",
+        ...(pdfPreview ? { "x-frame-options": "SAMEORIGIN" } : {}),
         "cache-control": "private, max-age=300",
       },
     });

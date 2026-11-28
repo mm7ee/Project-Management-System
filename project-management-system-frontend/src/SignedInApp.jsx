@@ -671,6 +671,8 @@ export default function Dashboard({ data, reload }) {
               canCreateItems={can("create_work_items")}
               readOnly={!!data.viewOnly}
               onSignPcn={(index, decision, remarks) => signPcn(selected.id, index, decision, remarks)}
+              prefs={prefs}
+              onPrefs={savePrefs}
               onSearch={
                 data.viewOnly
                   ? undefined
