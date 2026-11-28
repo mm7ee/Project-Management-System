@@ -107,7 +107,6 @@ export default function LandingPage({ draft, onDraft, onSubmit, checking, error,
         </section>
 
         <section className="lp-a-side">
-          <span className="lp-a-ring" aria-hidden="true" />
           {children ?? (
             <form
               ref={card}
@@ -235,7 +234,7 @@ function usePausedAnimations(ref) {
     /** @type {IntersectionObserver | null} */ let io = null;
     if ("IntersectionObserver" in window) {
       io = new IntersectionObserver((entries) => entries.forEach((e) => e.target.classList.toggle("lp-offscreen", !e.isIntersecting)));
-      el.querySelectorAll(".lp-a-band, .lp-a-board, .lp-a-ring").forEach((n) => io?.observe(n));
+      el.querySelectorAll(".lp-a-band, .lp-a-board").forEach((n) => io?.observe(n));
     }
     return () => {
       document.removeEventListener("visibilitychange", onVisible);

@@ -209,12 +209,11 @@
 .landing.lp-a {
   --lp-teal: #1d7368;   /* the turning word and the timeline's "Today": 5.4:1 on the light page */
   --lp-band: color-mix(in srgb, var(--brand-steel) 14%, transparent);
-  --lp-ring: color-mix(in srgb, var(--brand-steel) 35%, transparent);
   overflow: hidden;
   background: radial-gradient(circle at 1px 1px, var(--lp-dots) 1px, transparent 0) 0 0 / 22px 22px, var(--lp-bg);
 }
-:root:is([data-theme="dark"], [data-theme="futuristic"]) .landing.lp-a { --lp-teal: #4fd1c0; --lp-band: rgba(143, 179, 212, 0.18); --lp-ring: rgba(143, 179, 212, 0.2); }
-:root[data-theme="futuristic"] .landing.lp-a { --lp-teal: #3ee6d4; --lp-band: rgba(110, 140, 255, 0.22); --lp-ring: rgba(62, 230, 212, 0.26); }
+:root:is([data-theme="dark"], [data-theme="futuristic"]) .landing.lp-a { --lp-teal: #4fd1c0; --lp-band: rgba(143, 179, 212, 0.18); }
+:root[data-theme="futuristic"] .landing.lp-a { --lp-teal: #3ee6d4; --lp-band: rgba(110, 140, 255, 0.22); }
 
 /* The timeline behind everything */
 .lp-a-bg { position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
@@ -258,9 +257,6 @@
 /* The side: the code card, with the ring behind it and the board below */
 .lp-a-side { position: relative; display: grid; gap: 18px; justify-items: center; min-width: 0; }
 .lp-a-side > .lp-card { width: min(100%, 400px); position: relative; z-index: 1; }
-.lp-a-ring { position: absolute; left: 50%; top: 120px; width: 180px; height: 180px; margin: -90px 0 0 -90px; border-radius: 50%; z-index: 0; pointer-events: none;
-  background: radial-gradient(circle, transparent 58%, var(--lp-ring) 66%, transparent 72%); animation: lp-a-ring 6s cubic-bezier(.2, .6, .3, 1) infinite; }
-@keyframes lp-a-ring { 0% { transform: scale(0.6); opacity: 0.9; } 100% { transform: scale(6); opacity: 0; } }
 :root[data-theme="futuristic"] .lp-a-card, :root[data-theme="futuristic"] .lp-a-board { box-shadow: 0 0 0 1px rgba(140, 160, 255, 0.3), 0 0 26px rgba(62, 230, 212, 0.16), var(--lp-shadow); }
 
 /* The code field: a glow in the platform accent on focus, and the icon turns */
@@ -322,11 +318,10 @@
 /* Less motion: a still composition. Bars full, the card already in Done and ticked, the first word. */
 @media (prefers-reduced-motion: reduce) {
   .landing *, .landing *::after, .landing.lp-branded, .lp-flood { animation: none !important; transition: none !important; }
-  .lp-a-ring, .lp-flood { display: none; }
+  .lp-flood { display: none; }
   .lp-a-mover { transform: translateX(calc(200% + 40px)); }
   .lp-a-tick { opacity: 1; }
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
 :root[data-motion="reduced"] .landing *, :root[data-motion="reduced"] .landing *::after { animation: none !important; transition: none !important; }
-:root[data-motion="reduced"] .lp-a-ring { display: none; }
 :root[data-motion="reduced"] .lp-a-mover { transform: translateX(calc(200% + 40px)); }
