@@ -1372,3 +1372,17 @@ The plan, and the 13 recommendations approved with "continue", are in `docs/admi
   sandboxed frame, so `GET /api/documents/:id?preview` serves a PDF without the sandbox but with
   `frame-ancestors 'self'` and `X-Frame-Options: SAMEORIGIN`; it is still sent as `application/pdf` with `nosniff`, so it
   can never be read as a page. Every other download keeps the sandbox.
+
+## Project page, phase 6: inline edits with undo, shortcuts, search, the last tab (2026-11-28)
+
+- **Inline edits** on the Work list (status, assignee, due date) and in the header (the lead, the start and due dates):
+  shown at once, saved through the usual `PATCH` (so its rules apply), then a notice offers **Undo** for 8 seconds; a
+  refusal puts the value back and says why. The list's edits are for people who may edit any work item; the header's
+  for those who manage projects. The progress note stays in Update progress, which already asks for it.
+- **Keyboard shortcuts** (`src/data/shortcuts.js`): `g o` Overview, `g w` Work, `g l` Lifecycle, `g t` Timeline, `g r`
+  Risks, `g d` Documents, `g m` Team, `g a` Activity, `g c` Chat, `a` add a work item, `/` or Ctrl/Cmd+K search, `?` the
+  list. Never while typing in a box, with Alt held, or while a panel is open; the second key of `g …` within 1.2 s.
+- **Search within the project** (Ctrl/Cmd+K or `/`): its sections, "Add a work item", and its work items by key, summary
+  or description (the list's own search, so the access rule applies), chosen with the arrow keys and Enter.
+- **The last tab** is remembered per person and project (`lastTabs` in their preferences): opening the project from a
+  list goes back to it; a link to a tab opens that tab.

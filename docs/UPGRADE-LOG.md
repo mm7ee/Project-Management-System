@@ -1510,3 +1510,14 @@ Screenshots (dev data): `docs/design/cockpit/live-p5b-*.png`.
 - **No migration.** Saved views and remembered filters are part of each person's preferences.
 - **Tests:** `tests/workTab.test.js` (frontend, 8: the preferences' cleaning and caps, the critical path including a loop)
   and one more in `tests/overview.test.js` (backend: preferences cleaned on save, each person's own).
+
+## Project page, phase 6: inline edits, shortcuts, search, the last tab (2026-11-28)
+
+- **Change things where you see them:** on the Work list, a work item's status, assignee and due date; in the header
+  (Lead and dates), the project's lead and its start and due dates. Each change shows at once, and **Undo** is there for
+  a few seconds.
+- **Keyboard shortcuts:** `g` then `o` / `w` / `l` / `t` / `r` / `d` / `m` / `a` / `c` to go to a tab, `a` to add a work item,
+  `?` for the list (or the Shortcuts button, bottom right).
+- **Search this project** with Ctrl/Cmd+K or `/`: its work items, its tabs and its actions.
+- **Back where you left off:** opening a project takes you to the tab you last had open on it.
+- **No migration.** Tests: `tests/shortcuts.test.js` (frontend, 4). `npm test`: 391 passed (189 frontend, 202 backend).

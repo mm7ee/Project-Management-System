@@ -235,8 +235,10 @@ export default function Dashboard({ data, reload }) {
     window.addEventListener("hashchange", byKey);
     return () => window.removeEventListener("hashchange", byKey);
   }, [systems]);
+  // Opening a project goes back to the tab this person last had open on it (a direct link opens what it says).
   const openProject = /** @param {string} id */ (id) => {
-    window.location.hash = `/projects/${id}`;
+    const tab = prefs.lastTabs?.[id];
+    window.location.hash = `/projects/${id}${tab && tab !== "overview" ? `/${tab}` : ""}`;
   };
   // ---------- Back and forward ----------
   // Every screen is a browser history entry carrying { view, filter, depth }, so the browser's Back and

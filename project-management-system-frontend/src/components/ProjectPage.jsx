@@ -30,6 +30,8 @@ import LifecyclePage from "./LifecyclePage";
 import { CockpitHeader, KpiTiles, Stepper, useOverview } from "./ProjectCockpit";
 import { AttentionPanel, NextDays, SummaryCard } from "./ProjectOverview";
 import ProjectCharts from "./ProjectCharts";
+import ProjectKeys from "./ProjectKeys";
+import { PAGE_PREF_LIMITS, remember } from "../data/pagePrefs";
 import { ActivityTab, ProjectChat, ProjectFiles, RisksTab, TeamTab, TestingTab } from "./ProjectTabs";
 import DocumentsTab from "./DocumentsTab";
 import { DateLine, ProgressBar, ScheduleChip, updatedText } from "./SystemCard";
@@ -109,6 +111,20 @@ export default function ProjectPage(p) {
         setSaving(false);
       }
     });
+  // The tab last open on this project, for the next time this person opens it (their preferences).
+  const prefsRef = useRef(p.prefs);
+  prefsRef.current = p.prefs;
+  const section = p.itemKey && p.section === "items" ? "items" : p.section;
+  useEffect(() => {
+    if (!p.onPrefs || p.readOnly) return;
+    const t = setTimeout(() => {
+      const prefs = prefsRef.current;
+      if (!prefs || prefs.lastTabs?.[system.id] === section) return;
+      p.onPrefs?.({ ...prefs, lastTabs: remember(prefs.lastTabs ?? {}, system.id, section, PAGE_PREF_LIMITS.tabs) }).catch(() => undefined);
+    }, 1500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [system.id, section]);
   // Request update from the header: the form lives in the Overview's side column.
   const askForUpdate = () => {
     if (p.section !== "overview") window.location.hash = `#/projects/${system.id}`;
@@ -127,6 +143,12 @@ export default function ProjectPage(p) {
         canUpdate={p.canUpdate}
         canRequest={p.canRequest}
         canCreateItems={p.canCreateItems && !p.readOnly}
+        canManage={p.canManage}
+        users={users}
+        onChanged={() => {
+          p.onChanged();
+          overview.reload();
+        }}
         onBack={p.onBack}
         onUpdate={p.onUpdate}
         onRequest={askForUpdate}
@@ -137,6 +159,7 @@ export default function ProjectPage(p) {
       />
 
       {error && <p className="form-error banner">{error}</p>}
+      <ProjectKeys system={system} readOnly={p.readOnly} canCreate={p.canCreateItems} />
 
       {p.section === "risks" ? (
         <RisksTab system={system} now={now} />

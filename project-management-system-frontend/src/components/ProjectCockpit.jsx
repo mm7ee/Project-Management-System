@@ -11,6 +11,7 @@ import { ApiError, api } from "../data/api";
 import { initials } from "../data/systems";
 import { formatDate, timeAgo } from "../time";
 import { StatusPill } from "./SystemCard";
+import { useUndo } from "./ProjectKeys";
 
 /** @typedef {any} Overview  GET /api/systems/:id/overview, see docs/API.md "Project overview" */
 
@@ -62,13 +63,33 @@ const shortDate = (/** @type {string} */ d) => new Date(`${d.slice(0, 10)}T12:00
  * The sticky header.
  * @param {{
  *   system: System; data: Overview | null; section: string; me: User; readOnly: boolean;
- *   canUpdate: boolean; canRequest: boolean; canCreateItems: boolean;
- *   onBack: () => void; onUpdate: () => void; onRequest: () => void; onAdvanced: () => void;
+ *   canUpdate: boolean; canRequest: boolean; canCreateItems: boolean; canManage?: boolean; users?: User[];
+ *   onBack: () => void; onUpdate: () => void; onRequest: () => void; onAdvanced: () => void; onChanged?: () => void;
  * }} p
  */
 export function CockpitHeader(p) {
   const { system, data } = p;
   const [menu, setMenu] = useState(false);
+  const [details, setDetails] = useState(false);
+  const [undoNote, showUndo] = useUndo();
+  /** A change to the project's lead or dates, offered for undo. @param {"lead" | "startedAt" | "dueAt"} field @param {string} value */
+  const setField = async (field, value) => {
+    const before = /** @type {string} */ ((/** @type {any} */ (system))[field] ?? "");
+    if (before === value) return;
+    const send = (/** @type {string} */ v) => api(`/systems/${system.id}`, "PATCH", { [field]: field === "startedAt" ? v : v || null });
+    const who = (/** @type {string} */ id) => p.users?.find((u) => u.id === id)?.name ?? "someone";
+    const what = field === "lead" ? (value ? `Lead: ${who(value)}` : "No lead") : field === "dueAt" ? (value ? `Due ${formatDate(value)}` : "No due date") : `Started ${formatDate(value)}`;
+    try {
+      await send(value);
+      p.onChanged?.();
+      showUndo(`${what}.`, async () => {
+        await send(before);
+        p.onChanged?.();
+      });
+    } catch (e) {
+      showUndo(`Not changed: ${e instanceof Error ? e.message : "refused"}`);
+    }
+  };
   const [advancing, setAdvancing] = useState(false);
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
@@ -153,6 +174,39 @@ export function CockpitHeader(p) {
             </span>
           )}
         </div>
+        {p.canManage && !p.readOnly && (
+          <span className="ck-pop-wrap ck-wide">
+            <button className="btn btn-ghost sm ck-details-btn" aria-haspopup="dialog" aria-expanded={details} onClick={() => setDetails((v) => !v)}>
+              <Pencil size={13} aria-hidden="true" /> Lead and dates
+            </button>
+            {details && (
+              <div className="ck-pop ck-details" role="dialog" aria-label="The project's lead and dates">
+                <label className="field">
+                  <span>Project lead</span>
+                  <select value={system.lead ?? ""} onChange={(e) => setField("lead", e.target.value)}>
+                    <option value="">Nobody yet</option>
+                    {(p.users ?? []).map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="field">
+                  <span>Started</span>
+                  <input type="date" value={system.startedAt?.slice(0, 10) ?? ""} onChange={(e) => e.target.value && setField("startedAt", e.target.value)} />
+                </label>
+                <label className="field">
+                  <span>Due</span>
+                  <input type="date" value={system.dueAt?.slice(0, 10) ?? ""} onChange={(e) => setField("dueAt", e.target.value)} />
+                </label>
+                <button className="btn btn-ghost sm" onClick={() => setDetails(false)}>
+                  Done
+                </button>
+              </div>
+            )}
+          </span>
+        )}
         {(lead || team.length > 0) && (
           <div className="ck-people ck-wide" aria-label={`${lead ? `Lead ${lead.name}` : "No lead"}${team.length ? `, and ${plural(team.length, "team member")}` : ""}`}>
             {lead && (
@@ -283,6 +337,7 @@ export function CockpitHeader(p) {
           </>
         )}
       </div>
+      {undoNote}
       {note && (
         <p className="ck-note" role="status">
           {note}{" "}

@@ -15,6 +15,7 @@ import { useItemTypes } from "../data/itemTypes";
 import { assignable } from "../data/roles";
 import { DEFAULT_WORK_FILTERS, PAGE_PREF_LIMITS, cleanWorkFilters, isDefaultFilters, remember } from "../data/pagePrefs";
 import WorkViews, { BulkBar, newViewId } from "./WorkViews";
+import { useUndo } from "./ProjectKeys";
 /** @type {{ key: string; label: string }[]} */ const SORTS = [
   { key: "key", label: "Key" },
   { key: "priority", label: "Priority" },
@@ -42,6 +43,7 @@ export default function WorkItemsTab({ system, users, now, canCreate, canManage,
   const [sort, setSort] = useState(/** @type {string} */ (start.sort));
   const [dir, setDir] = useState(/** @type {"asc" | "desc" | (() => "asc" | "desc")} */ (start.dir));
   const [selected, setSelected] = useState(/** @type {Set<string>} */ (new Set()));
+  const [undoNote, showUndo] = useUndo();
   /** @type {import("../data/pagePrefs").WorkFilters} */ const current = cleanWorkFilters({ state, type, status, priority, assignee, label, q: query, sort, dir });
   const apply = (/** @type {import("../data/pagePrefs").WorkFilters} */ f) => {
     setState(f.state);
@@ -124,6 +126,33 @@ export default function WorkItemsTab({ system, users, now, canCreate, canManage,
       setError(e instanceof Error ? e.message : "Couldn't load more");
     } finally {
       setLoadingMore(false);
+    }
+  };
+  /**
+   * A change made in the list: shown at once, saved, then offered for undo; put back if the server refuses it.
+   * @param {WorkItemSummary} item
+   * @param {"status" | "assignee" | "dueDate"} field
+   * @param {string} value
+   */
+  const change = async (item, field, value) => {
+    const before = field === "status" ? item.status : field === "assignee" ? (item.assignee ?? "") : (item.dueDate ?? "");
+    if (before === value) return;
+    const shown = field === "status" ? { status: /** @type {any} */ (value), statusName: statuses.find((x) => x.id === value)?.name ?? item.statusName } : field === "assignee" ? { assignee: value || undefined } : { dueDate: value || undefined };
+    setPage((pg) => (pg ? { ...pg, items: pg.items.map((x) => (x.key === item.key ? { ...x, ...shown } : x)) } : pg));
+    const send = (/** @type {string} */ v) => api(`/items/${item.key}`, "PATCH", { [field]: field === "status" ? v : v || null });
+    const what = field === "status" ? `status ${statuses.find((x) => x.id === value)?.name ?? ""}` : field === "assignee" ? (value ? `assigned to ${userName(value) ?? "someone"}` : "unassigned") : value ? `due ${formatDate(value)}` : "no due date";
+    try {
+      await send(value);
+      showUndo(`${item.key}: ${what}.`, async () => {
+        await send(before);
+        await load();
+        onChanged();
+      });
+      load();
+      onChanged();
+    } catch (e) {
+      load();
+      showUndo(`${item.key} wasn't changed: ${e instanceof Error ? e.message : "refused"}`);
     }
   };
   const filtered = !!(type || status || priority || assignee || label || query || state !== "open");
@@ -312,6 +341,7 @@ export default function WorkItemsTab({ system, users, now, canCreate, canManage,
                   now={now}
                   systemId={system.id}
                   picked={canBulk && !readOnly ? selected.has(i.key) : undefined}
+                  edit={canBulk && !readOnly ? { statuses, people, onChange: (field, v) => change(i, field, v) } : undefined}
                   onPick={(on) =>
                     setSelected((s0) => {
                       const n = new Set(s0);
@@ -328,6 +358,7 @@ export default function WorkItemsTab({ system, users, now, canCreate, canManage,
       ) : page ? (
         <div className="empty">{filtered ? "No work items match these filters." : canCreate && !readOnly ? "No work items yet. Add the first one above: an epic for a big piece of work, or a story, task or bug." : "No work items yet."}</div>
       ) : null}
+      {undoNote}
       {page && page.items.length < page.total && (
         <button className="btn btn-ghost block-sm wi-more" onClick={more} disabled={loadingMore}>
           {loadingMore ? "Loading…" : `Show ${Math.min(PAGE_SIZE, page.total - page.items.length)} more`}
@@ -337,9 +368,10 @@ export default function WorkItemsTab({ system, users, now, canCreate, canManage,
   );
 }
 /**
- * @param {{ item: WorkItemSummary; assignee?: string; now: number; systemId: string; picked?: boolean; onPick?: (on: boolean) => void }} arg1
+ * @param {{ item: WorkItemSummary; assignee?: string; now: number; systemId: string; picked?: boolean; onPick?: (on: boolean) => void; edit?: { statuses: StatusDef[]; people: User[]; onChange: (field: "status" | "assignee" | "dueDate", value: string) => void } }} arg1
  */
-function Row({ item: i, assignee, now, systemId, picked, onPick }) {
+function Row({ item: i, assignee, now, systemId, picked, onPick, edit }) {
+  const stop = { onClick: (/** @type {import("react").MouseEvent} */ e) => e.stopPropagation(), onKeyDown: (/** @type {import("react").KeyboardEvent} */ e) => e.stopPropagation() };
   const late = !!i.dueDate && !isDone(i) && new Date(i.dueDate).setHours(23, 59, 59, 999) < now;
   const open = () => {
     window.location.hash = itemHref(systemId, i.key).slice(1);
@@ -373,14 +405,45 @@ function Row({ item: i, assignee, now, systemId, picked, onPick }) {
           {i.children && <Rollup {...i.children} />}
         </span>
       </td>
-      <td>
-        <ItemStatusPill item={i} />
+      <td {...(edit ? stop : {})}>
+        {edit ? (
+          <select className="wi-inline" value={i.status} aria-label={`Status of ${i.key}`} onChange={(e) => edit.onChange("status", e.target.value)}>
+            {!edit.statuses.some((x) => x.id === i.status) && <option value={i.status}>{i.statusName}</option>}
+            {edit.statuses.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.name}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <ItemStatusPill item={i} />
+        )}
       </td>
       <td>
         <ItemPriority priority={i.priority} />
       </td>
-      <td>{assignee ?? <i className="muted">Unassigned</i>}</td>
-      <td className={late ? "text-red strong" : ""}>{i.dueDate ? formatDate(i.dueDate) : <span className="muted">—</span>}</td>
+      {edit ? (
+        <td {...stop}>
+          <select className="wi-inline" value={i.assignee ?? ""} aria-label={`Assignee of ${i.key}`} onChange={(e) => edit.onChange("assignee", e.target.value)}>
+            <option value="">Unassigned</option>
+            {i.assignee && !edit.people.some((u) => u.id === i.assignee) && <option value={i.assignee}>{assignee ?? "Someone no longer here"}</option>}
+            {edit.people.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+        </td>
+      ) : (
+        <td>{assignee ?? <i className="muted">Unassigned</i>}</td>
+      )}
+      {edit ? (
+        <td {...stop} className={late ? "text-red strong" : ""}>
+          <input className="wi-inline date" type="date" value={i.dueDate ?? ""} aria-label={`Due date of ${i.key}`} onChange={(e) => edit.onChange("dueDate", e.target.value)} />
+        </td>
+      ) : (
+        <td className={late ? "text-red strong" : ""}>{i.dueDate ? formatDate(i.dueDate) : <span className="muted">—</span>}</td>
+      )}
       <td title={new Date(i.updatedAt).toLocaleString("en-GB")}>{timeAgo(i.updatedAt, now)}</td>
     </tr>
   );

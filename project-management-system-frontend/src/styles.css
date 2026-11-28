@@ -4497,3 +4497,32 @@ tr.picked td { background: color-mix(in srgb, var(--focus) 8%, transparent); }
 .ck-preview .close-btn.static { position: static; }
 .ck-preview-frame { width: 100%; height: 72vh; border: 1px solid var(--border); border-radius: var(--r-md); background: var(--canvas); }
 .ck-preview-img { max-width: 100%; max-height: 72vh; object-fit: contain; align-self: center; border-radius: var(--r-md); }
+
+/* ---------- Phase 6: shortcuts, search within the project, inline edits and undo (ProjectKeys.jsx) ---------- */
+kbd { display: inline-block; min-width: 20px; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--border); border-bottom-width: 2px; background: var(--card); color: var(--heading); font: 700 11.5px ui-monospace, Consolas, monospace; text-align: center; }
+.ck-keys-hint { position: fixed; right: 18px; bottom: 16px; z-index: 30; display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--r-pill); background: var(--card); color: var(--muted); font-family: inherit; font-size: 12px; box-shadow: var(--e-2); cursor: pointer; }
+.ck-help { max-width: 520px; }
+.ck-keys { display: grid; gap: 2px; margin: 14px 0 0; }
+.ck-keys > div { display: grid; grid-template-columns: 150px 1fr; gap: 12px; align-items: center; padding: 7px 0; border-top: 1px solid var(--border); }
+.ck-keys dt { margin: 0; }
+.ck-keys dd { margin: 0; color: var(--text); font-size: 13.5px; }
+.ck-then { font-size: 11px; color: var(--faint); }
+.ck-palette { width: min(640px, 94vw); max-width: none; padding: 0; align-self: flex-start; margin-top: 12vh; overflow: hidden; }
+.ck-palette-input { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border); color: var(--muted); }
+.ck-palette-input input { flex: 1; border: 0; outline: none; background: none; color: var(--text); font-family: inherit; font-size: 15px; }
+.ck-palette-list { list-style: none; margin: 0; padding: 6px; max-height: 50vh; overflow: auto; }
+.ck-palette-list li { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px; font-size: 13.5px; cursor: pointer; }
+.ck-palette-list li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ck-palette-list li small { color: var(--faint); font-size: 11.5px; }
+.ck-palette-list li.on { background: color-mix(in srgb, var(--focus) 14%, transparent); }
+.ck-palette-none { color: var(--faint); cursor: default !important; }
+.ck-undo { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 70; display: flex; align-items: center; gap: 14px; padding: 10px 14px 10px 16px; border-radius: var(--r-md); background: var(--heading); color: var(--card); font-size: 13.5px; box-shadow: var(--e-3); }
+.ck-undo .link-btn { color: inherit; text-decoration: underline; font-weight: 700; }
+.ck-undo .icon-link { color: inherit; opacity: 0.8; }
+.wi-inline { max-width: 170px; height: 30px; padding: 0 6px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: var(--text); font-family: inherit; font-size: 12.5px; cursor: pointer; }
+.wi-inline:hover, .wi-inline:focus { border-color: var(--input-line); background: var(--input-bg); }
+.wi-inline.date { width: 132px; }
+.ck-details { left: 0; right: auto; width: 260px; }
+.ck-details-btn { display: inline-flex; align-items: center; gap: 5px; }
+@media (max-width: 640px) { .ck-keys-hint { display: none; } }
+@media print { .ck-keys-hint, .ck-undo { display: none !important; } }
