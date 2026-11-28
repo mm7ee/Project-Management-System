@@ -436,6 +436,32 @@ bottlenecks), `extract_from_document` and `check_traceability`.
   (any of those, and `enabled`); `DELETE /:id`. In the prompt, `{project}`, `{document}` and `{item}` become the names
   of what's open. Up to 40 a workspace; unknown tools `400`. Their id in `skill` is `custom:<id>`.
 
+### Changes, with confirmation (phase d)
+
+Write tools (`src/actions.js`): `create_work_items` (up to 50), `update_work_items` (up to 50: status, priority,
+assignee, due date, labels), `add_comment` (or a reply to the customer), `log_work`, `request_update`,
+`create_risks`, `create_finding`, `draft_document` (text sections of a BRS, BSS or release notes draft: never
+submitted), `schedule_report` (a saved filter and an email subscription), `create_automation_rule` (saved switched
+off), `advance_stage` (only when the gate is met) and `send_notification`. None is offered to view-only links,
+Readers or Viewers, and each only to those with its permission.
+
+- **A write tool changes nothing.** It checks its arguments; the ids and keys it names must have come from a lookup
+  in the same request (or the open page, or the question); people are named, not given by id. Then it stores a
+  proposal and the answer event carries it in `actions: [{ id, tool, title, preview: { fields?, table?, warnings? },
+  status: "proposed", expiresAt }]`. At most 3 a request. Never available: deleting, permissions, roles or users,
+  deciding a sign-off, accepting a risk, changing signed or locked documents.
+- `POST /api/assistant/actions/:id/confirm` (the proposer only, once, within 30 minutes) runs the proposal's ordinary
+  API requests in order with the person's own session, through every check those requests have. → the card with
+  `status` (`done`, `partly_done`, `failed`) and `results: [{ ok, label, message?, href? }]`. Already decided
+  `409 action_decided`; expired `410 action_expired`; someone else's `404`. Logged as `assistant_action`.
+- `POST /api/assistant/actions/:id/cancel` → the card, `cancelled`. `GET /api/assistant/actions/:id` → the card.
+- `POST /api/assistant/actions { tool, args }`: a proposal straight from the panel (the button under an extracted
+  table), for `create_work_items` and `create_risks` only (others `400`) → `201` with the card.
+- `POST /api/systems/:id/notify { title, message }`: an in-app notification to the project's lead and developers
+  (not the sender), by its lead, Team Leaders, Managers and Administrators → `{ ok, people }`. Logged as
+  `project_notified`.
+- Proposals are kept 90 days (`src/retention.js`).
+
 ## Project lifecycle
 
 Each organisation has lifecycle templates (phases, stages and their gates); each project is on one version of one

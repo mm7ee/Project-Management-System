@@ -53,7 +53,7 @@ export async function extractTable(c, x, documentId, kind) {
   const where = { name: doc.name, href: documentHref(doc), project: doc.project };
   if (kind === "requirements" && kit && data) {
     const rows = kitRequirements(kit, data);
-    return { table: { title: `${spec.label}: ${doc.name}`, columns: spec.columns, rows, kind, documentId: doc.id, note: "From the document's own data in PMS: exact." }, doc: where, counts: { rows: rows.length, rejected: 0, ungrounded: 0 }, fromData: true };
+    return { table: { title: `${spec.label}: ${doc.name}`, columns: spec.columns, rows, kind, documentId: doc.id, projectId: doc.system_id, note: "From the document's own data in PMS: exact." }, doc: where, counts: { rows: rows.length, rejected: 0, ungrounded: 0 }, fromData: true };
   }
   const windows = [];
   for (let i = 0; i < text.length && windows.length < MAX_WINDOWS; i += WINDOW_CHARS) windows.push(text.slice(i, i + WINDOW_CHARS));
@@ -87,6 +87,7 @@ export async function extractTable(c, x, documentId, kind) {
       rows,
       kind,
       documentId: doc.id,
+      projectId: doc.system_id,
       note: `Read by ${x.model.split("/").pop()}; every row checked against the document.${left.length ? ` Left out: ${left.join(" and ")}.` : ""}${truncated ? ` Only the first ${(WINDOW_CHARS * MAX_WINDOWS).toLocaleString("en-GB")} characters were read.` : ""}`,
     },
     doc: where,

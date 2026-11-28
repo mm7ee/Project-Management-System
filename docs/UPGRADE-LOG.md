@@ -1576,3 +1576,17 @@ Plan: `docs/assistant-plan.md`. Mock-ups: `docs/design/assistant-mockups.html`.
 - **Your organisation's own skills:** Settings → This workspace → Ask AI skills (organisation administrators).
 - **Migration 0030** (`ai_skills`). API: `docs/API.md`. Tests: `tests/extraction.test.js` (frontend, 10),
   `tests/skills.test.js` (backend, 6). `npm test`: 443 passed (220 frontend, 223 backend).
+
+## Ask AI, phase (d): it can make changes, when you confirm (2026-11-28)
+
+GIF: `docs/design/assistant/brs-to-work-items.gif`. Screenshots: `docs/design/assistant/actions-*.png`.
+
+- **Ask AI can prepare changes:** create or update work items (several at once), comment or reply to a customer, log
+  time, ask a team for an update, add risks and security findings, draft sections of a BRS, BSS or release notes,
+  schedule a report by email, set up an automation rule, move a project to its next stage, notify a project's people.
+- **Nothing happens until you confirm.** Each change appears as a card showing exactly what it will do; Confirm runs
+  it as you, with your permissions, and the card shows what was done (with links) or why a step was refused.
+- **From a table to work items in one click:** under extracted requirements, action items, defects, acceptance
+  criteria or milestones, "Create N work items"; under risks, "Add N risks to the register".
+- **Migration 0031** (`ai_actions`). API: `docs/API.md`. Tests: `tests/actions.test.js` (frontend, 6; backend, 8).
+  `npm test`: 457 passed (226 frontend, 231 backend).

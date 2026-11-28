@@ -313,6 +313,11 @@ export function describe(e, users, systems) {
       const how = d.skill ? ` with the skill "${String(d.skill).replace(/^custom:.*/, "of your organisation").replace(/_/g, " ")}"` : "";
       return `Asked ${BRAND.assistantName} a question${where}${how}${did}${outcome}`;
     }
+    case "assistant_action":
+      // A change Ask AI proposed, confirmed by this person: what it was and how it went.
+      return `Confirmed ${BRAND.assistantName}'s proposal "${str(d.title)}"${d.outcome === "done" ? "" : d.outcome === "partly_done" ? `: ${str(d.done)} of ${str(d.steps)} steps done` : ": it didn't work"}`;
+    case "project_notified":
+      return `Notified the people on ${name}: "${str(d.title)}" (${str(d.people)} ${Number(d.people) === 1 ? "person" : "people"})`;
     case "documents_indexed":
       return `Had ${BRAND.assistantName} read documents: ${str(d.indexed)} now searchable${Number(d.skipped) ? `, ${str(d.skipped)} without text` : ""}${Number(d.failed) ? `, ${str(d.failed)} failed` : ""}`;
     case "ai_skill_added":

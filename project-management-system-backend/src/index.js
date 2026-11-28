@@ -59,6 +59,7 @@ import { projectReportsApi } from "./projectReports";
 import { assistantApi } from "./assistant";
 import { docIndexApi, indexLater } from "./docIndex";
 import { skillsApi } from "./skills";
+import { actionsApi } from "./actions";
 import { afterSignoff, askLifecycleLines, lifecycleApi, runLifecycleClock, startLifecycle } from "./lifecycle";
 import { projectDocsApi } from "./projectDocs";
 import { overviewApi } from "./overview";
@@ -769,6 +770,8 @@ async function orgByCode(root, code) {
  * @returns {Promise<Response>}
  */
 async function api(req, env, path, ctx) {
+  // Kept for requests this one makes on the person's behalf (a confirmed Ask AI proposal): `env` is narrowed below.
+  const baseEnv = env;
   // Until we know who is asking, `db` is the owner (ROOT): sign-in, two-step, password reset and logout look
   // up sessions, tickets and accounts by their unguessable token or by name, and read nothing else. Once the
   // person is known (below), `db` and `env.DB` become the handle for their organisation and workspace only.
@@ -1328,6 +1331,31 @@ async function api(req, env, path, ctx) {
     alert: (alerts, channel) => alert(alerts, channel),
     env,
     defer: (p) => ctx.waitUntil(p.catch((e) => console.error("background work failed", e))),
+    // A request to this API as the same person, with their own session, through every check the API has (src/actions.js
+    // runs a confirmed Ask AI proposal this way).
+    subrequest: async (m, p, b) => {
+      const headers = new Headers({ "content-type": "application/json" });
+      for (const h of ["cookie", "authorization", "user-agent", "cf-connecting-ip"]) {
+        const v = req.headers.get(h);
+        if (v) headers.set(h, v);
+      }
+      const sub = new Request(new URL(p, req.url), { method: m, headers, body: b === undefined || m === "GET" ? undefined : JSON.stringify(b) });
+      /** @type {Response} */ let res;
+      try {
+        res = await api(sub, baseEnv, new URL(sub.url).pathname, ctx);
+      } catch (e) {
+        if (e instanceof HttpError) return { status: e.status, data: { error: e.message, ...(e.code ? { code: e.code } : {}) } };
+        throw e;
+      }
+      const t = await res.text();
+      /** @type {any} */ let data = null;
+      try {
+        data = t ? JSON.parse(t) : null;
+      } catch {
+        data = t;
+      }
+      return { status: res.status, data };
+    },
     // Automation reacts after the response, so a person never waits for a rule.
     emit: guest ? undefined : (e) => ctx.waitUntil(runEvent(env, { ...e, by: me.id }).catch((err) => console.error("automation failed", err))),
   };
@@ -1353,7 +1381,8 @@ async function api(req, env, path, ctx) {
     (await projectReportsApi(itemCtx, path, method)) ??
     (await assistantApi(itemCtx, path, method)) ??
     (await docIndexApi(itemCtx, path, method)) ??
-    (await skillsApi(itemCtx, path, method));
+    (await skillsApi(itemCtx, path, method)) ??
+    (await actionsApi(itemCtx, path, method));
   if (itemsResponse) return itemsResponse;
   /**
    * After a project changes workspace: it takes the new workspace's workflow, unless some of its work

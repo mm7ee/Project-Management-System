@@ -1466,3 +1466,27 @@ organisations, a release per phase.
 - **The organisation's own skills** (migration 0030, `ai_skills`): per workspace, added by its administrators, with
   the tools each may use checked against the tool list. Up to 40 a workspace.
 - **Turning extracted rows into work items** comes with the write tools in phase (d), behind a confirmation card.
+
+## Ask AI, phase (d): changes only with the person's confirmation (2026-11-28)
+
+The AI rules, as they now stand: **it acts as the person** (every lookup and every change goes through the same
+code and checks as the API, with their own permissions); **writes need their confirmation**; **answers cite their
+sources**; **figures must be in the data** (any that aren't are flagged); **external providers are opt-in** (phase e).
+
+- **A write tool never changes anything.** It stores a proposal (`ai_actions`, migration 0031): a preview for the
+  card and the ordinary API requests that would make the change. Only the person's click on Confirm runs them. The
+  model has no tool that confirms, and a proposal can be confirmed once, by its proposer, within 30 minutes.
+- **Confirming sends the real API requests with the person's own session** (`c.subrequest`: the Worker calls its own
+  handler with their cookie or token). So a change through Ask AI is refused exactly where the same change in PMS
+  would be (a Manager who isn't on a project can't change its risk register; time can't be logged in the future), and
+  the step says why. No separate permission logic to keep in step.
+- **Ids must come from lookups:** a write tool may only name a project, item or document that a read tool returned in
+  the same request, or that's open on the page, or that the person typed. People are named, then looked up, never
+  given by id. This is what stops a model inventing (or being tricked into) an id.
+- **Checked when proposing, not only when confirming:** a PQL that doesn't parse, a rule that wouldn't save, a stage
+  whose gate isn't met, a project without a lifecycle: the tool says so and no card appears.
+- **Never offered:** deleting, permissions, roles, users, deciding sign-offs, accepting risks, signed or locked
+  documents. Automation rules are saved switched off; documents are drafted, never submitted; a rule can't be
+  organisation-wide.
+- **One confirmation for many:** an extracted table's rows become work items (or risks) through one card, up to 50.
+- **Not for** view-only links, Readers or Viewers; each tool only for those with its permission.

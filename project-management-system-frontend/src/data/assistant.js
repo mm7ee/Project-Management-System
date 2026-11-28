@@ -93,10 +93,28 @@ export function validateArgs(schema, raw) {
     } else if (p.type === "boolean") {
       if (typeof v !== "boolean") return { ok: false, error: `"${key}" must be true or false.` };
       value[key] = v;
+    } else if (p.type === "array" && p.items && "properties" in p.items) {
+      // A list of objects (several work items in one proposal): each checked against the item schema.
+      if (!Array.isArray(v) || !v.length) return { ok: false, error: `"${key}" must be a list.` };
+      if (p.maxItems && v.length > p.maxItems) return { ok: false, error: `"${key}" has too many items (at most ${p.maxItems}).` };
+      /** @type {Record<string, unknown>[]} */ const list = [];
+      for (const [i, x] of v.entries()) {
+        if (!x || typeof x !== "object" || Array.isArray(x)) return { ok: false, error: `"${key}" item ${i + 1} must be an object.` };
+        const r = validateArgs(/** @type {ToolSchema} */ (p.items), /** @type {Record<string, unknown>} */ (x));
+        if (!r.ok) return { ok: false, error: `"${key}" item ${i + 1}: ${r.error}` };
+        list.push(r.value);
+      }
+      value[key] = list;
     } else if (p.type === "array") {
       if (!Array.isArray(v) || v.some((x) => typeof x !== "string")) return { ok: false, error: `"${key}" must be a list of text.` };
       if (p.maxItems && v.length > p.maxItems) return { ok: false, error: `"${key}" has too many items (at most ${p.maxItems}).` };
       value[key] = v.map((x) => String(x).trim());
+    } else if (p.type === "object" && p.properties) {
+      // A nested object (the changes in an update).
+      if (typeof v !== "object" || Array.isArray(v)) return { ok: false, error: `"${key}" must be an object.` };
+      const r = validateArgs(/** @type {ToolSchema} */ ({ type: "object", properties: p.properties, required: p.required }), /** @type {Record<string, unknown>} */ (v));
+      if (!r.ok) return { ok: false, error: `"${key}": ${r.error}` };
+      value[key] = r.value;
     }
   }
   return { ok: true, value };
@@ -207,7 +225,9 @@ export const modelLabel = (model) => MODEL_LABELS[model] ?? model.split("/").pop
  */
 /**
  * @typedef {Object} ToolProperty
- * @property {"string" | "integer" | "number" | "boolean" | "array"} [type]
+ * @property {"string" | "integer" | "number" | "boolean" | "array" | "object"} [type]
+ * @property {Record<string, ToolProperty>} [properties]  a nested object's
+ * @property {string[]} [required]  a nested object's
  * @property {string} [description]
  * @property {readonly string[]} [enum]
  * @property {number} [maxLength]
@@ -215,7 +235,7 @@ export const modelLabel = (model) => MODEL_LABELS[model] ?? model.split("/").pop
  * @property {number} [minimum]
  * @property {number} [maximum]
  * @property {number} [maxItems]
- * @property {{ type: "string" }} [items]
+ * @property {{ type: "string" } | ToolSchema} [items]  a list of text, or of objects
  */
 /**
  * @typedef {Object} ToolSchema

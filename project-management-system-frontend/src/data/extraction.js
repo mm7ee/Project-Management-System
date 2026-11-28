@@ -229,4 +229,5 @@ export function toCsv(columns, rows) {
  * @property {string} [note]  how it was made and what was left out
  * @property {string} [kind]
  * @property {string} [documentId]
+ * @property {string} [projectId]  the document's project, for turning the rows into work items or risks
  */

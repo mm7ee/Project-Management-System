@@ -36,6 +36,8 @@ export async function purgeExpired(db, now = Date.now()) {
     ["document_chunks (orphaned)", db.prepare("DELETE FROM document_chunks WHERE doc_id NOT IN (SELECT id FROM documents)")],
     // Chat files uploaded but never sent (the composer was closed): gone after a day. Chunks follow by cascade.
     ["chat_files (never sent)", db.prepare("DELETE FROM chat_files WHERE message_id IS NULL AND uploaded_at < ?").bind(before(1))],
+    // Ask AI's proposals: after 90 days (what was confirmed is in the records it made and in the activity log).
+    ["ai_actions", db.prepare("DELETE FROM ai_actions WHERE created_at < ?").bind(before(90))],
   ];
   const results = await db.batch(steps.map(([, s]) => s));
   return Object.fromEntries(steps.map(([name], i) => [name, results[i].meta.changes ?? 0]));

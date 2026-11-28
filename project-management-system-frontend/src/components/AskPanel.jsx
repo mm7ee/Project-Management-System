@@ -4,7 +4,8 @@
 /** @import { User } from '../data/roles' */
 import { BRAND } from "../data/brand";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowUp, Check, CircleCheck, Copy, Download, RotateCcw, Sparkles, X, Zap } from "lucide-react";
+import { AlertTriangle, ArrowUp, Check, CircleCheck, Copy, Download, Plus, RotateCcw, Sparkles, X, Zap } from "lucide-react";
+import { tableToProposal } from "../data/actions";
 import { ApiError, api, shareToken } from "../data/api";
 import { isLate, isOpen } from "../data/features";
 import { modelLabel, readEvents } from "../data/assistant";
@@ -13,11 +14,109 @@ import { CONTEXT_LABELS } from "../data/skills";
 /** @type {Record<string, string>} */
 const SKILL_HEADINGS = { ...CONTEXT_LABELS, document: "For this project's documents", project: "For this project", item: "For this work item", request: "For this request" };
 /**
- * A table an answer carries (an extraction, a traceability check), with its note and CSV.
- * @param {{ table: import("../data/extraction").AnswerTable }} props
+ * A change Ask AI proposes: what it would do, and Confirm / Cancel. Nothing happens until the person confirms; then
+ * the server runs it with their own session and says how each step went.
+ * @param {{ card: import("../data/actions").ActionCard }} props
  */
-function AnswerTableView({ table }) {
+function ActionCardView({ card: first }) {
+  const [card, setCard] = useState(first);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const expired = card.status === "proposed" && Date.parse(card.expiresAt) <= Date.now();
+  /** @param {"confirm" | "cancel"} what */
+  const act = async (what) => {
+    setBusy(true);
+    setError("");
+    try {
+      setCard(/** @type {import("../data/actions").ActionCard} */ (await api(`/assistant/actions/${card.id}/${what}`, "POST")));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "That didn't work");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const p = card.preview;
+  const STATE = { done: "Done", partly_done: "Partly done", failed: "Didn't work", cancelled: "Cancelled", running: "Working…", proposed: expired ? "Expired: ask again" : "Waiting for you to confirm" };
+  return (
+    <section className={`ask-action is-${card.status}`} aria-label={card.title}>
+      <header>
+        <b>{card.title}</b>
+        <span className="ask-action-state">{STATE[card.status]}</span>
+      </header>
+      {!!p.fields?.length && (
+        <dl>
+          {p.fields.map(([k, v], i) => (
+            <div key={i}>
+              <dt>{k}</dt>
+              <dd>{v}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {p.table && p.table.rows.length > 0 && (
+        <div className="ask-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                {p.table.columns.map((col) => (
+                  <th key={col.key} scope="col">
+                    {col.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {p.table.rows.map((r, i) => (
+                <tr key={i}>
+                  {p.table?.columns.map((col) => (
+                    <td key={col.key}>{String(r[col.key] ?? "")}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {p.warnings?.map((w, i) => (
+        <p key={i} className="ask-action-warn">
+          <AlertTriangle size={13} /> {w}
+        </p>
+      ))}
+      {card.results && (
+        <ul className="ask-action-results">
+          {card.results.map((r, i) => (
+            <li key={i} className={r.ok ? "ok" : "bad"}>
+              {r.ok ? <Check size={13} /> : <X size={13} />} {r.href ? <a href={r.href}>{r.label}</a> : r.label}
+              {r.message && <span className="muted"> · {r.message}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && <p className="ask-action-warn">{error}</p>}
+      {card.status === "proposed" && !expired && (
+        <div className="ask-action-buttons">
+          <button type="button" className="btn btn-primary sm" disabled={busy} onClick={() => act("confirm")}>
+            <Check size={14} /> {busy ? "Working…" : "Confirm"}
+          </button>
+          <button type="button" className="btn btn-ghost sm" disabled={busy} onClick={() => act("cancel")}>
+            Cancel
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * A table an answer carries (an extraction, a traceability check), with its note and CSV, and, for rows that can
+ * become work items or risks, a button that proposes it (one confirmation for them all).
+ * @param {{ table: import("../data/extraction").AnswerTable; canWrite: boolean }} props
+ */
+function AnswerTableView({ table, canWrite }) {
   const [copied, setCopied] = useState(false);
+  const [card, setCard] = useState(/** @type {import("../data/actions").ActionCard | null} */ (null));
+  const [making, setMaking] = useState("");
+  const offer = canWrite && table.kind && table.projectId ? tableToProposal(/** @type {import("../data/extraction").ExtractionKind} */ (table.kind), table.rows, table.projectId) : null;
   const csv = () => toCsv(table.columns, table.rows);
   const file = `${table.title.replace(/[^\w\- ]+/g, "").trim().slice(0, 60) || "table"}.csv`;
   return (
@@ -83,8 +182,28 @@ function AnswerTableView({ table }) {
           >
             <Download size={13} /> Download CSV
           </button>
+          {offer && !card && (
+            <button
+              type="button"
+              className="ask-copy ask-make"
+              disabled={making === "…"}
+              onClick={async () => {
+                setMaking("…");
+                try {
+                  setCard(/** @type {import("../data/actions").ActionCard} */ (await api("/assistant/actions", "POST", { tool: offer.tool, args: offer.args })));
+                  setMaking("");
+                } catch (e) {
+                  setMaking(e instanceof Error ? e.message : "That didn't work");
+                }
+              }}
+            >
+              <Plus size={13} /> {offer.label}…
+            </button>
+          )}
         </div>
       )}
+      {making && making !== "…" && <p className="ask-action-warn">{making}</p>}
+      {card && <ActionCardView card={card} />}
     </figure>
   );
 }
@@ -251,7 +370,7 @@ export default function AskPanel({ open, onClose, systems, users, features, me, 
           if (event.type === "step") patch((t) => ({ steps: [...(t.steps ?? []), String(event.label)] }));
           if (event.type === "answer") {
             answered = true;
-            patch(() => ({ a: String(event.text), sources: event.sources ?? [], tables: event.tables ?? [], unverified: event.unverified ?? [], meta:{ model: String(event.model), tools: (event.tools ?? []).length, ms: Number(event.ms) } }));
+            patch(() => ({ a: String(event.text), sources: event.sources ?? [], tables: event.tables ?? [], actions: event.actions ?? [], unverified: event.unverified ?? [], meta:{ model: String(event.model), tools: (event.tools ?? []).length, ms: Number(event.ms) } }));
           }
         });
       } else if (![404, 405, 503].includes(res.status)) throw await failure(res);
@@ -444,7 +563,8 @@ export default function AskPanel({ open, onClose, systems, users, features, me, 
               {t.a && (
                 <div className="ask-a">
                   {render(t.a, t.sources)}
-                  {t.tables?.map((tb, n) => <AnswerTableView key={n} table={tb} />)}
+                  {t.tables?.map((tb, n) => <AnswerTableView key={n} table={tb} canWrite={!shareToken} />)}
+                  {t.actions?.map((card) => <ActionCardView key={card.id} card={card} />)}
                   {!!t.sources?.length && (
                     <ol className="ask-sources" aria-label="Sources">
                       {t.sources.map((s) => (
@@ -558,6 +678,7 @@ export default function AskPanel({ open, onClose, systems, users, features, me, 
  * @property {boolean} [snapshot]  answered the earlier way, from one snapshot
  * @property {import("../data/extraction").AnswerTable[]} [tables]  extractions and checks, shown under the answer
  * @property {string} [skill]  the skill that asked
+ * @property {import("../data/actions").ActionCard[]} [actions]  changes proposed, waiting for the person to confirm
  */
 /**
  * A skill the server offers for where the person is.

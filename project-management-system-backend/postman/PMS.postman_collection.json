@@ -12685,6 +12685,120 @@
           }
         },
         {
+          "name": "Assistant actions: propose work items from a table (nothing is created yet)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"201, a card waiting for confirmation\", () => { pm.response.to.have.status(201); const c = pm.response.json(); pm.expect(c.status).to.eql(\"proposed\"); pm.expect(c.preview.table.rows).to.have.length(1); pm.environment.set(\"actionId\", c.id); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"tool\":\"create_work_items\",\"args\":{\"projectId\":\"{{systemId}}\",\"items\":[{\"type\":\"TASK\",\"summary\":\"Postman check: proposed, never confirmed\"}]}}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/assistant/actions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assistant",
+                "actions"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Assistant actions: cancel it",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"cancelled\", () => { pm.response.to.have.status(200); pm.expect(pm.response.json().status).to.eql(\"cancelled\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assistant/actions/{{actionId}}/cancel",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assistant",
+                "actions",
+                "{{actionId}}",
+                "cancel"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Assistant actions: a cancelled one can't be confirmed",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"409\", () => { pm.response.to.have.status(409); pm.expect(pm.response.json().code).to.eql(\"action_decided\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assistant/actions/{{actionId}}/confirm",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assistant",
+                "actions",
+                "{{actionId}}",
+                "confirm"
+              ]
+            }
+          }
+        },
+        {
           "name": "Overview: the summary",
           "event": [
             {

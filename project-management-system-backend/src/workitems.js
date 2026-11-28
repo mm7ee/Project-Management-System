@@ -1686,6 +1686,8 @@ export async function askItemLines(c, nameOf, limit = 120) {
  * @property {(alerts: Alert[], channel?: ChannelPost) => void} alert Raises alerts for others (never the person acting), without holding up the request.
  * @property {(e: ItemEvent) => void} [emit] Tells automation what happened (worker/automation.ts). Absent where nothing should react.
  * @property {Env} [env] The Worker's environment, for email and secrets (service desk customer emails, webhooks).
+ * @property {(method: string, path: string, body?: unknown) => Promise<{ status: number; data: any }>} [subrequest] A request to the API as
+ *   this same person (their session, every check): how a confirmed Ask AI proposal runs.
  * @property {(p: Promise<unknown>) => void} [defer] Work to finish after the response (ctx.waitUntil); runs inline where there's no request.
  */
 /**
