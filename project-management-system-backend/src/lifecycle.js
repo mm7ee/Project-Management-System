@@ -314,7 +314,7 @@ async function gatherFacts(c, sys, life, stage) {
     environments: /** @type {{ name: string; verified_at: string | null }[]} */ (envs.results).map((e) => ({ name: e.name, verified: !!e.verified_at })),
     tests: testSummary(
       /** @type {{ id: string; suite: string }[]} */ (cases.results),
-      /** @type {{ case_id: string; result: "pass" | "fail" | "blocked"; run_at: string }[]} */ (runs.results).map((r) => ({ caseId: r.case_id, result: r.result, at: r.run_at })),
+      /** @type {{ case_id: string; result: "pass" | "fail" | "blocked" | "waived"; run_at: string }[]} */ (runs.results).map((r) => ({ caseId: r.case_id, result: r.result, at: r.run_at })),
     ),
     openBugs,
     change,
@@ -559,7 +559,7 @@ async function lifecycleView(c, systemId) {
     c.db.prepare("SELECT id, from_code, to_code, kind, reason, by_name, at FROM project_stage_history WHERE system_id = ? ORDER BY id DESC LIMIT 200").bind(sys.id).all(),
     c.db.prepare("SELECT r.*, a.name AS owner_name FROM risk_register r LEFT JOIN accounts a ON a.id = r.owner_id WHERE r.system_id = ? ORDER BY r.created_at").bind(sys.id).all(),
     c.db.prepare("SELECT f.*, a.name AS accepted_name FROM security_findings f LEFT JOIN accounts a ON a.id = f.accepted_by WHERE f.system_id = ? ORDER BY f.created_at").bind(sys.id).all(),
-    c.db.prepare("SELECT * FROM test_cases WHERE system_id = ? ORDER BY suite, position, created_at").bind(sys.id).all(),
+    c.db.prepare("SELECT t.*, a.name AS assignee_name FROM test_cases t LEFT JOIN accounts a ON a.id = t.assignee_id WHERE t.system_id = ? ORDER BY t.suite, t.position, t.created_at").bind(sys.id).all(),
     c.db.prepare("SELECT r.*, a.name AS run_name FROM test_runs r LEFT JOIN accounts a ON a.id = r.run_by WHERE r.system_id = ? ORDER BY r.run_at").bind(sys.id).all(),
     c.db.prepare("SELECT e.*, a.name AS verified_name FROM project_environments e LEFT JOIN accounts a ON a.id = e.verified_by WHERE e.system_id = ? ORDER BY e.name").bind(sys.id).all(),
     c.db.prepare("SELECT d.id, d.name, d.kind, d.url, d.stage_code, d.deliverable_key, d.version, d.locked_at, d.uploaded_at, a.name AS uploaded_name FROM documents d LEFT JOIN accounts a ON a.id = d.uploaded_by WHERE d.system_id = ? AND d.work_item_id IS NULL ORDER BY d.uploaded_at").bind(sys.id).all(),
@@ -887,13 +887,24 @@ async function registers(c, sys, stage, kind, id, action, method, b) {
       const suite = s(b.suite, 12).toUpperCase() || stage.testing?.suite || "QAT";
       if (!title) throw new HttpError(400, "Give the test case a title");
       if (!/^[A-Z]{2,12}$/.test(suite)) throw new HttpError(400, "Unknown test suite");
-      await db.prepare("INSERT INTO test_cases (id, system_id, suite, title, steps, expected, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").bind(id16(), sys.id, suite, title, s(b.steps, 4000), s(b.expected, 2000), c.me.id, c.now).run();
+      await db
+        .prepare("INSERT INTO test_cases (id, system_id, suite, title, steps, expected, scenario, assignee_id, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+        .bind(id16(), sys.id, suite, title, s(b.steps, 4000), s(b.expected, 2000), s(b.scenario, 200), b.assigneeId ? s(b.assigneeId, 80) : null, c.me.id, c.now)
+        .run();
       return;
     }
     const t = await own("test_cases");
+    // The UAT script's columns: scenario, test case, the tester assigned, the expected result.
+    if (!action && method === "PATCH") {
+      await db
+        .prepare("UPDATE test_cases SET title = ?, scenario = ?, expected = ?, steps = ?, assignee_id = ? WHERE id = ?")
+        .bind(b.title !== undefined ? s(b.title, 300) || t.title : t.title, b.scenario !== undefined ? s(b.scenario, 200) : t.scenario, b.expected !== undefined ? s(b.expected, 2000) : t.expected, b.steps !== undefined ? s(b.steps, 4000) : t.steps, b.assigneeId !== undefined ? (b.assigneeId ? s(b.assigneeId, 80) : null) : t.assignee_id, t.id)
+        .run();
+      return;
+    }
     if (action === "/runs" && method === "POST") {
-      const result = ["pass", "fail", "blocked"].includes(b.result) ? b.result : null;
-      if (!result) throw new HttpError(400, "Choose pass, fail or blocked");
+      const result = ["pass", "fail", "blocked", "waived"].includes(b.result) ? b.result : null;
+      if (!result) throw new HttpError(400, "Choose pass, fail, blocked or waived");
       const notes = s(b.notes, 2000);
       let bug = null;
       // A failed test raises a bug (the stage's testing setting), linked to the run.

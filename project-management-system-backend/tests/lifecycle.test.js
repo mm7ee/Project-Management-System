@@ -196,7 +196,7 @@ describe("project lifecycles", () => {
     const cases = l.tests;
     for (let i = 0; i < 20; i++) await lc("tom", `/tests/${cases[i].id}/runs`, { method: "POST", body: { result: i < 18 ? "pass" : "fail", notes: i < 18 ? "" : "Wrong total" } });
     l = await stageOf();
-    expect(l.testSummary.QAT).toEqual({ total: 20, pass: 18, fail: 2, blocked: 0, notRun: 0 });
+    expect(l.testSummary.QAT).toEqual({ total: 20, pass: 18, fail: 2, blocked: 0, waived: 0, notRun: 0 });
     const bugs = await db`SELECT summary, lifecycle_stage FROM work_items WHERE system_id = ${systemId} AND type = 'BUG'`;
     expect(bugs.map((/** @type {any} */ b) => b.lifecycle_stage)).toEqual(["QA", "QA"]);
     expect((await lc("tom", "/advance", { method: "POST" })).data.missing).toEqual(["QAT pass rate is 90%: at least 95% is needed"]);
@@ -295,5 +295,64 @@ describe("project lifecycles", () => {
     expect(hist).toEqual([{ kind: "migrate", by_name: "Migration 0026" }]);
     // Running it again changes nothing: already-mapped projects are left alone.
     expect((await db`SELECT * FROM lifecycle_map_projects(${orgs.b.id}, ${`map${tag}`})`).map((/** @type {any} */ r) => r.system_id)).toEqual([`map-10-${tag}`]);
+  }, SLOW);
+
+  it("documents written in PMS: a BRS from the template becomes the deliverable, is signed and locked; release notes make the changelog", async () => {
+    const p = await as("ada", "/api/systems", { method: "POST", body: { name: `Selfcare ${tag}`, startedAt: "2026-11-01", key: "SELF", lead: id("tom") } });
+    const sid = p.data.id;
+    const docs = (/** @type {string} */ who, sub = "", /** @type {{ method?: string; body?: unknown }} */ o = {}) => as(who, `/api/systems/${sid}/docs${sub}`, o);
+    expect((await docs("tom")).data.kits.map((/** @type {any} */ k) => k.kind)).toEqual(["brs", "bss", "release_notes"]);
+    // A new draft is prefilled (and not saved until something changes).
+    const fresh = await docs("tom", "/brs");
+    expect(fresh.data).toMatchObject({ saved: false, version: { version: 1 }, data: { control: { title: `Selfcare ${tag}` } } });
+    expect((await docs("tom", "/brs/submit", { method: "POST" })).status).toBe(409);
+    await docs("tom", "/brs", { method: "PUT", body: { data: fresh.data.data } });
+    const incomplete = await docs("tom", "/brs/submit", { method: "POST" });
+    expect(incomplete.data).toMatchObject({ code: "doc_incomplete" });
+    expect(incomplete.data.missing).toContain("1. Introduction");
+    const filled = { ...fresh.data.data, introduction: "Customers queue to check balances.", functional: [{ title: "Registration", items: [{ description: "Register with a phone number", priority: "M" }] }] };
+    await docs("tom", "/brs", { method: "PUT", body: { data: filled } });
+    // Only people on the project write its documents.
+    expect((await docs("dev", "/brs", { method: "PUT", body: { data: filled } })).status).toBe(403);
+    const sub = await docs("tom", "/brs/submit", { method: "POST" });
+    expect(sub.data).toMatchObject({ ok: true, version: 1, documentVersion: 1 });
+    // It is the BRS deliverable: the gate is met, and the sign-off is on this version.
+    let l = (await as("tom", `/api/systems/${sid}/lifecycle`)).data.lifecycle;
+    expect(l.gate[0].ok).toBe(true);
+    expect(l.documents.find((/** @type {any} */ d) => d.deliverable_key === "brs")).toMatchObject({ kind: "link", version: 1 });
+    l = (await as("tom", `/api/systems/${sid}/lifecycle/advance`, { method: "POST" })).data.lifecycle;
+    expect(l.stage).toBe("SIGN");
+    for (const who of ["ada", "mia"]) {
+      const mine = l.signoffs.find((/** @type {any} */ s) => s.signer_id === id(who) && s.status === "pending");
+      l = (await as(who, `/api/systems/${sid}/lifecycle/signoffs/${mine.id}`, { method: "POST", body: { decision: "approve", comment: "Good" } })).data.lifecycle;
+    }
+    expect(l.stage).toBe("BUILD");
+    const v1 = await docs("tom", "/brs?version=1");
+    expect(v1.data.version).toMatchObject({ version: 1, status: "submitted", locked: true });
+    expect(v1.data.signoffs.map((/** @type {any} */ s) => s.status)).toEqual(["approved", "approved"]);
+    // A submitted version is never changed; the next draft starts from it, as version 2.
+    await expect(
+      db.begin(async (/** @type {any} */ tx) => {
+        await tx`SET LOCAL ROLE pulse_app`;
+        await tx`SELECT set_config('app.org_id', ${orgs.a.id}, true), set_config('app.workspace_id', ${`${orgs.a.id}-ws`}, true)`;
+        await tx`UPDATE project_documents SET data = '{}' WHERE system_id = ${sid} AND version = 1`;
+      }),
+    ).rejects.toThrow(/never changed/);
+    const next = await docs("tom", "/brs");
+    expect(next.data).toMatchObject({ saved: false, version: { version: 2 }, data: { introduction: "Customers queue to check balances." } });
+    // Release notes: each published one is a release in the changelog.
+    const rn = (await docs("tom", "/release_notes")).data.data;
+    await docs("tom", "/release_notes", { method: "PUT", body: { data: { ...rn, release: { ...rn.release, version: "1.0.0" }, overview: "First release. Registration and balances." } } });
+    expect((await docs("tom", "/release_notes/submit", { method: "POST" })).status).toBe(200);
+    const log = await docs("tom", "/release_notes/changelog");
+    expect(log.data.entries.map((/** @type {any} */ e) => [e.version, e.summary])).toEqual([["1.0.0", "First release."]]);
+    // The UAT script: a scenario, the tester, and a waived result.
+    const t = (await as("tom", `/api/systems/${sid}/lifecycle/tests`, { method: "POST", body: { suite: "UAT", title: "Forgot PIN", scenario: "Create and Update Profile", expected: "The user can reset their PIN", assigneeId: id("mia") } })).data.lifecycle.tests[0];
+    expect(t).toMatchObject({ scenario: "Create and Update Profile", assignee_name: "mia", expected: "The user can reset their PIN" });
+    const waived = (await as("tom", `/api/systems/${sid}/lifecycle/tests/${t.id}/runs`, { method: "POST", body: { result: "waived" } })).data.lifecycle;
+    expect(waived.testSummary.UAT).toMatchObject({ total: 1, waived: 1 });
+    // Another organisation: nothing.
+    expect((await as("bob", `/api/systems/${sid}/docs`)).status).toBe(404);
+    expect((await as("bob", `/api/systems/${sid}/docs/brs?version=1`)).status).toBe(404);
   }, SLOW);
 });

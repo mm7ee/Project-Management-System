@@ -57,6 +57,7 @@ import { adminApi } from "./admin";
 import { chatApi } from "./chat";
 import { projectReportsApi } from "./projectReports";
 import { afterSignoff, askLifecycleLines, lifecycleApi, runLifecycleClock, startLifecycle } from "./lifecycle";
+import { projectDocsApi } from "./projectDocs";
 import { levelsFor } from "./access";
 /**
  * Requests made with a personal API token, and the token's name, for the activity log.
@@ -1339,6 +1340,7 @@ async function api(req, env, path, ctx) {
     (await serviceDeskApi(itemCtx, path, method)) ??
     (await integrationsApi(itemCtx, env, path, method)) ??
     (await chatApi(itemCtx, path, method)) ??
+    (await projectDocsApi(itemCtx, path, method)) ??
     (await lifecycleApi(itemCtx, path, method)) ??
     (await projectReportsApi(itemCtx, path, method));
   if (itemsResponse) return itemsResponse;

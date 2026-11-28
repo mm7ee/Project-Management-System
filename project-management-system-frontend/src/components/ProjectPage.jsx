@@ -27,6 +27,7 @@ import BoardView from "./BoardView";
 import BacklogView from "./BacklogView";
 import TimelineView from "./TimelineView";
 import LifecyclePage, { LifecycleStrip } from "./LifecyclePage";
+import DocumentsTab from "./DocumentsTab";
 import { DateLine, ProgressBar, ScheduleChip, StatusPill, updatedText } from "./SystemCard";
 /**
  * @param {{ title: string; icon?: ReactNode; count?: ReactNode; action?: ReactNode; children: ReactNode; tone?: "alert" }} props
@@ -161,9 +162,14 @@ export default function ProjectPage(p) {
         <a href={`#/projects/${system.id}/lifecycle`} className={p.section === "lifecycle" ? "on" : ""} aria-current={p.section === "lifecycle" ? "page" : undefined}>
           Lifecycle
         </a>
+        <a href={`#/projects/${system.id}/docs`} className={p.section === "docs" ? "on" : ""} aria-current={p.section === "docs" && !p.itemKey ? "page" : undefined}>
+          Documents
+        </a>
       </nav>
 
-      {p.section === "lifecycle" ? (
+      {p.section === "docs" ? (
+        <DocumentsTab system={system} me={me} users={users} doc={p.itemKey} readOnly={p.readOnly} onChanged={p.onChanged} />
+      ) : p.section === "lifecycle" ? (
         <LifecyclePage system={system} me={me} users={users} now={now} readOnly={p.readOnly} onChanged={p.onChanged} />
       ) : p.section === "backlog" ? (
         <BacklogView system={system} users={users} now={now} readOnly={p.readOnly} canEditPoints={p.canAssignOthers} onChanged={p.onChanged} />
@@ -900,7 +906,7 @@ function SaveAsTemplate({ system, attempt, onChanged }) {
  * @property {() => void} onNewFeature
  * @property {() => Promise<void>} onChanged
  * @property {boolean} canEditPcn
- * @property {"overview" | "items" | "board" | "backlog" | "timeline" | "lifecycle"} section
+ * @property {"overview" | "items" | "board" | "backlog" | "timeline" | "lifecycle" | "docs"} section
  * @property {boolean} canAssignOthers
  * @property {string} [itemKey]
  * @property {boolean} canCreateItems

@@ -1377,3 +1377,34 @@ Plan, template, mock-ups and the dry-run mapping (approved): `docs/lifecycle-pla
   Overview strip, the pipeline, the template editor, the report).
 - **Not done:** signing from an email link signs in first and opens the project's Lifecycle tab (there is no
   one-click approve in the email itself); the Monday Briefing and daily digest don't have a lifecycle section yet.
+
+## Project documents from the organisation's templates (2026-11-28)
+
+Guide: `docs/project-documents.md`. Screenshots: `docs/screenshots/documents/`.
+
+- **A Documents tab on every project** lists the templates in lifecycle order (Concept Note, BRS, BSS, UAT script,
+  Change Request, Release Notes, Changelog), each with its state and one button to write, continue, print or open it.
+- **BRS, BSS and Release Notes are written in PMS** from the templates (`src/data/documentKits.js`: one editor and one
+  printed layout for all three). They're prefilled from the project and its Concept Note, saved as you type, and
+  printed under the organisation's letterhead. Submitting a version makes it the stage's deliverable, so the existing
+  sign-off, segregation of duties and locking apply. The BSS comes with its standard NFRN, SECN and RRN requirements,
+  security headers, documentation and deployment tables, ready to edit. A submitted BSS is linked to the signed BRS.
+- **UAT script:** UAT test cases now have a scenario, the tester assigned, the expected result, and a Waived result
+  (set aside from the pass rate). The script prints in the template's layout, results chart included.
+- **Change Request form:** the Deployment stage's record is now the whole form: request, the change, technical
+  details, risk and impact, the three approvers and change closure. It prints in the form's layout. The gate still
+  checks the plan, rollback plan, date and approver.
+- **Release Notes and Changelog:** the bug fixes and finished features since the last release are filled in from
+  the work items; each published release goes into the changelog (Added, Changed, Deprecated / removed, Fixed,
+  Security).
+- **Concept Note:** the type "Systems & Services" (from the template) is added.
+- **Fixed:** a QAT pass rate just under the threshold (94.7%) was shown as "95%"; it is now rounded down.
+- **Migration `0027_project_documents.sql`** (reverse in `migrations/down/`): `project_documents` (drafts and frozen
+  versions, row-level security, a trigger refusing changes to a submitted version), test case scenario and tester, the
+  waived result, a larger stage record.
+- **Tests:** `tests/documentKits.test.js` (frontend, 9) and a documents test in `tests/lifecycle.test.js` (backend:
+  prefill, incomplete submit refused, submit → deliverable → gate → sign-off → locked, frozen versions, the next
+  draft, release notes → changelog, the UAT script's columns and waived, another organisation's 404). `npm test`: 343
+  passed (151 frontend, 192 backend).
+- **Not included:** the Econet logo (printouts use the organisation's own letterhead); Word (.docx) export (print or
+  save as PDF instead).

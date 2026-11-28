@@ -239,7 +239,7 @@ export function nextStage(def, code) {
  * @property {{ total: number; open: number; deferred: number }} items      in-scope work items of the project
  * @property {boolean} deferralApproved
  * @property {{ name: string; verified: boolean }[]} environments
- * @property {Record<string, { total: number; pass: number; fail: number; blocked: number; notRun: number }>} tests
+ * @property {Record<string, { total: number; pass: number; fail: number; blocked: number; waived: number; notRun: number }>} tests
  * @property {Record<string, number>} openBugs       open bugs by priority
  * @property {{ exists: boolean; approved: boolean } } change
  * @property {Record<string, unknown> | null} deployment
@@ -313,8 +313,9 @@ function check(c, f) {
       const t = f.tests[suite];
       if (!t || !t.total) return `Add ${suite} test cases and run them`;
       if (t.notRun) return `${t.notRun} ${suite} test${t.notRun === 1 ? " hasn't" : "s haven't"} been run`;
-      const rate = t.pass / t.total;
-      return rate + 1e-9 >= (c.min ?? 0.95) ? true : `${suite} pass rate is ${Math.round(rate * 100)}%: at least ${Math.round((c.min ?? 0.95) * 100)}% is needed`;
+      const counted = t.total - (t.waived ?? 0);
+      const rate = counted ? t.pass / counted : 1;
+      return rate + 1e-9 >= (c.min ?? 0.95) ? true : `${suite} pass rate is ${Math.floor(rate * 100 + 1e-9)}%: at least ${Math.round((c.min ?? 0.95) * 100)}% is needed`;
     }
     case "no_open_bugs": {
       const ps = c.priorities?.length ? c.priorities : ["Critical", "High"];
@@ -416,22 +417,24 @@ export function riskRating(likelihood, impact) {
 /**
  * A suite's results from its cases' latest runs.
  * @param {{ id: string; suite: string }[]} cases
- * @param {{ caseId: string; result: "pass" | "fail" | "blocked"; at: string }[]} runs
+ * @param {{ caseId: string; result: "pass" | "fail" | "blocked" | "waived"; at: string }[]} runs
  */
 export function testSummary(cases, runs) {
   /** @type {Map<string, { result: string; at: string }>} */ const latest = new Map();
+  // (A waived test is set aside: it counts neither for nor against the pass rate.)
   for (const r of runs) {
     const was = latest.get(r.caseId);
     if (!was || r.at >= was.at) latest.set(r.caseId, r);
   }
-  /** @type {Record<string, { total: number; pass: number; fail: number; blocked: number; notRun: number }>} */ const out = {};
+  /** @type {Record<string, { total: number; pass: number; fail: number; blocked: number; waived: number; notRun: number }>} */ const out = {};
   for (const c of cases) {
-    const s = (out[c.suite] ??= { total: 0, pass: 0, fail: 0, blocked: 0, notRun: 0 });
+    const s = (out[c.suite] ??= { total: 0, pass: 0, fail: 0, blocked: 0, waived: 0, notRun: 0 });
     s.total++;
     const r = latest.get(c.id)?.result;
     if (r === "pass") s.pass++;
     else if (r === "fail") s.fail++;
     else if (r === "blocked") s.blocked++;
+    else if (r === "waived") s.waived++;
     else s.notRun++;
   }
   return out;

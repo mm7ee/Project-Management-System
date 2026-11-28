@@ -1,7 +1,7 @@
 // The Project Concept Note (PCN): how a new project is proposed and approved.
 // Mirrors the PCN document's sections; stored on the project (System.pcn). Shared by the UI and
 // the Worker (which cleans and validates it).
-export const PCN_TYPES = /** @type {const} */ (["New system", "Enhancement to an existing system", "Process improvement", "Integration", "Other"]);
+export const PCN_TYPES = /** @type {const} */ (["Systems & Services", "New system", "Enhancement to an existing system", "Process improvement", "Integration", "Other"]);
 export const PILLARS = /** @type {const} */ (["Customer", "People", "Innovation", "Organization & Capacity", "Business Performance", "Stakeholder & Sustainability Management", "Risk & Compliance"]);
 /** @type {Record<PcnStatus, { label: string; tone: string }>} */ export const PCN_STATUS_META = {
   DRAFT: { label: "Draft: no signatories yet", tone: "slate" },

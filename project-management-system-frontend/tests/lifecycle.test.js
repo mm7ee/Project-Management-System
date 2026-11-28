@@ -100,7 +100,9 @@ describe("gates", () => {
     const cases = Array.from({ length: 20 }, (_, i) => ({ id: `c${i}`, suite: "QAT" }));
     const runs = cases.map((c, i) => ({ caseId: c.id, result: /** @type {"pass" | "fail"} */ (i < 18 ? "pass" : "fail"), at: "2026-11-20" }));
     let tests = testSummary(cases, runs);
-    expect(tests.QAT).toEqual({ total: 20, pass: 18, fail: 2, blocked: 0, notRun: 0 });
+    expect(tests.QAT).toEqual({ total: 20, pass: 18, fail: 2, blocked: 0, waived: 0, notRun: 0 });
+    // A waived case is set aside: 18 of 19 counted.
+    expect(evaluateGate(stage("QAT"), facts({ tests: testSummary(cases, [...runs, { caseId: "c19", result: "waived", at: "2026-11-22" }]) }))[0].missing).toBe("QAT pass rate is 94%: at least 95% is needed");
     expect(evaluateGate(stage("QAT"), facts({ tests }))[0].missing).toBe("QAT pass rate is 90%: at least 95% is needed");
     // A later run of a failed case counts, not the first.
     tests = testSummary(cases, [...runs, { caseId: "c18", result: "pass", at: "2026-11-21" }]);

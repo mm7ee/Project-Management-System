@@ -80,7 +80,7 @@ const greeting = () => {
  */
 const VIEW_PREFS = "pms:view-prefs";
 // #/projects/<id>/items is its Work items tab; #/projects/<id>/items/<KEY-n> one work item.
-const PROJECT_ROUTE = /^#\/projects\/([a-z0-9-]+)(?:\/(pcn|items|board|backlog|timeline|lifecycle)(?:\/([A-Z]{2,10}-\d{1,7}))?)?\/?$/;
+const PROJECT_ROUTE = /^#\/projects\/([a-z0-9-]+)(?:\/(pcn|items|board|backlog|timeline|lifecycle|docs)(?:\/([A-Z]{2,10}-\d{1,7}|[a-z_]{2,30}(?:-\d{1,4})?))?)?\/?$/;
 /**
  * @returns {string | null}
  */
@@ -654,9 +654,9 @@ export default function Dashboard({ data, reload }) {
               onNewFeature={() => setFeatureEdit({ feature: null, systemId: selected.id })}
               onChanged={reload}
               canEditPcn={can("manage_systems") || selected.pcnBy === me.id}
-              section={projectTab === "lifecycle" ? "lifecycle" : projectTab === "backlog" ? "backlog" : projectTab === "timeline" ? "timeline" : showBoard ? "board" : showItems ? "items" : "overview"}
+              section={projectTab === "docs" ? "docs" : projectTab === "lifecycle" ? "lifecycle" : projectTab === "backlog" ? "backlog" : projectTab === "timeline" ? "timeline" : showBoard ? "board" : showItems ? "items" : "overview"}
               canAssignOthers={can("edit_work_items")}
-              itemKey={showItems ? itemKey : undefined}
+              itemKey={showItems || projectTab === "docs" ? itemKey : undefined}
               canCreateItems={can("create_work_items")}
               readOnly={!!data.viewOnly}
               onSignPcn={(index, decision, remarks) => signPcn(selected.id, index, decision, remarks)}

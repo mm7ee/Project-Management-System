@@ -11,6 +11,8 @@ import { Check, CircleAlert, CornerUpLeft, FastForward, FileUp, History, Lock, P
 import { ApiError, api, uploadDocument } from "../data/api";
 import { ACTOR_LABEL, STAGE_TYPE_LABEL, riskRating, stageOf } from "../data/lifecycle";
 import { formatDate, timeAgo } from "../time";
+import { ChangeRequestForm } from "./DocumentsTab";
+import { kitFor } from "../data/documentKits";
 
 /**
  * @typedef {Object} LifecycleView  GET /api/systems/:id/lifecycle (worker/lifecycle.js lifecycleView)
@@ -36,7 +38,7 @@ import { formatDate, timeAgo } from "../time";
  * @property {any[]} risks
  * @property {any[]} findings
  * @property {any[]} tests
- * @property {Record<string, { total: number; pass: number; fail: number; blocked: number; notRun: number }>} testSummary
+ * @property {Record<string, { total: number; pass: number; fail: number; blocked: number; waived: number; notRun: number }>} testSummary
  * @property {any[]} environments
  * @property {{ signatories: any[]; missing: string[] } | null} pcn
  */
@@ -228,9 +230,23 @@ export default function LifecyclePage({ system, me, users, now, readOnly = false
             {stage.signoff && <Signoffs stage={stage} view={view} me={me} current={isCurrent} disabled={readOnly || busy} call={call} systemId={system.id} />}
             {stage.exit.some((c) => c.kind === "risk_register" || c.kind === "risks_mitigated") && <Risks view={view} users={users} disabled={readOnly || busy || !view.can.edit} call={call} nameOf={nameOf} />}
             {stage.exit.some((c) => c.kind === "security_clear") && <Findings view={view} disabled={readOnly || busy || !view.can.edit} call={call} now={now} />}
-            {(stage.testing || stage.exit.some((c) => c.kind === "test_pass_rate")) && <Tests view={view} suite={stage.testing?.suite ?? stage.exit.find((c) => c.kind === "test_pass_rate")?.suite ?? "QAT"} disabled={readOnly || busy || !view.can.edit} call={call} />}
+            {(stage.testing || stage.exit.some((c) => c.kind === "test_pass_rate")) && <Tests view={view} suite={stage.testing?.suite ?? stage.exit.find((c) => c.kind === "test_pass_rate")?.suite ?? "QAT"} disabled={readOnly || busy || !view.can.edit} call={call} users={users} systemId={system.id} />}
             {stage.exit.some((c) => c.kind === "environments") && <Environments view={view} required={stage.exit.find((c) => c.kind === "environments")?.required ?? []} disabled={readOnly || busy || !view.can.edit} call={call} />}
-            {stage.exit.some((c) => c.kind === "deployment_recorded" || c.kind === "change_approved") && <Deployment view={view} disabled={readOnly || busy || !view.can.edit} call={call} />}
+            {stage.exit.some((c) => c.kind === "deployment_recorded" || c.kind === "change_approved") && <Deployment view={view} disabled={readOnly || busy || !view.can.edit} call={call} systemId={system.id} />}
+            {(stage.type === "closure" || (stage.type === "testing" && stage.testing?.suite === "SMOKE")) && (
+              <div className="lc-box">
+                <h4>Release notes</h4>
+                <p className="small">Write this release's notes from the template: the bug fixes and finished features are filled in from the work items. Each published release goes into the project's changelog.</p>
+                <div className="lc-row">
+                  <a className="btn btn-navy sm" href={`#/projects/${system.id}/docs/release_notes`}>
+                    Write the release notes
+                  </a>
+                  <a className="btn btn-ghost sm" href={`#/projects/${system.id}/docs/changelog`}>
+                    Changelog
+                  </a>
+                </div>
+              </div>
+            )}
           </div>
           <div className="lc-col">
             {isCurrent && !readOnly && <Actions stage={stage} view={view} busy={busy} call={call} error={error} missing={missing} />}
@@ -372,10 +388,15 @@ function Deliverables({ system, stage, view, current, disabled, call, setError }
                   ) : null}
                 </div>
               ))}
+              {current && !disabled && kitFor(d.key) && (
+                <a className="btn btn-navy sm lc-write" href={`#/projects/${system.id}/docs/${/** @type {NonNullable<ReturnType<typeof kitFor>>} */ (kitFor(d.key)).kind}`}>
+                  <FileUp size={14} aria-hidden="true" /> Write the {d.key.toUpperCase()} in PMS (from the template)
+                </a>
+              )}
               {current && !disabled && (
                 <div className="lc-row">
                   <label className="btn btn-ghost sm">
-                    <FileUp size={14} aria-hidden="true" /> Upload {versions.length ? `version ${versions[0].version + 1}` : "it"}
+                    <FileUp size={14} aria-hidden="true" /> …or upload {versions.length ? `version ${versions[0].version + 1}` : "a file"}
                     <input
                       type="file"
                       className="sr-only"
@@ -680,30 +701,43 @@ function Findings({ view, disabled, call, now }) {
   );
 }
 
-/** @param {{ view: LifecycleView; suite: string; disabled: boolean; call: (p: string, m: string, b?: unknown) => Promise<boolean> }} p */
-function Tests({ view, suite, disabled, call }) {
-  const [title, setTitle] = useState("");
+/** @param {{ view: LifecycleView; suite: string; disabled: boolean; call: (p: string, m: string, b?: unknown) => Promise<boolean>; users?: User[]; systemId?: string }} p */
+function Tests({ view, suite, disabled, call, users = [], systemId = "" }) {
+  const blank = { title: "", scenario: "", expected: "", assigneeId: "" };
+  const [d, setD] = useState(blank);
   const cases = view.tests.filter((t) => t.suite === suite);
   const sum = view.testSummary[suite];
+  // The UAT script's columns: scenario, test case, the tester assigned, the expected result.
+  const script = suite === "UAT";
+  const counted = sum ? sum.total - (sum.waived ?? 0) : 0;
   return (
     <div className="lc-box">
       <h4>
-        {suite} tests {sum ? `· ${sum.pass} of ${sum.total} pass (${sum.total ? Math.round((sum.pass / sum.total) * 100) : 0}%)` : ""}
+        {suite} tests {sum ? `· ${sum.pass} of ${counted} pass (${counted ? Math.floor((sum.pass / counted) * 100) : 0}%)${sum.waived ? ` · ${sum.waived} waived` : ""}` : ""}
+        {script && cases.length > 0 && (
+          <a className="btn btn-ghost sm" href={`#/projects/${systemId}/docs/uat`}>
+            Print the UAT script
+          </a>
+        )}
       </h4>
       {cases.length ? (
         <ul className="lc-list">
-          {cases.map((t) => {
+          {cases.map((t, i) => {
             const last = t.runs[t.runs.length - 1];
             return (
               <li key={t.id}>
-                <span className={`lc-pill ${last?.result === "pass" ? "ok" : last?.result === "fail" ? "bad" : last ? "warn" : ""}`}>{last ? last.result : "not run"}</span>
+                <span className={`lc-pill ${last?.result === "pass" ? "ok" : last?.result === "fail" ? "bad" : last?.result === "waived" ? "info" : last ? "warn" : ""}`}>{last ? last.result : "not run"}</span>
                 <span>
+                  {script && <b className="mono">{i + 1}. </b>}
                   {t.title}
+                  {script && (t.scenario || t.assignee_name || t.expected) && (
+                    <small>{[t.scenario && `Scenario: ${t.scenario}`, t.assignee_name && `Tester: ${t.assignee_name}`, t.expected && `Expected: ${t.expected}`].filter(Boolean).join(" · ")}</small>
+                  )}
                   {last?.bug_item_id && <small>A bug was raised for the failure.</small>}
                 </span>
                 {!disabled && (
                   <span className="lc-row">
-                    {["pass", "fail", "blocked"].map((r) => (
+                    {["pass", "fail", "blocked", ...(script ? ["waived"] : [])].map((r) => (
                       <button key={r} className="btn btn-ghost sm" onClick={() => call(`/tests/${t.id}/runs`, "POST", { result: r })}>
                         {r[0].toUpperCase() + r.slice(1)}
                       </button>
@@ -722,10 +756,22 @@ function Tests({ view, suite, disabled, call }) {
           className="lc-form"
           onSubmit={async (e) => {
             e.preventDefault();
-            if (await call("/tests", "POST", { title, suite })) setTitle("");
+            if (await call("/tests", "POST", { ...d, suite, assigneeId: d.assigneeId || null })) setD(blank);
           }}
         >
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`New ${suite} test case`} required maxLength={300} />
+          {script && <input value={d.scenario} onChange={(e) => setD({ ...d, scenario: e.target.value })} placeholder="Scenario (e.g. Payments and Reversals)" maxLength={200} />}
+          <input value={d.title} onChange={(e) => setD({ ...d, title: e.target.value })} placeholder={`New ${suite} test case`} required maxLength={300} />
+          {script && <input value={d.expected} onChange={(e) => setD({ ...d, expected: e.target.value })} placeholder="Expected result" maxLength={2000} />}
+          {script && (
+            <select value={d.assigneeId} onChange={(e) => setD({ ...d, assigneeId: e.target.value })} aria-label="Test user assigned">
+              <option value="">Test user…</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+          )}
           <button className="btn btn-ghost sm">Add test</button>
         </form>
       )}
@@ -793,49 +839,27 @@ function Environments({ view, required, disabled, call }) {
   );
 }
 
-/** @param {{ view: LifecycleView; disabled: boolean; call: (p: string, m: string, b?: unknown) => Promise<boolean> }} p */
-function Deployment({ view, disabled, call }) {
-  const rec = view.records.deployment ?? {};
-  const [d, setD] = useState({ plan: rec.plan ?? "", rollbackPlan: rec.rollbackPlan ?? "", scheduledAt: rec.scheduledAt ?? "", approver: rec.approver ?? "" });
+/**
+ * The Deployment stage: its service desk change request, and the Change Request form (the stage's record).
+ * @param {{ view: LifecycleView; disabled: boolean; call: (p: string, m: string, b?: unknown) => Promise<boolean>; systemId: string }} p
+ */
+function Deployment({ view, disabled, call, systemId }) {
   const change = view.records.change;
+  const { updatedAt: _u, ...rec } = view.records.deployment ?? {};
   return (
     <div className="lc-box">
-      <h4>Deployment</h4>
+      <h4>Change Request form</h4>
       <p className="small">
-        Change request:{" "}
+        Service desk change request:{" "}
         {change?.key ? (
-          <a href={`#/service-desk`}>{change.key}</a>
+          <a href="#/service-desk">{change.key}</a>
         ) : change?.error ? (
           <span className="muted">couldn't be raised ({change.error}). Raise one on the service desk.</span>
         ) : (
           <span className="muted">raised automatically on entering Deployment</span>
         )}
       </p>
-      <form
-        className="lc-form stack"
-        onSubmit={(e) => {
-          e.preventDefault();
-          call("/records/deployment", "PUT", d);
-        }}
-      >
-        <label>
-          Deployment plan
-          <textarea value={d.plan} onChange={(e) => setD({ ...d, plan: e.target.value })} disabled={disabled} maxLength={4000} />
-        </label>
-        <label>
-          Rollback plan
-          <textarea value={d.rollbackPlan} onChange={(e) => setD({ ...d, rollbackPlan: e.target.value })} disabled={disabled} maxLength={4000} />
-        </label>
-        <label>
-          Date and time
-          <input type="datetime-local" value={d.scheduledAt} onChange={(e) => setD({ ...d, scheduledAt: e.target.value })} disabled={disabled} />
-        </label>
-        <label>
-          Approver
-          <input value={d.approver} onChange={(e) => setD({ ...d, approver: e.target.value })} disabled={disabled} maxLength={100} />
-        </label>
-        {!disabled && <button className="btn btn-ghost sm">Save the deployment record</button>}
-      </form>
+      <ChangeRequestForm value={rec} disabled={disabled} systemId={systemId} onSave={(d) => call("/records/deployment", "PUT", d)} />
     </div>
   );
 }

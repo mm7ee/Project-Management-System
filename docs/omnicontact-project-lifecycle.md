@@ -42,6 +42,17 @@ Targets are in **business days** (Monday to Friday, 08:00–17:00 Harare time, p
 - **Tests:** add QAT, UAT and smoke test cases, then record Pass, Fail or Blocked. A failed test raises a bug
   automatically.
 
+## Your documents
+
+Open a project's **Documents** tab. It lists Omnicontact's templates in the order you need them: Concept Note, BRS,
+BSS, UAT script, Change Request form, Release Notes and Changelog.
+
+- **Write them in PMS:** they're prefilled from the project, saved as you type, and printed in the template's layout
+  (**Print / Save as PDF**).
+- **Submit one:** it becomes the stage's document for sign-off.
+- **Generated for you:** the UAT script comes from the UATs stage's test cases, the Change Request form is the
+  Deployment stage's record, and the changelog builds itself from the release notes.
+
 ## Rules worth knowing
 
 - **Signed documents are locked.** A change after sign-off means a new version and a new sign-off round.

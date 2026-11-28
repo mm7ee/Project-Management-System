@@ -349,6 +349,26 @@ another organisation's template, project or sign-off is a `404`.
   `test_run`, `environment_verified`, `stage_record_saved`. Notifications: kinds `stage` and `signoff`.
 - Automation: the trigger **A project moves to another lifecycle stage** (`stage_changed`, optional "stage is").
 
+## Project documents
+
+The organisation's templates written in PMS (migration 0027, `src/projectDocs.js`, kits in
+`src/data/documentKits.js`): `brs`, `bss`, `release_notes`. People on the project write them; anyone who can see the
+project reads them; another organisation's project is a `404`.
+
+- `GET /api/systems/:id/docs` → `{ canEdit, kits: [{ kind, name, short, deliverable, draft, versions }] }`.
+- `GET /api/systems/:id/docs/:kind` → the draft `{ saved, version, data, versions, signoffs }`; without one, a new draft
+  prefilled from the project, the Concept Note and (release notes) the work resolved since the last release, not yet
+  saved. `?version=n` → that submitted version, with the sign-offs on it.
+- `PUT /api/systems/:id/docs/:kind` `{ data }`: save the draft (only the kit's sections, as text, are kept).
+- `POST /api/systems/:id/docs/:kind/submit`: freeze the draft as a version; it is added to the project's documents as
+  that deliverable (`brs`, `bss`, `release_notes`), version n, for the stage's sign-off and locking. `409`
+  `{ code: "doc_incomplete", missing }` until its required parts are filled in. A submitted version is never changed.
+- `GET /api/systems/:id/docs/release_notes/changelog` → `{ entries: [{ version, date, summary, added, changed,
+  deprecated, fixed, security }] }`, newest first.
+- Test cases take `scenario` and `assigneeId` (`PATCH …/lifecycle/tests/:id` changes them), and a run may be `waived`
+  (set aside from the pass rate). The Deployment record (`PUT …/lifecycle/records/deployment`) holds the whole Change
+  Request form.
+
 ## Service desk
 
 - **`GET /api/service-desk/queues?queue=…`** returns open requests, most urgent first, each with its two SLA
