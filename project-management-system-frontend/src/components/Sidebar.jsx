@@ -128,7 +128,7 @@ export default function Sidebar(p) {
 
         {p.canAdd ? (
           <button className="add-btn" onClick={go(p.onAdd)}>
-            <Plus size={17} strokeWidth={2.75} /> Add system
+            <Plus size={17} strokeWidth={2.75} /> Add project
           </button>
         ) : (
           // Without the right to add systems outright, new projects start as a Concept Note.

@@ -137,14 +137,14 @@ export default function AddSystemModal({ workspaces, initialWorkspace = "", user
   if (step === "start") {
     return (
       <div className="backdrop modal-backdrop" onClick={onClose}>
-        <div className="modal modal-wide start-modal" role="dialog" aria-label="Add a system" onClick={(e) => e.stopPropagation()}>
+        <div className="modal modal-wide start-modal" role="dialog" aria-label="Add a project" onClick={(e) => e.stopPropagation()}>
           <button type="button" className="close-btn" onClick={onClose} aria-label="Close">
             <X size={18} />
           </button>
           <button type="button" className="modal-back" onClick={onClose} aria-label="Back to the previous page (nothing is saved)">
             <ArrowLeft size={16} aria-hidden="true" /> Back
           </button>
-          <h2>Add a system</h2>
+          <h2>Add a project</h2>
           <p className="modal-note">How do you want to start?</p>
 
           <button type="button" className="start-option pcn" onClick={() => setStep("pcn")} autoFocus>
@@ -221,7 +221,7 @@ export default function AddSystemModal({ workspaces, initialWorkspace = "", user
       <form
         className="modal modal-wide"
         role="dialog"
-        aria-label="Add a system"
+        aria-label="Add a project"
         onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => {
           e.preventDefault();
@@ -248,7 +248,7 @@ export default function AddSystemModal({ workspaces, initialWorkspace = "", user
         <button type="button" className="modal-back" onClick={onClose} aria-label="Back to the previous page (nothing is saved)">
           <ArrowLeft size={16} aria-hidden="true" /> Back
         </button>
-        <h2>Add a system</h2>
+        <h2>Add a project</h2>
         <div className="start-chosen">
           {template ? (
             <>
@@ -392,7 +392,7 @@ export default function AddSystemModal({ workspaces, initialWorkspace = "", user
             Cancel
           </button>
           <button type="submit" className="btn btn-amber">
-            Add system
+            Add project
           </button>
         </div>
       </form>

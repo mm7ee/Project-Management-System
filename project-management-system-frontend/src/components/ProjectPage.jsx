@@ -819,7 +819,7 @@ function SaveAsTemplate({ system, attempt, onChanged }) {
   if (!open) {
     return (
       <>
-        {done && <p className="form-ok">Saved "{done}". Pick it under Add system → Start from a template.</p>}
+        {done && <p className="form-ok">Saved "{done}". Pick it under Add project → Start from a template.</p>}
         <button
           className="btn btn-ghost block-sm"
           onClick={() => {
