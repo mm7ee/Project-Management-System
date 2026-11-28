@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { reduceMotion } from "../prefs";
 /**
  * Drifting network of points joined by faint lines (the "omnichannel" backdrop on the
@@ -14,6 +14,22 @@ const PALETTES = {
   appDark: { link: "143, 179, 212", linkAlpha: 0.1, reach: "190, 205, 220", reachAlpha: 0.24, dot: "rgba(190, 205, 220, 0.4)", accent: "rgba(230, 235, 241, 0.6)" },
   sidebar: { link: "190, 205, 220", linkAlpha: 0.18, reach: "190, 205, 220", reachAlpha: 0.3, dot: "rgba(210, 220, 230, 0.5)", accent: "rgba(230, 235, 241, 0.7)" },
 };
+/** The theme the page shows now (its data-theme), as a surface. */
+const surfaceNow = () => (typeof document !== "undefined" && ["dark", "futuristic"].includes(document.documentElement.dataset.theme ?? "") ? "dark" : "light");
+/**
+ * The web in the app's faint inks, following the page's theme as it changes (the landing page's toggle, the
+ * device's setting): the platform page and the sign-in page.
+ * @param {{ className?: string }} props
+ */
+export function ThemedParticleField({ className }) {
+  const [surface, setSurface] = useState(surfaceNow);
+  useEffect(() => {
+    const watch = new MutationObserver(() => setSurface(surfaceNow()));
+    watch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => watch.disconnect();
+  }, []);
+  return <ParticleField key={surface} className={className} palette={surface === "dark" ? "appDark" : "appLight"} />;
+}
 /**
  * @param {{ className?: string; palette?: keyof typeof PALETTES }} props
  */

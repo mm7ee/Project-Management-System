@@ -9,7 +9,7 @@ import { passkeysSupported, signWithPasskey } from "../data/passkeys";
 import { BRAND } from "../data/brand";
 import { applyBranding, setTitle } from "../brandTheme";
 import OrgMark, { pageSurface } from "./OrgMark";
-import ParticleField from "./ParticleField";
+import { ThemedParticleField } from "./ParticleField";
 import { ForgotPassword, ResetPassword } from "./PasswordReset";
 import { resetTokenIn } from "../data/passwordReset";
 import LandingPage from "./LandingPage";
@@ -183,7 +183,7 @@ export default function Login({ onSignedIn }) {
   return (
     <div className="landing lp-branded">
       {/* The same faint web as inside the app: neutral, still under reduced motion, paused while the tab is hidden. */}
-      <ParticleField key={pageSurface()} className="lp-web" palette={pageSurface() === "dark" ? "appDark" : "appLight"} />
+      <ThemedParticleField className="lp-web" />
       {floodFrom && motionOk() && (
         <span className="lp-flood" aria-hidden="true" style={/** @type {any} */ ({ "--fx": `${floodFrom.x}px`, "--fy": `${floodFrom.y}px` })} onAnimationEnd={() => setFloodFrom(null)} />
       )}

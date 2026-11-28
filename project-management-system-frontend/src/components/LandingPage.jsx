@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Building2, ChartColumn, ChartGantt, Columns3, Headset, LoaderCircle, Moon, Orbit, Repeat2, Sparkles, Sun } from "lucide-react";
 import { BRAND } from "../data/brand";
 import { cycleTheme, landingTheme } from "../prefs";
+import { ThemedParticleField } from "./ParticleField";
 import "./landing.css";
 
 /**
@@ -43,6 +44,8 @@ export default function LandingPage({ draft, onDraft, onSubmit, checking, error,
   return (
     <div className="landing lp-a" ref={page}>
       <div className="lp-a-bg" aria-hidden="true">
+        {/* The app's faint web, behind the timeline band. */}
+        <ThemedParticleField className="lp-web" />
         <div className="lp-a-band">
           <i style={/** @type {any} */ ({ "--w": "34%", "--s": "0%", "--d": "0s" })} />
           <i style={/** @type {any} */ ({ "--w": "28%", "--s": "18%", "--d": ".4s" })} />
