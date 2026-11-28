@@ -558,7 +558,8 @@ export async function runAssistant(c, input, send, o) {
   /** Sources that came with a table: shown even when the answer doesn't cite them. */
   const withTable = new Set();
   /** @type {string[]} */ const used = [];
-  let evidence = `${input.question}\n${context}\n${c.now}`;
+  // Today's date only: the time of day would make figures such as 17 look found.
+  let evidence = `${input.question}\n${context}\n${c.now.slice(0, 10)}`;
   let calls = 0;
   let answer = "";
   const usage = { input: 0, output: 0 };

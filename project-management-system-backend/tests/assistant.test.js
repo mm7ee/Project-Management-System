@@ -125,9 +125,9 @@ describe("the assistant", () => {
   }, SLOW);
 
   it("a figure nothing looked up contains is flagged", async () => {
-    model((_input, n) => (n === 0 ? call("get_risks", { projectId: "AST" }) : { response: "Payroll has 17 critical risks." }));
+    model((_input, n) => (n === 0 ? call("get_risks", { projectId: "AST" }) : { response: "Payroll has 17 critical risks and 4,321 open issues." }));
     const answer = (await ask("mia", { question: "How risky is payroll?" })).events.find((e) => e.type === "answer");
-    expect(answer.unverified).toEqual(["17"]);
+    expect(answer.unverified).toEqual(["17", "4321"]);
   }, SLOW);
 
   it("another organisation's project can't be read, by id or by key", async () => {
