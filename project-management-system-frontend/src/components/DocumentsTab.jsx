@@ -20,7 +20,7 @@ import OrgMark from "./OrgMark";
  */
 
 /** The org's own letterhead (logo and name) over a document's title. @param {{ title: string; subtitle?: string }} p */
-function Letterhead({ title, subtitle }) {
+export function Letterhead({ title, subtitle }) {
   const b = currentBranding();
   return (
     <header className="doc-letterhead">

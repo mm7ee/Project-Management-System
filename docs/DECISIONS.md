@@ -1386,3 +1386,17 @@ The plan, and the 13 recommendations approved with "continue", are in `docs/admi
   or description (the list's own search, so the access rule applies), chosen with the arrow keys and Enter.
 - **The last tab** is remembered per person and project (`lastTabs` in their preferences): opening the project from a
   list goes back to it; a link to a tab opens that tab.
+
+## Project page, phase 7: the one-pager and the sample data (2026-11-28)
+
+- **The one-pager** (`src/components/OnePager.jsx`): the header's One-pager button (and the ⋯ menu) shows a preview of
+  one A4 page; Print / Save as PDF prints only that page (`body.op-printing`, a named `@page onepager`, so other pages'
+  printing is unchanged). It carries the organisation's letterhead, the project and its people, health with its
+  reasons, the stage and its clock, the KPI tiles, the summary, what needs attention (the first seven), the open risks,
+  the next 14 days and the burn-up with its forecast, and says who generated it, when, and that the figures are the
+  ones they may see. Paper always gets the light palette. No PDF library, as Reports.
+- **Sample data for the project page** (`scripts/demo-cockpit.mjs`): risks across the heat map, security findings (one
+  fixed, one accepted), QAT and UAT test cases with results (a failure raises its bug), on one project, through the real
+  API of a Worker on this machine (npm run dev:api) as a QA account. It refuses any other address, so it can't reach the
+  live site; titles start "Demo:", and anything already there is skipped. The older `scripts/demo-data.mjs` writes SQL
+  from before organisations and workspaces existed, so it isn't used for this.

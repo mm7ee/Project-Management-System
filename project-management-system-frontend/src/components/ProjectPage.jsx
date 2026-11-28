@@ -31,6 +31,7 @@ import { CockpitHeader, KpiTiles, Stepper, useOverview } from "./ProjectCockpit"
 import { AttentionPanel, NextDays, SummaryCard } from "./ProjectOverview";
 import ProjectCharts from "./ProjectCharts";
 import ProjectKeys from "./ProjectKeys";
+import OnePager from "./OnePager";
 import { PAGE_PREF_LIMITS, remember } from "../data/pagePrefs";
 import { ActivityTab, ProjectChat, ProjectFiles, RisksTab, TeamTab, TestingTab } from "./ProjectTabs";
 import DocumentsTab from "./DocumentsTab";
@@ -125,6 +126,8 @@ export default function ProjectPage(p) {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [system.id, section]);
+  const [onePager, setOnePager] = useState(false);
+  useEffect(() => setOnePager(false), [system.id]);
   // Request update from the header: the form lives in the Overview's side column.
   const askForUpdate = () => {
     if (p.section !== "overview") window.location.hash = `#/projects/${system.id}`;
@@ -149,6 +152,7 @@ export default function ProjectPage(p) {
           p.onChanged();
           overview.reload();
         }}
+        onOnePager={overview.data ? () => setOnePager(true) : undefined}
         onBack={p.onBack}
         onUpdate={p.onUpdate}
         onRequest={askForUpdate}
@@ -160,6 +164,7 @@ export default function ProjectPage(p) {
 
       {error && <p className="form-error banner">{error}</p>}
       <ProjectKeys system={system} readOnly={p.readOnly} canCreate={p.canCreateItems} />
+      {onePager && overview.data && <OnePager system={system} data={overview.data} me={me} onClose={() => setOnePager(false)} />}
 
       {p.section === "risks" ? (
         <RisksTab system={system} now={now} />

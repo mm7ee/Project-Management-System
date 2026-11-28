@@ -1521,3 +1521,15 @@ Screenshots (dev data): `docs/design/cockpit/live-p5b-*.png`.
 - **Search this project** with Ctrl/Cmd+K or `/`: its work items, its tabs and its actions.
 - **Back where you left off:** opening a project takes you to the tab you last had open on it.
 - **No migration.** Tests: `tests/shortcuts.test.js` (frontend, 4). `npm test`: 391 passed (189 frontend, 202 backend).
+
+## Project page, phase 7: the one-pager (2026-11-28)
+
+Example: `docs/design/cockpit/project-one-pager.pdf`. The drill-down GIF: `docs/design/cockpit/kpi-drill-down.gif`.
+Screenshots: `docs/design/cockpit/final-*.png`.
+
+- **One-pager:** the header's One-pager button shows one A4 page (the project, its health and stage, the KPI tiles, the
+  summary, what needs attention, the risks, the next 14 days and the burn-up) under the organisation's letterhead; Print
+  / Save as PDF.
+- **Sample data** for the project page on the dev branch: `node scripts/demo-cockpit.mjs` (with `npm run dev:api`
+  running).
+- **No migration.**

@@ -135,7 +135,7 @@ export default function ProjectCharts({ data, system, onSearch }) {
 /** @typedef {{ data: any; keyName: string; open: (pql: string) => (() => void) | undefined }} ChartProps */
 
 /** @param {ChartProps} p */
-function Burnup({ data, keyName, open }) {
+export function Burnup({ data, keyName, open }) {
   const [tip, setTip] = useState(/** @type {Tip} */ (null));
   /** @type {{ week: string; scope: number; done: number; created: number; resolved: number }[]} */ const weeks = data.series.weeks;
   const f = data.kpis.forecast;

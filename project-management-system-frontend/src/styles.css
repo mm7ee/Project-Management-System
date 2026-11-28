@@ -4526,3 +4526,53 @@ kbd { display: inline-block; min-width: 20px; padding: 1px 6px; border-radius: 5
 .ck-details-btn { display: inline-flex; align-items: center; gap: 5px; }
 @media (max-width: 640px) { .ck-keys-hint { display: none; } }
 @media print { .ck-keys-hint, .ck-undo { display: none !important; } }
+
+/* ---------- The project one-pager (OnePager.jsx): one A4 page, the light palette on paper ---------- */
+.op-shell { position: fixed; inset: 0; z-index: 80; overflow: auto; background: rgba(10, 12, 30, 0.55); padding: 0 0 40px; }
+.op-bar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 10px; padding: 10px 18px; background: var(--card); border-bottom: 1px solid var(--border); color: var(--heading); }
+.op-bar .btn { display: inline-flex; align-items: center; gap: 6px; }
+.op-paper { width: 210mm; max-width: calc(100vw - 32px); margin: 24px auto 0; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35); }
+.op-print {
+  page: onepager;
+  --canvas: #ffffff; --card: #ffffff; --border: #dfe3ea; --track: #eceff6; --grid: #eef0f6; --text: #121427; --muted: #464b66;
+  --faint: #676c85; --heading: #1f2933; --focus: #0039a6; --cat-1: #2d63c8; --cat-2: #eba300; --cat-4: #18a0d8; --danger: #c8102e;
+  --danger-ink: #b00d27; --danger-tint: #fdf0f1; --warning-ink: #7a5600; --warning-tint: #fdf3d8; --success-ink: #0b6e55; --success-tint: #e7f5f0;
+  color-scheme: light; box-sizing: border-box; min-height: 297mm; padding: 12mm 13mm; background: #fff; color: #121427; font-size: 10.5px; line-height: 1.4;
+  display: flex; flex-direction: column; gap: 9px; -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.op-print .doc-letterhead { padding: 9px 14px; }
+.op-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.op-title h1 { margin: 0; font-size: 19px; color: #1f2933; }
+.op-title p { margin: 2px 0 0; color: #464b66; }
+.op-health { padding: 4px 10px; border-radius: 999px; font-weight: 800; font-size: 11px; white-space: nowrap; }
+.op-health.red { background: #fdf0f1; color: #b00d27; } .op-health.amber { background: #fdf3d8; color: #7a5600; } .op-health.green { background: #e7f5f0; color: #0b6e55; } .op-health.none { background: #eceff6; color: #464b66; }
+.op-stage { margin: 0; padding: 7px 10px; border-radius: 6px; background: #f4f6fb; color: #121427; }
+.op-tiles { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.op-tiles > div { display: flex; flex-direction: column; gap: 1px; padding: 7px 8px; border: 1px solid #dfe3ea; border-radius: 6px; }
+.op-tiles small { font-size: 8.5px; color: #464b66; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+.op-tiles b { font-size: 15px; color: #1f2933; }
+.op-tiles span { font-size: 8.5px; color: #676c85; }
+.op-cols { display: grid; grid-template-columns: 1.25fr 1fr; gap: 14px; }
+.op-print h2 { margin: 6px 0 4px; font-size: 11.5px; color: #1f2933; border-bottom: 1px solid #dfe3ea; padding-bottom: 2px; }
+.op-print p { margin: 0; }
+.op-summary { font-size: 10.5px; }
+.op-att { margin: 0; padding-left: 16px; display: grid; gap: 3px; }
+.op-att span { color: #676c85; }
+.op-more { list-style: none; color: #676c85; }
+.op-risks { width: 100%; border-collapse: collapse; }
+.op-risks td { padding: 3px 4px; border-bottom: 1px solid #eceff6; vertical-align: top; }
+.op-risks small { display: block; color: #676c85; font-size: 9px; }
+.op-rate { display: inline-block; min-width: 50px; padding: 1px 6px; border-radius: 4px; font-size: 9px; font-weight: 800; text-align: center; }
+.op-rate.critical, .op-rate.high { background: #fdf0f1; color: #b00d27; } .op-rate.medium { background: #fdf3d8; color: #7a5600; } .op-rate.low { background: #e7f5f0; color: #0b6e55; }
+.op-next { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; }
+.op-chart .ck-chart { box-shadow: none; padding: 10px 12px; border-color: #dfe3ea; }
+.op-chart .ck-foot .link-btn, .op-chart [data-hit] { pointer-events: none; }
+.op-chart .ck-foot button { display: none; }
+.op-foot { margin-top: auto; display: flex; justify-content: space-between; gap: 12px; padding-top: 6px; border-top: 1px solid #dfe3ea; color: #676c85; font-size: 8.5px; }
+@page onepager { size: A4 portrait; margin: 0; }
+@media print {
+  body.op-printing > *:not(.op-shell) { display: none !important; }
+  body.op-printing .op-shell { position: static; overflow: visible; background: none; padding: 0; }
+  body.op-printing .op-paper { width: auto; max-width: none; margin: 0; box-shadow: none; }
+  body.op-printing .op-print { min-height: 0; height: 297mm; }
+}

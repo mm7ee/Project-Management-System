@@ -6,7 +6,7 @@
 // the tabs), the lifecycle stepper with its stage drawer, and the KPI tiles. Every tile opens the list or the place
 // behind its number.
 import { useEffect, useRef, useState } from "react";
-import { AlertOctagon, AlertTriangle, ArrowLeft, ArrowRight, ArrowUpRight, BellRing, Check, CheckCircle2, ChevronDown, CornerUpLeft, FileText, Link2, MoreHorizontal, Pencil, Plus, ShieldAlert, SkipForward, X } from "lucide-react";
+import { AlertOctagon, AlertTriangle, ArrowLeft, ArrowRight, ArrowUpRight, BellRing, Check, CheckCircle2, ChevronDown, CornerUpLeft, FileDown, FileText, Link2, MoreHorizontal, Pencil, Plus, ShieldAlert, SkipForward, X } from "lucide-react";
 import { ApiError, api } from "../data/api";
 import { initials } from "../data/systems";
 import { formatDate, timeAgo } from "../time";
@@ -64,7 +64,7 @@ const shortDate = (/** @type {string} */ d) => new Date(`${d.slice(0, 10)}T12:00
  * @param {{
  *   system: System; data: Overview | null; section: string; me: User; readOnly: boolean;
  *   canUpdate: boolean; canRequest: boolean; canCreateItems: boolean; canManage?: boolean; users?: User[];
- *   onBack: () => void; onUpdate: () => void; onRequest: () => void; onAdvanced: () => void; onChanged?: () => void;
+ *   onBack: () => void; onUpdate: () => void; onRequest: () => void; onAdvanced: () => void; onChanged?: () => void; onOnePager?: () => void;
  * }} p
  */
 export function CockpitHeader(p) {
@@ -276,6 +276,11 @@ export function CockpitHeader(p) {
                 <Plus size={15} strokeWidth={3} aria-hidden="true" /> <span className="ck-wide-sm">Add work item</span>
               </a>
             )}
+            {p.onOnePager && (
+              <button className="btn btn-ghost sm ck-icon ck-wide" onClick={p.onOnePager} aria-label="Export the one-pager (PDF)" title="Export the one-pager (PDF)">
+                <FileDown size={16} aria-hidden="true" />
+              </button>
+            )}
             <button className="btn btn-ghost sm ck-icon ck-wide" onClick={copyLink} aria-label="Copy a link to this project" title="Copy a link to this project">
               <Link2 size={16} aria-hidden="true" />
             </button>
@@ -298,6 +303,11 @@ export function CockpitHeader(p) {
                   <button role="menuitem" onClick={() => (setMenu(false), copyLink())}>
                     <Link2 size={15} aria-hidden="true" /> Copy link
                   </button>
+                  {p.onOnePager && (
+                    <button role="menuitem" onClick={() => (setMenu(false), p.onOnePager?.())}>
+                      <FileDown size={15} aria-hidden="true" /> One-pager (PDF)
+                    </button>
+                  )}
                   <a role="menuitem" href={`${base}/docs`} onClick={() => setMenu(false)}>
                     <FileText size={15} aria-hidden="true" /> Documents
                   </a>
