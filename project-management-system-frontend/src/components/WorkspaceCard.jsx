@@ -1,8 +1,8 @@
 /** @import { Tenant } from '../data/api' */
 /** @import { WorkspaceIcon } from '../data/orgAdmin' */
-// The top of the sidebar, under the organisation's logo: "You're in" the open workspace, unmistakably. Its icon on a
-// tile of its own colour with a slow "you are here" beacon, its name large, its key and your role in it, and one dot
-// per workspace you have (the lit one is this one). With more than one, it opens a list to switch, right there.
+// The top of the sidebar, under the organisation's logo: "Workspace" and the open workspace's name, its icon on a
+// tile of its own colour, and one dot per workspace you have (the lit one is this one). With more than one, it opens
+// a list to switch, right there.
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronsUpDown, Eye, Layers } from "lucide-react";
 import { contrast, cleanHex } from "../data/branding";
@@ -54,16 +54,8 @@ export default function WorkspaceCard({ tenant, viewOnly = false }) {
         <Icon size={18} />
       </span>
       <span className="wsc-text">
-        <span className="wsc-eyebrow">
-          <span className="wsc-live" aria-hidden="true" />
-          You're in
-        </span>
+        <span className="wsc-eyebrow">Workspace</span>
         <span className="wsc-name">{ws.name}</span>
-        <span className="wsc-meta">
-          {/* The key only when it says something the name doesn't ("PRJ" for Projects, not "PROJECTS"). */}
-          {ws.key.toLowerCase() !== ws.name.toLowerCase().replace(/\s+/g, "") && <span className="wsc-key">{ws.key}</span>}
-          {role}
-        </span>
       </span>
       {canSwitch && <ChevronsUpDown size={16} className="wsc-chev" aria-hidden="true" />}
     </>
