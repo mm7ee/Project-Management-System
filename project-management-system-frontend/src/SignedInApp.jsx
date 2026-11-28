@@ -488,6 +488,8 @@ export default function Dashboard({ data, reload }) {
         canUsers={can("manage_users")}
         canActivity={can("audit_log")}
         onView={(v) => {
+          // The sidebar's Projects always opens on All projects, whatever tab was last used.
+          if (v === "projects") setFilter("ALL");
           setView(v);
           if (selectedId) closeProject();
         }}
