@@ -493,6 +493,12 @@ export function describe(e, users, systems) {
       return `Started watching ${str(d.key)} "${str(d.summary)}"`;
     case "work_item_unwatched":
       return `Stopped watching ${str(d.key)} "${str(d.summary)}"`;
+    case "stage_commented":
+      return `Commented on ${str(d.stage)}: "${str(d.comment)}"`;
+    case "stage_changed":
+      return `${d.kind === "send_back" || d.kind === "decline" ? "Sent" : "Moved"} ${str(d.name)} from ${str(d.from)} to ${str(d.to)}${d.reason ? `: ${str(d.reason)}` : ""}`;
+    case "signoff_requested":
+      return `Asked for sign-off on ${str(d.stage)}`;
     default:
       return e.action;
   }

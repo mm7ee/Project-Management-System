@@ -325,9 +325,9 @@ function StageClock({ used, target, state }) {
 /**
  * The lifecycle stepper: stages by phase, each with its state as an icon and words, not colour alone. Clicking one
  * opens its drawer. On a phone it folds into "Stage 6 of 16" with a bar, which opens the full list.
- * @param {{ data: Overview; system: System; users: User[]; now: number }} p
+ * @param {{ data: Overview; system: System; users: User[]; now: number; readOnly?: boolean }} p
  */
-export function Stepper({ data, system, users, now }) {
+export function Stepper({ data, system, users, now, readOnly = false }) {
   const life = data.lifecycle;
   const [open, setOpen] = useState(/** @type {string | null} */ (null));
   const [expanded, setExpanded] = useState(false);
@@ -390,7 +390,7 @@ export function Stepper({ data, system, users, now }) {
           <span className="ck-legend-hint">Click a stage for its checklist, sign-offs and history</span>
         </div>
       </section>
-      {open && <StageDrawer system={system} code={open} overview={data} users={users} now={now} onClose={() => setOpen(null)} />}
+      {open && <StageDrawer system={system} code={open} overview={data} users={users} now={now} readOnly={readOnly} onClose={() => setOpen(null)} />}
     </>
   );
 }
@@ -408,9 +408,9 @@ function StageDot({ s }) {
 /**
  * A stage's drawer: what its gate needs (for the current stage, as the server decides it), its sign-offs, the
  * deliverables, and its history. From the lifecycle view, loaded when the drawer opens.
- * @param {{ system: System; code: string; overview: Overview; users: User[]; now: number; onClose: () => void }} p
+ * @param {{ system: System; code: string; overview: Overview; users: User[]; now: number; readOnly: boolean; onClose: () => void }} p
  */
-function StageDrawer({ system, code, overview, now, onClose }) {
+function StageDrawer({ system, code, overview, now, readOnly, onClose }) {
   const [view, setView] = useState(/** @type {any} */ (null));
   const [error, setError] = useState("");
   const panel = useRef(/** @type {HTMLElement | null} */ (null));
@@ -547,6 +547,7 @@ function StageDrawer({ system, code, overview, now, onClose }) {
             ) : (
               <p className="lead-none">Not reached yet.</p>
             )}
+            <StageComments system={system} code={code} now={now} readOnly={readOnly} />
             <div className="ck-drawer-foot">
               <a className="btn btn-ghost sm" href={`#/projects/${system.id}/lifecycle`} onClick={onClose}>
                 Open in Lifecycle
@@ -556,6 +557,82 @@ function StageDrawer({ system, code, overview, now, onClose }) {
         )}
       </aside>
     </div>
+  );
+}
+
+/**
+ * A stage's comments, oldest first, and a box to add one (not on a view-only link).
+ * @param {{ system: System; code: string; now: number; readOnly: boolean }} p
+ */
+function StageComments({ system, code, now, readOnly }) {
+  const [list, setList] = useState(/** @type {any[] | null} */ (null));
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let live = true;
+    api(`/systems/${system.id}/stage-comments?stage=${encodeURIComponent(code)}`)
+      .then((r) => live && setList(/** @type {any} */ (r).comments))
+      .catch(() => live && setList([]));
+    return () => {
+      live = false;
+    };
+  }, [system.id, code]);
+  const send = async () => {
+    if (!text.trim()) return;
+    setBusy(true);
+    setError("");
+    try {
+      const c = await api(`/systems/${system.id}/stage-comments`, "POST", { stage: code, body: text.trim() });
+      setList((l) => [...(l ?? []), c]);
+      setText("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't add the comment");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <h4>Comments</h4>
+      {list === null ? (
+        <p className="lead-none">Loading…</p>
+      ) : list.length ? (
+        <ul className="ck-drows">
+          {list.map((c) => (
+            <li key={c.id} className="ck-comment">
+              <span className="ck-av sm">{initials(c.author_name)}</span>
+              <span className="ck-drow-text">
+                <span>{c.body}</span>
+                <small title={new Date(c.created_at).toLocaleString("en-GB")}>
+                  {c.author_name} · {timeAgo(c.created_at, now)}
+                </small>
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="lead-none">No comments yet.</p>
+      )}
+      {!readOnly && (
+        <form
+          className="ck-comment-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            send();
+          }}
+        >
+          <label className="sr-only" htmlFor={`ck-c-${code}`}>
+            Add a comment on this stage
+          </label>
+          <textarea id={`ck-c-${code}`} rows={2} maxLength={2000} value={text} onChange={(e) => setText(e.target.value)} placeholder="Add a comment on this stage…" />
+          {error && <p className="form-error">{error}</p>}
+          <button className="btn btn-navy sm" type="submit" disabled={busy || !text.trim()}>
+            {busy ? "Adding…" : "Comment"}
+          </button>
+        </form>
+      )}
+    </>
   );
 }
 

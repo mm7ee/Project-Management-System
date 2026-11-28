@@ -169,6 +169,63 @@ describe("the project overview", () => {
     expect(row.reasons).toEqual(o.health.reasons);
   }, SLOW);
 
+  it("the summary: written from what the viewer may see, kept per viewer, the plain one when the AI strays", async () => {
+    const reply = (/** @type {string} */ text) => (api.env.AI.run = async (/** @type {string} */ _m, /** @type {any} */ input) => {
+      api.aiInputs.push(input);
+      return { response: text };
+    });
+    const factsSent = () => String(/** @type {any} */ (api.aiInputs.at(-1)).messages[1].content);
+    // A sentence quoting a number the facts don't have is thrown away.
+    reply("The project is at Dev Work and is off track. It has 99 open blockers waiting on the team. It should finish soon.");
+    let r = await as("mia", `/api/systems/${systemId}/summary`);
+    expect(r.status, JSON.stringify(r.data)).toBe(200);
+    expect(r.data.source).toBe("plain");
+    expect(r.data.text).toContain(`Payroll ${tag}`);
+    expect(r.data.upToDate).toBe(true);
+    // The facts were the Manager's: the restricted item isn't in them.
+    expect(factsSent()).toContain("Overdue work items: 2");
+    expect(factsSent()).not.toContain("Item 15");
+    // Kept: asking again doesn't call the AI.
+    const calls = api.aiInputs.length;
+    expect((await as("mia", `/api/systems/${systemId}/summary`)).data.text).toBe(r.data.text);
+    expect(api.aiInputs.length).toBe(calls);
+    // Regenerate within 30 seconds returns the one just written.
+    expect((await as("mia", `/api/systems/${systemId}/summary`, { method: "POST" })).data.generatedAt).toBe(r.data.generatedAt);
+    // The Administrator's is their own, from their own figures.
+    reply("The project is at Dev Work and is off track. It has 3 overdue work items and an open blocker. It should finish when the work is done.");
+    r = await as("ada", `/api/systems/${systemId}/summary`);
+    expect(factsSent()).toContain("Overdue work items: 3");
+    expect(r.data).toMatchObject({ source: "ai", text: "The project is at Dev Work and is off track. It has 3 overdue work items and an open blocker. It should finish when the work is done." });
+    // A number in words can't be checked: plain again.
+    await db`DELETE FROM project_summaries WHERE system_id = ${systemId}`;
+    reply("The project is at Dev Work and is off track. It has three overdue work items and an open blocker. It should finish when the work is done.");
+    expect((await as("ada", `/api/systems/${systemId}/summary`)).data.source).toBe("plain");
+    const rows = await db`SELECT viewer_key FROM project_summaries WHERE system_id = ${systemId} ORDER BY viewer_key`;
+    expect(rows.map((/** @type {any} */ x) => x.viewer_key)).toEqual([`u:${id("ada")}`]);
+    expect((await as("bob", `/api/systems/${systemId}/summary`)).status).toBe(404);
+  }, SLOW);
+
+  it("stage comments: added by people in the workspace, shown oldest first; another organisation gets a 404", async () => {
+    const add = await as("tom", `/api/systems/${systemId}/stage-comments`, { method: "POST", body: { stage: "BUILD", body: "Waiting for the API keys from the client." } });
+    expect(add.status, JSON.stringify(add.data)).toBe(201);
+    expect((await as("mia", `/api/systems/${systemId}/stage-comments`, { method: "POST", body: { stage: "BUILD", body: "Chasing them today." } })).status).toBe(201);
+    const list = await as("ada", `/api/systems/${systemId}/stage-comments?stage=BUILD`);
+    expect(list.data.comments.map((/** @type {any} */ c) => [c.author_name, c.body])).toEqual([["tom", "Waiting for the API keys from the client."], ["mia", "Chasing them today."]]);
+    expect((await as("ada", `/api/systems/${systemId}/stage-comments?stage=CLOSE`)).data.comments).toEqual([]);
+    expect((await as("tom", `/api/systems/${systemId}/stage-comments`, { method: "POST", body: { stage: "NOPE", body: "x" } })).status).toBe(400);
+    expect((await as("tom", `/api/systems/${systemId}/stage-comments`, { method: "POST", body: { stage: "BUILD", body: "   " } })).status).toBe(400);
+    expect((await as("bob", `/api/systems/${systemId}/stage-comments?stage=BUILD`)).status).toBe(404);
+    expect((await as("bob", `/api/systems/${systemId}/stage-comments`, { method: "POST", body: { stage: "BUILD", body: "Hello" } })).status).toBe(404);
+    // A record: the app can't change one.
+    const changed = await db.begin(async (/** @type {any} */ tx) => {
+      await tx`SET LOCAL ROLE pulse_app`;
+      await tx`SELECT set_config('app.org_id', ${orgs.a.id}, true), set_config('app.workspace_id', ${`${orgs.a.id}-ws`}, true)`;
+      await tx`UPDATE stage_comments SET body = 'changed' WHERE system_id = ${systemId}`;
+      return "updated";
+    }).catch((/** @type {any} */ e) => e.code);
+    expect(changed).toBe("42501");
+  }, SLOW);
+
   it("another organisation's project is a 404; nothing but GET", async () => {
     expect((await as("bob", `/api/systems/${systemId}/overview`)).status).toBe(404);
     expect((await as("ada", `/api/systems/${systemId}/overview`, { method: "POST" })).status).toBe(405);

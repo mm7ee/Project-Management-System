@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { AlertOctagon, ArrowLeft, BellRing, CheckCircle2, Download, ExternalLink, FileText, History, LayoutTemplate, Link2, Plus, RotateCcw, Trash2, Upload, UserMinus, Wrench, X } from "lucide-react";
 import { HEALTH_META, initials } from "../data/systems";
 import { byUrgency, isLate, isOpen } from "../data/features";
-import { MAX_DOCUMENT_BYTES, formatBytes, stalledDays } from "../data/project";
+import { MAX_DOCUMENT_BYTES, formatBytes } from "../data/project";
 import { HandoverSuggestions } from "./Rebalance";
 import { PcnCard, PcnForm } from "./Pcn";
 import { emptyPcn } from "../data/pcn";
@@ -28,6 +28,7 @@ import BacklogView from "./BacklogView";
 import TimelineView from "./TimelineView";
 import LifecyclePage from "./LifecyclePage";
 import { CockpitHeader, KpiTiles, Stepper, useOverview } from "./ProjectCockpit";
+import { AttentionPanel, NextDays, SummaryCard } from "./ProjectOverview";
 import DocumentsTab from "./DocumentsTab";
 import { DateLine, ProgressBar, ScheduleChip, updatedText } from "./SystemCard";
 /**
@@ -79,11 +80,11 @@ export default function ProjectPage(p) {
     };
   }, [system.id, stamp]);
   // The header, the stepper and the KPI tiles (GET /api/systems/:id/overview), refreshed with the project's data.
-  const overview = useOverview(system.id, `${stamp}|${p.requests.length}|${system.progress}|${system.status}`);
+  const overviewStamp = `${stamp}|${p.requests.length}|${system.progress}|${system.status}`;
+  const overview = useOverview(system.id, overviewStamp);
   const lead = users.find((u) => u.id === system.lead);
   const developers = users.filter((u) => u.role === "developer" && u.projectIds?.includes(system.id));
   const nameOf = /** @param {string} [id] */ (id) => users.find((u) => u.id === id)?.name ?? "Someone";
-  const stalled = stalledDays(system, now, p.limits);
   const openBlockers = p.blockers.filter((b) => !b.resolvedAt);
   const resolved = p.blockers.filter((b) => b.resolvedAt);
   const onHold = p.features.filter((f) => f.status === "ON_HOLD");
@@ -155,8 +156,15 @@ export default function ProjectPage(p) {
         <>
           {overview.data ? (
             <>
-              <Stepper data={overview.data} system={system} users={users} now={now} />
+              <Stepper data={overview.data} system={system} users={users} now={now} readOnly={p.readOnly} />
               <KpiTiles data={overview.data} system={system} onSearch={p.onSearch} onBlockers={() => document.getElementById("p-blockers")?.scrollIntoView({ behavior: "smooth", block: "start" })} />
+              <div className="ck-first">
+                <AttentionPanel data={overview.data} system={system} readOnly={p.readOnly} canContribute={p.canContribute} canUpdate={p.canUpdate} onUpdate={p.onUpdate} onSearch={p.onSearch} onChanged={p.onChanged} />
+                <div className="ck-first-side">
+                  <SummaryCard system={system} stamp={overviewStamp} readOnly={p.readOnly} now={now} />
+                  <NextDays data={overview.data} />
+                </div>
+              </div>
             </>
           ) : overview.error ? (
             <p className="form-error banner" role="alert">
@@ -171,42 +179,10 @@ export default function ProjectPage(p) {
               <span />
             </div>
           )}
-          {/* What is holding the project up, before anything else. */}
-          {(openBlockers.length > 0 || stalled !== null || onHold.length > 0) && (
-            <section className="blocker-band" aria-label="Blockers">
-              <AlertOctagon size={22} />
-              <div>
-                <b>{openBlockers.length ? `${openBlockers.length} open blocker${openBlockers.length > 1 ? "s" : ""}` : stalled !== null ? `No progress update for ${stalled} days` : "Work on hold"}</b>
-                <ul>
-                  {openBlockers.map((b) => (
-                    <li key={b.id}>
-                      {b.text}{" "}
-                      <small>
-                        · raised by {nameOf(b.raisedBy)} {timeAgo(b.raisedAt, now)}
-                      </small>
-                    </li>
-                  ))}
-                  {onHold.map((f) => (
-                    <li key={f.id}>
-                      Feature request "{f.title}" is on hold{f.notes ? `: ${f.notes}` : ""}
-                    </li>
-                  ))}
-                  {stalled !== null && openBlockers.length > 0 && <li>No progress update for {stalled} days.</li>}
-                  {stalled !== null && !openBlockers.length && (
-                    <li>
-                      Nobody has said what's in the way.{" "}
-                      {p.canContribute ? (
-                        <button className="link-btn" onClick={() => blockerInput.current?.focus()}>
-                          Record the blocker
-                        </button>
-                      ) : (
-                        "Ask the team for an update below."
-                      )}
-                    </li>
-                  )}
-                </ul>
-              </div>
-            </section>
+          {onHold.length > 0 && (
+            <p className="ck-onhold" role="status">
+              <b>On hold:</b> {onHold.map((f) => `"${f.title}"${f.notes ? ` (${f.notes})` : ""}`).join("; ")}
+            </p>
           )}
 
           <div className="project-grid">

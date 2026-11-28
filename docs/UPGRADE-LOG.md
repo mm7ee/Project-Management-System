@@ -1449,3 +1449,20 @@ Screenshots (dev data): `docs/design/cockpit/live-*.png`.
   overdue work items (each opens Search with its PQL list), blockers, High/Critical risks, and security findings or,
   in testing, the QAT and UAT pass rates. They swipe sideways on a phone.
 - The old header, tabs and lifecycle strip are gone; the rest of the Overview is unchanged until phase 3.
+
+## Project page, phase 3: what needs attention, the summary, stage comments (2026-11-28)
+
+- **What needs attention** takes the place of the blocker band: blockers, sign-offs waiting on someone, the stage over
+  its target, overdue work items, update requests and stale updates, most urgent first, each with one button (Resolve
+  with Undo, Send reminder, Open, Show all in Search, Post update).
+- **Summary:** three plain sentences written by Workers AI from the project's figures only; if it quotes a number the
+  figures don't have, the plain summary is shown instead. Regenerate, and when it was written.
+- **Next 14 days:** work items and epics due, sprints ending, the stage's target and the project's due date.
+- **Comments on a stage**, in the stage drawer.
+- The activity log describes stage moves, sign-off requests and stage comments in words.
+- **Migration `0028_project_page.sql`** (reverse in `migrations/down/`): `project_summaries` (per project and viewer)
+  and `stage_comments` (a record), both with row-level security.
+- **Tests:** `tests/projectSummary.test.js` (frontend, 6: the facts, the plain summary, the number check) and two more in
+  `tests/overview.test.js` (backend: the summary from what the viewer may see, kept per viewer, the plain one when the AI
+  quotes an unknown number or writes one in words, Regenerate's 30 seconds; stage comments, their checks, another
+  organisation's 404, and that the app can't change one).

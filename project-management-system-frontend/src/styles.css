@@ -4294,3 +4294,53 @@ button.wsc-card:active { transform: scale(0.985); }
   .ck-stepper.expanded .ck-step { flex: 0 0 calc(33% - 2px); }
 }
 .ck-tab-select select { width: 100%; min-height: 42px; padding: 0 10px; border-radius: var(--r-md); border: 1px solid var(--input-line); background: var(--input-bg); color: var(--text); font: 600 14px inherit; font-family: inherit; }
+
+/* ---------- The Overview's first row: what needs attention, the summary, the next 14 days (ProjectOverview.jsx) ---------- */
+.ck-first { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; align-items: start; margin-bottom: 16px; }
+.ck-first-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.ck-card-head { display: flex; align-items: center; gap: 8px; }
+.ck-card-head h3 { margin: 0; font-size: 15px; font-weight: 700; color: var(--heading); }
+.ck-card-head small { font-size: 12px; color: var(--faint); }
+.ck-card-head .link-btn { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; }
+.ck-att, .ck-summary, .ck-next { padding: 16px 18px; }
+.ck-att.has { border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); }
+.ck-att .ck-card-head h3 { font-size: 16.5px; }
+.ck-att-list { list-style: none; margin: 10px 0 0; padding: 0; }
+.ck-att-list li { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid var(--border); }
+.ck-att-n { width: 16px; flex: none; text-align: right; font-size: 12px; font-weight: 700; color: var(--faint); }
+.ck-att-kind { min-width: 96px; justify-content: center; flex: none; }
+.ck-chip.info { background: var(--info-tint); color: var(--info-ink); }
+.ck-att-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.ck-att-text b { font-size: 13.5px; color: var(--heading); overflow-wrap: anywhere; }
+.ck-att-text small { font-size: 12px; color: var(--faint); }
+.ck-att-list .btn { flex: none; display: inline-flex; align-items: center; gap: 5px; text-decoration: none; white-space: nowrap; }
+.ck-att-none { display: flex; align-items: center; gap: 8px; margin: 12px 0 2px; color: var(--success-ink); font-size: 13.5px; }
+.ck-att-note { display: flex; gap: 10px; align-items: center; margin: 10px 0 0; padding: 8px 12px; border-radius: var(--r-md); background: var(--success-tint); color: var(--success-ink); font-size: 13px; }
+.ck-att-more { margin-top: 8px; font-size: 13px; }
+.ck-ai { color: var(--cat-6); }
+.ck-sum-text { margin: 10px 0 0; font-size: 13.5px; line-height: 1.6; color: var(--text); }
+.ck-sum-wait { margin: 10px 0 0; color: var(--faint); font-size: 13px; }
+.ck-foot { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 10px 0 0; font-size: 11.5px; color: var(--faint); }
+.ck-next ul { list-style: none; margin: 8px 0 0; padding: 0; }
+.ck-next li { display: flex; gap: 12px; padding: 9px 0; border-top: 1px solid var(--border); font-size: 13px; }
+.ck-next-date { display: flex; flex-direction: column; flex: none; width: 74px; line-height: 1.25; }
+.ck-next-date b { color: var(--heading); }
+.ck-next-date small, .ck-next-text small { font-size: 11.5px; color: var(--faint); }
+.ck-next-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.ck-onhold { margin: 0 0 14px; padding: 10px 14px; border-radius: var(--r-md); background: var(--warning-tint); color: var(--warning-ink); font-size: 13px; }
+.ck-comment { align-items: flex-start !important; }
+.ck-comment-form { display: grid; gap: 8px; margin-top: 10px; }
+.ck-comment-form textarea { width: 100%; box-sizing: border-box; border-radius: var(--r-md); border: 1px solid var(--input-line); background: var(--input-bg); color: var(--text); padding: 9px 11px; font: inherit; font-size: 13px; }
+.ck-comment-form .btn { justify-self: start; }
+.spin { animation: ck-spin 0.9s linear infinite; }
+@keyframes ck-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+@media (max-width: 1100px) { .ck-first { grid-template-columns: minmax(0, 1fr); } .ck-first-side { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) {
+  .ck-first-side { display: flex; }
+  .ck-att-list li { flex-wrap: wrap; gap: 8px 10px; }
+  .ck-att-list .ck-att-text { flex: 1 1 100%; order: 3; padding-left: 26px; }
+  .ck-att-list li .btn { order: 4; margin-left: 26px; }
+}
+/* What the page scrolls to (blockers, the update request form) clears the sticky header. */
+.project-page [id] { scroll-margin-top: 190px; }

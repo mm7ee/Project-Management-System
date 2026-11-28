@@ -59,6 +59,7 @@ import { projectReportsApi } from "./projectReports";
 import { afterSignoff, askLifecycleLines, lifecycleApi, runLifecycleClock, startLifecycle } from "./lifecycle";
 import { projectDocsApi } from "./projectDocs";
 import { overviewApi } from "./overview";
+import { projectPageApi } from "./projectPage";
 import { levelsFor } from "./access";
 /**
  * Requests made with a personal API token, and the token's name, for the activity log.
@@ -1196,7 +1197,7 @@ async function api(req, env, path, ctx) {
     (method === "GET" &&
       (path === "/api/data" ||
         path === "/api/notifications" ||
-        /^\/api\/systems\/[a-z0-9-]+\/(history|overview)$/.test(path) ||
+        /^\/api\/systems\/[a-z0-9-]+\/(history|overview|summary|stage-comments)$/.test(path) ||
         path === "/api/items" ||
         path === "/api/boards" ||
         path === "/api/statuses" ||
@@ -1343,6 +1344,7 @@ async function api(req, env, path, ctx) {
     (await chatApi(itemCtx, path, method)) ??
     (await projectDocsApi(itemCtx, path, method)) ??
     (await overviewApi(itemCtx, path, method)) ??
+    (await projectPageApi(itemCtx, path, method)) ??
     (await lifecycleApi(itemCtx, path, method)) ??
     (await projectReportsApi(itemCtx, path, method));
   if (itemsResponse) return itemsResponse;

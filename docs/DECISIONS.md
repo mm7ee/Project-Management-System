@@ -1300,3 +1300,21 @@ The plan, and the 13 recommendations approved with "continue", are in `docs/admi
 - **View-only links** may open the overview, as they open the project page.
 - **Fixed on the way:** assigning a developer to a project failed with a database error since migration 0014 made
   `users` a view (`GROUP BY u.id` without `u.name`).
+
+## Project page, phase 3: what needs attention, the summary, stage comments (2026-11-28)
+
+- **What needs attention replaces the blocker band** at the top of the Overview, ranked by the server
+  (`src/data/attention.js`). Each entry has its one action: Resolve a blocker (with Undo), Send reminder to the
+  signatories, open the stage or the item, show the rest of the overdue items in Search, Post update. An action the
+  viewer can't take isn't shown; a view-only link gets only the links.
+- **The summary** (`src/data/projectSummary.js`, `src/projectPage.js`): Workers AI writes three sentences from the
+  project's figures only, the way the digests write their openings. The text is checked: every number in it must be in
+  the figures, numbers in words aren't allowed (they can't be checked), at most four sentences, no lists. Anything
+  else is thrown away for the plain summary worked out from the same figures, which says so ("Written from this
+  project's figures").
+- **Kept per viewer** (migration 0028, `project_summaries`): a summary describes what its reader may see, so one written
+  for an Administrator is never shown to anyone else. It's written again when the figures change (a fingerprint of the
+  facts), or on Regenerate, at most every 30 seconds per person.
+- **Stage comments** (`stage_comments`): anyone signed in to the workspace can comment on a stage in its drawer; a
+  comment is a record, never changed. Each one is in the activity log.
+- **Work on hold** (feature requests on hold) shows as a line under the attention panel, as it did in the blocker band.

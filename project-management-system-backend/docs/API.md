@@ -325,6 +325,22 @@ can't see is never counted, charted or listed.
 - `PUT /api/settings/limits` takes `capacityHours` (1 to 80, default 30): the weekly hours per person in the
   workload chart.
 
+### The summary and stage comments
+
+`src/projectPage.js`, migration 0028.
+
+- `GET /api/systems/:id/summary` → `{ text, source: "ai" | "plain", generatedAt, upToDate }`: three plain sentences on where
+  the project stands. Written from the overview as the viewer may see it and kept per viewer; written again when the
+  figures change. Workers AI writes it; text that quotes a number the figures don't have, or writes one in words, is
+  replaced by the plain summary (`src/data/projectSummary.js`). View-only links may read it.
+- `POST /api/systems/:id/summary`: write it again now (Regenerate). Within 30 seconds of the last one, that one is
+  returned. Not on a view-only link.
+- `GET /api/systems/:id/stage-comments?stage=CODE` → `{ comments: [{ id, stage_code, author_id, author_name, body,
+  created_at }] }`, oldest first.
+- `POST /api/systems/:id/stage-comments` `{ stage, body }` (up to 2,000 characters) → `201` the comment. Anyone
+  signed in to the workspace; not a view-only link. A stage the project's lifecycle doesn't have is a `400`. Comments
+  are a record: never changed or deleted (except with the project).
+
 ## Project lifecycle
 
 Each organisation has lifecycle templates (phases, stages and their gates); each project is on one version of one
