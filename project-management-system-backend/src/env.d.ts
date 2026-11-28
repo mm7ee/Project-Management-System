@@ -43,6 +43,8 @@ interface Fetcher {
 interface Ai {
   // A { response } object, or a ReadableStream of server-sent events when called with stream: true.
   run(model: string, input: Record<string, unknown>): Promise<unknown>;
+  // Documents (PDF, Office, HTML…) as Markdown, on Cloudflare (Ask AI reads uploads with it).
+  toMarkdown?(files: { name: string; blob: Blob }[]): Promise<{ name: string; mimeType?: string; format: "markdown" | "error"; data?: string; error?: string; tokens?: number }[]>;
 }
 
 /** Cloudflare Hyperdrive: a pooled, cached connection to the Postgres database. */

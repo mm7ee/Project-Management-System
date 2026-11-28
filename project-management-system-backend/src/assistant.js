@@ -16,6 +16,7 @@ import { lifecycleSnapshot } from "./lifecycle";
 import { loadReport } from "./projectReports";
 import { sprintHealth } from "./sprints";
 import { askServiceDeskLines } from "./servicedesk";
+import { documentText, searchPassages } from "./docIndex";
 import { itemAccess } from "./access";
 import { currentWorkspace } from "./settings";
 import { parseFilters } from "../../project-management-system-frontend/src/data/projectReport";
@@ -324,12 +325,47 @@ export const TOOLS = [
       return { data: { messages: list }, sources: list.slice(0, 6).map((m) => ({ label: `Chat · ${m.where} · ${m.from}`, href: `#/chat/${m.conversation}` })) };
     },
   },
+  {
+    name: "search_documents",
+    description:
+      "Search the text of project documents (uploaded files such as PDFs, Word and Excel, and documents written in PMS such as the BRS, BSS and release notes) by meaning. Returns the closest passages with their document, version and section. Use it for questions about what a document says: requirements, scope, decisions, risks described in documents. Narrow to one project with projectId when the question is about one.",
+    schema: { type: "object", properties: { query: { type: "string", maxLength: 300, description: "What to look for, in words" }, projectId: { type: "string", maxLength: 64, description: "The project's id or key, to search only its documents" } }, required: ["query"] },
+    label: (a) => `Searching documents for "${String(a.query).slice(0, 50)}"`,
+    available: (c) => !c.guest && !!(/** @type {Env | undefined} */ (c.env)?.AI),
+    run: async (c, a) => {
+      const p = a.projectId ? await projectRef(c, a.projectId) : null;
+      const found = await searchPassages(c, /** @type {Ai} */ (/** @type {Env} */ (c.env).AI), String(a.query), { systemId: p?.id, limit: 6 });
+      if (!found.length) return { data: { passages: [], note: "No document text matches. The documents may not have been read yet, or say nothing about this." }, sources: [] };
+      const label = (/** @type {typeof found[number]} */ r) => `${r.name}${r.version ? ` v${r.version}` : ""}${r.section ? ` · ${r.section}` : ""}${r.page ? ` · p. ${r.page}` : ""}`;
+      return {
+        data: { passages: found.map((r) => ({ document: r.name, documentId: r.document_id, version: r.version, project: r.project, section: r.section || null, page: r.page, match: r.score, text: r.text.slice(0, 1000) })) },
+        sources: found.map((r) => ({ label: label(r), href: r.href })),
+      };
+    },
+  },
+  {
+    name: "get_document",
+    description: "The text of one document (by the documentId search_documents returned), or only its sections whose heading contains `section`. Use it when a passage isn't enough, such as listing every requirement in a section.",
+    schema: { type: "object", properties: { documentId: { type: "string", maxLength: 40 }, section: { type: "string", maxLength: 100 } }, required: ["documentId"] },
+    label: () => "Reading a document",
+    available: (c) => !c.guest,
+    run: async (c, a) => {
+      const d = await documentText(c, String(a.documentId), a.section ? String(a.section) : undefined);
+      if (!d) throw new ToolError("No readable document with that id that you can see. Use search_documents first.");
+      const room = TOOL_RESULT_CHARS - 600;
+      return {
+        data: { document: d.name, version: d.version, project: d.project, text: d.text.slice(0, room), truncated: d.text.length > room },
+        sources: [{ label: `${d.name}${d.version ? ` v${d.version}` : ""}${a.section ? ` · ${a.section}` : ""}`, href: d.href }],
+      };
+    },
+  },
 ];
 
 const RULES = (/** @type {{ org: string; workspace: string; me: { name: string; role: string }; today: string; context: string }} */ x) => `You are "${BRAND.assistantName}", the assistant in ${x.org}'s project management system (workspace "${x.workspace}"). You are helping ${x.me.name} (${x.me.role}). Today is ${x.today}.
 ${x.context}
 How you work:
 - Use the tools to find facts. They only return what ${x.me.name} is allowed to see. Look up a project's id with find_projects when you only have its name.
+- For what a document says (requirements, scope, decisions), use search_documents, then get_document for a whole section. Quote briefly and name the document.
 - Never invent names, numbers, dates, keys or ids. Every figure you state must come from a tool result.
 - After a sentence that uses a tool result, cite it with the result's source id in square brackets, like [S2].
 - If the tools don't have the answer, say plainly that you couldn't find it. Don't guess.

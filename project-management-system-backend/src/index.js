@@ -57,6 +57,7 @@ import { adminApi } from "./admin";
 import { chatApi } from "./chat";
 import { projectReportsApi } from "./projectReports";
 import { assistantApi } from "./assistant";
+import { docIndexApi, indexLater } from "./docIndex";
 import { afterSignoff, askLifecycleLines, lifecycleApi, runLifecycleClock, startLifecycle } from "./lifecycle";
 import { projectDocsApi } from "./projectDocs";
 import { overviewApi } from "./overview";
@@ -1348,7 +1349,8 @@ async function api(req, env, path, ctx) {
     (await projectPageApi(itemCtx, path, method)) ??
     (await lifecycleApi(itemCtx, path, method)) ??
     (await projectReportsApi(itemCtx, path, method)) ??
-    (await assistantApi(itemCtx, path, method));
+    (await assistantApi(itemCtx, path, method)) ??
+    (await docIndexApi(itemCtx, path, method));
   if (itemsResponse) return itemsResponse;
   /**
    * After a project changes workspace: it takes the new workspace's workflow, unless some of its work
@@ -2863,6 +2865,8 @@ async function api(req, env, path, ctx) {
       }
       await db.batch(stmts);
       await audit(db, req, me, "document_added", system.id, { name: system.name, document: name, size: bytes.length });
+      // Read for Ask AI after the response (src/docIndex.js).
+      indexLater(itemCtx, id);
     } else {
       const b = await /** @type {Promise<{ name?: string; url?: string; }>} */ (/** @type {unknown} */ (body(req)));
       const url = /** @type {string} */ (text(b.url, "Link", true));

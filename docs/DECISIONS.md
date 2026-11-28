@@ -1424,3 +1424,23 @@ organisations, a release per phase.
 - **The earlier answer stays as the fallback:** if the model fails part-way, the panel asks `/api/ask` (the snapshot)
   and says it did. `/api/ask` and `/api/ask/pql` are unchanged.
 - **Model:** Llama 4 Scout, as before. Choosing per request (the registry and Auto) is phase (e).
+
+## Ask AI, phase (b): documents searchable by meaning (2026-11-28)
+
+- **pgvector on Neon** (migration 0029), as approved: `doc_passages` keeps each passage with its document, project,
+  section and page and a 1,024-dimension embedding (`@cf/baai/bge-m3`), HNSW cosine index. Row-level security as
+  every table; passages go with their document (cascade) and their organisation (the purge deletes every table with
+  `organization_id`). `doc_index` records each document's outcome (indexed, skipped with why, failed with why and
+  the number of tries).
+- **Search follows the download rule**, by joining to documents (and, for an attachment, its work item through
+  `itemAccess`), never by copying rights into the passages: a change to an item's security level applies at once.
+- **Text:** Workers AI `toMarkdown` for PDF and Office files (the files stay on Cloudflare; no parsing library);
+  text files as they are; PMS-written documents from their data (`kitText` in `src/data/passages.js`, the same
+  sections and requirement ids as the printed document). Images aren't read (that would need a vision model).
+- **Passages:** about 800 tokens, split at headings first, then paragraphs, then sentences, with about 100 tokens
+  carried into the next passage; each embedded with its document name and section, so a question naming a document
+  or a section finds it. At most 200 passages a document.
+- **When:** after an upload or a submit, in the background (`ctx.waitUntil`), so adding a document isn't slower.
+  Documents from before, and failures, are read from Settings → Ask AI documents (a few a request; 3 tries).
+- **Tests:** PGlite gets pgvector from `@electric-sql/pglite-pgvector` 0.0.17 (the build for our PGlite 0.5.16), a
+  dev dependency only.

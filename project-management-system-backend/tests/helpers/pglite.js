@@ -4,13 +4,15 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
+import { vector } from "@electric-sql/pglite-pgvector";
 
 const MIGRATIONS = fileURLToPath(new URL("../../database/migrations/", import.meta.url));
 
 /** A fresh database with every migration applied. */
 export async function migratedPglite() {
   // Counts and big numbers as numbers, as the Worker's own client returns them.
-  const pg = await PGlite.create({ parsers: { 20: (/** @type {string} */ x) => Number(x), 1700: (/** @type {string} */ x) => Number(x) } });
+  // pgvector, as on Neon (migration 0029: the passages Ask AI searches).
+  const pg = await PGlite.create({ extensions: { vector }, parsers: { 20: (/** @type {string} */ x) => Number(x), 1700: (/** @type {string} */ x) => Number(x) } });
   await pg.exec("CREATE TABLE schema_migrations (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)");
   for (const f of readdirSync(MIGRATIONS).filter((n) => n.endsWith(".sql")).sort()) {
     await pg.transaction(async (tx) => {

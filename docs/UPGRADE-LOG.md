@@ -1547,3 +1547,16 @@ Plan: `docs/assistant-plan.md`. Mock-ups: `docs/design/assistant-mockups.html`.
 - **It knows the page you're on:** asked from a project, "this project" means that one.
 - **No migration.** API: `POST /api/assistant` (`docs/API.md`). Tests: `tests/assistant.test.js` (frontend, 14;
   backend, 9). `npm test`: 414 passed (203 frontend, 211 backend).
+
+## Ask AI, phase (b): it reads the documents (2026-11-28)
+
+- **Ask AI searches documents by meaning:** uploaded PDFs, Word and Excel files, text files, work-item attachments,
+  and the BRS, BSS and release notes written in PMS. It quotes them and cites the document and section; a citation
+  opens the project's documents.
+- **Only what you may open:** an attachment on a restricted work item is searched only for those who can see the item.
+- **New documents are read as they're added.** For the ones already there: Settings → This workspace → Ask AI
+  documents → Read waiting (Administrators, Managers and Team Leaders). It shows what's searchable, what has no text,
+  and what failed and why.
+- **Migration 0029** (`doc_passages`, `doc_index`, the `vector` extension). API: `docs/API.md`. Tests:
+  `tests/passages.test.js` (frontend, 7), `tests/docIndex.test.js` (backend, 6). `npm test`: 427 passed (210
+  frontend, 217 backend).

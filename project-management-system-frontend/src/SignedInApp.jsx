@@ -52,6 +52,7 @@ import AutomationSettings from "./components/AutomationSettings";
 import ServiceDeskPage from "./components/ServiceDeskPage";
 import ChatPage, { useChatUnread } from "./components/ChatPage";
 import ServiceDeskSettings from "./components/ServiceDeskSettings";
+import AskAiDocuments from "./components/AskAiDocuments";
 import { CustomFieldsSection, IntegrationsSection, NotificationSchemesSection, SecurityLevelsSection } from "./components/AdminSettings";
 import WorkflowsSettings from "./components/WorkflowsSettings";
 import ItemTypesSettings from "./components/ItemTypesSettings";
@@ -746,6 +747,7 @@ export default function Dashboard({ data, reload }) {
                   : []),
                 ...(can("manage_schemes") ? [{ group: WS, key: "fields", label: "Fields", icon: ListPlus, content: <CustomFieldsSection workspaces={data.workspaces} /> }] : []),
                 ...(can("manage_automation") ? [{ group: WS, key: "automation", label: "Automations", icon: Zap, content: <AutomationSettings users={users} systems={systems} workspaces={data.workspaces} now={now} orgAdmin={orgAdmin} /> }] : []),
+                ...(["admin", "manager", "team_lead"].includes(me.role) || can("manage_systems") ? [{ group: WS, key: "ai-documents", label: `${BRAND.assistantName} documents`, icon: Sparkles, content: <AskAiDocuments /> }] : []),
                 ...(can("manage_users") ? [{ group: WS, key: "people", label: "Users", icon: Users, content: <UsersPage section="people" {...usersPageProps} /> }] : []),
                 ...(can("audit_log")
                   ? [

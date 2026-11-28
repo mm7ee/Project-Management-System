@@ -10,6 +10,7 @@
 /** @import { System } from '../../project-management-system-frontend/src/data/systems' */
 import { HttpError, body, json } from "./http";
 import { newToken } from "./auth";
+import { indexLater } from "./docIndex";
 import { KITS, changelog, cleanDoc, docMissing, newDoc } from "../../project-management-system-frontend/src/data/documentKits";
 
 /** @typedef {import("./workitems").ItemContext} ItemContext */
@@ -164,6 +165,7 @@ export async function projectDocsApi(c, path, method) {
         .bind(sys.id, JSON.stringify({ ...(links ? JSON.parse(links.data) : {}), bss: "brs" }), c.me.id, c.now)
         .run();
     }
+    indexLater(c, docId);
     await c.audit("project_document_submitted", sys.id, { name: sys.name, document: kit.name, version: Number(draft.version), deliverableVersion: docVersion });
     return json({ ok: true, version: Number(draft.version), documentId: docId, documentVersion: docVersion });
   }

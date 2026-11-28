@@ -12490,6 +12490,80 @@
           }
         },
         {
+          "name": "Assistant documents: what's searchable",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "const s = pm.response.json();",
+                  "pm.test(\"the counts\", () => { for (const k of [\"indexed\", \"waiting\", \"skipped\", \"failed\", \"passages\"]) pm.expect(s[k]).to.be.a(\"number\"); pm.expect(s.failures).to.be.an(\"array\"); pm.expect(s.available).to.be.a(\"boolean\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assistant/documents",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assistant",
+                "documents"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Assistant documents: read the waiting ones",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// A local Worker without the AI binding answers 503 assistant_off.",
+                  "if (pm.response.code === 503) { pm.test(\"the assistant is off here\", () => pm.expect(pm.response.json().code).to.eql(\"assistant_off\")); return; }",
+                  "pm.test(\"status is 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"what this round did\", () => { const d = pm.response.json().done; pm.expect(d.indexed + d.skipped + d.failed).to.be.at.most(8); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "omni_session={{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/assistant/documents/index",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "assistant",
+                "documents",
+                "index"
+              ]
+            }
+          }
+        },
+        {
           "name": "Overview: the summary",
           "event": [
             {

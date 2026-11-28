@@ -383,6 +383,24 @@ aren't offered `get_report`, `get_workload` or `search_chat`. There are no write
   the tokens. The question isn't kept.
 - **Model:** `@cf/meta/llama-4-scout-17b-16e-instruct`.
 
+### Documents (phase b)
+
+The assistant also has `search_documents` (`query`, optional `projectId`: the closest passages, each with its
+document, version, section, page and a match score) and `get_document` (`documentId`, optional `section`: one
+document's text). Both follow the download rule: the workspace's projects, and an attachment only for those who may
+see its work item. Not for view-only links.
+
+- **What's read** (`src/docIndex.js`): uploaded files (project documents and work-item attachments) as text, Markdown,
+  CSV or JSON as they are; PDF, Word, Excel, OpenDocument, HTML and XML through Workers AI `toMarkdown`; up to 10 MB.
+  The BRS, BSS and release notes written in PMS are read from their own data when submitted. Images, links to other
+  sites and other files are skipped. Text is split at headings, then paragraphs, into passages of about 800 tokens
+  (at most 200 a document) and embedded with `@cf/baai/bge-m3` (1,024 dimensions) into `doc_passages` (pgvector, HNSW).
+- **When:** right after an upload or a submit, in the background. A document deleted deletes its passages.
+- `GET /api/assistant/documents` → `{ indexed, waiting, skipped, failed, passages, failures: [{ name, projectId,
+  note }], available }`. `POST /api/assistant/documents/index` reads up to 8 waiting documents (about 20 seconds) and
+  returns the same with `done: { indexed, skipped, failed }`; call it again while `waiting` > 0. A document that fails
+  is tried 3 times. Administrators, Managers, Team Leaders and those who manage projects; others `403`.
+
 ## Project lifecycle
 
 Each organisation has lifecycle templates (phases, stages and their gates); each project is on one version of one

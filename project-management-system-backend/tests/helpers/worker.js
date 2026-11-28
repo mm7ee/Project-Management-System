@@ -79,11 +79,11 @@ export function workerClient(backend) {
   const ctx = { waitUntil: (/** @type {Promise<unknown>} */ p) => pending.push(p), passThroughOnException() {} };
   /**
    * @param {string} path
-   * @param {{ method?: string; body?: unknown; cookie?: string; headers?: Record<string, string> }} [o]
+   * @param {{ method?: string; body?: unknown; form?: FormData; cookie?: string; headers?: Record<string, string> }} [o]  form: a multipart upload
    */
   async function call(path, o = {}) {
-    const headers = { "content-type": "application/json", ...(o.cookie ? { cookie: o.cookie } : {}), ...(o.headers ?? {}) };
-    const res = await worker.fetch(new Request(`http://localhost${path}`, { method: o.method ?? "GET", headers, body: o.body === undefined ? undefined : JSON.stringify(o.body) }), env, /** @type {any} */ (ctx));
+    const headers = { ...(o.form ? {} : { "content-type": "application/json" }), ...(o.cookie ? { cookie: o.cookie } : {}), ...(o.headers ?? {}) };
+    const res = await worker.fetch(new Request(`http://localhost${path}`, { method: o.method ?? "GET", headers, body: o.form ?? (o.body === undefined ? undefined : JSON.stringify(o.body)) }), env, /** @type {any} */ (ctx));
     // Background work (notifications, automation, audit) finishes before the next step looks at the database.
     const now = pending;
     pending = [];

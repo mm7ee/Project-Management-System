@@ -12,6 +12,7 @@
 // they reported, everywhere (lists, item pages, links, Ask AI, notifications), as with feature
 // requests. A view-only link reads items and comments but never attachments, and changes nothing.
 import { newToken } from "./auth";
+import { indexLater } from "./docIndex";
 import { HttpError, body, json } from "./http";
 import { canSeeItem, itemAccess, levelsFor } from "./access";
 import { notifyItem } from "./schemes";
@@ -1490,6 +1491,7 @@ export async function itemsApi(c, path, method) {
     await db.batch(stmts);
     await c.audit("attachment_added", r.system_id, { name: r.project_name, key: keyOf(r), summary: r.summary, document: name, size: bytes.length });
     await notifyWatchers(c, r, `Attached ${name}`);
+    indexLater(c, id);
     return json({ id }, 201);
   }
   m = path.match(new RegExp(`^/api/items/${KEY}/attachments/([a-z0-9-]{4,40})$`));

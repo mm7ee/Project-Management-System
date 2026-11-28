@@ -4595,3 +4595,15 @@ kbd { display: inline-block; min-width: 20px; padding: 1px 6px; border-radius: 5
   body.op-printing .op-paper { width: auto; max-width: none; margin: 0; box-shadow: none; }
   body.op-printing .op-print { min-height: 0; height: 297mm; }
 }
+/* Settings → Ask AI documents. */
+.aidoc-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.aidoc-tile { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; }
+.aidoc-tile b { font-size: 22px; color: var(--heading); line-height: 1.1; }
+.aidoc-tile span { font-size: 13px; font-weight: 600; color: var(--text); }
+.aidoc-tile small { font-size: 12px; color: var(--muted); }
+.aidoc-tile.bad { border-color: var(--red); background: var(--tint-red); }
+.aidoc-tile.bad b { color: var(--red-ink); }
+.aidoc-h { margin: 18px 0 6px; font-size: 14px; }
+.aidoc-failures { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; }
+.aidoc-failures .muted { margin-left: 6px; }
+@media (max-width: 640px) { .aidoc-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
