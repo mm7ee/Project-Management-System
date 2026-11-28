@@ -1318,3 +1318,19 @@ The plan, and the 13 recommendations approved with "continue", are in `docs/admi
 - **Stage comments** (`stage_comments`): anyone signed in to the workspace can comment on a stage in its drawer; a
   comment is a record, never changed. Each one is in the activity log.
 - **Work on hold** (feature requests on hold) shows as a line under the attention panel, as it did in the blocker band.
+
+## Project page, phase 4: the charts (2026-11-28)
+
+- **Drawn in SVG, no chart library** (`src/components/ProjectCharts.jsx`), in the theme's chart colours (`--cat-*`), with
+  status colours only for meaning (over target, over capacity) and always with words.
+- **Five charts:** burn-up with the forecast cone (the Monte Carlo 50% and 85% dates, today and the due date), created
+  vs resolved (8 weeks), cumulative flow by status category (12 weeks), time in each stage against its target, and this
+  week's workload against capacity.
+- **Every chart** has a title, a one-line insight worked out from its figures (`src/data/chartInsights.js`), exact values
+  on hover and on keyboard focus, a data table to swap in for it, and an empty state.
+- **Traceable:** clicking a week, a bar, a band or a person (or Enter on it) opens Search with the PQL behind it: the
+  items created or resolved that week, the items now in that status category, someone's open items here. A test checks
+  each list gives the chart's number. Time in a stage opens the Lifecycle tab.
+- **Layout:** three columns (burn-up two wide beside time in stage; created vs resolved beside a two-wide cumulative
+  flow; workload across), two on a tablet, one on a phone, where the wide drawings scroll sideways so their labels
+  stay readable.

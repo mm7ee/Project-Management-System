@@ -71,7 +71,7 @@ export async function projectOverview(c, systemId) {
   const [workspace, limitsRow, users, team, countRow, blockers, requests, risks, findings, weekly, before, cfd, daily, overdue, upcomingItems, sprints, snap] = await Promise.all([
     currentWorkspace(db),
     /** @type {Promise<{ value: string } | null>} */ (settingRow(db, "workload_limits")),
-    all("SELECT id, name, role FROM users", []),
+    all("SELECT id, name, role, username FROM users", []),
     all("SELECT user_id FROM assignments WHERE system_id = ?", [systemId]),
     all(counts.sql, counts.args),
     all("SELECT id, text, raised_by, raised_at, resolved_at FROM blockers WHERE system_id = ? AND (resolved_at IS NULL OR resolved_at >= ?)", [systemId, sparkFrom]),
@@ -125,7 +125,7 @@ export async function projectOverview(c, systemId) {
   ]);
 
   /** @type {Limits} */ const limits = limitsRow ? { ...DEFAULT_LIMITS, ...JSON.parse(limitsRow.value) } : DEFAULT_LIMITS;
-  const people = new Map(/** @type {{ id: string; name: string; role: string }[]} */ (users).map((u) => [u.id, u]));
+  const people = new Map(/** @type {{ id: string; name: string; role: string; username: string }[]} */ (users).map((u) => [u.id, u]));
   const nameOf = (/** @type {string | null | undefined} */ id) => (id && people.get(id)?.name) || "Someone";
   const cnt = /** @type {{ open?: unknown; overdue?: unknown; done?: unknown }} */ (countRow[0] ?? {});
   const items = { open: num(cnt.open), overdue: num(cnt.overdue), done: num(cnt.done) };
@@ -255,7 +255,7 @@ export async function projectOverview(c, systemId) {
     people: teamIds.map((id) => {
       const l = logged.find((x) => x.user_id === id);
       const p = planned.find((x) => x.assignee === id);
-      return { id, name: nameOf(id), lead: id === sys.lead, loggedHours: hours(l?.minutes), plannedHours: hours(p?.minutes), openItems: num(p?.open), openItemsHere: num(p?.here) };
+      return { id, name: nameOf(id), username: people.get(id)?.username ?? null, lead: id === sys.lead, loggedHours: hours(l?.minutes), plannedHours: hours(p?.minutes), openItems: num(p?.open), openItemsHere: num(p?.here) };
     }),
   };
 

@@ -29,6 +29,7 @@ import TimelineView from "./TimelineView";
 import LifecyclePage from "./LifecyclePage";
 import { CockpitHeader, KpiTiles, Stepper, useOverview } from "./ProjectCockpit";
 import { AttentionPanel, NextDays, SummaryCard } from "./ProjectOverview";
+import ProjectCharts from "./ProjectCharts";
 import DocumentsTab from "./DocumentsTab";
 import { DateLine, ProgressBar, ScheduleChip, updatedText } from "./SystemCard";
 /**
@@ -165,6 +166,7 @@ export default function ProjectPage(p) {
                   <NextDays data={overview.data} />
                 </div>
               </div>
+              <ProjectCharts data={overview.data} system={system} onSearch={p.onSearch} />
             </>
           ) : overview.error ? (
             <p className="form-error banner" role="alert">

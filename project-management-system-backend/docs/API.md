@@ -318,7 +318,7 @@ can't see is never counted, charted or listed.
 - `upcoming`: the next 14 days (work items and epics due, sprints ending, the stage's target, the project's due date).
 - `series`: `weeks` (12 weeks: created, resolved, scope, done), `cumulative` (status category at the end of each
   week), `days` (30 days: open, overdue, blockers, High/Critical risks), `timeInStage` (business days against each
-  target), `workload` (`capacityHours`, and per team member the hours logged this week and the remaining estimates
+  target), `workload` (`capacityHours`, and per team member (with their `username`, for the PQL list) the hours logged this week and the remaining estimates
   due by Sunday).
 - `pql`: the work-item lists behind the figures (`open`, `overdue`, `done`, `all`); `POST /api/search` with one
   gives the same count as its tile.

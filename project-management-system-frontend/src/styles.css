@@ -4344,3 +4344,62 @@ button.wsc-card:active { transform: scale(0.985); }
 }
 /* What the page scrolls to (blockers, the update request form) clears the sticky header. */
 .project-page [id] { scroll-margin-top: 190px; }
+
+/* ---------- The Overview's charts (ProjectCharts.jsx): SVG in the theme's chart colours ---------- */
+.ck-charts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; align-items: start; }
+.ck-chart { padding: 16px 18px; min-width: 0; }
+.ck-chart.wide { grid-column: span 2; }
+.ck-chart.full { grid-column: 1 / -1; }
+.ck-chart-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.ck-chart-head h3 { margin: 0; font-size: 15px; font-weight: 700; color: var(--heading); }
+.ck-insight { margin: 4px 0 0; font-size: 13px; color: var(--muted); max-width: 60ch; }
+.ck-legend-row { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); }
+.ck-key-item { display: inline-flex; align-items: center; gap: 6px; }
+.ck-key-item i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+.ck-key-item i.line { height: 3px; width: 16px; border-radius: 2px; }
+.ck-key-item i.c1 { background: var(--cat-1); } .ck-key-item i.c2 { background: var(--cat-2); } .ck-key-item i.c4 { background: color-mix(in srgb, var(--cat-4) 55%, var(--card)); }
+.ck-key-item i.bad { background: var(--danger); } .ck-key-item i.cone { background: color-mix(in srgb, var(--cat-1) 24%, transparent); }
+.ck-key-item i.tick { width: 3px; height: 14px; border-radius: 1px; background: var(--heading); }
+.ck-plot { position: relative; margin-top: 10px; }
+.ck-svg { display: block; width: 100%; height: auto; overflow: visible; }
+.ck-grid { stroke: var(--grid); stroke-width: 1; }
+.ck-axis { font-size: 10.5px; fill: var(--faint); font-family: inherit; }
+.ck-axis.label { font-size: 11.5px; fill: var(--muted); }
+.ck-axis.strong { fill: var(--heading); font-weight: 700; }
+.ck-axis.bad { fill: var(--danger-ink); font-weight: 700; }
+.ck-line { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.ck-line.c1 { stroke: var(--cat-1); } .ck-line.c2 { stroke: var(--cat-2); }
+.ck-cone { fill: color-mix(in srgb, var(--cat-1) 22%, transparent); }
+.ck-median { stroke: var(--cat-1); stroke-width: 2; stroke-dasharray: 5 4; }
+.ck-scope-ahead { stroke: var(--cat-2); stroke-width: 2; stroke-dasharray: 3 4; }
+.ck-today { stroke: var(--muted); stroke-width: 1.5; }
+.ck-target { stroke: var(--danger); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.ck-mark.c1 { fill: var(--cat-1); stroke: var(--card); stroke-width: 2; }
+.ck-mark.hollow { fill: var(--card); stroke: var(--cat-1); stroke-width: 2; }
+.ck-bar.c1 { fill: var(--cat-1); } .ck-bar.c2 { fill: var(--cat-2); } .ck-bar.c4 { fill: color-mix(in srgb, var(--cat-4) 55%, var(--card)); } .ck-bar.bad { fill: var(--danger); }
+.ck-band.c1 { fill: var(--cat-1); } .ck-band.c2 { fill: var(--cat-2); } .ck-band.c4 { fill: color-mix(in srgb, var(--cat-4) 45%, var(--card)); }
+.ck-track { fill: var(--track); }
+.ck-tick { stroke: var(--heading); stroke-width: 2; }
+.ck-capacity { stroke: var(--heading); stroke-width: 2; stroke-dasharray: 4 3; }
+[data-hit] { outline: none; }
+rect[data-hit]:not(.ck-bar) { fill: transparent; }
+[data-hit="open"] { cursor: pointer; }
+rect[data-hit]:not(.ck-bar):hover, rect[data-hit]:not(.ck-bar):focus-visible { fill: color-mix(in srgb, var(--focus) 10%, transparent); }
+.ck-bar[data-hit]:hover, .ck-bar[data-hit]:focus-visible, g[data-hit]:hover .ck-bar, g[data-hit]:focus-visible .ck-bar, .ck-band[data-hit]:hover, .ck-band[data-hit]:focus-visible { filter: brightness(1.12); stroke: var(--focus); stroke-width: 2; }
+.ck-tip { position: absolute; transform: translate(-50%, 0); z-index: 5; display: flex; flex-direction: column; gap: 1px; padding: 8px 11px; background: var(--card); border: 1px solid var(--border); border-radius: var(--r-md); box-shadow: var(--e-3); font-size: 12px; color: var(--text); white-space: nowrap; pointer-events: none; }
+.ck-tip b { color: var(--heading); }
+.ck-tip span:last-child { color: var(--cyan-ink, var(--focus)); }
+.ck-chart-empty { margin: 18px 0 8px; color: var(--faint); font-size: 13px; }
+.ck-table-wrap { margin-top: 10px; max-height: 260px; overflow: auto; border: 1px solid var(--border); border-radius: var(--r-md); }
+.ck-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.ck-table th, .ck-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+.ck-table th[scope="row"], .ck-table thead th:first-child { text-align: left; }
+.ck-table thead th { position: sticky; top: 0; background: var(--card); color: var(--muted); font-weight: 700; }
+@media (max-width: 1100px) { .ck-charts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) {
+  .ck-charts { grid-template-columns: minmax(0, 1fr); }
+  .ck-chart.wide, .ck-chart.full { grid-column: auto; }
+  /* The wide drawings keep their proportions in a scrolling box on a phone, so their labels stay readable. */
+  .ck-chart.wide .ck-plot, .ck-chart.full .ck-plot { overflow-x: auto; }
+  .ck-chart.wide .ck-svg, .ck-chart.full .ck-svg { width: 560px; max-width: none; }
+}

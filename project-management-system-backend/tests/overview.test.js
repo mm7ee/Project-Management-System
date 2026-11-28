@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { hashPassword } from "../src/auth.js";
 import { purgeDueOrganizations } from "../src/platform.js";
 import { testBackend, testDatabase, workerClient } from "./helpers/worker.js";
+import { categoryPql, personPql, weekPql } from "../../project-management-system-frontend/src/data/chartInsights.js";
 
 const url = testDatabase();
 const tag = Date.now().toString(36);
@@ -155,6 +156,21 @@ describe("the project overview", () => {
     expect(o.series.days.at(-1)).toMatchObject({ open: 3, overdue: 2, blockers: 1 });
     expect(o.series.workload.people.map((/** @type {any} */ p) => p.id)).toEqual([id("tom")]);
     expect(o.series.workload.capacityHours).toBe(30);
+  }, SLOW);
+
+  it("every chart part opens a list with the same count", async () => {
+    const o = await overview("mia");
+    const count = async (/** @type {string} */ pql) => {
+      const r = await as("mia", "/api/search", { method: "POST", body: { pql } });
+      expect(r.status, JSON.stringify(r.data) + pql).toBe(200);
+      return r.data.total;
+    };
+    const busy = o.series.weeks.filter((/** @type {any} */ w) => w.resolved);
+    expect(busy.length).toBeGreaterThan(0);
+    for (const w of busy) expect(await count(weekPql("OVW", "resolved", w.week)), w.week).toBe(w.resolved);
+    expect(await count(categoryPql("OVW", "done"))).toBe(o.kpis.doneItems.value);
+    expect(await count(categoryPql("OVW", "todo")) + (await count(categoryPql("OVW", "inProgress")))).toBe(o.kpis.openItems.value);
+    expect(await count(personPql("OVW", id("tom")))).toBe(o.series.workload.people[0].openItemsHere);
   }, SLOW);
 
   it("a stage over its target counts against health here and in the report alike", async () => {

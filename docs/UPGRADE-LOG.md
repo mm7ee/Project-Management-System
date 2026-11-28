@@ -1466,3 +1466,17 @@ Screenshots (dev data): `docs/design/cockpit/live-*.png`.
   `tests/overview.test.js` (backend: the summary from what the viewer may see, kept per viewer, the plain one when the AI
   quotes an unknown number or writes one in words, Regenerate's 30 seconds; stage comments, their checks, another
   organisation's 404, and that the app can't change one).
+
+## Project page, phase 4: the charts (2026-11-28)
+
+Screenshots (dev data): `docs/design/cockpit/live-p4-*.png`.
+
+- **Five charts on the Overview:** the burn-up with its forecast cone (50% and 85% dates, today, the due date), created
+  vs resolved, cumulative flow, time in each stage against its target, and this week's workload against the weekly
+  capacity.
+- Each says what it shows in one line ("18 resolved and 1 created in the last 8 weeks: the open list is shrinking"),
+  shows exact values on hover or focus, has a **Data table**, and **opens the work items behind what you click** in
+  Search.
+- **No migration.** The overview adds each team member's username (for their list).
+- **Tests:** `tests/chartInsights.test.js` (frontend, 6) and one more in `tests/overview.test.js` (backend: each chart
+  part's list has the chart's count). `npm test`: 375 passed (175 frontend, 200 backend).
