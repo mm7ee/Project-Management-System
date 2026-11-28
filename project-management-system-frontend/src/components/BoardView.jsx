@@ -180,7 +180,7 @@ export default function BoardView({ scope, users, me, now, readOnly, canAssignOt
       )}
       {data.unmapped.length > 0 && (
         <p className="board-unmapped">
-          Not on this board: {unmappedNames.join(", ")}. {data.canConfigure ? "Add them to a column so their items show." : "Ask someone who edits systems to add them to a column."}
+          Not on this board: {unmappedNames.join(", ")}. {data.canConfigure ? "Add them to a column so their items show." : "Ask someone who edits projects to add them to a column."}
         </p>
       )}
       {data.truncated && <p className="board-unmapped">Showing the first 400 cards. Use the filters to narrow it down.</p>}

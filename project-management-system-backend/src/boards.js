@@ -48,7 +48,7 @@ async function ensureBoard(c, scope) {
   /** @type {{ name: string; statuses: string[] }[]} */ let columns;
   if (scope.systemId) {
     const sys = await /** @type {Promise<{ name: string; wf: string; } | null>} */ (/** @type {unknown} */ (db.prepare(`SELECT (s.data::json ->> 'name') AS name, ${EFFECTIVE_WORKFLOW} AS wf FROM systems s WHERE s.id = ?`).bind(scope.systemId).first()));
-    if (!sys) throw new HttpError(404, "System not found");
+    if (!sys) throw new HttpError(404, "Project not found");
     const [wf] = await loadWorkflows(db, [sys.wf]);
     const names = new Map((await statusCatalogue(db)).map((s) => [s.id, s.name]));
     name = `${sys.name} board`;
@@ -131,7 +131,7 @@ export async function boardsApi(c, path, method) {
     const systemId = q.get("system");
     const workspace = q.get("workspace");
     if (!systemId && !workspace) throw new HttpError(400, "Say which project or workspace");
-    if (systemId && !(await db.prepare("SELECT 1 FROM systems WHERE id = ?").bind(systemId).first())) throw new HttpError(404, "System not found");
+    if (systemId && !(await db.prepare("SELECT 1 FROM systems WHERE id = ?").bind(systemId).first())) throw new HttpError(404, "Project not found");
     if (c.guest && !(await db.prepare("SELECT 1 FROM boards WHERE system_id = ? OR workspace = ?").bind(systemId, workspace).first())) {
       // A view-only link changes nothing, not even by opening a board for the first time.
       return json({ board: null, cards: [], columns: [] });

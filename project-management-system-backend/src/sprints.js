@@ -85,7 +85,7 @@ async function getSprint(c, id) {
  */
 async function projectOf(c, id) {
   const row = await /** @type {Promise<{ id: string; key: string; agile_mode: string; name: string; } | null>} */ (/** @type {unknown} */ (c.db.prepare("SELECT id, key, agile_mode, (data::json ->> 'name') AS name FROM systems WHERE id = ?").bind(id).first()));
-  if (!row) throw new HttpError(404, "System not found");
+  if (!row) throw new HttpError(404, "Project not found");
   return row;
 }
 const mayPlan =
@@ -526,7 +526,7 @@ export async function sprintsApi(c, path, method) {
           .all()
       )
     );
-    if (system && !projects.results.length) throw new HttpError(404, "System not found");
+    if (system && !projects.results.length) throw new HttpError(404, "Project not found");
     if (!system && !workspace) throw new HttpError(400, "Say which project or workspace");
     const ids = projects.results.map((p) => p.id);
     const items = ids.length

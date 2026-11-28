@@ -133,7 +133,7 @@ export default function ProjectPage(p) {
             </button>
           )}
           <a className={`btn btn-navy ${canOpen && system.url ? "" : "disabled"}`} href={canOpen && system.url ? system.url : undefined} target="_blank" rel="noreferrer" aria-disabled={!canOpen}>
-            {canOpen ? "Open system" : "Not live yet"} {canOpen && <ArrowUpRight size={16} />}
+            {canOpen ? "Open the app" : "Not live yet"} {canOpen && <ArrowUpRight size={16} />}
           </a>
         </div>
       </header>
@@ -295,7 +295,7 @@ export default function ProjectPage(p) {
                         Under maintenance
                         {system.maintenanceSince ? ` since ${formatDate(system.maintenanceSince)}` : ""}
                       </b>
-                      <p>{system.maintenanceNote || "Updates or improvements are in progress. The system may be briefly unavailable."}</p>
+                      <p>{system.maintenanceNote || "Updates or improvements are in progress. The app may be briefly unavailable."}</p>
                     </div>
                   </section>
                 )}
@@ -581,7 +581,7 @@ export default function ProjectPage(p) {
                   </div>
                 ) : (
                   <button className="delete-link" onClick={() => setConfirming(true)}>
-                    <Trash2 size={15} /> Delete system
+                    <Trash2 size={15} /> Delete project
                   </button>
                 ))}
             </aside>

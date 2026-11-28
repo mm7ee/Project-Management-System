@@ -212,7 +212,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
               <Section icon={<ShieldCheck size={18} />} title="Your access" sub={`What the ${ROLE_LABEL[me.role]} role can do. An administrator manages roles.`}>
                 <ul className="perm-list plain">
                   <li className="perm-item">
-                    <Check size={14} /> View all systems and their progress
+                    <Check size={14} /> View all projects and their progress
                   </li>
                   {PERMISSIONS.filter((p) => permissions.includes(p.key)).map((p) => (
                     <li key={p.key} className="perm-item">
@@ -348,7 +348,7 @@ export default function SettingsPage({ me, prefs, permissions, projects, mfaRequ
                     </label>
                   </div>
                   <PasswordRules password={next} confirm={confirm} who={me} showReuse />
-                  <p className="set-note">Use a password you don't use for any other system.</p>
+                  <p className="set-note">Use a password you don't use anywhere else.</p>
                   {pwMsg && <p className={pwMsg.ok ? "form-ok" : "form-error"}>{pwMsg.text}</p>}
                   <button type="submit" className="btn btn-navy" disabled={!!passwordProblem(next, me) || next !== confirm}>
                     Change password

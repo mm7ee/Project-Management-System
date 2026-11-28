@@ -57,8 +57,8 @@ export function initials(name) {
     .toUpperCase();
 }
 /** @type {Record<Health, string>} */ export const HEALTH_META = {
-  Stable: "A reliable, fully functional system requiring little to no ongoing maintenance.",
-  Maintenance: "Completed/Live system undergoing minor updates, improvements, or version upgrades.",
+  Stable: "Delivered, reliable and fully working: little to no ongoing maintenance.",
+  Maintenance: "Completed or live, with minor updates, improvements or version upgrades under way.",
 };
 /** @typedef {"LIVE" | "COMPLETED" | "WIP" | "TESTING" | "TO_DEPLOY" | "UPCOMING" | "IDEA"} Status */
 /** @typedef {"Stable" | "Maintenance"} Health */

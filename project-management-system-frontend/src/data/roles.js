@@ -16,7 +16,7 @@ export const READ_ONLY_ROLE = /** @type {const} */ ("reader");
 /** @type {{ key: Permission; label: string }[]} */ export const PERMISSIONS = [
   { key: "edit_assigned", label: "Update their assigned projects" },
   { key: "edit_any", label: "Update any project" },
-  { key: "manage_systems", label: "Add, delete and edit systems" },
+  { key: "manage_systems", label: "Add, delete and edit projects" },
   { key: "assign_developers", label: "Add and remove developers on projects" },
   { key: "request_updates", label: "Request updates" },
   { key: "propose_projects", label: "Propose new projects with a Concept Note" },

@@ -85,8 +85,8 @@ export default function UpdateModal({ systems, initialId, onSave, onClose }) {
 
         {delivered && (
           <div className="field update-right">
-            <span>System health</span>
-            <div className="health-toggle" role="radiogroup" aria-label="System health">
+            <span>Project health</span>
+            <div className="health-toggle" role="radiogroup" aria-label="Project health">
               <button type="button" role="radio" aria-checked={health === "Stable"} className={health === "Stable" ? "on stable" : ""} onClick={() => setHealth("Stable")}>
                 <CheckCircle2 size={16} /> Stable
               </button>

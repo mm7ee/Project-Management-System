@@ -922,7 +922,7 @@ export default function Dashboard({ data, reload }) {
               setFilter("ALL");
               setQuery("");
             } catch (e) {
-              setAddError(e instanceof Error ? e.message : "Couldn't add the system");
+              setAddError(e instanceof Error ? e.message : "Couldn't add the project");
             }
           }}
         />

@@ -34,7 +34,7 @@ import { ProgressBar, StatusPill, lastUpdate } from "./SystemCard";
   TO_DEPLOY: "Tested and waiting to go live.",
   LIVE: "In use.",
   COMPLETED: "Delivered and finished.",
-  MAINTENANCE: "Live systems being updated or improved.",
+  MAINTENANCE: "Live projects being updated or improved.",
   BLOCKED: "Something is stopping them, or there's been no progress update for a while.",
   OVERDUE: "Past their due date and not delivered.",
   REQUESTED: "Someone asked the team for an update.",

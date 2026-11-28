@@ -577,7 +577,7 @@ export async function integrationsApi(c, env, path, method) {
     const events = (Array.isArray(b.events) ? b.events : []).map(String).filter(/** @returns {e is WebhookEvent} */ (e) => WEBHOOK_EVENTS.some((x) => x.key === e));
     if (!events.length) throw new HttpError(400, "Choose at least one event");
     const systemId = b.systemId ? String(b.systemId) : null;
-    if (systemId && !(await db.prepare("SELECT 1 FROM systems WHERE id = ?").bind(systemId).first())) throw new HttpError(404, "System not found");
+    if (systemId && !(await db.prepare("SELECT 1 FROM systems WHERE id = ?").bind(systemId).first())) throw new HttpError(404, "Project not found");
     // Its own JSON, with smart values ({{item.key}} …), or the system's standard payload when empty.
     const template = b.payloadTemplate ? String(b.payloadTemplate).slice(0, 8000) : null;
     if (template) {

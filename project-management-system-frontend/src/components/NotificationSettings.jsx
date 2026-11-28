@@ -134,7 +134,7 @@ export function DeliverySection() {
   if (!status) return null;
   return (
     <Section icon={<Send size={18} />} title="Email and Teams delivery" sub="Everything already appears under the bell. Connect these to send it further too. Keys are encrypted and can't be read back.">
-      {status.demoProjects > 0 && <p className="form-error">{status.demoProjects} demo projects are still in the system. Run "npm run demo:remove" before connecting email, or staff will receive summaries about demo work.</p>}
+      {status.demoProjects > 0 && <p className="form-error">{status.demoProjects} demo projects are still in PMS. Run "npm run demo:remove" before connecting email, or staff will receive summaries about demo work.</p>}
       <form
         className="set-form"
         onSubmit={(e) => {

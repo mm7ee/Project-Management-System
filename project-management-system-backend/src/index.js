@@ -468,7 +468,7 @@ const systemData =
  */
 async function getSystem(db, id) {
   const row = await /** @type {Promise<{ data: string; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT data FROM systems WHERE id = ?").bind(id).first()));
-  if (!row) throw new HttpError(404, "System not found");
+  if (!row) throw new HttpError(404, "Project not found");
   return JSON.parse(row.data);
 }
 /**
@@ -2940,7 +2940,7 @@ async function api(req, env, path, ctx) {
   const historyMatch = path.match(/^\/api\/systems\/([a-z0-9-]+)\/history$/);
   if (historyMatch && method === "GET") {
     // A project that isn't in this workspace is 404, the same as one that doesn't exist (not an empty history).
-    if (!(await db.prepare("SELECT 1 FROM systems WHERE id = ?").bind(historyMatch[1]).first())) throw new HttpError(404, "System not found");
+    if (!(await db.prepare("SELECT 1 FROM systems WHERE id = ?").bind(historyMatch[1]).first())) throw new HttpError(404, "Project not found");
     const rows = await /** @type {Promise<D1Result<{ id: number; at: string; user_id: string | null; actor: string; action: string; target: string; detail: string; }>>} */ (
       /** @type {unknown} */ (db.prepare("SELECT id, at, user_id, actor, action, target, detail FROM activity WHERE target = ? AND workspace_id = ? ORDER BY id DESC LIMIT 100").bind(historyMatch[1], scope.workspaceId).all())
     );

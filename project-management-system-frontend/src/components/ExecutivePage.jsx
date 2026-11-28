@@ -26,7 +26,7 @@ export default function ExecutivePage() {
   useEffect(() => {
     const token = tokenInPath();
     if (!token) {
-      setError("This page opens from its link. Ask whoever runs this system in your organisation for one.");
+      setError("This page opens from its link. Ask whoever runs PMS in your organisation for one.");
       return;
     }
     // The link stays in the address, so the page can be bookmarked and reloaded; the API gets it in a header.
@@ -109,8 +109,8 @@ function Figures({ data }) {
       </section>
 
       <section className="viz-card">
-        <h3>Where every system stands</h3>
-        <p className="viz-sub">The lifecycle, from idea to live. Systems in progress are {data.averageProgress}% complete on average.</p>
+        <h3>Where every project stands</h3>
+        <p className="viz-sub">The lifecycle, from idea to live. Projects in progress are {data.averageProgress}% complete on average.</p>
         <StageBar counts={data.stages} />
       </section>
 
@@ -174,9 +174,9 @@ function HowItWorks({ stallDays }) {
   return (
     <section className="viz-card exec-how">
       <h3>How it works</h3>
-      <p className="viz-sub">The systems team's single place to plan, build and run every internal system.</p>
+      <p className="viz-sub">The team's single place to plan, build and run every internal project.</p>
 
-      <div className="exec-flow" aria-label="Lifecycle of a system">
+      <div className="exec-flow" aria-label="Lifecycle of a project">
         {stages.map((s, i) => (
           <span key={s} className="exec-flow-step">
             <span className="exec-flow-node">{s}</span>
@@ -185,12 +185,12 @@ function HowItWorks({ stallDays }) {
         ))}
       </div>
       <p className="exec-note">
-        Live systems can be flagged <b>Under maintenance</b> while they're being updated. Delivered systems still take client requests for new modules and changes.
+        Live projects can be flagged <b>Under maintenance</b> while they're being updated. Delivered projects still take client requests for new modules and changes.
       </p>
 
       <div className="exec-steps">
-        <Step icon={<ClipboardList size={18} />} title="1. Every system is registered">
-          Each system has a lead, the developers working on it, a start and due date, and its status. Clicking a system in the tracker opens its own page with everything about it.
+        <Step icon={<ClipboardList size={18} />} title="1. Every project is registered">
+          Each project has a lead, the developers working on it, a start and due date, and its status. Clicking a project in the tracker opens its own page with everything about it.
         </Step>
         <Step icon={<CheckCircle2 size={18} />} title="2. Developers post progress">
           The assigned developers post progress (0–100%) and status as work moves. Managers can ask for an update at any time, and the request stays open until progress is posted.
@@ -201,8 +201,8 @@ function HowItWorks({ stallDays }) {
         <Step icon={<AlertOctagon size={18} />} title="4. Problems surface on their own">
           A system is flagged <b>at risk</b> within 7 days of its due date, <b>overdue</b> after it, <b>stalled</b> after {stallDays} days without a progress update, and <b>blocked</b> when the team records what's stopping it. Developers with too much on are flagged <b>overloaded</b>.
         </Step>
-        <Step icon={<FileText size={18} />} title="5. Documents and history stay with the system">
-          Specifications, contracts and designs are attached to each system, and every change is recorded in its history.
+        <Step icon={<FileText size={18} />} title="5. Documents and history stay with the project">
+          Specifications, contracts and designs are attached to each project, and every change is recorded in its history.
         </Step>
         <Step icon={<BellRing size={18} />} title="6. Reports in one click">
           Managers produce printable reports and spreadsheets of progress, deadlines, client requests and developer workload. This page is the summary version.
@@ -212,19 +212,19 @@ function HowItWorks({ stallDays }) {
       <h4 className="exec-subhead">Who can do what</h4>
       <div className="exec-roles">
         <div>
-          <Users size={16} /> <b>Administrators</b> add systems, manage people, roles and security settings.
+          <Users size={16} /> <b>Administrators</b> add projects, manage people, roles and security settings.
         </div>
         <div>
           <Users size={16} /> <b>Managers</b> request updates, log client requests and produce reports.
         </div>
         <div>
-          <Users size={16} /> <b>Team Leaders</b> run their systems: add and edit them, staff them with developers, log client requests and produce reports.
+          <Users size={16} /> <b>Team Leaders</b> run their projects: add and edit them, staff them with developers, log client requests and produce reports.
         </div>
         <div>
           <Users size={16} /> <b>Projects Assistants</b> follow up on progress with update requests and produce reports.
         </div>
         <div>
-          <Users size={16} /> <b>Developers</b> update the systems they're assigned to and raise blockers.
+          <Users size={16} /> <b>Developers</b> update the projects they're assigned to and raise blockers.
         </div>
         <div>
           <Users size={16} /> <b>Standard users</b>, including executives, can view everything but change nothing.

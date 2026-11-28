@@ -15,7 +15,7 @@ import { timeAgo } from "../time";
   { key: "", label: "Everything" },
   { key: "signin", label: "Sign-ins" },
   { key: "failed", label: "Failed sign-ins" },
-  { key: "systems", label: "Systems" },
+  { key: "systems", label: "Projects" },
   { key: "features", label: "Feature requests" },
   { key: "items", label: "Work items" },
   { key: "workflows", label: "Workflows & boards" },
@@ -157,7 +157,7 @@ export function describe(e, users, systems) {
     case "profile_updated":
       return `Updated their ${/** @type {string[] | undefined} */ (d.fields)?.join(" and ") ?? "contact details"}`;
     case "system_created":
-      return d.pcn ? `Proposed ${name} with a Project Concept Note` : `Added system ${name} (${statusLabel(d.status)}, ${str(d.progress)}%)${d.template ? ` from the "${str(d.template)}" template` : ""}`;
+      return d.pcn ? `Proposed ${name} with a Project Concept Note` : `Added project ${name} (${statusLabel(d.status)}, ${str(d.progress)}%)${d.template ? ` from the "${str(d.template)}" template` : ""}`;
     case "pcn_signed": {
       const verb = d.decision === "APPROVED" ? "approved" : d.decision === "DECLINED" ? "declined" : "withdrew a decision on";
       const who = d.recordedFor ? `Recorded that ${str(d.signatory)} ${verb}` : `Signed: ${verb}`;
@@ -210,7 +210,7 @@ export function describe(e, users, systems) {
       return `Developers on ${name}: ${parts.join(", ") || "no change"}`;
     }
     case "system_deleted":
-      return `Deleted system ${name}`;
+      return `Deleted project ${name}`;
     case "request_created":
       return `Requested an update on ${name}${Array.isArray(d.via) && d.via.length ? ` by ${channelList(cleanChannels(d.via))}` : ""}${d.message ? `: "${str(d.message)}"` : ""}`;
     case "feature_created":

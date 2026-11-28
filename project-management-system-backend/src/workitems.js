@@ -905,7 +905,7 @@ export async function applyChange(c, r, b, viaTransition = false) {
   let moving = false;
   if (b.systemId !== undefined && b.systemId !== r.system_id) {
     const target = await /** @type {Promise<{ id: string; } | null>} */ (/** @type {unknown} */ (c.db.prepare("SELECT id FROM systems WHERE id = ?").bind(String(b.systemId)).first()));
-    if (!target) throw new HttpError(404, "System not found");
+    if (!target) throw new HttpError(404, "Project not found");
     if (Number(r.child_total) || (await c.db.prepare("SELECT 1 FROM work_items WHERE parent_id = ?").bind(r.id).first())) {
       throw new HttpError(400, "Move or remove its child work items first");
     }
@@ -1112,7 +1112,7 @@ export async function createItem(c, b, source, id = newToken().slice(0, 16)) {
         .first()
     )
   );
-  if (!sys) throw new HttpError(404, "System not found");
+  if (!sys) throw new HttpError(404, "Project not found");
   // The item type (the workspace's own, such as Campaign) or, from older clients, a kind (Task).
   const itemType = await resolveItemType(c, b.itemType, b.type);
   const type = itemType.base;

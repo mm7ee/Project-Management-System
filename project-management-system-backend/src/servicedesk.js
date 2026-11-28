@@ -425,7 +425,7 @@ export async function serviceDeskApi(c, path, method) {
     const before = await configuredSystem(db);
     if (systemId) {
       const sys = await /** @type {Promise<{ id: string; workflow_id: string | null; name: string; } | null>} */ (/** @type {unknown} */ (db.prepare("SELECT id, workflow_id, (data::json ->> 'name') AS name FROM systems WHERE id = ?").bind(systemId).first()));
-      if (!sys) throw new HttpError(404, "System not found");
+      if (!sys) throw new HttpError(404, "Project not found");
       // The project takes the Service desk workflow, if its items' statuses fit it.
       if (sys.workflow_id !== SD_WORKFLOW) {
         const wf = await loadWorkflow(db, SD_WORKFLOW);

@@ -129,7 +129,7 @@ export function cleanTimeZone(v) {
   try {
     new Intl.DateTimeFormat("en", { timeZone: tz });
   } catch {
-    throw new HttpError(400, `${tz} isn't a time zone this system knows`);
+    throw new HttpError(400, `${tz} isn't a time zone PMS knows`);
   }
   return tz;
 }

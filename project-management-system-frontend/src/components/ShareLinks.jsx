@@ -17,7 +17,7 @@ const KINDS = {
     endpoint: "/showcase-links",
     title: "Executive page links",
     intro:
-      "The executive page shows how the system works and this workspace's portfolio as live totals: no names of projects, people or blockers. Anyone with the link can open it until it expires.",
+      "The executive page shows how projects are run here and this workspace's portfolio as live totals: no names of projects, people or blockers. Anyone with the link can open it until it expires.",
     days: [7, 30, 90, 365],
     first: 30,
   },
