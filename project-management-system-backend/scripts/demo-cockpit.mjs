@@ -85,12 +85,16 @@ const FINDINGS = [
   ["Demo: TLS 1.0 still enabled on the test host", "Info", "Only on the test host; production is TLS 1.2+.", "open"],
 ];
 for (const [title, severity, detail, status] of FINDINGS) {
-  if (has(view.findings, "title", title)) continue;
-  await call(`${lc}/findings`, "POST", { title, severity, detail });
+  if (!has(view.findings, "title", title)) {
+    await call(`${lc}/findings`, "POST", { title, severity, detail });
+    added++;
+  }
+  // A finding already there is brought to the state it should be in (a dropped connection can leave it open).
   const f = (await call(lc)).lifecycle.findings.find((/** @type {any} */ x) => x.title === title);
+  if (f.status === status) continue;
   if (status === "fixed") await call(`${lc}/findings/${f.id}`, "PATCH", { status: "fixed" });
   if (status === "accepted") await call(`${lc}/findings/${f.id}/accept`, "POST", { reason: "Test host only; fixed with the production hardening.", until: new Date(Date.now() + 60 * 86_400_000).toISOString().slice(0, 10) });
-  added++;
+  if (status !== "open") console.log(`${title}: now ${status}`);
 }
 
 /** [suite, title, scenario, expected, results in order] */
